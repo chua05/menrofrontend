@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { FiUser, FiLock, FiEye, FiEyeOff } from "react-icons/fi";
 import { FcGoogle } from "react-icons/fc";
+import { useAuth } from "../context/AuthContext";
 import forestImg from "../assets/forest.jpg";
 
 export default function LoginPage() {
@@ -11,20 +12,30 @@ export default function LoginPage() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
+  const { login } = useAuth();
 
-  const handleLogin = async (e) => {
-    e.preventDefault();
-    setError("");
-    if (!username || !password) { setError("Please fill in all fields."); return; }
-    setLoading(true);
-    try {
-      navigate("/dashboard");
-    } catch (err) {
-      setError("Invalid credentials. Please try again.");
-    } finally {
-      setLoading(false);
-    }
-  };
+ const handleLogin = async (e) => {
+  e.preventDefault();
+  setError("");
+  if (!username || !password) {
+    setError("Please fill in all fields.");
+    return;
+  }
+  setLoading(true);
+
+  // Temporary role simulation for testing
+  if (username === "admin") {
+    login({ name: "MENRO Admin" }, "admin");
+    navigate("/admin/dashboard");
+  } else if (username === "staff") {
+    login({ name: "MENRO Staff" }, "staff");
+    navigate("/staff/dashboard");
+  } else {
+    login({ name: "Juan Dela Cruz" }, "volunteer");
+    navigate("/volunteer/dashboard");
+  }
+  setLoading(false);
+};
 
   return (
     <div className="auth-page">
