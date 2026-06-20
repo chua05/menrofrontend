@@ -4,19 +4,13 @@ import { FiUser, FiMail, FiLock, FiEye, FiEyeOff } from "react-icons/fi";
 import { FcGoogle } from "react-icons/fc";
 import forestImg from "../assets/forest.jpg";
 
-const ROLES = [
-  "MENRO Administrator",
-  "MENRO Staff",
-  "Barangay Official",
-  "Volunteer",
-];
 
 export default function RegisterPage() {
   const navigate = useNavigate();
   const [form, setForm] = useState({
-    fullName: "", username: "", email: "",
-    role: "", orgName: "", password: "", confirmPassword: "",
-  });
+  fullName: "", username: "", email: "",
+  role: "Volunteer", orgName: "", password: "", confirmPassword: "",
+});
   const [showPass, setShowPass] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
   const [errors, setErrors] = useState({});
@@ -30,7 +24,6 @@ export default function RegisterPage() {
     if (!form.fullName.trim()) e.fullName = "Required";
     if (!form.username.trim()) e.username = "Required";
     if (!form.email || !/\S+@\S+\.\S+/.test(form.email)) e.email = "Enter a valid email";
-    if (!form.role) e.role = "Please select a role";
     if (!form.password || form.password.length < 6) e.password = "Min. 6 characters";
     if (form.password !== form.confirmPassword) e.confirmPassword = "Passwords do not match";
     return e;
@@ -81,10 +74,10 @@ export default function RegisterPage() {
           </div>
 
           {/* Heading */}
-          <div className="auth-heading">
+         <div className="auth-heading">
             <h1>Create your <em>account.</em></h1>
-            <p>Register to access the MENRO monitoring system.</p>
-          </div>
+            <p>Register as a Barangay Official or Volunteer to access the monitoring system.</p>
+        </div>
 
           <div className="auth-divider" />
 
@@ -119,13 +112,6 @@ export default function RegisterPage() {
                   value={form.email} onChange={update("email")}
                   className="auth-input" />
               </div>
-            </Field>
-
-            <Field label="Role" error={errors.role}>
-              <select value={form.role} onChange={update("role")} className="auth-select">
-                <option value="">Select your role</option>
-                {ROLES.map((r) => <option key={r} value={r}>{r}</option>)}
-              </select>
             </Field>
 
             <Field label="Organization / Barangay (optional)">
