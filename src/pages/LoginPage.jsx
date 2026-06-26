@@ -1,11 +1,15 @@
 import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
-import { FiUser, FiLock, FiEye, FiEyeOff } from "react-icons/fi";
+import { FiMail, FiLock, FiEye, FiEyeOff } from "react-icons/fi";
 import { FcGoogle } from "react-icons/fc";
 import forestImg from "../assets/forest.jpg";
+import {signInWithEmailAndPassword} from "firebase/auth";
+import { auth } from "../firebase/config";
+import axios from "axios";
+
 
 export default function LoginPage() {
-  const [username, setUsername] = useState("");
+  const [email,setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
@@ -15,13 +19,81 @@ export default function LoginPage() {
   const handleLogin = async (e) => {
     e.preventDefault();
     setError("");
-    if (!username || !password) { setError("Please fill in all fields."); return; }
-    setLoading(true);
+    if (!email || !password){ 
+      setError("Please fill in all fields."); return; }
+      setLoading(true);
+
     try {
-      navigate("/dashboard");
-    } catch (err) {
-      setError("Invalid credentials. Please try again.");
-    } finally {
+      const credential =
+    await signInWithEmailAndPassword(
+    auth,
+    email,
+    password
+    );
+
+    const token =
+    await credential.user.getIdToken();
+
+
+    const response =
+    await axios.post(
+
+    "http://localhost:5000/api/auth/verify",
+
+    {},
+
+    {
+
+    headers:{
+    Authorization:
+    `Bearer ${token}`
+    }
+    }
+    );
+
+    localStorage.setItem(
+      "token",
+      token
+      );
+
+
+
+      localStorage.setItem(
+      "user",
+      JSON.stringify(
+      response.data.data
+      )
+      );
+
+      navigate(
+      "/dashboard"
+      );
+      }
+
+      catch(error){
+
+          if(error.code==="auth/user-not-found"){
+          setError("Account not found.");
+          }
+
+          else if(error.code==="auth/wrong-password"){
+          setError("Incorrect password.");
+          }
+
+          else if(error.code==="auth/invalid-credential"){
+          setError("Invalid email or password.");
+          }
+
+          else{
+          setError(
+          error.response?.data?.message ||
+          error.message ||
+          "Login failed."
+          );
+          }
+          }
+
+        finally {
       setLoading(false);
     }
   };
@@ -64,16 +136,16 @@ export default function LoginPage() {
 
           <form onSubmit={handleLogin}>
 
-            {/* Username */}
+            {/* Email Address */}
             <div className="auth-field">
-              <div className="auth-label">Username</div>
+              <div className="auth-label">Email Address</div>
               <div className="auth-input-wrap">
-                <FiUser size={14} className="auth-icon" />
+                <FiMail size={14} className="auth-icon" />
                 <input
-                  type="text"
-                  placeholder="Enter your username"
-                  value={username}
-                  onChange={(e) => setUsername(e.target.value)}
+                  type="email"
+                  placeholder="Enter your email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
                   className="auth-input"
                 />
               </div>
@@ -89,10 +161,12 @@ export default function LoginPage() {
                 <FiLock size={14} className="auth-icon" />
                 <input
                   type={showPassword ? "text" : "password"}
+                  autoComplete="new-password"
                   placeholder="Enter your password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   className="auth-input"
+                  style={{ paddingRight: '36px' }}
                 />
                 <button type="button" className="auth-eye" onClick={() => setShowPassword(!showPassword)}>
                   {showPassword ? <FiEyeOff size={14} /> : <FiEye size={14} />}
@@ -135,7 +209,7 @@ export default function LoginPage() {
 
           <div className="auth-switch">
             Don't have an account?{" "}
-            <Link to="/register">Create one here</Link>
+            <Link to="/register">Create account</Link>
           </div>
 
           <div className="auth-footer">© 2025 MENRO JUBAN, SORSOGON</div>

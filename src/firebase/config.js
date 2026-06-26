@@ -1,17 +1,24 @@
 import { initializeApp } from "firebase/app";
 import { getAuth } from "firebase/auth";
-import { getFirestore } from "firebase/firestore";
 
-// Your groupmate (backend) will fill these values in
 const firebaseConfig = {
-  apiKey: "YOUR_API_KEY",
-  authDomain: "YOUR_AUTH_DOMAIN",
-  projectId: "YOUR_PROJECT_ID",
-  storageBucket: "YOUR_STORAGE_BUCKET",
-  messagingSenderId: "YOUR_SENDER_ID",
-  appId: "YOUR_APP_ID",
+
+  apiKey: "AIzaSyB28MAsFg7XngyUMV_g3leY3DmQhDgZnnM",
+
+  authDomain: "menrosystem-ddfac.firebaseapp.com",
+
+  projectId: "menrosystem-ddfac",
+
+  storageBucket: "menrosystem-ddfac.firebasestorage.app",
+
+  messagingSenderId: "290555801876",
+
+  appId: "1:290555801876:web:edb33bea8e078ce82d1201"
+
 };
 
 const app = initializeApp(firebaseConfig);
+
 export const auth = getAuth(app);
-export const db = getFirestore(app);
+
+export default app;

@@ -3,38 +3,93 @@ import { Link, useNavigate } from "react-router-dom";
 import { FiUser, FiMail, FiLock, FiEye, FiEyeOff } from "react-icons/fi";
 import { FcGoogle } from "react-icons/fc";
 import forestImg from "../assets/forest.jpg";
+import axios from "axios";
 
-const ROLES = [
-  "MENRO Administrator",
-  "MENRO Staff",
-  "Barangay Official",
-  "Volunteer",
-];
+const Field = ({ label, error, children }) => (
+  <div className="auth-field">
+    <div className="auth-label">{label}</div>
+
+    {children}
+
+    {error && (
+      <p
+        style={{
+          color: "#f87171",
+          fontSize: "11px",
+          marginTop: "4px",
+          fontWeight: 300
+        }}
+      >
+        {error}
+      </p>
+    )}
+  </div>
+);
 
 export default function RegisterPage() {
   const navigate = useNavigate();
   const [form, setForm] = useState({
-    fullName: "", username: "", email: "",
-    role: "", orgName: "", password: "", confirmPassword: "",
+  fullName: "",
+  username: "",
+  email: "",
+  contactNumber: "",
+  organization: "",
+  password: "",
+  confirmPassword: "",
   });
+
   const [showPass, setShowPass] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
   const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(false);
+  const [acceptedTerms, setAcceptedTerms] = useState(false);
 
   const update = (field) => (e) =>
     setForm((prev) => ({ ...prev, [field]: e.target.value }));
 
+
   const validate = () => {
-    const e = {};
-    if (!form.fullName.trim()) e.fullName = "Required";
-    if (!form.username.trim()) e.username = "Required";
-    if (!form.email || !/\S+@\S+\.\S+/.test(form.email)) e.email = "Enter a valid email";
-    if (!form.role) e.role = "Please select a role";
-    if (!form.password || form.password.length < 6) e.password = "Min. 6 characters";
-    if (form.password !== form.confirmPassword) e.confirmPassword = "Passwords do not match";
-    return e;
-  };
+  const e = {};
+
+  if (!form.fullName.trim())
+    e.fullName = "Required";
+
+  if (!form.username.trim())
+    e.username = "Required";
+
+  if (
+    !form.email ||
+    !/\S+@\S+\.\S+/.test(form.email)
+  )
+    e.email = "Enter a valid email";
+
+  if (
+  !form.contactNumber ||
+  !/^09\d{9}$/.test(form.contactNumber)
+)
+  e.contactNumber =
+    "Enter a valid mobile number";
+
+
+  if (
+    !form.password ||
+    form.password.length < 6
+  )
+    e.password = "Min. 6 characters";
+
+  if (
+    form.password !== form.confirmPassword
+  )
+    e.confirmPassword =
+      "Passwords do not match";
+
+  if (!acceptedTerms)
+    e.terms = 
+      "You must accept the Terms and Privacy Policy";
+
+  return e;
+
+};
 
   const handleRegister = async (e) => {
     e.preventDefault();
@@ -42,29 +97,36 @@ export default function RegisterPage() {
     if (Object.keys(errs).length > 0) { setErrors(errs); return; }
     setErrors({});
     setLoading(true);
-    try {
+    try{
+      await axios.post(
+        "http://localhost:5000/api/auth/register",
+        {
+          fullName: form.fullName,
+          username: form.username,
+          email: form.email,
+          contactNumber: form.contactNumber,
+          password: form.password,
+          organization: form.organization
+        }
+      );
       navigate("/login");
-    } catch (err) {
-      setErrors({ general: "Registration failed. Please try again." });
-    } finally {
-      setLoading(false);
     }
+    catch(err){
+      setErrors({
+        general: err.response?.data?.message ||"Registration failed"});
+      }
+      finally{
+   setLoading(false);
+}
   };
 
-  const Field = ({ label, error, children }) => (
-    <div className="auth-field">
-      <div className="auth-label">{label}</div>
-      {children}
-      {error && <p style={{ color: '#f87171', fontSize: '11px', marginTop: '4px', fontWeight: 300 }}>{error}</p>}
-    </div>
-  );
 
   return (
     <div className="auth-page">
 
       {/* ── Left Panel ── */}
       <div className="auth-left">
-        <div className="auth-form-box">
+        <div className="auth-form-box" style={{ marginTop: "90px" }}>
 
           {/* Logo */}
           <div className="auth-logo">
@@ -121,17 +183,33 @@ export default function RegisterPage() {
               </div>
             </Field>
 
-            <Field label="Role" error={errors.role}>
-              <select value={form.role} onChange={update("role")} className="auth-select">
-                <option value="">Select your role</option>
-                {ROLES.map((r) => <option key={r} value={r}>{r}</option>)}
-              </select>
-            </Field>
+            <Field
+                label="Contact Number"
+                error={errors.contactNumber}
+              >
+                <div className="auth-input-wrap">
+                  <FiUser size={14}
+                    className="auth-icon"
+                  />
 
-            <Field label="Organization / Barangay (optional)">
-              <input type="text" placeholder="e.g. Barangay Bacolod"
-                value={form.orgName} onChange={update("orgName")}
-                className="auth-input no-icon" />
+                  <input
+                    type="text"
+                    placeholder="09123456789"
+                    value={form.contactNumber}
+                    onChange={update("contactNumber")}
+                    className="auth-input"
+                  />
+                </div>
+              </Field>
+
+            <Field label="Organization (optional)">
+              <input
+                type="text"
+                placeholder="e.g. Juban Environment Office"
+                value={form.organization}
+                onChange={update("organization")}
+                className="auth-input no-icon"
+              />
             </Field>
 
             {/* Password row */}
@@ -139,9 +217,11 @@ export default function RegisterPage() {
               <Field label="Password" error={errors.password}>
                 <div className="auth-input-wrap">
                   <FiLock size={13} className="auth-icon" />
-                  <input type={showPass ? "text" : "password"} placeholder="••••••"
-                    value={form.password} onChange={update("password")}
-                    className="auth-input" style={{ paddingRight: '36px' }} />
+                  <input type={showPass ? "text" : "password"}
+                  autoComplete="new-password"
+                  placeholder="••••••"
+                  value={form.password} onChange={update("password")}
+                  className="auth-input" style={{ paddingRight: '36px' }} />
                   <button type="button" className="auth-eye" onClick={() => setShowPass(!showPass)}>
                     {showPass ? <FiEyeOff size={13} /> : <FiEye size={13} />}
                   </button>
@@ -151,9 +231,11 @@ export default function RegisterPage() {
               <Field label="Confirm" error={errors.confirmPassword}>
                 <div className="auth-input-wrap">
                   <FiLock size={13} className="auth-icon" />
-                  <input type={showConfirm ? "text" : "password"} placeholder="••••••"
-                    value={form.confirmPassword} onChange={update("confirmPassword")}
-                    className="auth-input" style={{ paddingRight: '36px' }} />
+                  <input type={showConfirm ? "text" : "password"} 
+                  autoComplete="new-password"
+                  placeholder="••••••"
+                  value={form.confirmPassword} onChange={update("confirmPassword")}
+                  className="auth-input" style={{ paddingRight: '36px' }} />
                   <button type="button" className="auth-eye" onClick={() => setShowConfirm(!showConfirm)}>
                     {showConfirm ? <FiEyeOff size={13} /> : <FiEye size={13} />}
                   </button>
@@ -163,7 +245,10 @@ export default function RegisterPage() {
 
             {/* Terms */}
             <div className="auth-terms" style={{ marginBottom: '16px', marginTop: '4px' }}>
-              <input type="checkbox" id="terms" />
+              <input type="checkbox" id="terms" checked={acceptedTerms} onChange={(e) =>
+              setAcceptedTerms(e.target.checked)
+                  }
+                />
               <label htmlFor="terms">
                 I agree to the{" "}
                 <a href="#">Terms of Service</a>
@@ -171,6 +256,20 @@ export default function RegisterPage() {
                 <a href="#">Privacy Policy</a>
               </label>
             </div>
+
+            {errors.terms && (
+                <p
+                  style={{
+                    color: "#f87171",
+                    fontSize: "11px",
+                    marginTop: "-10px",
+                    marginBottom: "12px",
+                    fontWeight: 300
+                  }}
+                >
+                  {errors.terms}
+                </p>
+              )}
 
             <button type="submit" disabled={loading} className="auth-btn-primary">
               {loading ? (
@@ -230,4 +329,4 @@ export default function RegisterPage() {
 
     </div>
   );
-}
+  }
