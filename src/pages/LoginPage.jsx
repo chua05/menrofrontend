@@ -3,8 +3,8 @@ import { useNavigate, Link } from "react-router-dom";
 import { FiMail, FiLock, FiEye, FiEyeOff } from "react-icons/fi";
 import { FcGoogle } from "react-icons/fc";
 import forestImg from "../assets/forest.jpg";
-import {signInWithEmailAndPassword} from "firebase/auth";
-import { auth } from "../firebase/config";
+import {signInWithEmailAndPassword, signInWithPopup} from "firebase/auth";
+import { auth, googleProvider } from "../firebase/config";
 import axios from "axios";
 
 
@@ -97,6 +97,94 @@ export default function LoginPage() {
       setLoading(false);
     }
   };
+
+  const handleGoogleLogin = async () => {
+
+        try{
+
+        const result =
+
+        await signInWithPopup(
+
+        auth,
+
+        googleProvider
+
+        );
+
+
+        const token =
+
+        await result.user.getIdToken();
+
+
+        const response =
+
+        await axios.post(
+
+        "http://localhost:5000/api/auth/verify",
+
+        {},
+
+        {
+
+        headers:{
+
+        Authorization:
+
+        `Bearer ${token}`
+
+        }
+
+        }
+
+        );
+
+
+        localStorage.setItem(
+
+        "token",
+
+        token
+
+        );
+
+
+        localStorage.setItem(
+
+        "user",
+
+        JSON.stringify(
+
+        response.data.data
+
+        )
+
+        );
+
+
+        navigate(
+
+        "/dashboard"
+
+        );
+
+
+        }
+
+        catch(error){
+
+        console.log(error);
+
+        setError(
+
+        "Google sign in failed."
+
+        );
+
+        }
+
+        };
 
   return (
     <div className="auth-page">
@@ -202,7 +290,7 @@ export default function LoginPage() {
           </div>
 
           {/* Google */}
-          <button className="auth-btn-google">
+          <button className="auth-btn-google" onClick={handleGoogleLogin}>
             <FcGoogle size={15} />
             Continue with Google
           </button>
