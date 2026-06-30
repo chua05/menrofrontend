@@ -186,6 +186,16 @@ body {
   transition: border-color .15s, box-shadow .15s;
 }
 
+.auth-input::-ms-reveal,
+.auth-input::-ms-clear {
+  display: none;
+}
+
+.auth-input::-webkit-credentials-auto-fill-button,
+.auth-input::-webkit-textfield-decoration-container {
+  display: none !important;
+}
+
 .auth-input:focus {
   border-color: #166534;
   box-shadow: 0 0 0 3px rgba(22, 101, 52, .07);

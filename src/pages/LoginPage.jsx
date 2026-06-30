@@ -1,12 +1,15 @@
 import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
-import { FiUser, FiLock, FiEye, FiEyeOff } from "react-icons/fi";
+import { FiMail, FiLock, FiEye, FiEyeOff } from "react-icons/fi";
 import { FcGoogle } from "react-icons/fc";
 import { useAuth } from "../context/AuthContext";
 import forestImg from "../assets/forest.jpg";
+import { signInWithEmailAndPassword, signInWithPopup } from "firebase/auth";
+import { auth, googleProvider } from "../firebase/config";
+import axios from "axios";
 
 export default function LoginPage() {
-  const [username, setUsername] = useState("");
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
@@ -14,28 +17,78 @@ export default function LoginPage() {
   const navigate = useNavigate();
   const { login } = useAuth();
 
- const handleLogin = async (e) => {
-  e.preventDefault();
-  setError("");
-  if (!username || !password) {
-    setError("Please fill in all fields.");
-    return;
-  }
-  setLoading(true);
+  const handleLogin = async (e) => {
+    e.preventDefault();
+    setError("");
+    if (!email || !password) {
+      setError("Please fill in all fields.");
+      return;
+    }
+    setLoading(true);
 
-  // Temporary role simulation for testing
-  if (username === "admin") {
-    login({ name: "MENRO Admin" }, "admin");
-    navigate("/admin/dashboard");
-  } else if (username === "staff") {
-    login({ name: "MENRO Staff" }, "staff");
-    navigate("/staff/dashboard");
-  } else {
-    login({ name: "Juan Dela Cruz" }, "volunteer");
-    navigate("/volunteer/dashboard");
-  }
-  setLoading(false);
-};
+    try {
+      const credential = await signInWithEmailAndPassword(auth, email, password);
+      const token = await credential.user.getIdToken();
+
+      const response = await axios.post(
+        "http://localhost:5000/api/auth/verify",
+        {},
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+
+      const userData = response.data.data;
+      const role = userData.role || "volunteer";
+
+      localStorage.setItem("token", token);
+      localStorage.setItem("user", JSON.stringify(userData));
+      login(userData, role);
+
+      if (role === "admin") navigate("/admin/dashboard");
+      else if (role === "staff") navigate("/staff/dashboard");
+      else navigate("/volunteer/dashboard");
+
+    } catch (error) {
+      if (error.code === "auth/user-not-found") {
+        setError("Account not found.");
+      } else if (error.code === "auth/wrong-password") {
+        setError("Incorrect password.");
+      } else if (error.code === "auth/invalid-credential") {
+        setError("Invalid email or password.");
+      } else {
+        setError(error.response?.data?.message || error.message || "Login failed.");
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleGoogleLogin = async () => {
+    try {
+      const result = await signInWithPopup(auth, googleProvider);
+      const token = await result.user.getIdToken();
+
+      const response = await axios.post(
+        "http://localhost:5000/api/auth/verify",
+        {},
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+
+      const userData = response.data.data;
+      const role = userData.role || "volunteer";
+
+      localStorage.setItem("token", token);
+      localStorage.setItem("user", JSON.stringify(userData));
+      login(userData, role);
+
+      if (role === "admin") navigate("/admin/dashboard");
+      else if (role === "staff") navigate("/staff/dashboard");
+      else navigate("/volunteer/dashboard");
+
+    } catch (error) {
+      console.log(error);
+      setError("Google sign in failed.");
+    }
+  };
 
   return (
     <div className="auth-page">
@@ -75,16 +128,16 @@ export default function LoginPage() {
 
           <form onSubmit={handleLogin}>
 
-            {/* Username */}
+            {/* Email Address */}
             <div className="auth-field">
-              <div className="auth-label">Username</div>
+              <div className="auth-label">Email Address</div>
               <div className="auth-input-wrap">
-                <FiUser size={14} className="auth-icon" />
+                <FiMail size={14} className="auth-icon" />
                 <input
-                  type="text"
-                  placeholder="Enter your username"
-                  value={username}
-                  onChange={(e) => setUsername(e.target.value)}
+                  type="email"
+                  placeholder="Enter your email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
                   className="auth-input"
                 />
               </div>
@@ -100,10 +153,12 @@ export default function LoginPage() {
                 <FiLock size={14} className="auth-icon" />
                 <input
                   type={showPassword ? "text" : "password"}
+                  autoComplete="new-password"
                   placeholder="Enter your password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   className="auth-input"
+                  style={{ paddingRight: '36px' }}
                 />
                 <button type="button" className="auth-eye" onClick={() => setShowPassword(!showPassword)}>
                   {showPassword ? <FiEyeOff size={14} /> : <FiEye size={14} />}
@@ -139,14 +194,14 @@ export default function LoginPage() {
           </div>
 
           {/* Google */}
-          <button className="auth-btn-google">
+          <button className="auth-btn-google" onClick={handleGoogleLogin}>
             <FcGoogle size={15} />
             Continue with Google
           </button>
 
           <div className="auth-switch">
             Don't have an account?{" "}
-            <Link to="/register">Create one here</Link>
+            <Link to="/register">Create account</Link>
           </div>
 
           <div className="auth-footer">© 2025 MENRO JUBAN, SORSOGON</div>
