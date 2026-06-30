@@ -1,11 +1,43 @@
+import { useAuth } from "../context/AuthContext";
+
+import DashboardHeader from "../components/dashboard/DashboardHeader";
+import DashboardCards from "../components/dashboard/DashboardCards";
+import RecentActivities from "../components/dashboard/RecentActivities";
+import QuickActions from "../components/dashboard/QuickActions";
+
 export default function DashboardPage() {
-  const user = JSON.parse(localStorage.getItem("user"));
-    return (
-    <div>
-    <h1>Dashboard</h1>
-    <p>{user?.fullName}</p>
-    <p>{user?.email}</p>
-    <p>{user?.role}</p>
+
+  const { currentUser, userRole } = useAuth();
+
+  return (
+
+    <div className="page-wrapper">
+
+    <h1>Dashboard Loaded</h1>
+
+    <p>User: {currentUser?.fullName}</p>
+
+    <p>Role: {userRole}</p>
+
+    <DashboardHeader
+        user={currentUser}
+        role={userRole}
+    />
+
+    <DashboardCards
+        role={userRole}
+    />
+
+    <div className="dashboard-content">
+
+        <RecentActivities />
+
+        <QuickActions />
+
     </div>
-    );
-    }
+
+</div>
+
+  );
+
+}
