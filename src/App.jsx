@@ -1,6 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider } from "./context/AuthContext";
-import MainLayout from "./layouts/MainLayout";
+import DashboardLayout from "./layouts/DashboardLayout";
 import ProtectedRoute from "./routes/ProtectedRoute";
 
 // Auth
@@ -34,7 +34,7 @@ function App() {
           {/* Admin routes */}
           <Route path="/admin" element={
             <ProtectedRoute allowedRoles={["admin"]}>
-              <MainLayout />
+              <DashboardLayout/>
             </ProtectedRoute>
           }>
             <Route path="dashboard" element={<DashboardPage />} />
@@ -54,7 +54,7 @@ function App() {
           {/* Staff routes */}
           <Route path="/staff" element={
             <ProtectedRoute allowedRoles={["staff"]}>
-              <MainLayout />
+             <DashboardLayout/>
             </ProtectedRoute>
           }>
             <Route path="dashboard" element={<DashboardPage />} />
@@ -73,7 +73,7 @@ function App() {
           {/* Volunteer routes */}
           <Route path="/volunteer" element={
             <ProtectedRoute allowedRoles={["volunteer"]}>
-              <MainLayout />
+              <DashboardLayout/>
             </ProtectedRoute>
           }>
             <Route path="dashboard" element={<DashboardPage />} />
