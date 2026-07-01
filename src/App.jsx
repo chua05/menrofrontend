@@ -6,28 +6,24 @@ import ProtectedRoute from "./components/ProtectedRoute";
 // Auth
 import LoginPage from "./pages/LoginPage";
 import RegisterPage from "./pages/RegisterPage";
+import DashboardPage from "./pages/DashboardPage";
 
 // Admin
-import AdminDashboard from "./pages/admin/AdminDashboard";
 import ManageUsers from "./pages/admin/ManageUsers";
 
 // Staff
-import StaffDashboard from "./pages/staff/StaffDashboard";
 import ManageSeedlings from "./pages/staff/ManageSeedlings";
 import ProcessRequests from "./pages/staff/ProcessRequests";
 import VerifyReports from "./pages/staff/VerifyReports";
 
 // Shared
-import SeedlingRequests from "./pages/shared/SeedlingRequests";
 import PlantingEvents from "./pages/shared/PlantingEvents";
 import EventSchedule from "./pages/shared/EventSchedule";
 import SubmitPlantingReport from "./pages/shared/SubmitPlantingReport";
 import TreeMonitoring from "./pages/shared/TreeMonitoring";
 import PlantingMap from "./pages/shared/PlantingMap";
 import Reports from "./pages/shared/Reports";
-
-// Volunteer
-import VolunteerDashboard from "./pages/volunteer/VolunteerDashboard";
+import SeedlingRequests from "./pages/shared/SeedlingRequests";
 
 function App() {
   return (
@@ -45,14 +41,15 @@ function App() {
               <MainLayout />
             </ProtectedRoute>
           }>
-            <Route path="dashboard" element={<AdminDashboard />} />
+            <Route path="dashboard" element={<DashboardPage />} />
             <Route path="users" element={<ManageUsers />} />
             <Route path="requests" element={<SeedlingRequests />} />
+            <Route path="seedlings" element={<ManageSeedlings />} />
             <Route path="process-requests" element={<ProcessRequests />} />
             <Route path="events" element={<PlantingEvents />} />
             <Route path="schedule" element={<EventSchedule />} />
             <Route path="map" element={<PlantingMap />} />
-            <Route path="submit-report" element={<SubmitPlantingReport />} />
+            <Route path="planting" element={<SubmitPlantingReport />} />
             <Route path="verify-reports" element={<VerifyReports />} />
             <Route path="monitoring" element={<TreeMonitoring />} />
             <Route path="reports" element={<Reports />} />
@@ -64,13 +61,14 @@ function App() {
               <MainLayout />
             </ProtectedRoute>
           }>
-            <Route path="dashboard" element={<StaffDashboard />} />
+            <Route path="dashboard" element={<DashboardPage />} />
             <Route path="seedlings" element={<ManageSeedlings />} />
+            <Route path="requests" element={<SeedlingRequests />} />
             <Route path="process-requests" element={<ProcessRequests />} />
             <Route path="events" element={<PlantingEvents />} />
             <Route path="schedule" element={<EventSchedule />} />
             <Route path="map" element={<PlantingMap />} />
-            <Route path="submit-report" element={<SubmitPlantingReport />} />
+            <Route path="planting" element={<SubmitPlantingReport />} />
             <Route path="verify-reports" element={<VerifyReports />} />
             <Route path="monitoring" element={<TreeMonitoring />} />
             <Route path="reports" element={<Reports />} />
@@ -82,13 +80,13 @@ function App() {
               <MainLayout />
             </ProtectedRoute>
           }>
-            <Route path="dashboard" element={<VolunteerDashboard />} />
-            <Route path="requests" element={<SeedlingRequests />} />
-            <Route path="schedule" element={<EventSchedule />} />
-            <Route path="map" element={<PlantingMap />} />
-            <Route path="submit-report" element={<SubmitPlantingReport />} />
+            <Route path="dashboard" element={<DashboardPage />} />
+            <Route path="request-seedlings" element={<SeedlingRequests />} />
+            <Route path="my-requests" element={<SeedlingRequests />} />
+            <Route path="events" element={<PlantingEvents />} />
+            <Route path="my-sites" element={<PlantingMap />} />
+            <Route path="my-activities" element={<SubmitPlantingReport />} />
             <Route path="monitoring" element={<TreeMonitoring />} />
-            <Route path="reports" element={<Reports />} />
           </Route>
 
         </Routes>

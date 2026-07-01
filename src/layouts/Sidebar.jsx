@@ -3,10 +3,10 @@ import { useAuth } from "../context/AuthContext";
 import {
   FiLayout, FiUsers, FiPackage, FiClipboard,
   FiMap, FiCalendar, FiCheckSquare, FiFileText,
-  FiUpload, FiLogOut
+  FiUpload, FiLogOut, FiSettings, FiUser,
+  FiMapPin, FiActivity
 } from "react-icons/fi";
 
-// Nav config per role
 const NAV = {
   admin: [
     {
@@ -18,31 +18,21 @@ const NAV = {
     {
       section: "Management",
       items: [
-        { label: "Manage Users", icon: <FiUsers size={15} />, to: "/admin/users" },
+        { label: "Sites", icon: <FiMapPin size={15} />, to: "/admin/sites" },
+        { label: "Events", icon: <FiCalendar size={15} />, to: "/admin/events" },
         { label: "Seedling Requests", icon: <FiClipboard size={15} />, to: "/admin/requests" },
-        { label: "Process Requests", icon: <FiCheckSquare size={15} />, to: "/admin/process-requests" },
-      ]
-    },
-    {
-      section: "Planting",
-      items: [
-        { label: "Planting Events", icon: <FiCalendar size={15} />, to: "/admin/events" },
-        { label: "Event Schedule", icon: <FiCalendar size={15} />, to: "/admin/schedule" },
-        { label: "Planting Map", icon: <FiMap size={15} />, to: "/admin/map" },
-      ]
-    },
-    {
-      section: "Monitoring",
-      items: [
-        { label: "Submit Report", icon: <FiUpload size={15} />, to: "/admin/submit-report" },
-        { label: "Verify Reports", icon: <FiCheckSquare size={15} />, to: "/admin/verify-reports" },
-        { label: "Tree Monitoring", icon: <FiFileText size={15} />, to: "/admin/monitoring" },
-      ]
-    },
-    {
-      section: "Reports",
-      items: [
+        { label: "Seedlings", icon: <FiPackage size={15} />, to: "/admin/seedlings" },
+        { label: "Planting", icon: <FiUpload size={15} />, to: "/admin/planting" },
+        { label: "Monitoring", icon: <FiCheckSquare size={15} />, to: "/admin/monitoring" },
+        { label: "Users", icon: <FiUsers size={15} />, to: "/admin/users" },
         { label: "Reports", icon: <FiFileText size={15} />, to: "/admin/reports" },
+      ]
+    },
+    {
+      section: "Account",
+      items: [
+        { label: "Settings", icon: <FiSettings size={15} />, to: "/admin/settings" },
+        { label: "Profile", icon: <FiUser size={15} />, to: "/admin/profile" },
       ]
     },
   ],
@@ -55,32 +45,21 @@ const NAV = {
       ]
     },
     {
-      section: "Seedlings",
+      section: "Management",
       items: [
-        { label: "Manage Seedlings", icon: <FiPackage size={15} />, to: "/staff/seedlings" },
-        { label: "Process Requests", icon: <FiCheckSquare size={15} />, to: "/staff/process-requests" },
-      ]
-    },
-    {
-      section: "Planting",
-      items: [
-        { label: "Planting Events", icon: <FiCalendar size={15} />, to: "/staff/events" },
-        { label: "Event Schedule", icon: <FiCalendar size={15} />, to: "/staff/schedule" },
-        { label: "Planting Map", icon: <FiMap size={15} />, to: "/staff/map" },
-      ]
-    },
-    {
-      section: "Monitoring",
-      items: [
-        { label: "Submit Report", icon: <FiUpload size={15} />, to: "/staff/submit-report" },
-        { label: "Verify Reports", icon: <FiCheckSquare size={15} />, to: "/staff/verify-reports" },
-        { label: "Tree Monitoring", icon: <FiFileText size={15} />, to: "/staff/monitoring" },
-      ]
-    },
-    {
-      section: "Reports",
-      items: [
+        { label: "Sites", icon: <FiMapPin size={15} />, to: "/staff/sites" },
+        { label: "Events", icon: <FiCalendar size={15} />, to: "/staff/events" },
+        { label: "Seedling Requests", icon: <FiClipboard size={15} />, to: "/staff/requests" },
+        { label: "Seedlings", icon: <FiPackage size={15} />, to: "/staff/seedlings" },
+        { label: "Planting", icon: <FiUpload size={15} />, to: "/staff/planting" },
+        { label: "Monitoring", icon: <FiCheckSquare size={15} />, to: "/staff/monitoring" },
         { label: "Reports", icon: <FiFileText size={15} />, to: "/staff/reports" },
+      ]
+    },
+    {
+      section: "Account",
+      items: [
+        { label: "Profile", icon: <FiUser size={15} />, to: "/staff/profile" },
       ]
     },
   ],
@@ -89,33 +68,29 @@ const NAV = {
     {
       section: "Main",
       items: [
-        { label: "Overview", icon: <FiLayout size={15} />, to: "/volunteer/dashboard" },
+        { label: "Dashboard", icon: <FiLayout size={15} />, to: "/volunteer/dashboard" },
       ]
     },
     {
       section: "Seedlings",
       items: [
-        { label: "Submit Request", icon: <FiClipboard size={15} />, to: "/volunteer/requests" },
+        { label: "Request Seedlings", icon: <FiClipboard size={15} />, to: "/volunteer/request-seedlings" },
+        { label: "My Requests", icon: <FiFileText size={15} />, to: "/volunteer/my-requests" },
       ]
     },
     {
-      section: "Planting",
+      section: "Activities",
       items: [
-        { label: "Event Schedule", icon: <FiCalendar size={15} />, to: "/volunteer/schedule" },
-        { label: "Planting Sites", icon: <FiMap size={15} />, to: "/volunteer/map" },
-        { label: "Submit Report", icon: <FiUpload size={15} />, to: "/volunteer/submit-report" },
+        { label: "Events", icon: <FiCalendar size={15} />, to: "/volunteer/events" },
+        { label: "My Sites", icon: <FiMapPin size={15} />, to: "/volunteer/my-sites" },
+        { label: "My Activities", icon: <FiActivity size={15} />, to: "/volunteer/my-activities" },
+        { label: "Monitoring", icon: <FiCheckSquare size={15} />, to: "/volunteer/monitoring" },
       ]
     },
     {
-      section: "Monitoring",
+      section: "Account",
       items: [
-        { label: "Tree Monitoring", icon: <FiFileText size={15} />, to: "/volunteer/monitoring" },
-      ]
-    },
-    {
-      section: "Reports",
-      items: [
-        { label: "Reports", icon: <FiFileText size={15} />, to: "/volunteer/reports" },
+        { label: "Profile", icon: <FiUser size={15} />, to: "/volunteer/profile" },
       ]
     },
   ],
@@ -124,16 +99,15 @@ const NAV = {
 export default function Sidebar() {
   const { userRole, currentUser, logout } = useAuth();
   const navigate = useNavigate();
-  const navItems = NAV[userRole] || NAV.staff;
+  const navItems = NAV[userRole] || NAV.volunteer;
 
   const handleLogout = () => {
     logout();
     navigate("/login");
   };
 
-  // Get initials for avatar
-  const initials = currentUser?.name
-    ? currentUser.name.split(" ").map((n) => n[0]).join("").slice(0, 2).toUpperCase()
+  const initials = currentUser?.fullName
+    ? currentUser.fullName.split(" ").map((n) => n[0]).join("").slice(0, 2).toUpperCase()
     : "U";
 
   return (
@@ -168,9 +142,6 @@ export default function Sidebar() {
               >
                 <span className="sb-item-icon">{item.icon}</span>
                 <span className="sb-item-label">{item.label}</span>
-                {item.badge && (
-                  <span className="sb-badge">{item.badge}</span>
-                )}
               </NavLink>
             ))}
           </div>
@@ -183,7 +154,7 @@ export default function Sidebar() {
           <div className="sb-avatar">{initials}</div>
           <div>
             <div className="sb-user-name">
-              {currentUser?.name || "User"}
+              {currentUser?.fullName || "User"}
             </div>
             <div className="sb-user-role">
               {userRole === "admin" ? "Administrator"
