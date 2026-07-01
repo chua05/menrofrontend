@@ -3,16 +3,23 @@ import { createContext, useContext, useState } from "react";
 const AuthContext = createContext();
 
 export function AuthProvider({ children }) {
-  // TODO: replace with real Firebase auth later
-  const [currentUser, setCurrentUser] = useState(null);
-  const [userRole, setUserRole] = useState(null);
+  const storedUser = JSON.parse(localStorage.getItem("user"));
+
+  const [currentUser, setCurrentUser] = useState(storedUser);
+  const [userRole, setUserRole] = useState(storedUser?.role || null);
 
   const login = (user, role) => {
-    setCurrentUser(user);
-    setUserRole(role);
+    const resolvedRole = role || user.role || "volunteer";
+    const userWithRole = { ...user, role: resolvedRole };
+
+    localStorage.setItem("user", JSON.stringify(userWithRole));
+    setCurrentUser(userWithRole);
+    setUserRole(resolvedRole);
   };
 
   const logout = () => {
+    localStorage.removeItem("user");
+    localStorage.removeItem("token");
     setCurrentUser(null);
     setUserRole(null);
   };

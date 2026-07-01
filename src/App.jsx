@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider } from "./context/AuthContext";
 import MainLayout from "./layouts/MainLayout";
+import ProtectedRoute from "./components/ProtectedRoute";
 
 // Auth
 import LoginPage from "./pages/LoginPage";
@@ -16,7 +17,7 @@ import ManageSeedlings from "./pages/staff/ManageSeedlings";
 import ProcessRequests from "./pages/staff/ProcessRequests";
 import VerifyReports from "./pages/staff/VerifyReports";
 
-// Shared pages (multiple roles)
+// Shared
 import SeedlingRequests from "./pages/shared/SeedlingRequests";
 import PlantingEvents from "./pages/shared/PlantingEvents";
 import EventSchedule from "./pages/shared/EventSchedule";
@@ -39,7 +40,11 @@ function App() {
           <Route path="/register" element={<RegisterPage />} />
 
           {/* Admin routes */}
-          <Route path="/admin" element={<MainLayout />}>
+          <Route path="/admin" element={
+            <ProtectedRoute allowedRoles={["admin"]}>
+              <MainLayout />
+            </ProtectedRoute>
+          }>
             <Route path="dashboard" element={<AdminDashboard />} />
             <Route path="users" element={<ManageUsers />} />
             <Route path="requests" element={<SeedlingRequests />} />
@@ -54,7 +59,11 @@ function App() {
           </Route>
 
           {/* Staff routes */}
-          <Route path="/staff" element={<MainLayout />}>
+          <Route path="/staff" element={
+            <ProtectedRoute allowedRoles={["staff"]}>
+              <MainLayout />
+            </ProtectedRoute>
+          }>
             <Route path="dashboard" element={<StaffDashboard />} />
             <Route path="seedlings" element={<ManageSeedlings />} />
             <Route path="process-requests" element={<ProcessRequests />} />
@@ -68,7 +77,11 @@ function App() {
           </Route>
 
           {/* Volunteer routes */}
-          <Route path="/volunteer" element={<MainLayout />}>
+          <Route path="/volunteer" element={
+            <ProtectedRoute allowedRoles={["volunteer"]}>
+              <MainLayout />
+            </ProtectedRoute>
+          }>
             <Route path="dashboard" element={<VolunteerDashboard />} />
             <Route path="requests" element={<SeedlingRequests />} />
             <Route path="schedule" element={<EventSchedule />} />
