@@ -128,7 +128,7 @@ export default function RegisterPage() {
           {/* Heading */}
           <div className="auth-heading">
             <h1>Create your <em>account.</em></h1>
-            <p>Register as a Barangay Official or Volunteer to access the monitoring system.</p>
+            <p>Register to access the MENRO system.</p>
           </div>
 
           <div className="auth-divider" />

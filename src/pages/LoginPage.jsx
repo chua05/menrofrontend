@@ -2,93 +2,178 @@ import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { FiMail, FiLock, FiEye, FiEyeOff } from "react-icons/fi";
 import { FcGoogle } from "react-icons/fc";
-import { useAuth } from "../context/AuthContext";
 import forestImg from "../assets/forest.jpg";
-import { signInWithEmailAndPassword, signInWithPopup } from "firebase/auth";
+import {signInWithEmailAndPassword, signInWithPopup} from "firebase/auth";
 import { auth, googleProvider } from "../firebase/config";
 import axios from "axios";
+import { useAuth } from "../context/AuthContext";
+
 
 export default function LoginPage() {
-  const [email, setEmail] = useState("");
+  const [email,setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
   const { login } = useAuth();
-
   const handleLogin = async (e) => {
     e.preventDefault();
     setError("");
-    if (!email || !password) {
-      setError("Please fill in all fields.");
-      return;
-    }
-    setLoading(true);
+    if (!email || !password){ 
+      setError("Please fill in all fields."); return; }
+      setLoading(true);
 
     try {
-      const credential = await signInWithEmailAndPassword(auth, email, password);
-      const token = await credential.user.getIdToken();
+      const credential =
+    await signInWithEmailAndPassword(
+    auth,
+    email,
+    password
+    );
 
-      const response = await axios.post(
-        "http://localhost:5000/api/auth/verify",
-        {},
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
+    const token =
+    await credential.user.getIdToken();
 
-      const userData = response.data.data;
-      const role = userData.role || "volunteer";
 
-      localStorage.setItem("token", token);
-      localStorage.setItem("user", JSON.stringify(userData));
-      login(userData, role);
+    const response =
+    await axios.post(
 
-      if (role === "admin") navigate("/admin/dashboard");
-      else if (role === "staff") navigate("/staff/dashboard");
-      else navigate("/volunteer/dashboard");
+    "http://localhost:5000/api/auth/verify",
 
-    } catch (error) {
-      if (error.code === "auth/user-not-found") {
-        setError("Account not found.");
-      } else if (error.code === "auth/wrong-password") {
-        setError("Incorrect password.");
-      } else if (error.code === "auth/invalid-credential") {
-        setError("Invalid email or password.");
-      } else {
-        setError(error.response?.data?.message || error.message || "Login failed.");
+    {},
+
+    {
+
+    headers:{
+    Authorization:
+    `Bearer ${token}`
+    }
+    }
+    );
+
+    localStorage.setItem("token", token);
+
+    login(response.data.data);
+
+    navigate("/dashboard");
       }
-    } finally {
+
+      catch(error){
+
+          if(error.code==="auth/user-not-found"){
+          setError("Account not found.");
+          }
+
+          else if(error.code==="auth/wrong-password"){
+          setError("Incorrect password.");
+          }
+
+          else if(error.code==="auth/invalid-credential"){
+          setError("Invalid email or password.");
+          }
+
+          else{
+          setError(
+          error.response?.data?.message ||
+          error.message ||
+          "Login failed."
+          );
+          }
+          }
+
+        finally {
       setLoading(false);
     }
   };
 
   const handleGoogleLogin = async () => {
-    try {
-      const result = await signInWithPopup(auth, googleProvider);
-      const token = await result.user.getIdToken();
 
-      const response = await axios.post(
+        try{
+
+        const result =
+
+        await signInWithPopup(
+
+        auth,
+
+        googleProvider
+
+        );
+
+
+        const token =
+
+        await result.user.getIdToken();
+
+
+        const response =
+
+        await axios.post(
+
         "http://localhost:5000/api/auth/verify",
+
         {},
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
 
-      const userData = response.data.data;
-      const role = userData.role || "volunteer";
+        {
 
-      localStorage.setItem("token", token);
-      localStorage.setItem("user", JSON.stringify(userData));
-      login(userData, role);
+        headers:{
 
-      if (role === "admin") navigate("/admin/dashboard");
-      else if (role === "staff") navigate("/staff/dashboard");
-      else navigate("/volunteer/dashboard");
+        Authorization:
 
-    } catch (error) {
-      console.log(error);
-      setError("Google sign in failed.");
-    }
-  };
+        `Bearer ${token}`
+
+        }
+
+        }
+
+        );
+
+
+        localStorage.setItem(
+
+        "token",
+
+        token
+
+        );
+
+
+        localStorage.setItem(
+
+        "user",
+
+        JSON.stringify(
+
+        response.data.data
+
+        )
+
+        );
+
+
+        navigate(
+
+        "/dashboard"
+
+        );
+
+
+        }
+
+        catch(error){
+
+        console.log(error);
+
+        setError(
+
+        "Google sign in failed."
+
+        );
+
+        }
+
+        };
 
   return (
     <div className="auth-page">
