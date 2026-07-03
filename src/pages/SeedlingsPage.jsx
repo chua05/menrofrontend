@@ -1,224 +1,188 @@
 import { useState } from "react";
-import { FiPlus, FiEdit2, FiTrash2, FiSearch, FiDownload } from "react-icons/fi";
+import { useAuth } from "../context/AuthContext";
+import { FiPackage, FiPlus, FiEdit2, FiAlertTriangle } from "react-icons/fi";
 
-const initialSeedlings = [
-  { id: 1, name: "Pili", category: "Fruit Tree", initial: 1500, distributed: 260, remaining: 1240, source: "Municipal Nursery", status: "Good" },
-  { id: 2, name: "Lansones", category: "Fruit Tree", initial: 2000, distributed: 550, remaining: 1450, source: "Municipal Nursery", status: "Good" },
-  { id: 3, name: "Kasuy", category: "Fruit Tree", initial: 1900, distributed: 400, remaining: 850, source: "Municipal Nursery", status: "Low" },
-  { id: 4, name: "Calamansi", category: "Fruit Tree", initial: 1000, distributed: 300, remaining: 700, source: "Municipal Nursery", status: "Good" },
-  { id: 5, name: "Narra", category: "Hardwood", initial: 800, distributed: 200, remaining: 600, source: "DENR Nursery", status: "Good" },
-  { id: 6, name: "Mahogany", category: "Hardwood", initial: 600, distributed: 580, remaining: 20, source: "DENR Nursery", status: "Critical" },
-  { id: 7, name: "Coconut", category: "Palm", initial: 3000, distributed: 1200, remaining: 1800, source: "LGU Nursery", status: "Good" },
+const SAMPLE_SEEDLINGS = [
+  { id: "S001", species: "Narra", category: "Hardwood", stock: 150, released: 50, status: "Available" },
+  { id: "S002", species: "Mahogany", category: "Hardwood", stock: 8, released: 92, status: "Low Stock" },
+  { id: "S003", species: "Bamboo", category: "Grass", stock: 200, released: 100, status: "Available" },
+  { id: "S004", species: "Molave", category: "Hardwood", stock: 0, released: 75, status: "Out of Stock" },
+  { id: "S005", species: "Ipil-ipil", category: "Legume", stock: 45, released: 30, status: "Available" },
 ];
 
-const statusStyle = {
-  Good:     { bg: "#dcfce7", color: "#166534" },
-  Low:      { bg: "#fef3c7", color: "#92400e" },
-  Critical: { bg: "#fee2e2", color: "#dc2626" },
+const STATUS_COLORS = {
+  "Available": { bg: "#dcfce7", color: "#166534" },
+  "Low Stock": { bg: "#fef9c3", color: "#854d0e" },
+  "Out of Stock": { bg: "#fee2e2", color: "#991b1b" },
 };
 
-const summaryCards = [
-  { label: "Total Inventory", value: "12,450", icon: "🌱", sub: "All seedling types" },
-  { label: "Average Health", value: "84.2%", icon: "📊", sub: "Based on stock condition" },
-  { label: "Pending Requests", value: "08", icon: "📋", sub: "Awaiting processing" },
-  { label: "Distributed", value: "3,820", icon: "📦", sub: "Total released" },
-];
-
-export default function ManageSeedlings() {
-  const [seedlings, setSeedlings] = useState(initialSeedlings);
-  const [search, setSearch] = useState("");
-  const [showModal, setShowModal] = useState(false);
-  const [editItem, setEditItem] = useState(null);
+export default function SeedlingsPage() {
+  const { userRole } = useAuth();
+  const [seedlings, setSeedlings] = useState(SAMPLE_SEEDLINGS);
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [selectedSeedling, setSelectedSeedling] = useState(null);
   const [form, setForm] = useState({
-    name: "", category: "", initial: "", source: "",
+    species: "", category: "", stock: "", description: ""
   });
+  const [editForm, setEditForm] = useState({
+    stock: "", description: ""
+  });
+  const [successMsg, setSuccessMsg] = useState("");
 
-  const filtered = seedlings.filter((s) =>
-    s.name.toLowerCase().includes(search.toLowerCase()) ||
-    s.category.toLowerCase().includes(search.toLowerCase())
-  );
+  const update = (field) => (e) =>
+    setForm((prev) => ({ ...prev, [field]: e.target.value }));
 
-  const openAdd = () => {
-    setEditItem(null);
-    setForm({ name: "", category: "", initial: "", source: "" });
-    setShowModal(true);
+  const updateEdit = (field) => (e) =>
+    setEditForm((prev) => ({ ...prev, [field]: e.target.value }));
+
+  const getStatus = (stock) => {
+    if (stock === 0) return "Out of Stock";
+    if (stock <= 10) return "Low Stock";
+    return "Available";
   };
 
-  const openEdit = (item) => {
-    setEditItem(item);
-    setForm({
-      name: item.name,
-      category: item.category,
-      initial: item.initial,
-      source: item.source,
-    });
-    setShowModal(true);
+  const handleAdd = (e) => {
+    e.preventDefault();
+    if (!form.species || !form.stock) return;
+
+    const newSeedling = {
+      id: `S00${seedlings.length + 1}`,
+      species: form.species,
+      category: form.category || "General",
+      stock: parseInt(form.stock),
+      released: 0,
+      status: getStatus(parseInt(form.stock)),
+    };
+
+    setSeedlings((prev) => [...prev, newSeedling]);
+    setForm({ species: "", category: "", stock: "", description: "" });
+    setShowAddModal(false);
+    setSuccessMsg("Seedling added successfully!");
+    setTimeout(() => setSuccessMsg(""), 3000);
   };
 
-  const handleDelete = (id) => {
-    setSeedlings((prev) => prev.filter((s) => s.id !== id));
-  };
-
-  const handleSave = () => {
-    if (!form.name || !form.category || !form.initial) return;
-    if (editItem) {
-      setSeedlings((prev) => prev.map((s) =>
-        s.id === editItem.id
-          ? { ...s, ...form, initial: Number(form.initial), remaining: Number(form.initial) - s.distributed }
+  const handleEdit = (e) => {
+    e.preventDefault();
+    setSeedlings((prev) =>
+      prev.map((s) =>
+        s.id === selectedSeedling.id
+          ? { ...s, stock: parseInt(editForm.stock), status: getStatus(parseInt(editForm.stock)) }
           : s
-      ));
-    } else {
-      const newItem = {
-        id: Date.now(),
-        name: form.name,
-        category: form.category,
-        initial: Number(form.initial),
-        distributed: 0,
-        remaining: Number(form.initial),
-        source: form.source,
-        status: "Good",
-      };
-      setSeedlings((prev) => [...prev, newItem]);
-    }
-    setShowModal(false);
+      )
+    );
+    setShowEditModal(false);
+    setSuccessMsg("Inventory updated successfully!");
+    setTimeout(() => setSuccessMsg(""), 3000);
   };
+
+  const lowStockCount = seedlings.filter((s) => s.status === "Low Stock").length;
+  const outOfStockCount = seedlings.filter((s) => s.status === "Out of Stock").length;
 
   return (
-    <div className="page-wrapper">
+    <div style={{ padding: "32px" }}>
 
       {/* Header */}
-      <div style={{
-        display: "flex",
-        alignItems: "flex-start",
-        justifyContent: "space-between",
-        marginBottom: "24px",
-      }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "24px" }}>
         <div>
-          <div className="page-title">Manage Seedlings</div>
-          <div className="page-subtitle">
-            Monitor and manage seedling inventory, stock levels, and distribution records.
-          </div>
+          <h1 style={{ fontSize: "22px", fontWeight: "700", color: "#1a1a1a", marginBottom: "4px" }}>
+            Seedling Inventory
+          </h1>
+          <p style={{ color: "#6b7280", fontSize: "14px" }}>
+            Manage and monitor available seedling stocks.
+          </p>
         </div>
-        <div style={{ display: "flex", gap: "8px" }}>
-          <button style={{
-            height: "34px", padding: "0 14px",
-            background: "#fff", border: "1px solid #ede9e4",
-            borderRadius: "8px", fontSize: "12px", color: "#78716c",
-            cursor: "pointer", fontFamily: "'DM Sans', sans-serif",
-            display: "flex", alignItems: "center", gap: "6px",
-          }}>
-            <FiDownload size={13} /> Export Report
-          </button>
-          <button
-            onClick={openAdd}
-            style={{
-              height: "34px", padding: "0 14px",
-              background: "#166534", border: "none",
-              borderRadius: "8px", fontSize: "12px", color: "#fff",
-              cursor: "pointer", fontFamily: "'DM Sans', sans-serif",
-              display: "flex", alignItems: "center", gap: "6px",
-            }}>
-            <FiPlus size={13} /> Add New Seedling
-          </button>
-        </div>
+        <button
+          onClick={() => setShowAddModal(true)}
+          style={{
+            background: "#16a34a",
+            color: "#fff",
+            border: "none",
+            borderRadius: "8px",
+            padding: "10px 18px",
+            fontSize: "13px",
+            fontWeight: "600",
+            cursor: "pointer",
+            display: "flex",
+            alignItems: "center",
+            gap: "6px",
+          }}
+        >
+          <FiPlus size={14} /> Add Seedling
+        </button>
       </div>
+
+      {/* Success message */}
+      {successMsg && (
+        <div style={{
+          background: "#dcfce7", color: "#166534",
+          padding: "12px 16px", borderRadius: "8px",
+          marginBottom: "16px", fontSize: "13px", fontWeight: "500"
+        }}>
+          ✅ {successMsg}
+        </div>
+      )}
+
+      {/* Alerts */}
+      {(lowStockCount > 0 || outOfStockCount > 0) && (
+        <div style={{
+          background: "#fef9c3", border: "1px solid #fde047",
+          borderRadius: "10px", padding: "14px 18px",
+          marginBottom: "20px", display: "flex",
+          alignItems: "center", gap: "10px",
+          fontSize: "13px", color: "#854d0e"
+        }}>
+          <FiAlertTriangle size={16} />
+          <span>
+            {lowStockCount > 0 && `${lowStockCount} species with low stock. `}
+            {outOfStockCount > 0 && `${outOfStockCount} species out of stock.`}
+          </span>
+        </div>
+      )}
 
       {/* Summary Cards */}
       <div style={{
         display: "grid",
-        gridTemplateColumns: "repeat(4, 1fr)",
-        gap: "12px",
-        marginBottom: "20px",
+        gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))",
+        gap: "16px", marginBottom: "24px"
       }}>
-        {summaryCards.map((c) => (
-          <div key={c.label} style={{
-            background: "#fff",
-            border: "1px solid #ede9e4",
-            borderRadius: "10px",
-            padding: "14px 16px",
+        {[
+          { label: "Total Species", value: seedlings.length, icon: "🌱" },
+          { label: "Available", value: seedlings.filter(s => s.status === "Available").length, icon: "✅" },
+          { label: "Low Stock", value: lowStockCount, icon: "⚠️" },
+          { label: "Out of Stock", value: outOfStockCount, icon: "❌" },
+        ].map((card) => (
+          <div key={card.label} style={{
+            background: "#fff", border: "1px solid #e5e7eb",
+            borderRadius: "12px", padding: "16px",
           }}>
-            <div style={{ fontSize: "20px", marginBottom: "8px" }}>{c.icon}</div>
-            <div style={{
-              fontSize: "24px",
-              fontFamily: "'DM Serif Display', serif",
-              color: "#1c1917",
-              lineHeight: 1,
-              marginBottom: "4px",
-            }}>
-              {c.value}
-            </div>
-            <div style={{ fontSize: "11px", color: "#78716c", fontWeight: 400 }}>
-              {c.label}
-            </div>
-            <div style={{ fontSize: "10px", color: "#c4bfba", fontWeight: 300, marginTop: "2px" }}>
-              {c.sub}
-            </div>
+            <div style={{ fontSize: "20px", marginBottom: "6px" }}>{card.icon}</div>
+            <div style={{ fontSize: "22px", fontWeight: "700", color: "#1a1a1a" }}>{card.value}</div>
+            <div style={{ fontSize: "12px", color: "#6b7280" }}>{card.label}</div>
           </div>
         ))}
       </div>
 
       {/* Table */}
       <div style={{
-        background: "#fff",
-        border: "1px solid #ede9e4",
-        borderRadius: "10px",
-        overflow: "hidden",
+        background: "#fff", border: "1px solid #e5e7eb",
+        borderRadius: "12px", overflow: "hidden"
       }}>
-
-        {/* Table header */}
-        <div style={{
-          padding: "14px 16px",
-          borderBottom: "1px solid #f5f4f0",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-        }}>
-          <div style={{ fontSize: "13px", fontWeight: 500, color: "#1c1917" }}>
-            Seedling Inventory
-          </div>
-          {/* Search */}
-          <div style={{ position: "relative" }}>
-            <FiSearch style={{
-              position: "absolute", left: "10px",
-              top: "50%", transform: "translateY(-50%)",
-              color: "#c4bfba", fontSize: "13px",
-            }} />
-            <input
-              type="text"
-              placeholder="Search seedlings..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              style={{
-                height: "32px",
-                padding: "0 12px 0 32px",
-                border: "1px solid #ede9e4",
-                borderRadius: "7px",
-                fontSize: "12px",
-                fontFamily: "'DM Sans', sans-serif",
-                color: "#1c1917",
-                background: "#faf9f6",
-                outline: "none",
-                width: "200px",
-              }}
-            />
-          </div>
+        <div style={{ padding: "16px 20px", borderBottom: "1px solid #e5e7eb" }}>
+          <h2 style={{ fontSize: "15px", fontWeight: "600", color: "#1a1a1a" }}>
+            All Seedlings
+          </h2>
         </div>
 
-        {/* Table */}
         <table style={{ width: "100%", borderCollapse: "collapse" }}>
           <thead>
-            <tr style={{ background: "#faf9f6" }}>
-              {["Species Name", "Category", "Initial Stock", "Distributed", "Remaining", "Source", "Status", "Actions"].map((h) => (
+            <tr style={{ background: "#f9fafb" }}>
+              {["ID", "Species", "Category", "Available Stock", "Released", "Status", "Actions"].map((h) => (
                 <th key={h} style={{
-                  padding: "9px 14px",
-                  textAlign: "left",
-                  fontSize: "10px",
-                  color: "#a8a29e",
-                  fontWeight: 500,
-                  letterSpacing: ".06em",
-                  textTransform: "uppercase",
-                  borderBottom: "1px solid #ede9e4",
-                  whiteSpace: "nowrap",
+                  padding: "12px 16px", textAlign: "left",
+                  fontSize: "12px", fontWeight: "600",
+                  color: "#6b7280", textTransform: "uppercase",
+                  letterSpacing: "0.05em"
                 }}>
                   {h}
                 </th>
@@ -226,220 +190,230 @@ export default function ManageSeedlings() {
             </tr>
           </thead>
           <tbody>
-            {filtered.map((row) => {
-              const s = statusStyle[row.status];
-              return (
-                <tr key={row.id} style={{ borderBottom: "1px solid #f5f4f0" }}>
-                  <td style={{
-                    padding: "11px 14px",
-                    fontSize: "13px",
-                    fontWeight: 500,
-                    color: "#1c1917",
+            {seedlings.map((s, i) => (
+              <tr key={s.id} style={{
+                borderTop: "1px solid #f3f4f6",
+                background: i % 2 === 0 ? "#fff" : "#fafafa"
+              }}>
+                <td style={{ padding: "14px 16px", fontSize: "13px", fontWeight: "600", color: "#1a1a1a" }}>
+                  {s.id}
+                </td>
+                <td style={{ padding: "14px 16px", fontSize: "13px", color: "#374151" }}>
+                  {s.species}
+                </td>
+                <td style={{ padding: "14px 16px", fontSize: "13px", color: "#374151" }}>
+                  {s.category}
+                </td>
+                <td style={{ padding: "14px 16px", fontSize: "13px", color: "#374151", fontWeight: "600" }}>
+                  {s.stock}
+                </td>
+                <td style={{ padding: "14px 16px", fontSize: "13px", color: "#374151" }}>
+                  {s.released}
+                </td>
+                <td style={{ padding: "14px 16px" }}>
+                  <span style={{
+                    padding: "4px 10px", borderRadius: "999px",
+                    fontSize: "12px", fontWeight: "600",
+                    background: STATUS_COLORS[s.status]?.bg,
+                    color: STATUS_COLORS[s.status]?.color,
                   }}>
-                    {row.name}
-                  </td>
-                  <td style={{ padding: "11px 14px", fontSize: "12px", color: "#78716c" }}>
-                    {row.category}
-                  </td>
-                  <td style={{ padding: "11px 14px", fontSize: "12px", color: "#78716c" }}>
-                    {row.initial.toLocaleString()}
-                  </td>
-                  <td style={{ padding: "11px 14px", fontSize: "12px", color: "#78716c" }}>
-                    {row.distributed.toLocaleString()}
-                  </td>
-                  <td style={{
-                    padding: "11px 14px",
-                    fontSize: "12px",
-                    fontWeight: 500,
-                    color: row.remaining < 100 ? "#dc2626" : "#166534",
-                  }}>
-                    {row.remaining.toLocaleString()}
-                  </td>
-                  <td style={{ padding: "11px 14px", fontSize: "12px", color: "#78716c" }}>
-                    {row.source}
-                  </td>
-                  <td style={{ padding: "11px 14px" }}>
-                    <span style={{
-                      fontSize: "10px",
-                      fontWeight: 500,
-                      background: s.bg,
-                      color: s.color,
-                      padding: "3px 9px",
-                      borderRadius: "10px",
-                    }}>
-                      {row.status}
-                    </span>
-                  </td>
-                  <td style={{ padding: "11px 14px" }}>
-                    <div style={{ display: "flex", gap: "6px" }}>
-                      <button
-                        onClick={() => openEdit(row)}
-                        style={{
-                          width: 28, height: 28,
-                          border: "1px solid #ede9e4",
-                          borderRadius: "6px",
-                          background: "#fff",
-                          cursor: "pointer",
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          color: "#78716c",
-                        }}>
-                        <FiEdit2 size={12} />
-                      </button>
-                      <button
-                        onClick={() => handleDelete(row.id)}
-                        style={{
-                          width: 28, height: 28,
-                          border: "1px solid #fecaca",
-                          borderRadius: "6px",
-                          background: "#fff5f5",
-                          cursor: "pointer",
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          color: "#dc2626",
-                        }}>
-                        <FiTrash2 size={12} />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              );
-            })}
+                    {s.status}
+                  </span>
+                </td>
+                <td style={{ padding: "14px 16px" }}>
+                  <button
+                    onClick={() => {
+                      setSelectedSeedling(s);
+                      setEditForm({ stock: s.stock, description: "" });
+                      setShowEditModal(true);
+                    }}
+                    style={{
+                      padding: "6px 12px",
+                      background: "#f3f4f6",
+                      color: "#374151",
+                      border: "none",
+                      borderRadius: "6px",
+                      fontSize: "12px",
+                      fontWeight: "600",
+                      cursor: "pointer",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "4px",
+                    }}
+                  >
+                    <FiEdit2 size={11} /> Update Stock
+                  </button>
+                </td>
+              </tr>
+            ))}
           </tbody>
         </table>
-
-        {/* Table footer */}
-        <div style={{
-          padding: "10px 16px",
-          background: "#faf9f6",
-          borderTop: "1px solid #ede9e4",
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-        }}>
-          <span style={{ fontSize: "11px", color: "#a8a29e" }}>
-            Showing {filtered.length} of {seedlings.length} seedling types
-          </span>
-          <div style={{ display: "flex", gap: "6px" }}>
-            <button style={{
-              height: "28px", padding: "0 10px",
-              border: "1px solid #ede9e4", borderRadius: "6px",
-              background: "#fff", fontSize: "11px",
-              color: "#78716c", cursor: "pointer",
-              fontFamily: "'DM Sans', sans-serif",
-            }}>
-              Update Stock
-            </button>
-          </div>
-        </div>
       </div>
 
-      {/* ── Modal ── */}
-      {showModal && (
+      {/* Add Modal */}
+      {showAddModal && (
         <div style={{
           position: "fixed", inset: 0,
-          background: "rgba(0,0,0,.4)",
-          zIndex: 100,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
+          background: "rgba(0,0,0,0.4)",
+          display: "flex", alignItems: "center",
+          justifyContent: "center", zIndex: 1000
         }}>
           <div style={{
-            background: "#fff",
-            borderRadius: "12px",
-            padding: "24px",
-            width: "100%",
-            maxWidth: "420px",
-            boxShadow: "0 20px 60px rgba(0,0,0,.15)",
+            background: "#fff", borderRadius: "16px",
+            padding: "28px", width: "460px",
+            boxShadow: "0 20px 60px rgba(0,0,0,0.15)"
           }}>
-            <div style={{
-              fontSize: "15px",
-              fontWeight: 500,
-              color: "#1c1917",
-              marginBottom: "20px",
-            }}>
-              {editItem ? "Edit Seedling" : "Add New Seedling"}
-            </div>
-
-            <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
-              {[
-                { label: "Species Name", key: "name", placeholder: "e.g. Pili" },
-                { label: "Category", key: "category", placeholder: "e.g. Fruit Tree" },
-                { label: "Initial Stock", key: "initial", placeholder: "e.g. 1000", type: "number" },
-                { label: "Source", key: "source", placeholder: "e.g. Municipal Nursery" },
-              ].map((f) => (
-                <div key={f.key}>
-                  <label style={{
-                    display: "block",
-                    fontSize: "10.5px",
-                    fontWeight: 500,
-                    color: "#78716c",
-                    letterSpacing: ".08em",
-                    textTransform: "uppercase",
-                    marginBottom: "6px",
-                  }}>
-                    {f.label}
+            <h2 style={{ fontSize: "17px", fontWeight: "700", marginBottom: "20px" }}>
+              Add New Seedling
+            </h2>
+            <form onSubmit={handleAdd}>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px" }}>
+                <div style={{ gridColumn: "1 / -1" }}>
+                  <label style={{ fontSize: "13px", fontWeight: "500", display: "block", marginBottom: "6px" }}>
+                    Species Name *
                   </label>
                   <input
-                    type={f.type || "text"}
-                    placeholder={f.placeholder}
-                    value={form[f.key]}
-                    onChange={(e) => setForm((prev) => ({ ...prev, [f.key]: e.target.value }))}
+                    type="text"
+                    placeholder="e.g. Narra"
+                    value={form.species}
+                    onChange={update("species")}
                     style={{
-                      width: "100%",
-                      height: "38px",
-                      padding: "0 12px",
-                      border: "1px solid #e7e5e4",
-                      borderRadius: "8px",
-                      fontSize: "13px",
-                      fontFamily: "'DM Sans', sans-serif",
-                      color: "#1c1917",
-                      outline: "none",
-                      background: "#faf9f6",
+                      width: "100%", padding: "10px 12px",
+                      border: "1px solid #e5e7eb", borderRadius: "8px",
+                      fontSize: "13px", boxSizing: "border-box"
                     }}
                   />
                 </div>
-              ))}
-            </div>
+                <div>
+                  <label style={{ fontSize: "13px", fontWeight: "500", display: "block", marginBottom: "6px" }}>
+                    Category
+                  </label>
+                  <select
+                    value={form.category}
+                    onChange={update("category")}
+                    style={{
+                      width: "100%", padding: "10px 12px",
+                      border: "1px solid #e5e7eb", borderRadius: "8px",
+                      fontSize: "13px", background: "#fff"
+                    }}
+                  >
+                    <option value="">Select category</option>
+                    <option value="Hardwood">Hardwood</option>
+                    <option value="Softwood">Softwood</option>
+                    <option value="Grass">Grass</option>
+                    <option value="Legume">Legume</option>
+                    <option value="Fruit">Fruit</option>
+                    <option value="General">General</option>
+                  </select>
+                </div>
+                <div>
+                  <label style={{ fontSize: "13px", fontWeight: "500", display: "block", marginBottom: "6px" }}>
+                    Initial Stock *
+                  </label>
+                  <input
+                    type="number"
+                    min="1"
+                    placeholder="e.g. 100"
+                    value={form.stock}
+                    onChange={update("stock")}
+                    style={{
+                      width: "100%", padding: "10px 12px",
+                      border: "1px solid #e5e7eb", borderRadius: "8px",
+                      fontSize: "13px", boxSizing: "border-box"
+                    }}
+                  />
+                </div>
+              </div>
+              <div style={{ display: "flex", gap: "12px", marginTop: "20px", justifyContent: "flex-end" }}>
+                <button
+                  type="button"
+                  onClick={() => setShowAddModal(false)}
+                  style={{
+                    padding: "10px 18px", border: "1px solid #e5e7eb",
+                    borderRadius: "8px", fontSize: "13px",
+                    background: "#fff", cursor: "pointer"
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  style={{
+                    padding: "10px 18px", background: "#16a34a",
+                    color: "#fff", border: "none",
+                    borderRadius: "8px", fontSize: "13px",
+                    fontWeight: "600", cursor: "pointer"
+                  }}
+                >
+                  Add Seedling
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
-            <div style={{
-              display: "flex",
-              gap: "8px",
-              marginTop: "20px",
-              justifyContent: "flex-end",
-            }}>
-              <button
-                onClick={() => setShowModal(false)}
-                style={{
-                  height: "36px", padding: "0 16px",
-                  border: "1px solid #ede9e4",
-                  borderRadius: "8px",
-                  background: "#fff",
-                  fontSize: "12px",
-                  color: "#78716c",
-                  cursor: "pointer",
-                  fontFamily: "'DM Sans', sans-serif",
-                }}>
-                Cancel
-              </button>
-              <button
-                onClick={handleSave}
-                style={{
-                  height: "36px", padding: "0 16px",
-                  border: "none",
-                  borderRadius: "8px",
-                  background: "#166534",
-                  fontSize: "12px",
-                  color: "#fff",
-                  cursor: "pointer",
-                  fontFamily: "'DM Sans', sans-serif",
-                  fontWeight: 500,
-                }}>
-                {editItem ? "Save Changes" : "Add Seedling"}
-              </button>
-            </div>
+      {/* Edit/Update Stock Modal */}
+      {showEditModal && selectedSeedling && (
+        <div style={{
+          position: "fixed", inset: 0,
+          background: "rgba(0,0,0,0.4)",
+          display: "flex", alignItems: "center",
+          justifyContent: "center", zIndex: 1000
+        }}>
+          <div style={{
+            background: "#fff", borderRadius: "16px",
+            padding: "28px", width: "400px",
+            boxShadow: "0 20px 60px rgba(0,0,0,0.15)"
+          }}>
+            <h2 style={{ fontSize: "17px", fontWeight: "700", marginBottom: "6px" }}>
+              Update Stock
+            </h2>
+            <p style={{ fontSize: "13px", color: "#6b7280", marginBottom: "20px" }}>
+              {selectedSeedling.species} — Current stock: {selectedSeedling.stock}
+            </p>
+            <form onSubmit={handleEdit}>
+              <div>
+                <label style={{ fontSize: "13px", fontWeight: "500", display: "block", marginBottom: "6px" }}>
+                  New Stock Quantity *
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  value={editForm.stock}
+                  onChange={updateEdit("stock")}
+                  style={{
+                    width: "100%", padding: "10px 12px",
+                    border: "1px solid #e5e7eb", borderRadius: "8px",
+                    fontSize: "13px", boxSizing: "border-box"
+                  }}
+                />
+              </div>
+              <div style={{ display: "flex", gap: "12px", marginTop: "20px", justifyContent: "flex-end" }}>
+                <button
+                  type="button"
+                  onClick={() => setShowEditModal(false)}
+                  style={{
+                    padding: "10px 18px", border: "1px solid #e5e7eb",
+                    borderRadius: "8px", fontSize: "13px",
+                    background: "#fff", cursor: "pointer"
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  style={{
+                    padding: "10px 18px", background: "#16a34a",
+                    color: "#fff", border: "none",
+                    borderRadius: "8px", fontSize: "13px",
+                    fontWeight: "600", cursor: "pointer"
+                  }}
+                >
+                  Update
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
