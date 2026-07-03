@@ -32,57 +32,51 @@ function App() {
           <Route path="/register" element={<RegisterPage />} />
 
           {/* Admin routes */}
-          <Route path="/admin" element={
-            <ProtectedRoute allowedRoles={["admin"]}>
-              <DashboardLayout/>
-            </ProtectedRoute>
-          }>
-            <Route path="dashboard" element={<DashboardPage />} />
-            <Route path="users" element={<UsersPage />} />
-            <Route path="seedlings" element={<SeedlingsPage />} />
-            <Route path="requests" element={<SeedlingRequestsPage />} />
-            <Route path="process-requests" element={<ProcessRequestsPage />} />
-            <Route path="events" element={<EventsPage />} />
-            <Route path="schedule" element={<EventSchedulePage />} />
-            <Route path="sites" element={<SitesPage />} />
-            <Route path="planting" element={<PlantingPage />} />
-            <Route path="verify-reports" element={<VerifyReportsPage />} />
-            <Route path="monitoring" element={<MonitoringPage />} />
-            <Route path="reports" element={<ReportsPage />} />
+          <Route element={<ProtectedRoute allowedRoles={["admin"]} />}>
+            <Route path="/admin" element={<DashboardLayout />}>
+              <Route path="dashboard" element={<DashboardPage />} />
+              <Route path="users" element={<UsersPage />} />
+              <Route path="seedlings" element={<SeedlingsPage />} />
+              <Route path="requests" element={<SeedlingRequestsPage />} />
+              <Route path="process-requests" element={<ProcessRequestsPage />} />
+              <Route path="events" element={<EventsPage />} />
+              <Route path="schedule" element={<EventSchedulePage />} />
+              <Route path="sites" element={<SitesPage />} />
+              <Route path="planting" element={<PlantingPage />} />
+              <Route path="verify-reports" element={<VerifyReportsPage />} />
+              <Route path="monitoring" element={<MonitoringPage />} />
+              <Route path="reports" element={<ReportsPage />} />
+            </Route>
           </Route>
 
           {/* Staff routes */}
-          <Route path="/staff" element={
-            <ProtectedRoute allowedRoles={["staff"]}>
-             <DashboardLayout/>
-            </ProtectedRoute>
-          }>
-            <Route path="dashboard" element={<DashboardPage />} />
-            <Route path="seedlings" element={<SeedlingsPage />} />
-            <Route path="requests" element={<SeedlingRequestsPage />} />
-            <Route path="process-requests" element={<ProcessRequestsPage />} />
-            <Route path="events" element={<EventsPage />} />
-            <Route path="schedule" element={<EventSchedulePage />} />
-            <Route path="sites" element={<SitesPage />} />
-            <Route path="planting" element={<PlantingPage />} />
-            <Route path="verify-reports" element={<VerifyReportsPage />} />
-            <Route path="monitoring" element={<MonitoringPage />} />
-            <Route path="reports" element={<ReportsPage />} />
+          <Route element={<ProtectedRoute allowedRoles={["staff"]} />}>
+            <Route path="/staff" element={<DashboardLayout />}>
+              <Route path="dashboard" element={<DashboardPage />} />
+              <Route path="seedlings" element={<SeedlingsPage />} />
+              <Route path="requests" element={<SeedlingRequestsPage />} />
+              <Route path="process-requests" element={<ProcessRequestsPage />} />
+              <Route path="events" element={<EventsPage />} />
+              <Route path="schedule" element={<EventSchedulePage />} />
+              <Route path="sites" element={<SitesPage />} />
+              <Route path="planting" element={<PlantingPage />} />
+              <Route path="verify-reports" element={<VerifyReportsPage />} />
+              <Route path="monitoring" element={<MonitoringPage />} />
+              <Route path="reports" element={<ReportsPage />} />
+            </Route>
           </Route>
 
-          {/* Volunteer routes */}
-          <Route path="/volunteer" element={
-            <ProtectedRoute allowedRoles={["volunteer"]}>
-              <DashboardLayout/>
-            </ProtectedRoute>
-          }>
-            <Route path="dashboard" element={<DashboardPage />} />
-            <Route path="request-seedlings" element={<SeedlingRequestsPage />} />
-            <Route path="my-requests" element={<SeedlingRequestsPage />} />
-            <Route path="events" element={<EventsPage />} />
-            <Route path="my-sites" element={<SitesPage />} />
-            <Route path="my-activities" element={<PlantingPage />} />
-            <Route path="monitoring" element={<MonitoringPage />} />
+          {/* Participant routes */}
+          <Route element={<ProtectedRoute allowedRoles={["participant"]} />}>
+            <Route path="/participant" element={<DashboardLayout />}>
+              <Route path="dashboard" element={<DashboardPage />} />
+              <Route path="request-seedlings" element={<SeedlingRequestsPage />} />
+              <Route path="my-requests" element={<SeedlingRequestsPage />} />
+              <Route path="events" element={<EventsPage />} />
+              <Route path="my-sites" element={<SitesPage />} />
+              <Route path="my-activities" element={<PlantingPage />} />
+              <Route path="monitoring" element={<MonitoringPage />} />
+            </Route>
           </Route>
 
         </Routes>
