@@ -72,15 +72,15 @@ export default function SeedlingRequestsPage() {
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "24px" }}>
         <div>
           <h1 style={{ fontSize: "22px", fontWeight: "700", color: "#1a1a1a", marginBottom: "4px" }}>
-            {userRole === "volunteer" ? "Seedling Requests" : "Manage Seedling Requests"}
+            {userRole === "participant" ? "Seedling Requests" : "Manage Seedling Requests"}
           </h1>
           <p style={{ color: "#6b7280", fontSize: "14px" }}>
-            {userRole === "volunteer"
+            {userRole === "participant"
               ? "Submit and track your seedling requests."
               : "Review and process seedling requests."}
           </p>
         </div>
-        {userRole === "volunteer" && (
+        {userRole === "participant" && (
           <button
             onClick={() => setShowForm(!showForm)}
             style={{
@@ -114,8 +114,8 @@ export default function SeedlingRequestsPage() {
         </div>
       )}
 
-      {/* Submit Form — Volunteer only */}
-      {showForm && userRole === "volunteer" && (
+      {/* Submit Form — participant only */}
+      {showForm && userRole === "participant" && (
         <div style={{
           background: "#fff",
           border: "1px solid #e5e7eb",
@@ -289,7 +289,7 @@ export default function SeedlingRequestsPage() {
       }}>
         <div style={{ padding: "16px 20px", borderBottom: "1px solid #e5e7eb" }}>
           <h2 style={{ fontSize: "15px", fontWeight: "600", color: "#1a1a1a" }}>
-            {userRole === "volunteer" ? "My Requests" : "All Requests"}
+            {userRole === "participant" ? "My Requests" : "All Requests"}
           </h2>
         </div>
 

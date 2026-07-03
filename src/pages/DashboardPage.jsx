@@ -14,7 +14,7 @@ const CARDS = {
     { label: "Planting Sites", value: "—", icon: "📍" },
     { label: "Available Seedlings", value: "—", icon: "📦" },
   ],
-  volunteer: [
+  participant: [
     { label: "My Requests", value: "—", icon: "📋" },
     { label: "Joined Events", value: "—", icon: "📅" },
     { label: "Submitted Reports", value: "—", icon: "📄" },
@@ -25,13 +25,13 @@ const CARDS = {
 const WELCOME = {
   admin: "Welcome back, Administrator. Here is the system overview.",
   staff: "Welcome back. Here are your current operational tasks.",
-  volunteer: "Welcome! Here is a summary of your reforestation activities.",
+  participant: "Welcome! Here is a summary of your reforestation activities.",
 };
 
 export default function DashboardPage() {
   const { currentUser, userRole } = useAuth();
-  const cards = CARDS[userRole] || CARDS.volunteer;
-  const welcome = WELCOME[userRole] || WELCOME.volunteer;
+  const cards = CARDS[userRole] || CARDS.participant;
+  const welcome = WELCOME[userRole] || WELCOME.participant;
 
   return (
     <div style={{ padding: "32px" }}>

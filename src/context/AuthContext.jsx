@@ -9,7 +9,7 @@ export function AuthProvider({ children }) {
   const [userRole, setUserRole] = useState(storedUser?.role || null);
 
   const login = (user, role, token) => {
-    const resolvedRole = role || user.role || "volunteer";
+    const resolvedRole = role || user.role || "participant";
     const userWithRole = { ...user, role: resolvedRole };
 
     localStorage.setItem("user", JSON.stringify(userWithRole));

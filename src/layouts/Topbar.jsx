@@ -48,7 +48,7 @@ export default function Topbar() {
             <div className="topbar-user-role">
               {userRole === "admin" ? "Office Head"
                 : userRole === "staff" ? "Office Member"
-                : "Volunteer"}
+                : "Participant"}
             </div>
           </div>
         </div>

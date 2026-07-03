@@ -64,33 +64,33 @@ const NAV = {
     },
   ],
 
-  volunteer: [
+  participant: [
     {
       section: "Main",
       items: [
-        { label: "Dashboard", icon: <FiLayout size={15} />, to: "/volunteer/dashboard" },
+        { label: "Dashboard", icon: <FiLayout size={15} />, to: "/participant/dashboard" },
       ]
     },
     {
       section: "Seedlings",
       items: [
-        { label: "Request Seedlings", icon: <FiClipboard size={15} />, to: "/volunteer/request-seedlings" },
-        { label: "My Requests", icon: <FiFileText size={15} />, to: "/volunteer/my-requests" },
+        { label: "Request Seedlings", icon: <FiClipboard size={15} />, to: "/participant/request-seedlings" },
+        { label: "My Requests", icon: <FiFileText size={15} />, to: "/participant/my-requests" },
       ]
     },
     {
       section: "Activities",
       items: [
-        { label: "Events", icon: <FiCalendar size={15} />, to: "/volunteer/events" },
-        { label: "My Sites", icon: <FiMapPin size={15} />, to: "/volunteer/my-sites" },
-        { label: "My Activities", icon: <FiActivity size={15} />, to: "/volunteer/my-activities" },
-        { label: "Monitoring", icon: <FiCheckSquare size={15} />, to: "/volunteer/monitoring" },
+        { label: "Events", icon: <FiCalendar size={15} />, to: "/participant/events" },
+        { label: "My Sites", icon: <FiMapPin size={15} />, to: "/participant/my-sites" },
+        { label: "My Activities", icon: <FiActivity size={15} />, to: "/participant/my-activities" },
+        { label: "Monitoring", icon: <FiCheckSquare size={15} />, to: "/participant/monitoring" },
       ]
     },
     {
       section: "Account",
       items: [
-        { label: "Profile", icon: <FiUser size={15} />, to: "/volunteer/profile" },
+        { label: "Profile", icon: <FiUser size={15} />, to: "/participant/profile" },
       ]
     },
   ],
@@ -99,7 +99,7 @@ const NAV = {
 export default function Sidebar() {
   const { userRole, currentUser, logout } = useAuth();
   const navigate = useNavigate();
-  const navItems = NAV[userRole] || NAV.volunteer;
+  const navItems = NAV[userRole] || NAV.participant;
 
   const handleLogout = () => {
     logout();
@@ -159,7 +159,7 @@ export default function Sidebar() {
             <div className="sb-user-role">
               {userRole === "admin" ? "Administrator"
                 : userRole === "staff" ? "Office Member"
-                : "Volunteer"}
+                : "participant"}
             </div>
           </div>
         </div>
