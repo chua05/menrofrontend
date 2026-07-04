@@ -20,6 +20,8 @@ import SitesPage from "./pages/SitesPage";
 import PlantingPage from "./pages/PlantingPage";
 import MonitoringPage from "./pages/MonitoringPage";
 import ReportsPage from "./pages/ReportsPage";
+import ProfilePage from "./pages/ProfilePage";
+import SettingsPage from "./pages/SettingsPage";
 
 function App() {
   return (
@@ -46,6 +48,8 @@ function App() {
               <Route path="verify-reports" element={<VerifyReportsPage />} />
               <Route path="monitoring" element={<MonitoringPage />} />
               <Route path="reports" element={<ReportsPage />} />
+              <Route path="profile" element={<ProfilePage />} />
+              <Route path="settings" element={<SettingsPage />} />
             </Route>
           </Route>
 
@@ -63,6 +67,8 @@ function App() {
               <Route path="verify-reports" element={<VerifyReportsPage />} />
               <Route path="monitoring" element={<MonitoringPage />} />
               <Route path="reports" element={<ReportsPage />} />
+              <Route path="profile" element={<ProfilePage />} />
+              <Route path="settings" element={<SettingsPage />} />  
             </Route>
           </Route>
 
@@ -76,6 +82,7 @@ function App() {
               <Route path="my-sites" element={<SitesPage />} />
               <Route path="my-activities" element={<PlantingPage />} />
               <Route path="monitoring" element={<MonitoringPage />} />
+              <Route path="profile" element={<ProfilePage />} />
             </Route>
           </Route>
 
