@@ -3,10 +3,17 @@ import { useAuth } from "../context/AuthContext";
 import {
   FiLayout, FiUsers, FiPackage, FiClipboard,
   FiMap, FiCalendar, FiCheckSquare, FiFileText,
+<<<<<<< HEAD
   FiUpload, FiLogOut
 } from "react-icons/fi";
 
 // Nav config per role
+=======
+  FiUpload, FiLogOut, FiSettings, FiUser,
+  FiMapPin, FiActivity
+} from "react-icons/fi";
+
+>>>>>>> origin/rebuild-frontend
 const NAV = {
   admin: [
     {
@@ -18,6 +25,7 @@ const NAV = {
     {
       section: "Management",
       items: [
+<<<<<<< HEAD
         { label: "Manage Users", icon: <FiUsers size={15} />, to: "/admin/users" },
         { label: "Seedling Requests", icon: <FiClipboard size={15} />, to: "/admin/requests" },
         { label: "Process Requests", icon: <FiCheckSquare size={15} />, to: "/admin/process-requests" },
@@ -45,6 +53,25 @@ const NAV = {
         { label: "Reports", icon: <FiFileText size={15} />, to: "/admin/reports" },
       ]
     },
+=======
+        { label: "Sites", icon: <FiMapPin size={15} />, to: "/admin/sites" },
+        { label: "Events", icon: <FiCalendar size={15} />, to: "/admin/events" },
+        { label: "Seedling Requests", icon: <FiClipboard size={15} />, to: "/admin/requests" },
+        { label: "Seedlings", icon: <FiPackage size={15} />, to: "/admin/seedlings" },
+        { label: "Planting", icon: <FiUpload size={15} />, to: "/admin/planting" },
+        { label: "Monitoring", icon: <FiCheckSquare size={15} />, to: "/admin/monitoring" },
+        { label: "Users", icon: <FiUsers size={15} />, to: "/admin/users" },
+        { label: "Reports", icon: <FiFileText size={15} />, to: "/admin/reports" },
+      ]
+    },
+    {
+      section: "Account",
+      items: [
+        { label: "Settings", icon: <FiSettings size={15} />, to: "/admin/settings" },
+        { label: "Profile", icon: <FiUser size={15} />, to: "/admin/profile" },
+      ]
+    },
+>>>>>>> origin/rebuild-frontend
   ],
 
   staff: [
@@ -55,6 +82,7 @@ const NAV = {
       ]
     },
     {
+<<<<<<< HEAD
       section: "Seedlings",
       items: [
         { label: "Manage Seedlings", icon: <FiPackage size={15} />, to: "/staff/seedlings" },
@@ -90,11 +118,38 @@ const NAV = {
       section: "Main",
       items: [
         { label: "Overview", icon: <FiLayout size={15} />, to: "/volunteer/dashboard" },
+=======
+      section: "Management",
+      items: [
+        { label: "Sites", icon: <FiMapPin size={15} />, to: "/staff/sites" },
+        { label: "Events", icon: <FiCalendar size={15} />, to: "/staff/events" },
+        { label: "Seedling Requests", icon: <FiClipboard size={15} />, to: "/staff/requests" },
+        { label: "Seedlings", icon: <FiPackage size={15} />, to: "/staff/seedlings" },
+        { label: "Planting", icon: <FiUpload size={15} />, to: "/staff/planting" },
+        { label: "Monitoring", icon: <FiCheckSquare size={15} />, to: "/staff/monitoring" },
+        { label: "Reports", icon: <FiFileText size={15} />, to: "/staff/reports" },
+      ]
+    },
+    {
+      section: "Account",
+      items: [
+        { label: "Profile", icon: <FiUser size={15} />, to: "/staff/profile" },
+      ]
+    },
+  ],
+
+  participant: [
+    {
+      section: "Main",
+      items: [
+        { label: "Dashboard", icon: <FiLayout size={15} />, to: "/participant/dashboard" },
+>>>>>>> origin/rebuild-frontend
       ]
     },
     {
       section: "Seedlings",
       items: [
+<<<<<<< HEAD
         { label: "Submit Request", icon: <FiClipboard size={15} />, to: "/volunteer/requests" },
       ]
     },
@@ -116,6 +171,25 @@ const NAV = {
       section: "Reports",
       items: [
         { label: "Reports", icon: <FiFileText size={15} />, to: "/volunteer/reports" },
+=======
+        { label: "Request Seedlings", icon: <FiClipboard size={15} />, to: "/participant/request-seedlings" },
+        { label: "My Requests", icon: <FiFileText size={15} />, to: "/participant/my-requests" },
+      ]
+    },
+    {
+      section: "Activities",
+      items: [
+        { label: "Events", icon: <FiCalendar size={15} />, to: "/participant/events" },
+        { label: "My Sites", icon: <FiMapPin size={15} />, to: "/participant/my-sites" },
+        { label: "My Activities", icon: <FiActivity size={15} />, to: "/participant/my-activities" },
+        { label: "Monitoring", icon: <FiCheckSquare size={15} />, to: "/participant/monitoring" },
+      ]
+    },
+    {
+      section: "Account",
+      items: [
+        { label: "Profile", icon: <FiUser size={15} />, to: "/participant/profile" },
+>>>>>>> origin/rebuild-frontend
       ]
     },
   ],
@@ -124,16 +198,25 @@ const NAV = {
 export default function Sidebar() {
   const { userRole, currentUser, logout } = useAuth();
   const navigate = useNavigate();
+<<<<<<< HEAD
   const navItems = NAV[userRole] || NAV.staff;
+=======
+  const navItems = NAV[userRole] || NAV.participant;
+>>>>>>> origin/rebuild-frontend
 
   const handleLogout = () => {
     logout();
     navigate("/login");
   };
 
+<<<<<<< HEAD
   // Get initials for avatar
   const initials = currentUser?.fullname
     ? currentUser.fullname.split(" ").map((n) => n[0]).join("").slice(0, 2).toUpperCase()
+=======
+  const initials = currentUser?.fullName
+    ? currentUser.fullName.split(" ").map((n) => n[0]).join("").slice(0, 2).toUpperCase()
+>>>>>>> origin/rebuild-frontend
     : "U";
 
   return (
@@ -168,9 +251,12 @@ export default function Sidebar() {
               >
                 <span className="sb-item-icon">{item.icon}</span>
                 <span className="sb-item-label">{item.label}</span>
+<<<<<<< HEAD
                 {item.badge && (
                   <span className="sb-badge">{item.badge}</span>
                 )}
+=======
+>>>>>>> origin/rebuild-frontend
               </NavLink>
             ))}
           </div>
@@ -183,12 +269,20 @@ export default function Sidebar() {
           <div className="sb-avatar">{initials}</div>
           <div>
             <div className="sb-user-name">
+<<<<<<< HEAD
               {currentUser?.fullname || "User"}
+=======
+              {currentUser?.fullName || "User"}
+>>>>>>> origin/rebuild-frontend
             </div>
             <div className="sb-user-role">
               {userRole === "admin" ? "Administrator"
                 : userRole === "staff" ? "Office Member"
+<<<<<<< HEAD
                 : "Volunteer"}
+=======
+                : "participant"}
+>>>>>>> origin/rebuild-frontend
             </div>
           </div>
         </div>

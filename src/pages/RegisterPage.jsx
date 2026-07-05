@@ -29,13 +29,13 @@ const Field = ({ label, error, children }) => (
 export default function RegisterPage() {
   const navigate = useNavigate();
   const [form, setForm] = useState({
-  fullName: "",
-  username: "",
-  email: "",
-  contactNumber: "",
-  organization: "",
-  password: "",
-  confirmPassword: "",
+    fullName: "",
+    username: "",
+    email: "",
+    contactNumber: "",
+    organization: "",
+    password: "",
+    confirmPassword: "",
   });
 
   const [showPass, setShowPass] = useState(false);
@@ -47,49 +47,32 @@ export default function RegisterPage() {
   const update = (field) => (e) =>
     setForm((prev) => ({ ...prev, [field]: e.target.value }));
 
-
   const validate = () => {
-  const e = {};
+    const e = {};
 
-  if (!form.fullName.trim())
-    e.fullName = "Required";
+    if (!form.fullName.trim())
+      e.fullName = "Required";
 
-  if (!form.username.trim())
-    e.username = "Required";
+    if (!form.username.trim())
+      e.username = "Required";
 
-  if (
-    !form.email ||
-    !/\S+@\S+\.\S+/.test(form.email)
-  )
-    e.email = "Enter a valid email";
+    if (!form.email || !/\S+@\S+\.\S+/.test(form.email))
+      e.email = "Enter a valid email";
 
-  if (
-  !form.contactNumber ||
-  !/^09\d{9}$/.test(form.contactNumber)
-)
-  e.contactNumber =
-    "Enter a valid mobile number";
+    if (!form.contactNumber || !/^09\d{9}$/.test(form.contactNumber))
+      e.contactNumber = "Enter a valid mobile number";
 
+    if (!form.password || form.password.length < 6)
+      e.password = "Min. 6 characters";
 
-  if (
-    !form.password ||
-    form.password.length < 6
-  )
-    e.password = "Min. 6 characters";
+    if (form.password !== form.confirmPassword)
+      e.confirmPassword = "Passwords do not match";
 
-  if (
-    form.password !== form.confirmPassword
-  )
-    e.confirmPassword =
-      "Passwords do not match";
+    if (!acceptedTerms)
+      e.terms = "You must accept the Terms and Privacy Policy";
 
-  if (!acceptedTerms)
-    e.terms = 
-      "You must accept the Terms and Privacy Policy";
-
-  return e;
-
-};
+    return e;
+  };
 
   const handleRegister = async (e) => {
     e.preventDefault();
@@ -97,7 +80,7 @@ export default function RegisterPage() {
     if (Object.keys(errs).length > 0) { setErrors(errs); return; }
     setErrors({});
     setLoading(true);
-    try{
+    try {
       await axios.post(
         "http://localhost:5000/api/auth/register",
         {
@@ -111,15 +94,15 @@ export default function RegisterPage() {
       );
       navigate("/login");
     }
-    catch(err){
+    catch (err) {
       setErrors({
-        general: err.response?.data?.message ||"Registration failed"});
-      }
-      finally{
-   setLoading(false);
-}
+        general: err.response?.data?.message || "Registration failed"
+      });
+    }
+    finally {
+      setLoading(false);
+    }
   };
-
 
   return (
     <div className="auth-page">
@@ -145,7 +128,7 @@ export default function RegisterPage() {
           {/* Heading */}
           <div className="auth-heading">
             <h1>Create your <em>account.</em></h1>
-            <p>Register to access the MENRO monitoring system.</p>
+            <p>Register to access the MENRO system.</p>
           </div>
 
           <div className="auth-divider" />
@@ -183,24 +166,18 @@ export default function RegisterPage() {
               </div>
             </Field>
 
-            <Field
-                label="Contact Number"
-                error={errors.contactNumber}
-              >
-                <div className="auth-input-wrap">
-                  <FiUser size={14}
-                    className="auth-icon"
-                  />
-
-                  <input
-                    type="text"
-                    placeholder="09123456789"
-                    value={form.contactNumber}
-                    onChange={update("contactNumber")}
-                    className="auth-input"
-                  />
-                </div>
-              </Field>
+            <Field label="Contact Number" error={errors.contactNumber}>
+              <div className="auth-input-wrap">
+                <FiUser size={14} className="auth-icon" />
+                <input
+                  type="text"
+                  placeholder="09123456789"
+                  value={form.contactNumber}
+                  onChange={update("contactNumber")}
+                  className="auth-input"
+                />
+              </div>
+            </Field>
 
             <Field label="Organization (optional)">
               <input
@@ -329,4 +306,4 @@ export default function RegisterPage() {
 
     </div>
   );
-  }
+}
