@@ -15,7 +15,7 @@ export default function QuickActions() {
 
   const role = userRole;
 
-  let actions = [];
+  let actions;
 
   if (role === "admin") {
 

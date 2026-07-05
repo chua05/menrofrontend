@@ -6,7 +6,7 @@ export default function RecentActivities() {
 
   const role = userRole;
 
-  let activities = [];
+  let activities;
 
   if (role === "admin") {
     activities = [

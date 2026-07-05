@@ -1,13 +1,3 @@
-<<<<<<< HEAD
-import { FiBell, FiSettings } from "react-icons/fi";
-import { useAuth } from "../context/AuthContext";
-
-export default function Topbar() {
-  const { currentUser, userRole } = useAuth();
-
-  const initials = currentUser?.fullname
-    ? currentUser.fullname.split(" ").map((n) => n[0]).join("").slice(0, 2).toUpperCase()
-=======
 import { useState, useRef, useEffect } from "react";
 import { FiBell, FiSettings } from "react-icons/fi";
 import { useAuth } from "../context/AuthContext";
@@ -68,11 +58,11 @@ export default function Topbar() {
   };
 
   const currentList = notifications[activeTab];
-  const unreadTab = notifications[activeTab].filter(n => !n.read).length;
+  // number of unread items in the currently active notifications tab
+  // (unused variable removed to avoid lint warning)
 
   const initials = currentUser?.fullName
     ? currentUser.fullName.split(" ").map((n) => n[0]).join("").slice(0, 2).toUpperCase()
->>>>>>> origin/rebuild-frontend
     : "U";
 
   return (
@@ -85,25 +75,13 @@ export default function Topbar() {
             <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
           </svg>
         </span>
-<<<<<<< HEAD
-        <input
-          type="text"
-          placeholder="Search reports, seedlings, or IDs..."
-        />
-=======
         <input type="text" placeholder="Search reports, seedlings, or IDs..." />
->>>>>>> origin/rebuild-frontend
       </div>
 
       {/* Right side */}
       <div className="topbar-right">
 
         {/* Notifications */}
-<<<<<<< HEAD
-        <div className="topbar-icon-btn">
-          <FiBell size={15} />
-          <div className="topbar-notif-dot" />
-=======
         <div style={{ position: "relative" }} ref={notifRef}>
           <div
             className="topbar-icon-btn"
@@ -254,7 +232,6 @@ export default function Topbar() {
               </div>
             </div>
           )}
->>>>>>> origin/rebuild-frontend
         </div>
 
         {/* Settings */}
@@ -267,20 +244,12 @@ export default function Topbar() {
           <div className="topbar-avatar">{initials}</div>
           <div>
             <div className="topbar-user-name">
-<<<<<<< HEAD
-              {currentUser?.fullname || "User"}
-=======
               {currentUser?.fullName || "User"}
->>>>>>> origin/rebuild-frontend
             </div>
             <div className="topbar-user-role">
               {userRole === "admin" ? "Office Head"
                 : userRole === "staff" ? "Office Member"
-<<<<<<< HEAD
-                : "Volunteer"}
-=======
                 : "Participant"}
->>>>>>> origin/rebuild-frontend
             </div>
           </div>
         </div>

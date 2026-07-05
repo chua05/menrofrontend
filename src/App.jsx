@@ -1,20 +1,13 @@
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
-<<<<<<< HEAD
-
-=======
 import { AuthProvider } from "./context/AuthContext";
 import DashboardLayout from "./layouts/DashboardLayout";
 import ProtectedRoute from "./routes/ProtectedRoute";
 
 // Auth
->>>>>>> origin/rebuild-frontend
 import LoginPage from "./pages/LoginPage";
 import RegisterPage from "./pages/RegisterPage";
 import DashboardPage from "./pages/DashboardPage";
 
-<<<<<<< HEAD
-import DashboardLayout from "./layouts/DashboardLayout";
-=======
 // Pages
 import UsersPage from "./pages/UsersPage";
 import SeedlingsPage from "./pages/SeedlingsPage";
@@ -29,62 +22,10 @@ import MonitoringPage from "./pages/MonitoringPage";
 import ReportsPage from "./pages/ReportsPage";
 import ProfilePage from "./pages/ProfilePage";
 import SettingsPage from "./pages/SettingsPage";
->>>>>>> origin/rebuild-frontend
 
 function App() {
 
   return (
-<<<<<<< HEAD
-
-    <BrowserRouter>
-
-      <Routes>
-
-        {/* Redirect */}
-
-        <Route
-          path="/"
-          element={<Navigate to="/login" replace />}
-        />
-
-        {/* Public */}
-
-        <Route
-          path="/login"
-          element={<LoginPage />}
-        />
-
-        <Route
-          path="/register"
-          element={<RegisterPage />}
-        />
-
-        {/* Protected Layout */}
-
-        <Route element={<DashboardLayout />}>
-
-          <Route
-            path="/admin/dashboard"
-            element={<DashboardPage />}
-          />
-
-          <Route
-            path="/staff/dashboard"
-            element={<DashboardPage />}
-          />
-
-          <Route
-            path="/volunteer/dashboard"
-            element={<DashboardPage />}
-          />
-
-        </Route>
-
-      </Routes>
-
-    </BrowserRouter>
-
-=======
     <AuthProvider>
       <BrowserRouter>
         <Routes>
@@ -149,7 +90,6 @@ function App() {
         </Routes>
       </BrowserRouter>
     </AuthProvider>
->>>>>>> origin/rebuild-frontend
   );
 
 }
