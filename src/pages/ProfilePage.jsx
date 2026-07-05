@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useAuth } from "../context/AuthContext";
+import { useAuth } from "../context/useAuth";
 import { FiUser, FiMail, FiPhone, FiMapPin, FiEdit2, FiSave } from "react-icons/fi";
 
 export default function ProfilePage() {

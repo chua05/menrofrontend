@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useAuth } from "../context/AuthContext";
+import { useAuth } from "../context/useAuth";
 import { FiMapPin, FiPlus, FiEye, FiEdit2, FiTrash2 } from "react-icons/fi";
 
 const SAMPLE_SITES = [

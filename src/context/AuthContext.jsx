@@ -1,6 +1,5 @@
-import { createContext, useContext, useState } from "react";
-
-const AuthContext = createContext();
+import { useState } from "react";
+import { AuthContext } from "./authContextValue";
 
 export function AuthProvider({ children }) {
   const storedUser = JSON.parse(localStorage.getItem("user") || "null");
@@ -33,6 +32,4 @@ export function AuthProvider({ children }) {
   );
 }
 
-export function useAuth() {
-  return useContext(AuthContext);
-}
+export default AuthProvider;

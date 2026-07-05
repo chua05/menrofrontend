@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useAuth } from "../context/AuthContext";
+import { useAuth } from "../context/useAuth";
 import { FiPackage, FiPlus, FiEdit2, FiAlertTriangle } from "react-icons/fi";
 
 const SAMPLE_SEEDLINGS = [
