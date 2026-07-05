@@ -6,7 +6,7 @@ import forestImg from "../assets/forest.jpg";
 import {signInWithEmailAndPassword, signInWithPopup} from "firebase/auth";
 import { auth, googleProvider } from "../firebase/config";
 import axios from "axios";
-import { useAuth } from "../context/AuthContext";
+import { useAuth } from "../context/useAuth";
 
 
 export default function LoginPage() {

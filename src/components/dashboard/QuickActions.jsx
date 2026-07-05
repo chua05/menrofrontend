@@ -7,7 +7,7 @@ import {
   FiMapPin,
 } from "react-icons/fi";
 
-import { useAuth } from "../../context/AuthContext";
+import { useAuth } from "../../context/useAuth";
 
 export default function QuickActions() {
 
@@ -15,7 +15,7 @@ export default function QuickActions() {
 
   const role = userRole;
 
-  let actions = [];
+  let actions;
 
   if (role === "admin") {
 
