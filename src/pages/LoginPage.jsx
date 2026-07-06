@@ -6,7 +6,6 @@ import forestImg from "../assets/forest.jpg";
 import {signInWithEmailAndPassword, signInWithPopup} from "firebase/auth";
 import { auth, googleProvider } from "../firebase/config";
 import axios from "axios";
-import { useAuth } from "../context/useAuth";
 
 
 export default function LoginPage() {
@@ -16,7 +15,7 @@ export default function LoginPage() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
-  const { login } = useAuth();
+
   const handleLogin = async (e) => {
     e.preventDefault();
     setError("");
@@ -52,11 +51,23 @@ export default function LoginPage() {
     }
     );
 
-    localStorage.setItem("token", token);
+    localStorage.setItem(
+      "token",
+      token
+      );
 
-    login(response.data.data);
 
-    navigate("/dashboard");
+
+      localStorage.setItem(
+      "user",
+      JSON.stringify(
+      response.data.data
+      )
+      );
+
+      navigate(
+      "/dashboard"
+      );
       }
 
       catch(error){
