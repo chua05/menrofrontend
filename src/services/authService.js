@@ -23,7 +23,7 @@ export const getProfile = async(token)=>{
 
 const response = await axios.get(
 
-`${API_URL}/me`,
+`${API_URL}/profile`,
 
 
 {

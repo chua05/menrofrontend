@@ -3,202 +3,103 @@ import { useNavigate, Link } from "react-router-dom";
 import { FiMail, FiLock, FiEye, FiEyeOff } from "react-icons/fi";
 import { FcGoogle } from "react-icons/fc";
 import forestImg from "../assets/forest.jpg";
-import {signInWithEmailAndPassword, signInWithPopup} from "firebase/auth";
+import { signInWithEmailAndPassword, signInWithPopup } from "firebase/auth";
 import { auth, googleProvider } from "../firebase/config";
+import { useAuth } from "../context/AuthContext";
 import axios from "axios";
 
 
 export default function LoginPage() {
-  const [email,setEmail] = useState("");
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
+  const { login } = useAuth();
 
   const handleLogin = async (e) => {
     e.preventDefault();
     setError("");
-    if (!email || !password){ 
-      setError("Please fill in all fields."); return; }
-      setLoading(true);
+    if (!email || !password) {
+      setError("Please fill in all fields.");
+      return;
+    }
+    setLoading(true);
 
     try {
-      const credential =
-    await signInWithEmailAndPassword(
-    auth,
-    email,
-    password
-    );
+      const credential = await signInWithEmailAndPassword(auth, email, password);
+      const token = await credential.user.getIdToken();
 
-    const token =
-    await credential.user.getIdToken();
-
-
-    const response =
-    await axios.post(
-
-    "http://localhost:5000/api/auth/verify",
-
-    {},
-
-    {
-
-    headers:{
-    Authorization:
-    `Bearer ${token}`
-    }
-    }
-    );
-
-    localStorage.setItem(
-      "token",
-      token
+      const response = await axios.post(
+        "http://localhost:5000/api/auth/verify",
+        {},
+        { headers: { Authorization: `Bearer ${token}` } }
       );
 
+      const userData = response.data.data;
+      // update context and persist token via AuthContext.login
+      login(userData, userData.role, token);
 
+      const role = userData.role;
+      console.log("ROLE:", role);
+      console.log("USER:", userData);
 
-      localStorage.setItem(
-      "user",
-      JSON.stringify(
-      response.data.data
-      )
-      );
-
-      navigate(
-      "/dashboard"
-      );
-      }
-
-      catch(error){
-
-          if(error.code==="auth/user-not-found"){
-          setError("Account not found.");
-          }
-
-          else if(error.code==="auth/wrong-password"){
-          setError("Incorrect password.");
-          }
-
-          else if(error.code==="auth/invalid-credential"){
-          setError("Invalid email or password.");
-          }
-
-          else{
-          setError(
-          error.response?.data?.message ||
-          error.message ||
-          "Login failed."
-          );
-          }
-          }
-
-        finally {
+      if (role === "admin") navigate("/admin/dashboard");
+      else if (role === "staff") navigate("/staff/dashboard");
+      else navigate("/participant/dashboard");
+    } catch (err) {
+      if (err.code === "auth/user-not-found") setError("Account not found.");
+      else if (err.code === "auth/wrong-password") setError("Incorrect password.");
+      else if (err.code === "auth/invalid-credential") setError("Invalid email or password.");
+      else setError(err.response?.data?.message || err.message || "Login failed.");
+    } finally {
       setLoading(false);
     }
   };
 
   const handleGoogleLogin = async () => {
+    setError("");
+    setLoading(true);
+    try {
+      const result = await signInWithPopup(auth, googleProvider);
+      const token = await result.user.getIdToken();
 
-        try{
-
-        const result =
-
-        await signInWithPopup(
-
-        auth,
-
-        googleProvider
-
-        );
-
-
-        const token =
-
-        await result.user.getIdToken();
-
-
-        const response =
-
-        await axios.post(
-
+      const response = await axios.post(
         "http://localhost:5000/api/auth/verify",
-
         {},
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
 
-        {
+      const userData = response.data.data;
+      login(userData, userData.role, token);
 
-        headers:{
+      const role = userData.role;
+      console.log("ROLE:", role);
+      console.log("USER:", userData);
 
-        Authorization:
-
-        `Bearer ${token}`
-
-        }
-
-        }
-
-        );
-
-
-        localStorage.setItem(
-
-        "token",
-
-        token
-
-        );
-
-
-        localStorage.setItem(
-
-        "user",
-
-        JSON.stringify(
-
-        response.data.data
-
-        )
-
-        );
-
-
-        navigate(
-
-        "/dashboard"
-
-        );
-
-
-        }
-
-        catch(error){
-
-        console.log(error);
-
-        setError(
-
-        "Google sign in failed."
-
-        );
-
-        }
-
-        };
+      if (role === "admin") navigate("/admin/dashboard");
+      else if (role === "staff") navigate("/staff/dashboard");
+      else navigate("/participant/dashboard");
+    } catch (err) {
+      console.error(err);
+      setError("Google sign in failed.");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <div className="auth-page">
-
       {/* ── Left Panel ── */}
       <div className="auth-left">
         <div className="auth-form-box">
-
           {/* Logo */}
           <div className="auth-logo">
             <div className="auth-logo-mark">
               <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.48 19 2c1 2 2 4.18 2 8 0 5.5-4.78 10-10 10z"/>
-                <path d="M2 21c0-3 1.85-5.36 5.08-6C9.5 14.52 12 13 13 12"/>
+                <path d="M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.48 19 2c1 2 2 4.18 2 8 0 5.5-4.78 10-10 10z" />
+                <path d="M2 21c0-3 1.85-5.36 5.08-6C9.5 14.52 12 13 13 12" />
               </svg>
             </div>
             <div>
@@ -223,7 +124,6 @@ export default function LoginPage() {
           )}
 
           <form onSubmit={handleLogin}>
-
             {/* Email Address */}
             <div className="auth-field">
               <div className="auth-label">Email Address</div>
