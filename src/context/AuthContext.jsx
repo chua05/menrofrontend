@@ -1,5 +1,7 @@
-import { useState } from "react";
-import { AuthContext } from "./authContextValue";
+/* eslint-disable react-refresh/only-export-components */
+import { createContext, useContext, useState } from "react";
+
+const AuthContext = createContext();
 
 export function AuthProvider({ children }) {
   const storedUser = JSON.parse(localStorage.getItem("user") || "null");
@@ -32,4 +34,6 @@ export function AuthProvider({ children }) {
   );
 }
 
-export default AuthProvider;
+export function useAuth() {
+  return useContext(AuthContext);
+}

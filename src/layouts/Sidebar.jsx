@@ -1,39 +1,112 @@
 import { NavLink, useNavigate } from "react-router-dom";
-import { useAuth } from "../context/useAuth";
+import {useState,} from "react";
 import {
-  FiLayout, FiUsers, FiPackage, FiClipboard,
-  FiCalendar, FiCheckSquare, FiFileText,
-  FiUpload, FiLogOut, FiSettings, FiUser,
-  FiMapPin, FiActivity
-} from "react-icons/fi";
+  LayoutDashboard,
+  ClipboardList,
+  Sprout,
+  CalendarDays,
+  MapPin,
+  FileCheck2,
+  Activity,
+  ChartNoAxesCombined,
+  Map,
+  FileText,
+  Users,
+  Settings,
+  UserRound,
+  LogOut,
+  X,
+} from "lucide-react";
 
-const NAV = {
+import { useAuth } from "../context/AuthContext";
+import menroLogo from "../assets/menro-logo.png";
+
+const NAVIGATION = {
   admin: [
     {
       section: "Main",
       items: [
-        { label: "Dashboard", icon: <FiLayout size={15} />, to: "/admin/dashboard" },
-      ]
+        {
+          label: "Dashboard",
+          icon: LayoutDashboard,
+          to: "/admin/dashboard",
+        },
+      ],
     },
     {
       section: "Management",
       items: [
-        { label: "Sites", icon: <FiMapPin size={15} />, to: "/admin/sites" },
-        { label: "Events", icon: <FiCalendar size={15} />, to: "/admin/events" },
-        { label: "Seedling Requests", icon: <FiClipboard size={15} />, to: "/admin/requests" },
-        { label: "Seedlings", icon: <FiPackage size={15} />, to: "/admin/seedlings" },
-        { label: "Planting", icon: <FiUpload size={15} />, to: "/admin/planting" },
-        { label: "Monitoring", icon: <FiCheckSquare size={15} />, to: "/admin/monitoring" },
-        { label: "Users", icon: <FiUsers size={15} />, to: "/admin/users" },
-        { label: "Reports", icon: <FiFileText size={15} />, to: "/admin/reports" },
-      ]
+        {
+          label: "Seedling Requests",
+          icon: ClipboardList,
+          to: "/admin/requests",
+        },
+        {
+          label: "Seedlings",
+          icon: Sprout,
+          to: "/admin/seedlings",
+        },
+        {
+          label: "Event Calendar",
+          icon: CalendarDays,
+          to: "/admin/event-calendar",
+        },
+        {
+          label: "Planting Sites",
+          icon: MapPin,
+          to: "/admin/planting-sites",
+        },
+      ],
     },
     {
-      section: "Account",
+      section: "Monitoring",
       items: [
-        { label: "Settings", icon: <FiSettings size={15} />, to: "/admin/settings" },
-        { label: "Profile", icon: <FiUser size={15} />, to: "/admin/profile" },
-      ]
+        {
+          label: "Planting Reports",
+          icon: FileCheck2,
+          to: "/admin/planting-reports",
+        },
+        {
+          label: "Survival Monitoring",
+          icon: Activity,
+          to: "/admin/survival-monitoring",
+        },
+      ],
+    },
+    {
+      section: "Analytics",
+      items: [
+        {
+          label: "Reforestation Analytics",
+          icon: ChartNoAxesCombined,
+          to: "/admin/reforestation-analytics",
+        },
+        {
+          label: "Map Visualization",
+          icon: Map,
+          to: "/admin/map-visualization",
+        },
+      ],
+    },
+    {
+      section: "System",
+      items: [
+        {
+          label: "Reports",
+          icon: FileText,
+          to: "/admin/reports",
+        },
+        {
+          label: "Registered Users",
+          icon: Users,
+          to: "/admin/registered-users",
+        },
+        {
+          label: "Settings",
+          icon: Settings,
+          to: "/admin/settings",
+        },
+      ],
     },
   ],
 
@@ -41,26 +114,87 @@ const NAV = {
     {
       section: "Main",
       items: [
-        { label: "Dashboard", icon: <FiLayout size={15} />, to: "/staff/dashboard" },
-      ]
+        {
+          label: "Dashboard",
+          icon: LayoutDashboard,
+          to: "/staff/dashboard",
+        },
+      ],
     },
     {
       section: "Management",
       items: [
-        { label: "Sites", icon: <FiMapPin size={15} />, to: "/staff/sites" },
-        { label: "Events", icon: <FiCalendar size={15} />, to: "/staff/events" },
-        { label: "Seedling Requests", icon: <FiClipboard size={15} />, to: "/staff/requests" },
-        { label: "Seedlings", icon: <FiPackage size={15} />, to: "/staff/seedlings" },
-        { label: "Planting", icon: <FiUpload size={15} />, to: "/staff/planting" },
-        { label: "Monitoring", icon: <FiCheckSquare size={15} />, to: "/staff/monitoring" },
-        { label: "Reports", icon: <FiFileText size={15} />, to: "/staff/reports" },
-      ]
+        {
+          label: "Seedling Requests",
+          icon: ClipboardList,
+          to: "/staff/requests",
+        },
+        {
+          label: "Seedlings",
+          icon: Sprout,
+          to: "/staff/seedlings",
+        },
+        {
+          label: "Event Calendar",
+          icon: CalendarDays,
+          to: "/staff/event-calendar",
+        },
+        {
+          label: "Planting Sites",
+          icon: MapPin,
+          to: "/staff/planting-sites",
+        },
+      ],
     },
     {
-      section: "Account",
+      section: "Monitoring",
       items: [
-        { label: "Profile", icon: <FiUser size={15} />, to: "/staff/profile" },
-      ]
+        {
+          label: "Planting Reports",
+          icon: FileCheck2,
+          to: "/staff/planting-reports",
+        },
+        {
+          label: "Survival Monitoring",
+          icon: Activity,
+          to: "/staff/survival-monitoring",
+        },
+      ],
+    },
+    {
+      section: "Analytics",
+      items: [
+        {
+          label: "Reforestation Analytics",
+          icon: ChartNoAxesCombined,
+          to: "/staff/reforestation-analytics",
+        },
+        {
+          label: "Map Visualization",
+          icon: Map,
+          to: "/staff/map-visualization",
+        },
+      ],
+    },
+    {
+      section: "System",
+      items: [
+        {
+          label: "Reports",
+          icon: FileText,
+          to: "/staff/reports",
+        },
+        {
+          label: "Registered Users",
+          icon: Users,
+          to: "/staff/registered-users",
+        },
+        {
+          label: "Settings",
+          icon: Settings,
+          to: "/staff/settings",
+        },
+      ],
     },
   ],
 
@@ -68,107 +202,352 @@ const NAV = {
     {
       section: "Main",
       items: [
-        { label: "Dashboard", icon: <FiLayout size={15} />, to: "/participant/dashboard" },
-      ]
+        {
+          label: "Dashboard",
+          icon: LayoutDashboard,
+          to: "/participant/dashboard",
+        },
+      ],
     },
     {
       section: "Seedlings",
       items: [
-        { label: "Request Seedlings", icon: <FiClipboard size={15} />, to: "/participant/request-seedlings" },
-        { label: "My Requests", icon: <FiFileText size={15} />, to: "/participant/my-requests" },
-      ]
+        {
+          label: "Request Seedlings",
+          icon: Sprout,
+          to: "/participant/request-seedlings",
+        },
+        {
+          label: "My Requests",
+          icon: ClipboardList,
+          to: "/participant/my-requests",
+        },
+      ],
     },
     {
       section: "Activities",
       items: [
-        { label: "Events", icon: <FiCalendar size={15} />, to: "/participant/events" },
-        { label: "My Sites", icon: <FiMapPin size={15} />, to: "/participant/my-sites" },
-        { label: "My Activities", icon: <FiActivity size={15} />, to: "/participant/my-activities" },
-        { label: "Monitoring", icon: <FiCheckSquare size={15} />, to: "/participant/monitoring" },
-      ]
+        {
+          label: "Event Calendar",
+          icon: CalendarDays,
+          to: "/participant/event-calendar",
+        },
+        {
+          label: "Planting Sites",
+          icon: MapPin,
+          to: "/participant/planting-sites",
+        },
+      ],
+    },
+    {
+      section: "Monitoring",
+      items: [
+        {
+          label: "My Planting Reports",
+          icon: FileCheck2,
+          to: "/participant/my-planting-reports",
+        },
+        {
+          label: "Survival Monitoring",
+          icon: Activity,
+          to: "/participant/survival-monitoring",
+        },
+      ],
     },
     {
       section: "Account",
       items: [
-        { label: "Profile", icon: <FiUser size={15} />, to: "/participant/profile" },
-      ]
+        {
+          label: "Profile",
+          icon: UserRound,
+          to: "/participant/profile",
+        },
+      ],
     },
   ],
 };
 
-export default function Sidebar() {
+function getRoleLabel(role) {
+  if (role === "admin") return "Office Head";
+  if (role === "staff") return "Staff";
+  return "Participant";
+}
+
+function getFallbackName(role) {
+  if (role === "admin") return "MENRO Administrator";
+  if (role === "staff") return "MENRO Staff";
+  return "Participant";
+}
+
+function getInitials(name, role) {
+  if (!name) {
+    if (role === "admin") return "MA";
+    if (role === "staff") return "MS";
+    return "P";
+  }
+
+  return name
+    .trim()
+    .split(/\s+/)
+    .map((word) => word.charAt(0))
+    .join("")
+    .slice(0, 2)
+    .toUpperCase();
+}
+
+export default function Sidebar({ isOpen, onClose }) {
   const { userRole, currentUser, logout } = useAuth();
   const navigate = useNavigate();
-  const navItems = NAV[userRole] || NAV.participant;
 
-  const handleLogout = () => {
-    logout();
-    navigate("/login");
+  const [
+    showLogoutConfirm,
+    setShowLogoutConfirm,
+  ] = useState(false);
+
+  const [
+    loggingOut,
+    setLoggingOut,
+  ] = useState(false);
+
+  const resolvedRole =
+    userRole && NAVIGATION[userRole] ? userRole : "participant";
+
+  const navigation = NAVIGATION[resolvedRole];
+
+  const displayName =
+    currentUser?.fullName?.trim() || getFallbackName(resolvedRole);
+
+  const roleLabel = getRoleLabel(resolvedRole);
+
+  const initials = getInitials(displayName, resolvedRole);
+
+  const handleLogout = async () => {
+    if (loggingOut) {
+      return;
+    }
+
+    setLoggingOut(true);
+
+    try {
+      await logout();
+
+      setShowLogoutConfirm(false);
+
+      onClose?.();
+
+      navigate("/login", {
+        replace: true,
+      });
+    } catch (error) {
+      console.error(
+        "Logout failed:",
+        error
+      );
+
+      setLoggingOut(false);
+    }
   };
 
-  const initials = currentUser?.fullName
-    ? currentUser.fullName.split(" ").map((n) => n[0]).join("").slice(0, 2).toUpperCase()
-    : "U";
-
   return (
-    <div className="sidebar">
+    <aside
+      className={`sidebar ${isOpen ? "open" : ""}`}
+      aria-hidden={!isOpen}
+    >
+      {/* Header */}
+      <div className="sb-header">
+        <div className="sb-brand">
+          <img
+            src={menroLogo}
+            alt="MENRO Juban logo"
+            className="sb-brand-logo"
+          />
 
-      {/* Logo */}
-      <div className="sb-logo">
-        <div className="sb-logo-mark">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.48 19 2c1 2 2 4.18 2 8 0 5.5-4.78 10-10 10z"/>
-            <path d="M2 21c0-3 1.85-5.36 5.08-6C9.5 14.52 12 13 13 12"/>
-          </svg>
+          <div className="sb-brand-text">
+            <div className="sb-brand-name">MENRO</div>
+            <div className="sb-brand-location">Juban, Sorsogon</div>
+          </div>
         </div>
-        <div>
-          <div className="sb-logo-name">MENRO</div>
-          <div className="sb-logo-sub">ENVIRONMENT OFFICE</div>
-        </div>
+
+        <button
+          type="button"
+          className="sb-close"
+          onClick={onClose}
+          aria-label="Close sidebar"
+          title="Close sidebar"
+        >
+          <X size={20} strokeWidth={1.9} />
+        </button>
       </div>
 
       {/* Navigation */}
-      <div className="sb-nav">
-        {navItems.map((group) => (
-          <div key={group.section}>
+      <nav className="sb-nav">
+        {navigation.map((group) => (
+          <div className="sb-group" key={group.section}>
             <div className="sb-section">{group.section}</div>
-            {group.items.map((item) => (
-              <NavLink
-                key={item.to}
-                to={item.to}
-                className={({ isActive }) =>
-                  `sb-item ${isActive ? "active" : ""}`
-                }
-              >
-                <span className="sb-item-icon">{item.icon}</span>
-                <span className="sb-item-label">{item.label}</span>
-              </NavLink>
-            ))}
+
+            {group.items.map((item) => {
+              const Icon = item.icon;
+
+              return (
+                <NavLink
+                  key={item.to}
+                  to={item.to}
+                  onClick={onClose}
+                  className={({ isActive }) =>
+                    `sb-item ${isActive ? "active" : ""}`
+                  }
+                >
+                  <Icon
+                    className="sb-item-icon"
+                    size={17}
+                    strokeWidth={1.8}
+                  />
+
+                  <span className="sb-item-label">{item.label}</span>
+                </NavLink>
+              );
+            })}
           </div>
         ))}
-      </div>
+      </nav>
 
-      {/* Bottom user + logout */}
+      {/* User */}
       <div className="sb-bottom">
         <div className="sb-user">
           <div className="sb-avatar">{initials}</div>
-          <div>
-            <div className="sb-user-name">
-              {currentUser?.fullName || "User"}
-            </div>
-            <div className="sb-user-role">
-              {userRole === "admin" ? "Administrator"
-                : userRole === "staff" ? "Office Member"
-                : "participant"}
-            </div>
+
+          <div className="sb-user-content">
+            <div className="sb-user-name">{displayName}</div>
+            <div className="sb-user-role">{roleLabel}</div>
           </div>
         </div>
-        <div className="sb-logout" onClick={handleLogout}>
-          <span className="sb-logout-icon"><FiLogOut size={14} /></span>
-          <span className="sb-logout-label">Logout</span>
-        </div>
+
+        <button
+          type="button"
+          className="sb-logout"
+          onClick={() =>
+          setShowLogoutConfirm(true)
+        }
+        >
+          <LogOut size={17} strokeWidth={1.8} />
+          <span>Logout</span>
+        </button>
       </div>
 
+      {showLogoutConfirm && (
+  <div
+    style={{
+      position: "fixed",
+      inset: 0,
+      zIndex: 99999,
+      background:
+        "rgba(20, 30, 24, 0.35)",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      padding: "20px",
+    }}
+    onMouseDown={(event) => {
+      if (
+        event.target ===
+        event.currentTarget
+      ) {
+        setShowLogoutConfirm(
+          false
+        );
+      }
+    }}
+  >
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="logout-title"
+      style={{
+        width: "100%",
+        maxWidth: "360px",
+        background: "#ffffff",
+        borderRadius: "12px",
+        padding: "22px",
+        boxShadow:
+          "0 18px 45px rgba(0, 0, 0, 0.18)",
+      }}
+    >
+      <h3
+        id="logout-title"
+        style={{
+          margin: "0 0 8px",
+          fontSize: "16px",
+          color: "#1f2d25",
+        }}
+      >
+        Log out
+      </h3>
+
+      <p
+        style={{
+          margin: "0",
+          fontSize: "13px",
+          lineHeight: 1.6,
+          color: "#66736b",
+        }}
+      >
+        Are you sure you want
+        to log out?
+      </p>
+
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "flex-end",
+          gap: "9px",
+          marginTop: "20px",
+        }}
+      >
+        <button
+          type="button"
+          onClick={() =>
+            setShowLogoutConfirm(
+              false
+            )
+          }
+          style={{
+            minWidth: "82px",
+            padding: "9px 14px",
+            border:
+              "1px solid #d7dfda",
+            borderRadius: "7px",
+            background: "#ffffff",
+            cursor: "pointer",
+            fontWeight: 600,
+          }}
+        >
+          Cancel
+        </button>
+
+        <button
+          type="button"
+          onClick={handleLogout}
+          disabled={loggingOut}
+          style={{
+            minWidth: "82px",
+            padding: "9px 14px",
+            border: "none",
+            borderRadius: "7px",
+            background: "#087443",
+            color: "#ffffff",
+            cursor: "pointer",
+            fontWeight: 700,
+          }}
+        >
+          {loggingOut
+            ? "Logging out..."
+            : "Log Out"}
+        </button>
+      </div>
     </div>
+  </div>
+)}
+
+    </aside>
   );
 }
