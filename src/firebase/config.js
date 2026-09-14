@@ -3,17 +3,17 @@ import { getAuth, GoogleAuthProvider } from "firebase/auth";
 
 const firebaseConfig = {
 
-  apiKey: "AIzaSyB28MAsFg7XngyUMV_g3leY3DmQhDgZnnM",
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
 
-  authDomain: "menrosystem-ddfac.firebaseapp.com",
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
 
-  projectId: "menrosystem-ddfac",
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
 
-  storageBucket: "menrosystem-ddfac.firebasestorage.app",
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
 
-  messagingSenderId: "290555801876",
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
 
-  appId: "1:290555801876:web:edb33bea8e078ce82d1201"
+  appId: import.meta.env.VITE_FIREBASE_APP_ID
 
 };
 

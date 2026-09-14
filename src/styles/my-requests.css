@@ -1,0 +1,976 @@
+/* =========================================================
+   MY REQUESTS PAGE
+========================================================= */
+
+.myr-page {
+  width: 100%;
+  padding: 32px;
+  color: #17231c;
+}
+
+/* =========================================================
+   PAGE HEADER
+========================================================= */
+
+.myr-page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  margin-bottom: 24px;
+}
+
+.myr-title-group {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+}
+
+.myr-title-icon {
+  width: 48px;
+  height: 48px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: #e8f6ed;
+  color: #168347;
+}
+
+.myr-title-group h1 {
+  margin: 0;
+  color: #111b15;
+  font-size: 24px;
+  font-weight: 700;
+  line-height: 1.25;
+}
+
+.myr-title-group p {
+  margin: 5px 0 0;
+  color: #69766e;
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 1.5;
+}
+
+.myr-request-button {
+  min-height: 42px;
+  padding: 0 17px;
+  flex-shrink: 0;
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+
+  border: 1px solid #147c43;
+  border-radius: 8px;
+  background: #147c43;
+  color: #ffffff;
+
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease;
+}
+
+.myr-request-button:hover {
+  background: #106c39;
+  border-color: #106c39;
+}
+
+.myr-request-button:focus-visible {
+  outline: 3px solid rgba(20, 124, 67, 0.17);
+  outline-offset: 2px;
+}
+
+/* =========================================================
+   SUMMARY CARDS
+========================================================= */
+
+.myr-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+.myr-summary-card {
+  min-width: 0;
+  min-height: 88px;
+
+  display: flex;
+  align-items: center;
+  gap: 14px;
+
+  padding: 15px 16px;
+
+  border: 1px solid #dce4df;
+  border-radius: 9px;
+  background: #ffffff;
+}
+
+.myr-summary-card > div:last-child {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.myr-summary-card span {
+  color: #58655d;
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.myr-summary-card strong {
+  color: #101a14;
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.myr-summary-icon {
+  width: 44px;
+  height: 44px;
+  flex-shrink: 0;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  border-radius: 50%;
+}
+
+.myr-summary-icon-total {
+  background: #eaf5ee;
+  color: #168347;
+}
+
+.myr-summary-card-pending {
+  border-color: #f2dfbd;
+  background: #fffdf8;
+}
+
+.myr-summary-icon-pending {
+  background: #fff1d7;
+  color: #e18a00;
+}
+
+.myr-summary-card-reviewed {
+  border-color: #d7e4f6;
+  background: #fbfdff;
+}
+
+.myr-summary-icon-reviewed {
+  background: #e7f0ff;
+  color: #287bd8;
+}
+
+.myr-summary-card-approved {
+  border-color: #d9ebdf;
+  background: #fbfefc;
+}
+
+.myr-summary-icon-approved {
+  background: #e6f5eb;
+  color: #179454;
+}
+
+.myr-summary-card-rejected {
+  border-color: #f1d9dc;
+  background: #fffdfd;
+}
+
+.myr-summary-icon-rejected {
+  background: #fde9eb;
+  color: #df424d;
+}
+
+/* =========================================================
+   TABLE
+========================================================= */
+
+.myr-table-card {
+  overflow: hidden;
+  border: 1px solid #dce4df;
+  border-radius: 9px;
+  background: #ffffff;
+}
+
+.myr-table-wrapper {
+  width: 100%;
+  overflow-x: auto;
+}
+
+.myr-table {
+  width: 100%;
+  min-width: 1050px;
+  border-collapse: collapse;
+  table-layout: auto;
+}
+
+.myr-table thead {
+  background: #f8faf9;
+}
+
+.myr-table th {
+  height: 52px;
+  padding: 0 16px;
+
+  border-bottom: 1px solid #dfe6e2;
+
+  color: #536158;
+  font-size: 11px;
+  font-weight: 700;
+  text-align: left;
+  text-transform: uppercase;
+  letter-spacing: 0.01em;
+
+  white-space: nowrap;
+}
+
+.myr-table td {
+  min-height: 60px;
+  padding: 14px 16px;
+
+  border-bottom: 1px solid #edf1ef;
+
+  color: #27342c;
+  font-size: 12px;
+  line-height: 1.45;
+  vertical-align: middle;
+}
+
+.myr-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.myr-table tbody tr:not(:has(.myr-empty-state)):hover {
+  background: #fbfcfb;
+}
+
+.myr-number-column {
+  width: 52px;
+}
+
+.myr-action-column {
+  width: 85px;
+  text-align: center !important;
+}
+
+.myr-row-number {
+  color: #7b8780 !important;
+}
+
+.myr-request-id {
+  color: #18251d;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.myr-purpose-text {
+  display: block;
+  max-width: 260px;
+}
+
+.myr-seedling-count {
+  font-weight: 600;
+}
+
+.myr-action-cell {
+  text-align: center;
+}
+
+.myr-view-button {
+  width: 36px;
+  height: 36px;
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  border: 1px solid #cfdad3;
+  border-radius: 7px;
+  background: #ffffff;
+  color: #24784a;
+
+  cursor: pointer;
+
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease,
+    color 0.15s ease;
+}
+
+.myr-view-button:hover {
+  border-color: #8ebda1;
+  background: #edf7f1;
+  color: #126b3b;
+}
+
+.myr-view-button:focus-visible {
+  outline: 3px solid rgba(20, 124, 67, 0.14);
+  outline-offset: 2px;
+}
+
+/* =========================================================
+   EMPTY STATE
+========================================================= */
+
+.myr-empty-cell {
+  height: 420px;
+  padding: 0 !important;
+}
+
+.myr-empty-state {
+  width: 100%;
+  min-height: 420px;
+
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+
+  padding: 40px 20px;
+  text-align: center;
+}
+
+.myr-empty-illustration {
+  position: relative;
+
+  width: 94px;
+  height: 94px;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  margin-bottom: 18px;
+
+  border-radius: 50%;
+  background: #edf7f1;
+  color: #267b4d;
+}
+
+.myr-empty-sprout {
+  position: absolute;
+  right: 2px;
+  bottom: 7px;
+
+  width: 40px;
+  height: 40px;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  border-radius: 50%;
+  background: #edf7f1;
+  color: #168347;
+}
+
+.myr-empty-state h2 {
+  margin: 0;
+  color: #111b15;
+  font-size: 17px;
+  font-weight: 700;
+}
+
+.myr-empty-state p {
+  max-width: 520px;
+  margin: 8px 0 0;
+  color: #748078;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+/* =========================================================
+   STATUS BADGES
+========================================================= */
+
+.myr-status {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  min-height: 26px;
+  padding: 3px 10px;
+
+  border-radius: 999px;
+
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.myr-status-pending {
+  background: #fff2d8;
+  color: #966000;
+}
+
+.myr-status-under-review {
+  background: #eee9ff;
+  color: #6543b5;
+}
+
+.myr-status-reviewed {
+  background: #e6f0ff;
+  color: #236bc3;
+}
+
+.myr-status-approved {
+  background: #e5f5eb;
+  color: #187846;
+}
+
+.myr-status-rejected {
+  background: #fde9eb;
+  color: #bd2e3b;
+}
+
+/* =========================================================
+   PAGINATION
+========================================================= */
+
+.myr-pagination {
+  min-height: 68px;
+
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+
+  padding: 12px 18px;
+
+  border-top: 1px solid #e1e7e3;
+  background: #ffffff;
+}
+
+.myr-pagination-info {
+  color: #66736b;
+  font-size: 12px;
+}
+
+.myr-pagination-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.myr-page-arrow,
+.myr-current-page {
+  width: 38px;
+  height: 38px;
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  border-radius: 7px;
+}
+
+.myr-page-arrow {
+  border: 1px solid #d6dfd9;
+  background: #ffffff;
+  color: #4b5b51;
+
+  cursor: pointer;
+
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease;
+}
+
+.myr-page-arrow:hover:not(:disabled) {
+  border-color: #9bc2aa;
+  background: #f3f9f5;
+}
+
+.myr-page-arrow:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.myr-current-page {
+  border: 1px solid #dceee2;
+  background: #eaf6ee;
+  color: #157642;
+
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.myr-page-size {
+  height: 38px;
+
+  display: flex;
+  align-items: center;
+
+  padding: 0 13px;
+
+  border: 1px solid #d6dfd9;
+  border-radius: 7px;
+
+  color: #59675f;
+  font-size: 12px;
+}
+
+/* =========================================================
+   DETAILS MODAL
+========================================================= */
+
+.myr-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  padding: 24px;
+
+  background: rgba(15, 25, 19, 0.48);
+}
+
+.myr-details-modal {
+  width: min(920px, 100%);
+  max-height: calc(100vh - 48px);
+
+  display: flex;
+  flex-direction: column;
+
+  overflow: hidden;
+
+  border: 1px solid #dce4df;
+  border-radius: 11px;
+
+  background: #ffffff;
+}
+
+.myr-modal-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+
+  padding: 20px 22px;
+
+  border-bottom: 1px solid #e2e8e4;
+}
+
+.myr-modal-label {
+  display: block;
+  margin-bottom: 3px;
+
+  color: #23804d;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.myr-modal-header h2 {
+  margin: 0;
+
+  color: #142018;
+  font-size: 20px;
+  font-weight: 700;
+}
+
+.myr-modal-header p {
+  margin: 4px 0 0;
+
+  color: #738078;
+  font-size: 12px;
+}
+
+.myr-modal-close {
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  border: 1px solid #d6ded9;
+  border-radius: 7px;
+
+  background: #ffffff;
+  color: #536158;
+
+  cursor: pointer;
+}
+
+.myr-modal-close:hover {
+  background: #f5f7f6;
+}
+
+.myr-modal-content {
+  overflow-y: auto;
+  padding: 20px 22px 24px;
+}
+
+/* =========================================================
+   DETAILS TOP STATUS
+========================================================= */
+
+.myr-details-status-row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+
+  margin-bottom: 18px;
+  padding: 15px 16px;
+
+  border: 1px solid #dfe6e2;
+  border-radius: 8px;
+
+  background: #fafcfb;
+}
+
+.myr-details-status-row > div {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 7px;
+}
+
+.myr-details-status-row span:first-child {
+  color: #6c796f;
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.myr-details-status-row strong {
+  color: #1b2820;
+  font-size: 13px;
+}
+
+/* =========================================================
+   DETAIL SECTIONS
+========================================================= */
+
+.myr-detail-section {
+  margin-top: 16px;
+  padding: 18px;
+
+  border: 1px solid #e0e6e2;
+  border-radius: 8px;
+
+  background: #ffffff;
+}
+
+.myr-section-title {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+
+  margin-bottom: 16px;
+
+  color: #1a7d49;
+}
+
+.myr-section-title > svg {
+  margin-top: 1px;
+  flex-shrink: 0;
+}
+
+.myr-section-title h3 {
+  margin: 0;
+
+  color: #1a281f;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.myr-section-title p {
+  margin: 3px 0 0;
+
+  color: #7a867e;
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+/* =========================================================
+   READ ONLY FORM FIELDS
+========================================================= */
+
+.myr-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.myr-field-full {
+  grid-column: 1 / -1;
+}
+
+.myr-readonly-field {
+  min-width: 0;
+}
+
+.myr-readonly-field label {
+  display: block;
+
+  margin-bottom: 6px;
+
+  color: #526057;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.myr-readonly-field > div {
+  min-height: 40px;
+
+  display: flex;
+  align-items: center;
+  gap: 9px;
+
+  padding: 9px 11px;
+
+  border: 1px solid #d9e1dc;
+  border-radius: 7px;
+
+  background: #fafbfa;
+
+  color: #29362e;
+  font-size: 12px;
+}
+
+.myr-readonly-field > div svg {
+  flex-shrink: 0;
+  color: #6b7a70;
+}
+
+.myr-readonly-field > div span {
+  min-width: 0;
+  word-break: break-word;
+}
+
+.myr-readonly-textarea {
+  min-height: 80px !important;
+  align-items: flex-start !important;
+}
+
+/* =========================================================
+   SEEDLING DETAILS
+========================================================= */
+
+.myr-seedling-list {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+
+.myr-seedling-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 130px;
+  gap: 12px;
+
+  padding: 12px 14px;
+
+  border: 1px solid #dfe5e1;
+  border-radius: 7px;
+
+  background: #fafcfb;
+}
+
+.myr-seedling-item > div {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.myr-seedling-item span {
+  color: #748078;
+  font-size: 10px;
+}
+
+.myr-seedling-item strong {
+  color: #26342b;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.myr-total-seedlings {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 14px;
+
+  margin-top: 10px;
+  padding-top: 12px;
+
+  border-top: 1px solid #e5eae7;
+}
+
+.myr-total-seedlings span {
+  color: #647168;
+  font-size: 11px;
+}
+
+.myr-total-seedlings strong {
+  color: #167843;
+  font-size: 17px;
+  font-weight: 700;
+}
+
+/* =========================================================
+   REMARKS
+========================================================= */
+
+.myr-remarks-box {
+  padding: 12px 14px;
+
+  border: 1px solid #d9e5dc;
+  border-radius: 7px;
+
+  background: #f6faf7;
+
+  color: #334039;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+/* =========================================================
+   MODAL FOOTER
+========================================================= */
+
+.myr-modal-footer {
+  display: flex;
+  justify-content: flex-end;
+
+  padding: 14px 22px;
+
+  border-top: 1px solid #e2e8e4;
+
+  background: #ffffff;
+}
+
+.myr-close-button {
+  min-width: 86px;
+  min-height: 39px;
+
+  padding: 0 16px;
+
+  border: 1px solid #cfd9d3;
+  border-radius: 7px;
+
+  background: #ffffff;
+  color: #37463d;
+
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+
+  cursor: pointer;
+}
+
+.myr-close-button:hover {
+  background: #f6f8f7;
+}
+
+/* =========================================================
+   RESPONSIVE
+========================================================= */
+
+@media (max-width: 1200px) {
+  .myr-summary-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 900px) {
+  .myr-page {
+    padding: 24px;
+  }
+
+  .myr-summary-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .myr-form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .myr-field-full {
+    grid-column: auto;
+  }
+}
+
+@media (max-width: 640px) {
+  .myr-page {
+    padding: 18px 14px;
+  }
+
+  .myr-page-header {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .myr-title-group {
+    align-items: flex-start;
+  }
+
+  .myr-title-group h1 {
+    font-size: 21px;
+  }
+
+  .myr-request-button {
+    width: 100%;
+  }
+
+  .myr-summary-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .myr-summary-card {
+    min-height: 78px;
+  }
+
+  .myr-pagination {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .myr-pagination-actions {
+    width: 100%;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+  }
+
+  .myr-modal-overlay {
+    padding: 12px;
+  }
+
+  .myr-details-modal {
+    max-height: calc(100vh - 24px);
+  }
+
+  .myr-modal-header,
+  .myr-modal-content,
+  .myr-modal-footer {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+
+  .myr-details-status-row {
+    grid-template-columns: 1fr;
+  }
+
+  .myr-seedling-item {
+    grid-template-columns: 1fr;
+  }
+}

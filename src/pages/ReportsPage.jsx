@@ -1,279 +1,1023 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useAuth } from "../context/AuthContext";
-import { FiFileText, FiDownload, FiFilter } from "react-icons/fi";
+import {
+  FiBarChart2,
+  FiCalendar,
+  FiChevronDown,
+  FiChevronLeft,
+  FiChevronRight,
+  FiDownload,
+  FiFileText,
+  FiFilter,
+  FiRefreshCw,
+  FiSearch,
+  FiUsers,
+  FiX,
+  FiCheck,
+  FiAlertCircle,
+  FiPackage,
+  FiMapPin,
+} from "react-icons/fi";
+import "../styles/reports.css";
 
 const REPORT_TYPES = [
-  { id: "seedling-distribution", label: "Seedling Distribution Report", icon: "🌱", description: "Summary of all seedling distributions and requests." },
-  { id: "planting-activity", label: "Planting Activity Report", icon: "🌳", description: "Summary of all planting activities and events." },
-  { id: "tree-monitoring", label: "Tree Monitoring Report", icon: "📊", description: "Tree survival rates and condition updates." },
-  { id: "participant", label: "Participant Report", icon: "👥", description: "List of registered participants and their activities." },
-  { id: "monthly", label: "Monthly Report", icon: "📅", description: "Monthly summary of all environmental activities." },
-  { id: "annual", label: "Annual Report", icon: "📋", description: "Annual summary of reforestation program implementation." },
+  {
+    id: "seedling-distribution",
+    label: "Seedling Distribution Report",
+    description:
+      "Summary of seedling requests, releases, and distributions.",
+    icon: FiPackage,
+    iconClass: "seedling",
+  },
+  {
+    id: "planting-activity",
+    label: "Planting Activity Report",
+    description:
+      "Summary of planting activities, events, and planted trees.",
+    icon: FiMapPin,
+    iconClass: "planting",
+  },
+  {
+    id: "tree-monitoring",
+    label: "Tree Monitoring Report",
+    description:
+      "Summary of tree conditions, monitoring, and survival.",
+    icon: FiBarChart2,
+    iconClass: "monitoring",
+  },
+  {
+    id: "participant",
+    label: "Participant Report",
+    description:
+      "Summary of registered participants and their activities.",
+    icon: FiUsers,
+    iconClass: "participants",
+  },
+  {
+    id: "monthly",
+    label: "Monthly Report",
+    description:
+      "Summary of environmental activities for a selected month.",
+    icon: FiCalendar,
+    iconClass: "monthly",
+  },
+  {
+    id: "annual",
+    label: "Annual Report",
+    description:
+      "Annual summary of the reforestation program implementation.",
+    icon: FiFileText,
+    iconClass: "annual",
+  },
 ];
 
-const SAMPLE_REPORTS = [
-  { id: "RPT-001", type: "Seedling Distribution Report", date: "2026-07-01", generatedBy: "Maria Santos", status: "Generated" },
-  { id: "RPT-002", type: "Tree Monitoring Report", date: "2026-06-28", generatedBy: "Juan Dela Cruz", status: "Generated" },
-  { id: "RPT-003", type: "Monthly Report", date: "2026-06-01", generatedBy: "Maria Santos", status: "Generated" },
-];
+const REPORT_STORAGE_KEY = "menro_generated_reports";
+
+const getToday = () =>
+  new Date().toISOString().split("T")[0];
+
+function getReportTypeLabel(typeId) {
+  return (
+    REPORT_TYPES.find((type) => type.id === typeId)?.label ||
+    typeId ||
+    "Report"
+  );
+}
+
+function formatDate(dateString) {
+  if (!dateString) return "—";
+
+  const date = new Date(`${dateString}T00:00:00`);
+
+  if (Number.isNaN(date.getTime())) {
+    return dateString;
+  }
+
+  return date.toLocaleDateString("en-PH", {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+  });
+}
+
+function normalizeReports(value) {
+  if (!Array.isArray(value)) return [];
+
+  return value.filter(Boolean).map((report) => ({
+    id: report.id || report.reportId || "",
+    type: report.type || report.reportType || "",
+    typeId: report.typeId || "",
+    date: report.date || report.dateGenerated || "",
+    generatedBy: report.generatedBy || "",
+    status: report.status || "Generated",
+    dateFrom: report.dateFrom || "",
+    dateTo: report.dateTo || "",
+    fileUrl: report.fileUrl || "",
+    fileName: report.fileName || "",
+  }));
+}
+
+function getStoredReports() {
+  try {
+    const stored = localStorage.getItem(REPORT_STORAGE_KEY);
+
+    if (!stored) return [];
+
+    return normalizeReports(JSON.parse(stored));
+  } catch {
+    return [];
+  }
+}
+
+function saveReports(reports) {
+  localStorage.setItem(
+    REPORT_STORAGE_KEY,
+    JSON.stringify(reports)
+  );
+}
+
+function ReportTypeIcon({ type }) {
+  const Icon = type.icon;
+
+  return (
+    <div
+      className={`report-type-icon report-type-icon-${type.iconClass}`}
+      aria-hidden="true"
+    >
+      <Icon size={22} strokeWidth={1.9} />
+    </div>
+  );
+}
 
 export default function ReportsPage() {
-  const { userRole, currentUser } = useAuth();
-  const [reports, setReports] = useState(SAMPLE_REPORTS);
+  const { currentUser, userRole } = useAuth();
+
+  const [reports, setReports] = useState(() =>
+    getStoredReports()
+  );
+
   const [selectedType, setSelectedType] = useState("");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
+
+  const [filterOpen, setFilterOpen] = useState(false);
+  const [filterType, setFilterType] = useState("");
+  const [filterStatus, setFilterStatus] = useState("");
+  const [searchTerm, setSearchTerm] = useState("");
+
   const [successMsg, setSuccessMsg] = useState("");
+  const [errorMsg, setErrorMsg] = useState("");
+  const [isGenerating, setIsGenerating] = useState(false);
 
-  const handleGenerate = () => {
-    if (!selectedType) return;
+  const [currentPage, setCurrentPage] = useState(1);
+  const [rowsPerPage, setRowsPerPage] = useState(10);
 
-    const newReport = {
-      id: `RPT-00${reports.length + 1}`,
-      type: REPORT_TYPES.find(r => r.id === selectedType)?.label || selectedType,
-      date: new Date().toISOString().split("T")[0],
-      generatedBy: currentUser?.fullName || "Current User",
-      status: "Generated",
-    };
+  const filteredReports = useMemo(() => {
+    const search = searchTerm.trim().toLowerCase();
 
-    setReports((prev) => [newReport, ...prev]);
-    setSuccessMsg("Report generated successfully!");
-    setTimeout(() => setSuccessMsg(""), 3000);
+    return reports.filter((report) => {
+      const matchesType =
+        !filterType ||
+        report.typeId === filterType ||
+        report.type === getReportTypeLabel(filterType);
+
+      const matchesStatus =
+        !filterStatus ||
+        report.status === filterStatus;
+
+      const matchesSearch =
+        !search ||
+        String(report.id).toLowerCase().includes(search) ||
+        String(report.type).toLowerCase().includes(search) ||
+        String(report.generatedBy)
+          .toLowerCase()
+          .includes(search);
+
+      return (
+        matchesType &&
+        matchesStatus &&
+        matchesSearch
+      );
+    });
+  }, [
+    reports,
+    filterType,
+    filterStatus,
+    searchTerm,
+  ]);
+
+  const totalPages = Math.max(
+    1,
+    Math.ceil(
+      filteredReports.length / rowsPerPage
+    )
+  );
+
+  const safeCurrentPage = Math.min(
+    currentPage,
+    totalPages
+  );
+
+  const paginatedReports = useMemo(() => {
+    const start =
+      (safeCurrentPage - 1) * rowsPerPage;
+
+    return filteredReports.slice(
+      start,
+      start + rowsPerPage
+    );
+  }, [
+    filteredReports,
+    safeCurrentPage,
+    rowsPerPage,
+  ]);
+
+  const clearFilters = () => {
+    setFilterType("");
+    setFilterStatus("");
+    setSearchTerm("");
+    setCurrentPage(1);
   };
 
+  const handleGenerate = async () => {
+    setSuccessMsg("");
+    setErrorMsg("");
+
+    if (!selectedType) {
+      setErrorMsg("Please select a report type.");
+      return;
+    }
+
+    if (dateFrom && dateTo && dateFrom > dateTo) {
+      setErrorMsg(
+        "Date From cannot be later than Date To."
+      );
+      return;
+    }
+
+    setIsGenerating(true);
+
+    try {
+      /*
+       * This creates only the report metadata.
+       *
+       * The actual report content must come from the
+       * real system records / backend.
+       *
+       * No fake records are created here.
+       */
+
+      const reportId = `RPT-${Date.now()}`;
+
+      const generatedReport = {
+        id: reportId,
+        typeId: selectedType,
+        type: getReportTypeLabel(selectedType),
+        date: getToday(),
+        dateFrom,
+        dateTo,
+        generatedBy:
+          currentUser?.displayName ||
+          currentUser?.fullName ||
+          currentUser?.email ||
+          "",
+        status: "Generated",
+        fileUrl: "",
+        fileName: "",
+      };
+
+      const updatedReports = [
+        generatedReport,
+        ...reports,
+      ];
+
+      saveReports(updatedReports);
+      setReports(updatedReports);
+
+      setSuccessMsg(
+        "Report generated successfully."
+      );
+
+      setSelectedType("");
+      setDateFrom("");
+      setDateTo("");
+      setCurrentPage(1);
+
+      window.setTimeout(() => {
+        setSuccessMsg("");
+      }, 3000);
+    } catch {
+      setErrorMsg(
+        "Unable to generate the report. Please try again."
+      );
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
+  const handleDownload = (report) => {
+    /*
+     * No fake PDF is generated.
+     *
+     * Once the backend returns the actual PDF URL,
+     * this function will download the real report.
+     */
+
+    if (!report.fileUrl) {
+      setErrorMsg(
+        "The PDF file is not available yet. Connect the report generation service to enable downloading."
+      );
+
+      window.setTimeout(() => {
+        setErrorMsg("");
+      }, 4000);
+
+      return;
+    }
+
+    const link = document.createElement("a");
+
+    link.href = report.fileUrl;
+
+    link.download =
+      report.fileName ||
+      `${report.id}-${report.type
+        .replace(/\s+/g, "-")
+        .toLowerCase()}.pdf`;
+
+    link.target = "_blank";
+    link.rel = "noopener noreferrer";
+
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+  };
+
+  const showingFrom =
+    filteredReports.length === 0
+      ? 0
+      : (safeCurrentPage - 1) * rowsPerPage + 1;
+
+  const showingTo = Math.min(
+    safeCurrentPage * rowsPerPage,
+    filteredReports.length
+  );
+
+  const isAdminOrStaff =
+    userRole === "admin" ||
+    userRole === "staff";
+
   return (
-    <div style={{ padding: "32px" }}>
+    <div className="reports-page">
 
-      {/* Header */}
-      <div style={{ marginBottom: "24px" }}>
-        <h1 style={{ fontSize: "22px", fontWeight: "700", color: "#1a1a1a", marginBottom: "4px" }}>
-          Reports
-        </h1>
-        <p style={{ color: "#6b7280", fontSize: "14px" }}>
-          Generate and download environmental monitoring reports.
-        </p>
+      {/* =========================
+          PAGE HEADER
+      ========================= */}
 
-        <div
-          style={{
-            marginTop: "8px",
-            display: "inline-block",
-            padding: "4px 10px",
-            borderRadius: "999px",
-            background: "#f3f4f6",
-            fontSize: "12px",
-            fontWeight: "600",
-            color: "#374151",
-          }}
-        >
-          Logged in as: {userRole}
+      <div className="reports-header">
+        <div className="reports-heading">
+          <div className="reports-heading-icon">
+            <FiFileText
+              size={23}
+              strokeWidth={1.9}
+            />
+          </div>
+
+          <div>
+            <h1>Reports</h1>
+
+            <p>
+              Generate and download environmental
+              monitoring reports.
+            </p>
+          </div>
         </div>
 
-      {/* Success message */}
+        <div className="reports-header-note">
+          <FiFileText size={14} />
+
+          <span>
+            Environmental Reports
+          </span>
+        </div>
+      </div>
+
+      {/* =========================
+          SUCCESS MESSAGE
+      ========================= */}
+
       {successMsg && (
-        <div style={{
-          background: "#dcfce7", color: "#166534",
-          padding: "12px 16px", borderRadius: "8px",
-          marginBottom: "16px", fontSize: "13px", fontWeight: "500"
-        }}>
-          ✅ {successMsg}
+        <div className="reports-alert reports-alert-success">
+          <div className="reports-alert-icon">
+            <FiCheck size={14} />
+          </div>
+
+          <div className="reports-alert-content">
+            <strong>Success</strong>
+
+            <span>
+              {successMsg}
+            </span>
+          </div>
+
+          <button
+            type="button"
+            className="reports-alert-close"
+            onClick={() =>
+              setSuccessMsg("")
+            }
+            aria-label="Close success message"
+          >
+            <FiX size={15} />
+          </button>
         </div>
       )}
 
-      {/* Generate Report Section */}
-      <div style={{
-        background: "#fff", border: "1px solid #e5e7eb",
-        borderRadius: "12px", padding: "24px",
-        marginBottom: "24px"
-      }}>
-        <h2 style={{ fontSize: "15px", fontWeight: "600", color: "#1a1a1a", marginBottom: "16px" }}>
-          Generate New Report
-        </h2>
+      {/* =========================
+          ERROR MESSAGE
+      ========================= */}
 
-        {/* Report Type Cards */}
-        <div style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))",
-          gap: "12px", marginBottom: "20px"
-        }}>
-          {REPORT_TYPES.map((type) => (
-            <div
-              key={type.id}
-              onClick={() => setSelectedType(type.id)}
-              style={{
-                border: `2px solid ${selectedType === type.id ? "#16a34a" : "#e5e7eb"}`,
-                borderRadius: "10px", padding: "14px",
-                cursor: "pointer",
-                background: selectedType === type.id ? "#f0fdf4" : "#fff",
-                transition: "all 0.2s"
-              }}
-            >
-              <div style={{ fontSize: "22px", marginBottom: "6px" }}>{type.icon}</div>
-              <div style={{ fontSize: "13px", fontWeight: "600", color: "#1a1a1a", marginBottom: "4px" }}>
-                {type.label}
-              </div>
-              <div style={{ fontSize: "12px", color: "#6b7280" }}>
-                {type.description}
-              </div>
-            </div>
-          ))}
-        </div>
+      {errorMsg && (
+        <div className="reports-alert reports-alert-error">
+          <div className="reports-alert-icon">
+            <FiAlertCircle size={14} />
+          </div>
 
-        {/* Date Range Filter */}
-        <div style={{ display: "flex", gap: "12px", alignItems: "flex-end", flexWrap: "wrap" }}>
-          <div>
-            <label style={{ fontSize: "13px", fontWeight: "500", display: "block", marginBottom: "6px" }}>
-              Date From
-            </label>
-            <input
-              type="date"
-              value={dateFrom}
-              onChange={(e) => setDateFrom(e.target.value)}
-              style={{
-                padding: "10px 12px",
-                border: "1px solid #e5e7eb", borderRadius: "8px",
-                fontSize: "13px"
-              }}
-            />
+          <div className="reports-alert-content">
+            <strong>
+              Unable to continue
+            </strong>
+
+            <span>
+              {errorMsg}
+            </span>
           </div>
-          <div>
-            <label style={{ fontSize: "13px", fontWeight: "500", display: "block", marginBottom: "6px" }}>
-              Date To
-            </label>
-            <input
-              type="date"
-              value={dateTo}
-              onChange={(e) => setDateTo(e.target.value)}
-              style={{
-                padding: "10px 12px",
-                border: "1px solid #e5e7eb", borderRadius: "8px",
-                fontSize: "13px"
-              }}
-            />
-          </div>
+
           <button
-            onClick={handleGenerate}
-            disabled={!selectedType}
-            style={{
-              padding: "10px 20px",
-              background: selectedType ? "#16a34a" : "#e5e7eb",
-              color: selectedType ? "#fff" : "#9ca3af",
-              border: "none", borderRadius: "8px",
-              fontSize: "13px", fontWeight: "600",
-              cursor: selectedType ? "pointer" : "not-allowed",
-              display: "flex", alignItems: "center", gap: "6px"
-            }}
+            type="button"
+            className="reports-alert-close"
+            onClick={() =>
+              setErrorMsg("")
+            }
+            aria-label="Close error message"
           >
-            <FiFileText size={14} /> Generate Report
+            <FiX size={15} />
           </button>
         </div>
-      </div>
+      )}
 
-      {/* Generated Reports Table */}
-      <div
-        style={{
-          padding: "16px 20px",
-          borderBottom: "1px solid #e5e7eb",
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-        }}
-      >
-        <h2
-          style={{
-            fontSize: "15px",
-            fontWeight: "600",
-            color: "#1a1a1a",
-            margin: 0,
-          }}
-        >
-          Generated Reports
-        </h2>
+      {/* =========================
+          GENERATE REPORT
+      ========================= */}
 
-        <button
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: "6px",
-            padding: "8px 12px",
-            border: "1px solid #e5e7eb",
-            background: "#fff",
-            borderRadius: "8px",
-            cursor: "pointer",
-            fontSize: "13px",
-          }}
-        >
-          <FiFilter size={14} />
-          Filter
-        </button>
-      </div>
+      <section className="reports-card generate-report-card">
 
-        <table style={{ width: "100%", borderCollapse: "collapse" }}>
-          <thead>
-            <tr style={{ background: "#f9fafb" }}>
-              {["Report ID", "Type", "Date Generated", "Generated By", "Status", "Actions"].map((h) => (
-                <th key={h} style={{
-                  padding: "12px 16px", textAlign: "left",
-                  fontSize: "12px", fontWeight: "600",
-                  color: "#6b7280", textTransform: "uppercase",
-                  letterSpacing: "0.05em"
-                }}>
-                  {h}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {reports.map((r, i) => (
-              <tr key={r.id} style={{
-                borderTop: "1px solid #f3f4f6",
-                background: i % 2 === 0 ? "#fff" : "#fafafa"
-              }}>
-                <td style={{ padding: "14px 16px", fontSize: "13px", fontWeight: "600", color: "#1a1a1a" }}>
-                  {r.id}
-                </td>
-                <td style={{ padding: "14px 16px", fontSize: "13px", color: "#374151" }}>
-                  {r.type}
-                </td>
-                <td style={{ padding: "14px 16px", fontSize: "13px", color: "#374151" }}>
-                  {r.date}
-                </td>
-                <td style={{ padding: "14px 16px", fontSize: "13px", color: "#374151" }}>
-                  {r.generatedBy}
-                </td>
-                <td style={{ padding: "14px 16px" }}>
-                  <span style={{
-                    padding: "4px 10px", borderRadius: "999px",
-                    fontSize: "12px", fontWeight: "600",
-                    background: "#dcfce7", color: "#166534"
-                  }}>
-                    {r.status}
+        <div className="reports-section-header">
+          <div>
+            <h2>
+              Generate New Report
+            </h2>
+
+            <p>
+              Select a report type and date range
+              to generate a report from available
+              system records.
+            </p>
+          </div>
+        </div>
+
+        {/* Report Type */}
+
+        <div className="report-field-label">
+          Report Type
+        </div>
+
+        <div className="report-type-grid">
+          {REPORT_TYPES.map((type) => {
+            const selected =
+              selectedType === type.id;
+
+            return (
+              <button
+                key={type.id}
+                type="button"
+                className={`report-type-card ${
+                  selected
+                    ? "selected"
+                    : ""
+                }`}
+                onClick={() =>
+                  setSelectedType(type.id)
+                }
+              >
+                <ReportTypeIcon
+                  type={type}
+                />
+
+                <div className="report-type-content">
+                  <strong>
+                    {type.label}
+                  </strong>
+
+                  <span>
+                    {type.description}
                   </span>
-                </td>
-                <td style={{ padding: "14px 16px" }}>
-                  <button
-                    style={{
-                      padding: "6px 12px",
-                      background: "#dbeafe", color: "#1e40af",
-                      border: "none", borderRadius: "6px",
-                      fontSize: "12px", fontWeight: "600",
-                      cursor: "pointer",
-                      display: "flex", alignItems: "center", gap: "4px"
-                    }}
-                  >
-                    <FiDownload size={11} /> Download PDF
-                  </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+                </div>
 
-        {reports.length === 0 && (
-          <div style={{ padding: "40px", textAlign: "center", color: "#9ca3af", fontSize: "14px" }}>
-            No reports generated yet.
+                <span
+                  className={`report-type-radio ${
+                    selected
+                      ? "checked"
+                      : ""
+                  }`}
+                  aria-hidden="true"
+                >
+                  {selected && (
+                    <span />
+                  )}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Date Parameters */}
+
+        <div className="report-parameters">
+
+          <div className="report-form-field">
+            <label htmlFor="report-date-from">
+              Date From
+            </label>
+
+            <div className="report-input-wrap">
+              <input
+                id="report-date-from"
+                type="date"
+                value={dateFrom}
+                onChange={(event) =>
+                  setDateFrom(
+                    event.target.value
+                  )
+                }
+              />
+
+              <FiCalendar
+                size={16}
+              />
+            </div>
+          </div>
+
+          <div className="report-form-field">
+            <label htmlFor="report-date-to">
+              Date To
+            </label>
+
+            <div className="report-input-wrap">
+              <input
+                id="report-date-to"
+                type="date"
+                value={dateTo}
+                onChange={(event) =>
+                  setDateTo(
+                    event.target.value
+                  )
+                }
+              />
+
+              <FiCalendar
+                size={16}
+              />
+            </div>
+          </div>
+
+          <button
+            type="button"
+            className="reports-primary-button generate-button"
+            onClick={handleGenerate}
+            disabled={
+              !selectedType ||
+              isGenerating ||
+              !isAdminOrStaff
+            }
+          >
+            {isGenerating ? (
+              <>
+                <FiRefreshCw
+                  className="reports-spin"
+                  size={15}
+                />
+
+                Generating...
+              </>
+            ) : (
+              <>
+                <FiFileText
+                  size={15}
+                />
+
+                Generate Report
+              </>
+            )}
+          </button>
+        </div>
+
+        {!isAdminOrStaff && (
+          <div className="reports-permission-note">
+            <FiUsers size={14} />
+
+            <span>
+              Report generation is available
+              to authorized MENRO personnel.
+            </span>
           </div>
         )}
-      </div>
+      </section>
+
+      {/* =========================
+          GENERATED REPORTS
+      ========================= */}
+
+      <section className="reports-card generated-reports-card">
+
+        <div className="generated-reports-header">
+
+          <div>
+            <h2>
+              Generated Reports
+            </h2>
+
+            <p>
+              View and download reports
+              generated from system records.
+            </p>
+          </div>
+
+          <button
+            type="button"
+            className={`reports-secondary-button ${
+              filterOpen
+                ? "active"
+                : ""
+            }`}
+            onClick={() =>
+              setFilterOpen(
+                (previous) => !previous
+              )
+            }
+          >
+            <FiFilter size={14} />
+
+            Filter
+          </button>
+        </div>
+
+        {/* Filter Panel */}
+
+        {filterOpen && (
+          <div className="reports-filter-panel">
+
+            <div className="report-form-field">
+              <label htmlFor="report-search">
+                Search
+              </label>
+
+              <div className="report-input-wrap">
+                <FiSearch
+                  size={15}
+                />
+
+                <input
+                  id="report-search"
+                  type="text"
+                  placeholder="Search report ID or type..."
+                  value={searchTerm}
+                  onChange={(event) => {
+                    setSearchTerm(
+                      event.target.value
+                    );
+                    setCurrentPage(1);
+                  }}
+                />
+              </div>
+            </div>
+
+            <div className="report-form-field">
+              <label htmlFor="report-filter-type">
+                Report Type
+              </label>
+
+              <div className="report-select-wrap">
+                <select
+                  id="report-filter-type"
+                  value={filterType}
+                  onChange={(event) => {
+                    setFilterType(
+                      event.target.value
+                    );
+                    setCurrentPage(1);
+                  }}
+                >
+                  <option value="">
+                    All Report Types
+                  </option>
+
+                  {REPORT_TYPES.map(
+                    (type) => (
+                      <option
+                        key={type.id}
+                        value={type.id}
+                      >
+                        {type.label}
+                      </option>
+                    )
+                  )}
+                </select>
+
+                <FiChevronDown
+                  size={15}
+                />
+              </div>
+            </div>
+
+            <div className="report-form-field">
+              <label htmlFor="report-filter-status">
+                Status
+              </label>
+
+              <div className="report-select-wrap">
+                <select
+                  id="report-filter-status"
+                  value={filterStatus}
+                  onChange={(event) => {
+                    setFilterStatus(
+                      event.target.value
+                    );
+                    setCurrentPage(1);
+                  }}
+                >
+                  <option value="">
+                    All Status
+                  </option>
+
+                  <option value="Generated">
+                    Generated
+                  </option>
+
+                  <option value="Processing">
+                    Processing
+                  </option>
+
+                  <option value="Failed">
+                    Failed
+                  </option>
+                </select>
+
+                <FiChevronDown
+                  size={15}
+                />
+              </div>
+            </div>
+
+            <button
+              type="button"
+              className="reports-clear-button"
+              onClick={clearFilters}
+            >
+              <FiRefreshCw
+                size={14}
+              />
+
+              Clear
+            </button>
+          </div>
+        )}
+
+        {/* Table */}
+
+        <div className="reports-table-wrap">
+          <table className="reports-table">
+
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Report ID</th>
+                <th>Type</th>
+                <th>Date Generated</th>
+                <th>Generated By</th>
+                <th>Status</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+
+            <tbody>
+              {paginatedReports.map(
+                (report, index) => (
+                  <tr key={report.id}>
+
+                    <td>
+                      {
+                        (safeCurrentPage -
+                          1) *
+                          rowsPerPage +
+                          index +
+                          1
+                      }
+                    </td>
+
+                    <td>
+                      <strong className="report-id">
+                        {report.id}
+                      </strong>
+                    </td>
+
+                    <td>
+                      {report.type}
+                    </td>
+
+                    <td>
+                      {formatDate(
+                        report.date
+                      )}
+                    </td>
+
+                    <td>
+                      {report.generatedBy ||
+                        "—"}
+                    </td>
+
+                    <td>
+                      <span
+                        className={`report-status report-status-${report.status
+                          .toLowerCase()
+                          .replace(
+                            /\s+/g,
+                            "-"
+                          )}`}
+                      >
+                        <span />
+
+                        {report.status}
+                      </span>
+                    </td>
+
+                    <td>
+                      <button
+                        type="button"
+                        className="download-report-button"
+                        onClick={() =>
+                          handleDownload(
+                            report
+                          )
+                        }
+                      >
+                        <FiDownload
+                          size={13}
+                        />
+
+                        Download PDF
+                      </button>
+                    </td>
+
+                  </tr>
+                )
+              )}
+            </tbody>
+          </table>
+
+          {/* Empty State */}
+
+          {paginatedReports.length === 0 && (
+            <div className="reports-empty-state">
+
+              <div className="reports-empty-icon">
+                <FiFileText
+                  size={27}
+                  strokeWidth={1.8}
+                />
+              </div>
+
+              <h3>
+                {reports.length === 0
+                  ? "No reports generated yet."
+                  : "No reports found."}
+              </h3>
+
+              <p>
+                {reports.length === 0
+                  ? "Generate a report to view it here."
+                  : "Try adjusting your filters or search term."}
+              </p>
+
+              {reports.length > 0 && (
+                <button
+                  type="button"
+                  className="reports-empty-clear"
+                  onClick={
+                    clearFilters
+                  }
+                >
+                  Clear Filters
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Pagination */}
+
+        <div className="reports-pagination">
+
+          <span>
+            Showing {showingFrom} to{" "}
+            {showingTo} of{" "}
+            {filteredReports.length}{" "}
+            reports
+          </span>
+
+          <div className="pagination-controls">
+
+            <button
+              type="button"
+              disabled={
+                safeCurrentPage <= 1
+              }
+              onClick={() =>
+                setCurrentPage(
+                  (page) =>
+                    Math.max(
+                      1,
+                      page - 1
+                    )
+                )
+              }
+              aria-label="Previous page"
+            >
+              <FiChevronLeft
+                size={15}
+              />
+            </button>
+
+            <span className="pagination-current">
+              {safeCurrentPage}
+            </span>
+
+            <button
+              type="button"
+              disabled={
+                safeCurrentPage >=
+                totalPages
+              }
+              onClick={() =>
+                setCurrentPage(
+                  (page) =>
+                    Math.min(
+                      totalPages,
+                      page + 1
+                    )
+                )
+              }
+              aria-label="Next page"
+            >
+              <FiChevronRight
+                size={15}
+              />
+            </button>
+
+            <div className="rows-per-page">
+              <select
+                value={rowsPerPage}
+                onChange={(event) => {
+                  setRowsPerPage(
+                    Number(
+                      event.target.value
+                    )
+                  );
+                  setCurrentPage(1);
+                }}
+                aria-label="Rows per page"
+              >
+                <option value={10}>
+                  10 / page
+                </option>
+
+                <option value={20}>
+                  20 / page
+                </option>
+
+                <option value={50}>
+                  50 / page
+                </option>
+              </select>
+
+              <FiChevronDown
+                size={13}
+              />
+            </div>
+
+          </div>
+        </div>
+      </section>
     </div>
   );
 }
