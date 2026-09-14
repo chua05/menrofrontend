@@ -1587,7 +1587,7 @@ export default function DashboardPage() {
     return () => {
       cancelled = true;
     };
-  }, [isManagement]);
+  }, [isManagement, isParticipant]);
 
   const participantIdentity =
     useMemo(
