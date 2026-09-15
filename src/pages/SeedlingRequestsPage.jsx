@@ -1644,54 +1644,69 @@ export default function SeedlingRequestsPage() {
                     </td>
 
                     <td>
-                      <div className="sr-actions">
-                        <button
-                          type="button"
-                          className="sr-view-btn"
-                          title="View details"
-                          onClick={() =>
-                            setSelectedRequest(
-                              request
-                            )
-                          }
-                        >
-                          <Eye size={15} />
-                        </button>
+  <div className="sr-actions">
+    {/* VIEW DETAILS */}
+    <button
+      type="button"
+      className="sr-view-btn"
+      title="View details"
+      onClick={() =>
+        setSelectedRequest(request)
+      }
+    >
+      <Eye size={15} />
+    </button>
 
-                        {userRole ===
-                          "admin" &&
-                          request.status ===
-                            "Reviewed" && (
-                            <>
-                              <button
-                                type="button"
-                                className="sr-approve-btn"
-                                onClick={() =>
-                                  updateRequestStatus(
-                                    request.id,
-                                    "Approved"
-                                  )
-                                }
-                              >
-                                Approve
-                              </button>
+    {/* STAFF - REVIEW REQUEST */}
+    {userRole === "staff" &&
+      request.status === "Pending Review" && (
+        <button
+          type="button"
+          className="sr-approve-btn"
+          onClick={() =>
+            updateRequestStatus(
+              request.id,
+              "Reviewed"
+            )
+          }
+        >
+          Review
+        </button>
+      )}
 
-                              <button
-                                type="button"
-                                className="sr-reject-btn"
-                                onClick={() =>
-                                  updateRequestStatus(
-                                    request.id,
-                                    "Rejected"
-                                  )
-                                }
-                              >
-                                Reject
-                              </button>
-                            </>
-                          )}
-                      </div>
-                    </td>
+    {/* ADMIN - APPROVE OR REJECT REVIEWED REQUEST */}
+    {userRole === "admin" &&
+      request.status === "Reviewed" && (
+        <>
+          <button
+            type="button"
+            className="sr-approve-btn"
+            onClick={() =>
+              updateRequestStatus(
+                request.id,
+                "Approved"
+              )
+            }
+          >
+            Approve
+          </button>
+
+          <button
+            type="button"
+            className="sr-reject-btn"
+            onClick={() =>
+              updateRequestStatus(
+                request.id,
+                "Rejected"
+              )
+            }
+          >
+            Reject
+          </button>
+        </>
+      )}
+  </div>
+</td>
                   </tr>
                 )
               )}
