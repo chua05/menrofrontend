@@ -24,7 +24,7 @@ if (hasApiKey) {
   // Prevent double initialization during HMR or multiple imports
   app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
 } else {
-  // eslint-disable-next-line no-console
+   
   console.warn("VITE_FIREBASE_API_KEY is not set. Skipping Firebase initialization.");
 }
 
@@ -33,7 +33,7 @@ if (app) {
   try {
     auth = getAuth(app);
   } catch (err) {
-    // eslint-disable-next-line no-console
+     
     console.warn("Firebase auth initialization failed:", err?.message || err);
   }
 }
