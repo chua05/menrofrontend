@@ -1,4 +1,4 @@
-import { initializeApp } from "firebase/app";
+import { initializeApp, getApps, getApp } from "firebase/app";
 import { getAuth, GoogleAuthProvider } from "firebase/auth";
 
 const firebaseConfig = {
@@ -17,8 +17,18 @@ const firebaseConfig = {
 
 };
 
-const app = initializeApp(firebaseConfig);
+// Prevent double initialization during HMR or multiple imports
+const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
 
-export const auth = getAuth(app);
-export const googleProvider = new GoogleAuthProvider();
+let auth;
+try {
+  auth = getAuth(app);
+} catch (err) {
+  // eslint-disable-next-line no-console
+  console.warn("Firebase auth initialization failed:", err?.message || err);
+}
+
+const googleProvider = new GoogleAuthProvider();
+
+export { auth, googleProvider };
 export default app;
