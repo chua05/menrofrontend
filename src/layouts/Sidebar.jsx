@@ -440,21 +440,18 @@ export default function Sidebar({ isOpen, onClose }) {
       position: "fixed",
       inset: 0,
       zIndex: 99999,
-      background:
-        "rgba(20, 30, 24, 0.35)",
+      background: "rgba(20, 30, 24, 0.32)",
       display: "flex",
       alignItems: "center",
       justifyContent: "center",
-      padding: "20px",
+      padding: "16px",
     }}
     onMouseDown={(event) => {
       if (
-        event.target ===
-        event.currentTarget
+        event.target === event.currentTarget &&
+        !loggingOut
       ) {
-        setShowLogoutConfirm(
-          false
-        );
+        setShowLogoutConfirm(false);
       }
     }}
   >
@@ -462,21 +459,24 @@ export default function Sidebar({ isOpen, onClose }) {
       role="dialog"
       aria-modal="true"
       aria-labelledby="logout-title"
+      aria-describedby="logout-description"
       style={{
-        width: "100%",
-        maxWidth: "360px",
+        width: "280px",
+        maxWidth: "calc(100vw - 32px)",
         background: "#ffffff",
-        borderRadius: "12px",
-        padding: "22px",
+        borderRadius: "10px",
+        padding: "18px",
         boxShadow:
-          "0 18px 45px rgba(0, 0, 0, 0.18)",
+          "0 12px 32px rgba(0, 0, 0, 0.16)",
       }}
     >
       <h3
         id="logout-title"
         style={{
-          margin: "0 0 8px",
-          fontSize: "16px",
+          margin: "0 0 6px",
+          fontSize: "15px",
+          lineHeight: "1.3",
+          fontWeight: 700,
           color: "#1f2d25",
         }}
       >
@@ -484,41 +484,52 @@ export default function Sidebar({ isOpen, onClose }) {
       </h3>
 
       <p
+        id="logout-description"
         style={{
-          margin: "0",
+          margin: 0,
           fontSize: "13px",
-          lineHeight: 1.6,
+          lineHeight: "1.45",
           color: "#66736b",
         }}
       >
-        Are you sure you want
-        to log out?
+        Are you sure you want to log out?
       </p>
 
       <div
         style={{
           display: "flex",
+          alignItems: "center",
           justifyContent: "flex-end",
-          gap: "9px",
-          marginTop: "20px",
+          gap: "8px",
+          marginTop: "16px",
         }}
       >
         <button
           type="button"
+          disabled={loggingOut}
           onClick={() =>
-            setShowLogoutConfirm(
-              false
-            )
+            setShowLogoutConfirm(false)
           }
           style={{
-            minWidth: "82px",
-            padding: "9px 14px",
-            border:
-              "1px solid #d7dfda",
+            width: "76px",
+            height: "34px",
+            padding: 0,
+            margin: 0,
+            border: "1px solid #d7dfda",
             borderRadius: "7px",
             background: "#ffffff",
-            cursor: "pointer",
+            color: "#445149",
+            fontSize: "12px",
+            lineHeight: 1,
             fontWeight: 600,
+            cursor: loggingOut
+              ? "not-allowed"
+              : "pointer",
+            opacity: loggingOut ? 0.6 : 1,
+            display: "inline-flex",
+            alignItems: "center",
+            justifyContent: "center",
+            flex: "0 0 76px",
           }}
         >
           Cancel
@@ -529,19 +540,33 @@ export default function Sidebar({ isOpen, onClose }) {
           onClick={handleLogout}
           disabled={loggingOut}
           style={{
-            minWidth: "82px",
-            padding: "9px 14px",
+            width: loggingOut ? "100px" : "76px",
+            height: "34px",
+            padding: 0,
+            margin: 0,
             border: "none",
             borderRadius: "7px",
             background: "#087443",
             color: "#ffffff",
-            cursor: "pointer",
-            fontWeight: 700,
+            fontSize: "12px",
+            lineHeight: 1,
+            fontWeight: 600,
+            cursor: loggingOut
+              ? "not-allowed"
+              : "pointer",
+            opacity: loggingOut ? 0.75 : 1,
+            display: "inline-flex",
+            alignItems: "center",
+            justifyContent: "center",
+            flex: loggingOut
+              ? "0 0 100px"
+              : "0 0 76px",
+            whiteSpace: "nowrap",
           }}
         >
           {loggingOut
             ? "Logging out..."
-            : "Log Out"}
+            : "Log out"}
         </button>
       </div>
     </div>
