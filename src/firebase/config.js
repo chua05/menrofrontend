@@ -17,15 +17,25 @@ const firebaseConfig = {
 
 };
 
-// Prevent double initialization during HMR or multiple imports
-const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
-
-let auth;
-try {
-  auth = getAuth(app);
-} catch (err) {
+// If there's no API key, avoid initializing Firebase (prevents auth/invalid-api-key errors)
+const hasApiKey = !!firebaseConfig.apiKey;
+let app = null;
+if (hasApiKey) {
+  // Prevent double initialization during HMR or multiple imports
+  app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
+} else {
   // eslint-disable-next-line no-console
-  console.warn("Firebase auth initialization failed:", err?.message || err);
+  console.warn("VITE_FIREBASE_API_KEY is not set. Skipping Firebase initialization.");
+}
+
+let auth = null;
+if (app) {
+  try {
+    auth = getAuth(app);
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.warn("Firebase auth initialization failed:", err?.message || err);
+  }
 }
 
 const googleProvider = new GoogleAuthProvider();
