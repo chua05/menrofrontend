@@ -1,4 +1,4 @@
-import { initializeApp } from "firebase/app";
+import { initializeApp, getApps, getApp } from "firebase/app";
 import { getAuth, GoogleAuthProvider } from "firebase/auth";
 
 const firebaseConfig = {
@@ -17,8 +17,28 @@ const firebaseConfig = {
 
 };
 
-const app = initializeApp(firebaseConfig);
+// If there's no API key, avoid initializing Firebase (prevents auth/invalid-api-key errors)
+const hasApiKey = !!firebaseConfig.apiKey;
+let app = null;
+if (hasApiKey) {
+  // Prevent double initialization during HMR or multiple imports
+  app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
+} else {
+   
+  console.warn("VITE_FIREBASE_API_KEY is not set. Skipping Firebase initialization.");
+}
 
-export const auth = getAuth(app);
-export const googleProvider = new GoogleAuthProvider();
+let auth = null;
+if (app) {
+  try {
+    auth = getAuth(app);
+  } catch (err) {
+     
+    console.warn("Firebase auth initialization failed:", err?.message || err);
+  }
+}
+
+const googleProvider = new GoogleAuthProvider();
+
+export { auth, googleProvider };
 export default app;
