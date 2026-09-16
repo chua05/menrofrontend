@@ -16,6 +16,9 @@ import axios from "axios";
 import menroLogo from "../assets/menro-logo.png";
 import "../styles/login.css";
 
+const API_BASE_URL =
+  import.meta.env.VITE_API_URL || "http://localhost:5000/api";
+
 export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] =
@@ -88,7 +91,7 @@ export default function LoginPage() {
 
       const response =
         await axios.post(
-          "http://localhost:5000/api/auth/verify",
+          `${API_BASE_URL}/auth/verify`,
           {},
           {
             headers: {
@@ -176,7 +179,7 @@ export default function LoginPage() {
 
         const response =
           await axios.post(
-            "http://localhost:5000/api/auth/verify",
+            `${API_BASE_URL}/auth/verify`,
             {},
             {
               headers: {
@@ -214,7 +217,9 @@ export default function LoginPage() {
         console.error(err);
         setSuccess("");
         setError(
-          "Google sign in failed."
+          err.response?.data?.message ||
+            err.message ||
+            "Google sign in failed."
         );
       } finally {
         setLoading(false);
