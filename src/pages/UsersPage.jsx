@@ -24,7 +24,8 @@ import { useAuth } from "../context/AuthContext";
 import { auth } from "../firebase/config";
 import "../styles/registered-users.css";
 
-const API_BASE_URL = "http://localhost:5000/api";
+const API_BASE_URL =
+  import.meta.env.VITE_API_URL || "http://localhost:5000/api";
 const PAGE_SIZE_OPTIONS = [10, 20, 50];
 
 const BARANGAYS = [

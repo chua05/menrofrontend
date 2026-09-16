@@ -2,41 +2,6 @@ import { useEffect, useRef, useState } from "react";
 import { Bell, Menu, Search } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 
-const SAMPLE_NOTIFICATIONS = {
-  alerts: [
-    {
-      id: 1,
-      message: "New seedling request submitted.",
-      time: "2 mins ago",
-      read: false,
-    },
-    {
-      id: 2,
-      message: "Seedling request SR-2026-0041 was approved.",
-      time: "1 hour ago",
-      read: false,
-    },
-  ],
-
-  events: [
-    {
-      id: 3,
-      message: "Barangay Roque Tree Planting Activity was scheduled.",
-      time: "Yesterday",
-      read: false,
-    },
-  ],
-
-  logs: [
-    {
-      id: 4,
-      message: "Planting report PR-2026-001 was approved.",
-      time: "Aug 25, 2026",
-      read: true,
-    },
-  ],
-};
-
 function getDisplayName(user, role) {
   if (user?.fullName?.trim()) {
     return user.fullName;
@@ -84,10 +49,6 @@ export default function Topbar({ onOpenSidebar }) {
   const { currentUser, userRole } = useAuth();
 
   const [showNotifications, setShowNotifications] = useState(false);
-  const [activeTab, setActiveTab] = useState("alerts");
-  const [notifications, setNotifications] = useState(
-    SAMPLE_NOTIFICATIONS
-  );
 
   const notificationRef = useRef(null);
 
@@ -111,19 +72,6 @@ export default function Topbar({ onOpenSidebar }) {
     };
   }, []);
 
-  const allNotifications = [
-    ...notifications.alerts,
-    ...notifications.events,
-    ...notifications.logs,
-  ];
-
-  const unreadCount = allNotifications.filter(
-    (notification) => !notification.read
-  ).length;
-
-  const currentNotifications =
-    notifications[activeTab] || [];
-
   const displayName = getDisplayName(
     currentUser,
     userRole
@@ -135,40 +83,6 @@ export default function Topbar({ onOpenSidebar }) {
     displayName,
     userRole
   );
-
-  const handleMarkRead = (tab, id) => {
-    setNotifications((previous) => ({
-      ...previous,
-
-      [tab]: previous[tab].map((notification) =>
-        notification.id === id
-          ? {
-              ...notification,
-              read: true,
-            }
-          : notification
-      ),
-    }));
-  };
-
-  const handleMarkAllRead = () => {
-    setNotifications((previous) => ({
-      alerts: previous.alerts.map((item) => ({
-        ...item,
-        read: true,
-      })),
-
-      events: previous.events.map((item) => ({
-        ...item,
-        read: true,
-      })),
-
-      logs: previous.logs.map((item) => ({
-        ...item,
-        read: true,
-      })),
-    }));
-  };
 
   return (
     <header className="topbar">
@@ -226,11 +140,6 @@ export default function Topbar({ onOpenSidebar }) {
               strokeWidth={1.8}
             />
 
-            {unreadCount > 0 && (
-              <span className="topbar-notif-dot">
-                {unreadCount}
-              </span>
-            )}
           </button>
 
           {showNotifications && (
@@ -240,76 +149,12 @@ export default function Topbar({ onOpenSidebar }) {
                   Notifications
                 </div>
 
-                <div className="notification-tabs">
-                  {["alerts", "events", "logs"].map(
-                    (tab) => (
-                      <button
-                        type="button"
-                        key={tab}
-                        className={`notification-tab ${
-                          activeTab === tab
-                            ? "active"
-                            : ""
-                        }`}
-                        onClick={() =>
-                          setActiveTab(tab)
-                        }
-                      >
-                        {tab
-                          .charAt(0)
-                          .toUpperCase() +
-                          tab.slice(1)}
-                      </button>
-                    )
-                  )}
-                </div>
               </div>
 
               <div className="notification-list">
-                {currentNotifications.length ===
-                0 ? (
-                  <div className="notification-empty">
-                    No notifications.
-                  </div>
-                ) : (
-                  currentNotifications.map(
-                    (notification) => (
-                      <button
-                        type="button"
-                        key={notification.id}
-                        className={`notification-item ${
-                          notification.read
-                            ? ""
-                            : "unread"
-                        }`}
-                        onClick={() =>
-                          handleMarkRead(
-                            activeTab,
-                            notification.id
-                          )
-                        }
-                      >
-                        <span
-                          className={`notification-dot ${
-                            notification.read
-                              ? "read"
-                              : ""
-                          }`}
-                        />
-
-                        <span className="notification-item-content">
-                          <span className="notification-message">
-                            {notification.message}
-                          </span>
-
-                          <span className="notification-time">
-                            {notification.time}
-                          </span>
-                        </span>
-                      </button>
-                    )
-                  )
-                )}
+                <div className="notification-empty">
+                  Notifications are unavailable until the server provides them.
+                </div>
               </div>
 
               <div className="notification-footer">
@@ -323,13 +168,6 @@ export default function Topbar({ onOpenSidebar }) {
                   Close
                 </button>
 
-                <button
-                  type="button"
-                  className="notification-read-all"
-                  onClick={handleMarkAllRead}
-                >
-                  Mark all as read
-                </button>
               </div>
             </div>
           )}

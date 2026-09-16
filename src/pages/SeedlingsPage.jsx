@@ -10,7 +10,6 @@ import {
   CalendarClock,
   Eye,
   Pencil,
-  Archive,
   X,
   ChevronLeft,
   ChevronRight,
@@ -28,27 +27,10 @@ import "../styles/seedlings.css";
 const API_BASE_URL =
   import.meta.env.VITE_API_URL || "http://localhost:5000/api";
 
-const ARCHIVE_STORAGE_KEY = "menro_seedlings_archive";
-
-function getStoredArray(key) {
-  try {
-    const stored = localStorage.getItem(key);
-
-    if (!stored) {
-      return [];
-    }
-
-    const parsed = JSON.parse(stored);
-
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
-}
-
-function getStoredArchivedSeedlings() {
-  return getStoredArray(ARCHIVE_STORAGE_KEY);
-}
+const NURSERY_OPTIONS = [
+  "Sorsogon Provincial Nursery",
+  "Sorsogon Provincial Nursery in Barangay Cogon, Juban, Sorsogon",
+];
 
 function timestampToIso(value) {
   if (!value) return "";
@@ -104,19 +86,17 @@ function normalizeInventoryItem(item) {
     planted:
       Number(item.planted || 0),
     lowStockThreshold:
-      item.lowStockThreshold ?? 20,
+      item.lowStockThreshold ?? null,
     sourceNursery:
       item.sourceNursery || "",
     dateReceived:
       item.dateReceived || "",
-    storageLocation:
-      item.storageLocation || "",
     batchReference:
       item.batchReference || "",
     description:
       item.description || "",
     status:
-      item.status || "Available",
+      item.status || "",
     createdAt:
       timestampToIso(item.createdAt) ||
       item.createdAt ||
@@ -229,7 +209,6 @@ function getInitialForm() {
     sourceNursery: "",
     dateReceived: "",
 
-    storageLocation: "",
     batchReference: "",
 
     description: "",
@@ -288,8 +267,6 @@ export default function SeedlingsPage() {
   const [seedlings, setSeedlings] =
     useState([]);
 
-  const [archivedSeedlings, setArchivedSeedlings] =
-    useState(getStoredArchivedSeedlings);
 
   const [activeTab, setActiveTab] =
     useState("seedlings");
@@ -312,11 +289,13 @@ export default function SeedlingsPage() {
   const [showEditModal, setShowEditModal] =
     useState(false);
 
+  const [showStockModal, setShowStockModal] = useState(false);
+  const [stockAmount, setStockAmount] = useState("");
+  const [stockError, setStockError] = useState("");
+
   const [showDetailsModal, setShowDetailsModal] =
     useState(false);
 
-  const [showArchiveModal, setShowArchiveModal] =
-    useState(false);
 
   const [selectedSeedling, setSelectedSeedling] =
     useState(null);
@@ -394,7 +373,6 @@ export default function SeedlingsPage() {
         );
 
         if (!cancelled) {
-          setSeedlings([]);
           setErrorMessage(
             error.message ||
               "Unable to load seedling inventory."
@@ -414,12 +392,6 @@ export default function SeedlingsPage() {
     };
   }, []);
 
-  useEffect(() => {
-    localStorage.setItem(
-      ARCHIVE_STORAGE_KEY,
-      JSON.stringify(archivedSeedlings)
-    );
-  }, [archivedSeedlings]);
 
   useEffect(() => {
     const handleOutsideClick = (event) => {
@@ -725,6 +697,7 @@ export default function SeedlingsPage() {
 
   const handleAddSeedling = async (event) => {
     event.preventDefault();
+    if (!canManage || actionLoading) return;
 
     const errors =
       validateForm();
@@ -765,20 +738,13 @@ export default function SeedlingsPage() {
               // for forward compatibility.
               scientificName:
                 form.scientificName.trim(),
-              lowStockThreshold:
-                form.lowStockThreshold === ""
-                  ? Math.ceil(
-                      quantity * 0.3
-                    )
-                  : Number(
-                      form.lowStockThreshold
-                    ),
+              ...(form.lowStockThreshold !== ""
+                ? { lowStockThreshold: Number(form.lowStockThreshold) }
+                : {}),
               sourceNursery:
                 form.sourceNursery.trim(),
               dateReceived:
                 form.dateReceived,
-              storageLocation:
-                form.storageLocation.trim(),
               batchReference:
                 form.batchReference.trim(),
             }),
@@ -848,6 +814,44 @@ export default function SeedlingsPage() {
     setShowEditModal(true);
   };
 
+  const openAddStock = (seedling) => {
+    if (!canManage) return;
+    setSelectedSeedling(seedling);
+    setStockAmount("");
+    setStockError("");
+    setShowStockModal(true);
+  };
+
+  const handleAddStock = async (event) => {
+    event.preventDefault();
+    if (!canManage || !selectedSeedling || actionLoading) return;
+    const amount = Number(stockAmount);
+    if (!Number.isSafeInteger(amount) || amount <= 0) {
+      setStockError("Enter a whole number greater than zero.");
+      return;
+    }
+
+    setActionLoading(true);
+    setStockError("");
+    try {
+      const response = await apiRequest(`/inventory/${selectedSeedling.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ quantity: selectedSeedling.quantity + amount }),
+      });
+      const updated = normalizeInventoryItem(response.data || {});
+      setSeedlings((previous) => previous.map((item) =>
+        item.id === updated.id ? updated : item
+      ));
+      setSelectedSeedling(updated);
+      setShowStockModal(false);
+      showSuccess(`${formatNumber(amount)} seedlings added to ${updated.treeName}.`);
+    } catch (error) {
+      setStockError(error.message || "Unable to add stock.");
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
   const updateEditForm = (
     field,
     value
@@ -868,7 +872,7 @@ export default function SeedlingsPage() {
   ) => {
     event.preventDefault();
 
-    if (!selectedSeedling) {
+    if (!canManage || !selectedSeedling || actionLoading) {
       return;
     }
 
@@ -994,147 +998,6 @@ export default function SeedlingsPage() {
       showError(
         error.message ||
           "Unable to update the seedling record."
-      );
-    } finally {
-      setActionLoading(false);
-    }
-  };
-
-  const archiveSeedling = async (
-    seedling
-  ) => {
-    const confirmed =
-      window.confirm(
-        `Archive ${seedling.id} - ${seedling.treeName}?`
-      );
-
-    if (!confirmed) {
-      return;
-    }
-
-    setActionLoading(true);
-    setErrorMessage("");
-
-    try {
-      await apiRequest(
-        `/inventory/${seedling.id}`,
-        {
-          method: "DELETE",
-        }
-      );
-
-      const archivedRecord = {
-        ...seedling,
-        archivedAt:
-          new Date().toISOString(),
-      };
-
-      setArchivedSeedlings(
-        (previous) => [
-          archivedRecord,
-          ...previous.filter(
-            (item) =>
-              item.id !==
-              seedling.id
-          ),
-        ]
-      );
-
-      setSeedlings(
-        (previous) =>
-          previous.filter(
-            (item) =>
-              item.id !==
-              seedling.id
-          )
-      );
-
-      setShowDetailsModal(false);
-      setSelectedSeedling(null);
-
-      showSuccess(
-        `${seedling.treeName} was archived successfully.`
-      );
-    } catch (error) {
-      console.error(error);
-      showError(
-        error.message ||
-          "Unable to archive the seedling record."
-      );
-    } finally {
-      setActionLoading(false);
-    }
-  };
-
-  const restoreSeedling = async (
-    seedlingId
-  ) => {
-    const archived =
-      archivedSeedlings.find(
-        (seedling) =>
-          seedling.id ===
-          seedlingId
-      );
-
-    if (!archived) {
-      return;
-    }
-
-    setActionLoading(true);
-    setErrorMessage("");
-
-    try {
-      const response =
-        await apiRequest(
-          "/inventory",
-          {
-            method: "POST",
-            body: JSON.stringify({
-              species:
-                archived.treeName,
-              category:
-                archived.category,
-              quantity:
-                Number(
-                  archived.quantity ||
-                    0
-                ),
-              description:
-                archived.description ||
-                "",
-            }),
-          }
-        );
-
-      const restored =
-        normalizeInventoryItem(
-          response.data || {}
-        );
-
-      setSeedlings(
-        (previous) => [
-          restored,
-          ...previous,
-        ]
-      );
-
-      setArchivedSeedlings(
-        (previous) =>
-          previous.filter(
-            (seedling) =>
-              seedling.id !==
-              seedlingId
-          )
-      );
-
-      showSuccess(
-        `${archived.treeName} was restored as an active inventory record.`
-      );
-    } catch (error) {
-      console.error(error);
-      showError(
-        error.message ||
-          "Unable to restore the seedling record."
       );
     } finally {
       setActionLoading(false);
@@ -1547,33 +1410,6 @@ export default function SeedlingsPage() {
                       </div>
                     </button>
 
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setShowArchiveModal(
-                          true
-                        );
-
-                        setShowMoreMenu(
-                          false
-                        );
-                      }}
-                    >
-                      <Archive size={15} />
-
-                      <div>
-                        <strong>
-                          Archived Records
-                        </strong>
-
-                        <span>
-                          {
-                            archivedSeedlings.length
-                          }{" "}
-                          archived
-                        </span>
-                      </div>
-                    </button>
                   </div>
                 )}
               </div>
@@ -1740,20 +1576,13 @@ export default function SeedlingsPage() {
 
                                   <button
                                     type="button"
-                                    className="sd-icon-action archive"
-                                    title="Archive record"
-                                    onClick={() =>
-                                      archiveSeedling(
-                                        seedling
-                                      )
-                                    }
+                                    className="sd-icon-action edit"
+                                    title="Add stock"
+                                    onClick={() => openAddStock(seedling)}
                                   >
-                                    <Archive
-                                      size={
-                                        14
-                                      }
-                                    />
+                                    <Plus size={14} />
                                   </button>
+
                                 </>
                               )}
                             </div>
@@ -2071,17 +1900,22 @@ export default function SeedlingsPage() {
         </FormField>
 
         <FormField label="Source / Nursery">
-          <input
-            type="text"
+          <select
             value={form.sourceNursery}
-            placeholder="e.g. MENRO Nursery"
             onChange={(event) =>
               updateForm(
                 "sourceNursery",
                 event.target.value
               )
             }
-          />
+          >
+            <option value="">Select a nursery</option>
+            {NURSERY_OPTIONS.map((nursery) => (
+              <option key={nursery} value={nursery}>
+                {nursery}
+              </option>
+            ))}
+          </select>
         </FormField>
 
         <FormField
@@ -2107,25 +1941,11 @@ export default function SeedlingsPage() {
       <div className="sd-form-section-heading">
         <h3>Storage Information</h3>
         <p>
-          Optional nursery and reference information.
+          Optional batch and reference information.
         </p>
       </div>
 
       <div className="sd-form-grid">
-        <FormField label="Nursery / Storage Location">
-          <input
-            type="text"
-            value={form.storageLocation}
-            placeholder="e.g. Main MENRO Nursery"
-            onChange={(event) =>
-              updateForm(
-                "storageLocation",
-                event.target.value
-              )
-            }
-          />
-        </FormField>
-
         <FormField label="Batch / Reference No.">
           <input
             type="text"
@@ -2334,6 +2154,33 @@ export default function SeedlingsPage() {
           </div>
         )}
 
+      {showStockModal && selectedSeedling && (
+        <div className="sd-modal-backdrop">
+          <div className="sd-modal">
+            <div className="sd-modal-header">
+              <div>
+                <h2>Add Stock</h2>
+                <p>{selectedSeedling.treeName} · Current total: {formatNumber(selectedSeedling.quantity)}</p>
+              </div>
+              <button type="button" className="sd-modal-close" onClick={() => setShowStockModal(false)} disabled={actionLoading} aria-label="Close">
+                <X size={18} />
+              </button>
+            </div>
+            <form className="sd-modal-body" onSubmit={handleAddStock}>
+              <div className="sd-form-grid">
+                <FormField label="Quantity to Add *" error={stockError}>
+                  <input type="number" min="1" step="1" value={stockAmount} onChange={(event) => setStockAmount(event.target.value)} />
+                </FormField>
+              </div>
+              <div className="sd-modal-footer">
+                <button type="button" className="sd-secondary-btn" onClick={() => setShowStockModal(false)} disabled={actionLoading}>Cancel</button>
+                <button type="submit" className="sd-primary-btn" disabled={actionLoading}>{actionLoading ? "Saving..." : "Add Stock"}</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       {/* DETAILS MODAL */}
       {showDetailsModal &&
         selectedSeedling && (
@@ -2448,21 +2295,6 @@ export default function SeedlingsPage() {
               </div>
 
               <div className="sd-modal-footer sd-details-footer">
-                {canManage && (
-                  <button
-                    type="button"
-                    className="sd-archive-btn"
-                    onClick={() =>
-                      archiveSeedling(
-                        selectedSeedling
-                      )
-                    }
-                  >
-                    <Archive size={14} />
-                    Archive
-                  </button>
-                )}
-
                 <button
                   type="button"
                   className="sd-secondary-btn"
@@ -2479,108 +2311,6 @@ export default function SeedlingsPage() {
           </div>
         )}
 
-      {/* ARCHIVE MODAL */}
-      {showArchiveModal && (
-        <div className="sd-modal-backdrop">
-          <div className="sd-modal sd-archive-modal">
-            <div className="sd-modal-header">
-              <div>
-                <h2>
-                  Archived Seedlings
-                </h2>
-
-                <p>
-                  Restore archived inventory
-                  records when needed.
-                </p>
-              </div>
-
-              <button
-                type="button"
-                className="sd-modal-close"
-                onClick={() =>
-                  setShowArchiveModal(
-                    false
-                  )
-                }
-              >
-                <X size={18} />
-              </button>
-            </div>
-
-            <div className="sd-archive-body">
-              {archivedSeedlings.length ===
-              0 ? (
-                <div className="sd-archive-empty">
-                  <Archive
-                    size={30}
-                    strokeWidth={1.5}
-                  />
-
-                  <h3>
-                    No archived records
-                  </h3>
-
-                  <p>
-                    Archived seedlings will
-                    appear here.
-                  </p>
-                </div>
-              ) : (
-                archivedSeedlings.map(
-                  (seedling) => (
-                    <div
-                      className="sd-archive-item"
-                      key={
-                        seedling.id
-                      }
-                    >
-                      <div>
-                        <strong>
-                          {
-                            seedling.id
-                          }
-                        </strong>
-
-                        <span>
-                          {
-                            seedling.treeName
-                          }
-                        </span>
-                      </div>
-
-                      <button
-                        type="button"
-                        onClick={() =>
-                          restoreSeedling(
-                            seedling.id
-                          )
-                        }
-                      >
-                        Restore
-                      </button>
-                    </div>
-                  )
-                )
-              )}
-            </div>
-
-            <div className="sd-modal-footer">
-              <button
-                type="button"
-                className="sd-secondary-btn"
-                onClick={() =>
-                  setShowArchiveModal(
-                    false
-                  )
-                }
-              >
-                Close
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
