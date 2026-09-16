@@ -75,13 +75,6 @@ const BARANGAYS = [
   "Tughan",
 ];
 
-const LOCAL_KEYS = {
-  requests: ["menro_seedling_requests"],
-  inventory: ["menro_seedlings"],
-  distributions: ["menro_distributions"],
-  reports: ["menro_planting_reports"],
-};
-
 const SURVIVAL_COLORS = [
   "#16813d",
   "#287e47",
@@ -91,28 +84,6 @@ const SURVIVAL_COLORS = [
   "#455d7a",
   "#94a3b8",
 ];
-
-function getStoredArray(keys) {
-  const keyList = Array.isArray(keys) ? keys : [keys];
-
-  for (const key of keyList) {
-    try {
-      const raw = localStorage.getItem(key);
-
-      if (!raw) continue;
-
-      const parsed = JSON.parse(raw);
-
-      if (Array.isArray(parsed)) {
-        return parsed;
-      }
-    } catch {
-      // Ignore malformed fallback data.
-    }
-  }
-
-  return [];
-}
 
 function unwrapArray(payload) {
   if (Array.isArray(payload)) return payload;
@@ -200,7 +171,7 @@ async function apiGet(path, token) {
   }
 
   if (!response.ok) {
-    return null;
+    throw new Error(payload?.message || `Unable to load ${path}.`);
   }
 
   return unwrapArray(payload);
@@ -1452,10 +1423,7 @@ export default function DashboardPage() {
 
         if (cancelled) return;
 
-        const pick = (
-          index,
-          fallbackKeys = []
-        ) => {
+        const pick = (index) => {
           const result =
             results[index];
 
@@ -1469,35 +1437,23 @@ export default function DashboardPage() {
             return result.value;
           }
 
-          return fallbackKeys.length > 0
-            ? getStoredArray(
-                fallbackKeys
-              )
-            : [];
+          return [];
         };
 
-        setRequests(
-          pick(
-            0,
-            LOCAL_KEYS.requests
-          )
-        );
+        setRequests(pick(0));
 
         // Registered planting sites now come only from the backend.
         setSites(
           pick(1)
         );
 
-        setReports(
-          pick(
-            2,
-            LOCAL_KEYS.reports
-          )
-        );
+        setReports(pick(2));
 
         // Event Calendar and Dashboard now share the same backend source.
         setEvents(
-          pick(3)
+          pick(3).filter((event) =>
+            ["Tree Planting", "Other MENRO Activity"].includes(event?.type)
+          )
         );
 
         if (isManagement) {
@@ -1505,19 +1461,9 @@ export default function DashboardPage() {
             pick(5)
           );
 
-          setInventory(
-            pick(
-              6,
-              LOCAL_KEYS.inventory
-            )
-          );
+          setInventory(pick(6));
 
-          setDistributions(
-            pick(
-              7,
-              LOCAL_KEYS.distributions
-            )
-          );
+          setDistributions(pick(7));
         } else {
           // Preserve participant restrictions.
           setUsers([]);
@@ -1529,41 +1475,28 @@ export default function DashboardPage() {
           pick(4)
         );
 
-        setLoadError("");
+        const failedCount = results.filter(
+          (result) => result.status === "rejected"
+        ).length;
+        setLoadError(
+          failedCount > 0
+            ? `${failedCount} dashboard data source${failedCount === 1 ? "" : "s"} could not be loaded.`
+            : ""
+        );
       } catch (error) {
         console.error(error);
 
         if (cancelled) return;
 
-        setRequests(
-          getStoredArray(
-            LOCAL_KEYS.requests
-          )
-        );
+        setRequests([]);
 
         setSites([]);
 
-        setReports(
-          getStoredArray(
-            LOCAL_KEYS.reports
-          )
-        );
+        setReports([]);
 
-        setInventory(
-          isManagement
-            ? getStoredArray(
-                LOCAL_KEYS.inventory
-              )
-            : []
-        );
+        setInventory([]);
 
-        setDistributions(
-          isManagement
-            ? getStoredArray(
-                LOCAL_KEYS.distributions
-              )
-            : []
-        );
+        setDistributions([]);
 
         setUsers([]);
 
@@ -2340,9 +2273,7 @@ export default function DashboardPage() {
     >
       {loadError && (
         <div className="dashboard-warning">
-          {loadError} Available
-          stored records are being
-          shown where possible.
+          {loadError} Available API records are shown where possible.
         </div>
       )}
 

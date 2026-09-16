@@ -17,7 +17,6 @@ import {
   Users,
   X,
   XCircle,
-  PackageOpen,
   Activity,
   Leaf,
   RefreshCw,
@@ -34,8 +33,6 @@ const API_BASE_URL =
 
 const EVENT_TYPES = [
   "Tree Planting",
-  "Seedling Distribution",
-  "Monitoring Activity",
   "Other MENRO Activity",
 ];
 
@@ -225,8 +222,8 @@ function formatDateKey(
  *
  * This is separate from recordStatus.
  *
- * recordStatus:
- * authorized / scheduled / approved / completed
+ * recordStatus is supplied by the backend; an approved request's
+ * Tree Planting event is already scheduled.
  *
  * calendar status:
  * Upcoming / Ongoing / Completed / Cancelled
@@ -280,36 +277,12 @@ function getEventTypeIcon(type) {
     return Sprout;
   }
 
-  if (
-    type === "Seedling Distribution"
-  ) {
-    return PackageOpen;
-  }
-
-  if (
-    type === "Monitoring Activity"
-  ) {
-    return Activity;
-  }
-
   return Leaf;
 }
 
 function getEventTypeClass(type) {
   if (type === "Tree Planting") {
     return "tree-planting";
-  }
-
-  if (
-    type === "Seedling Distribution"
-  ) {
-    return "seedling-distribution";
-  }
-
-  if (
-    type === "Monitoring Activity"
-  ) {
-    return "monitoring";
   }
 
   return "other";
@@ -576,7 +549,9 @@ export default function EventSchedulePage() {
 
     setEvents(
       Array.isArray(response.data)
-        ? response.data
+        ? response.data.filter((event) =>
+            EVENT_TYPES.includes(event?.type)
+          )
         : []
     );
   }
@@ -594,7 +569,9 @@ export default function EventSchedulePage() {
 
     setArchivedEvents(
       Array.isArray(response.data)
-        ? response.data
+        ? response.data.filter((event) =>
+            EVENT_TYPES.includes(event?.type)
+          )
         : []
     );
   }
@@ -1885,16 +1862,6 @@ export default function EventSchedulePage() {
                 </span>
 
                 <span>
-                  <i className="seedling-distribution" />
-                  Distribution
-                </span>
-
-                <span>
-                  <i className="monitoring" />
-                  Monitoring
-                </span>
-
-                <span>
                   <i className="other" />
                   Other
                 </span>
@@ -2506,9 +2473,25 @@ export default function EventSchedulePage() {
                     label="Actual Participants"
                     value={
                       selectedEvent.actualParticipants ??
-                      0
+                      "—"
                     }
                   />
+
+                  {selectedEvent.recordStatus && (
+                    <DetailItem
+                      icon={CalendarDays}
+                      label="Record Status"
+                      value={selectedEvent.recordStatus}
+                    />
+                  )}
+
+                  {(selectedEvent.sourceRequestId || selectedEvent.requestId) && (
+                    <DetailItem
+                      icon={Sprout}
+                      label="Source Request"
+                      value={selectedEvent.sourceRequestId || selectedEvent.requestId}
+                    />
+                  )}
 
                   <DetailItem
                     icon={Users}

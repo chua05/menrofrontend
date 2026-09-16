@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   FiBarChart2,
   FiCalendar,
@@ -27,11 +27,10 @@ import {
 } from "recharts";
 
 import "../styles/reforestation-analytics.css";
+import { auth } from "../firebase/config";
 
-const SEEDLINGS_STORAGE_KEY = "menro_seedlings";
-const PLANTING_REPORTS_STORAGE_KEY = "menro_planting_reports";
-const MONITORING_STORAGE_KEY = "menro_survival_monitoring";
-const PLANTING_SITES_STORAGE_KEY = "menro_planting_sites";
+const API_BASE_URL =
+  import.meta.env.VITE_API_URL || "http://localhost:5000/api";
 
 const JUBAN_BARANGAYS = [
   "Añog",
@@ -78,21 +77,18 @@ const SPECIES_COLORS = [
   "#d88352",
 ];
 
-function safeParse(value) {
-  try {
-    const parsed = JSON.parse(value);
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
+async function loadApiRecords(path, token) {
+  const response = await fetch(`${API_BASE_URL}${path}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(payload.message || `Unable to load ${path}.`);
   }
-}
-
-function loadStorageArray(key) {
-  if (typeof window === "undefined") {
-    return [];
+  if (!Array.isArray(payload.data)) {
+    throw new Error(`Unexpected response from ${path}.`);
   }
-
-  return safeParse(window.localStorage.getItem(key));
+  return payload.data;
 }
 
 function normalizeVerificationStatus(status) {
@@ -306,21 +302,13 @@ function EmptyChart({ icon, title, message }) {
 }
 
 export default function ReforestationAnalyticsPage() {
-  const [seedlings, setSeedlings] = useState(() =>
-    loadStorageArray(SEEDLINGS_STORAGE_KEY)
-  );
-
-  const [plantingReports, setPlantingReports] = useState(() =>
-    loadStorageArray(PLANTING_REPORTS_STORAGE_KEY)
-  );
-
-  const [monitoringRecords, setMonitoringRecords] = useState(() =>
-    loadStorageArray(MONITORING_STORAGE_KEY)
-  );
-
-  const [plantingSites, setPlantingSites] = useState(() =>
-    loadStorageArray(PLANTING_SITES_STORAGE_KEY)
-  );
+  const [seedlings, setSeedlings] = useState([]);
+  const [plantingReports, setPlantingReports] = useState([]);
+  const [monitoringRecords, setMonitoringRecords] = useState([]);
+  const [plantingSites, setPlantingSites] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
+  const [refreshKey, setRefreshKey] = useState(0);
 
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
@@ -329,23 +317,36 @@ export default function ReforestationAnalyticsPage() {
   const [speciesFilter, setSpeciesFilter] = useState("All");
   const [siteFilter, setSiteFilter] = useState("All");
 
-  const loadAnalyticsData = () => {
-    setSeedlings(
-      loadStorageArray(SEEDLINGS_STORAGE_KEY)
-    );
-
-    setPlantingReports(
-      loadStorageArray(PLANTING_REPORTS_STORAGE_KEY)
-    );
-
-    setMonitoringRecords(
-      loadStorageArray(MONITORING_STORAGE_KEY)
-    );
-
-    setPlantingSites(
-      loadStorageArray(PLANTING_SITES_STORAGE_KEY)
-    );
-  };
+  useEffect(() => {
+    let cancelled = false;
+    async function loadAnalyticsData() {
+      try {
+        if (typeof auth.authStateReady === "function") {
+          await auth.authStateReady();
+        }
+        const token = await auth.currentUser?.getIdToken();
+        if (!token) throw new Error("Your session has expired. Please sign in again.");
+        const [inventory, reports, monitoring, sites] = await Promise.all([
+          loadApiRecords("/inventory", token),
+          loadApiRecords("/planting-reports", token),
+          loadApiRecords("/monitoring", token),
+          loadApiRecords("/sites", token),
+        ]);
+        if (cancelled) return;
+        setSeedlings(inventory);
+        setPlantingReports(reports);
+        setMonitoringRecords(monitoring);
+        setPlantingSites(sites);
+        setLoadError("");
+      } catch (error) {
+        if (!cancelled) setLoadError(error.message || "Unable to load analytics.");
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+    loadAnalyticsData();
+    return () => { cancelled = true; };
+  }, [refreshKey]);
 
   const verifiedReports = useMemo(() => {
     return plantingReports.filter(
@@ -1045,15 +1046,20 @@ export default function ReforestationAnalyticsPage() {
           <button
             type="button"
             className="ra-icon-button"
-            onClick={
-              loadAnalyticsData
-            }
+            onClick={() => {
+              setLoading(true);
+              setRefreshKey((current) => current + 1);
+            }}
+            disabled={loading}
             title="Refresh analytics"
           >
             <FiRefreshCw size={16} />
           </button>
         </div>
       </div>
+
+      {loading && <p role="status">Loading analytics...</p>}
+      {loadError && <p role="alert">{loadError}</p>}
 
       {/* KPI CARDS */}
       <div className="ra-kpi-grid">
