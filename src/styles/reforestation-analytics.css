@@ -3,6 +3,7 @@
   padding: 28px 30px 40px;
   background: #f8faf9;
   color: #1f2937;
+  font-size: 14px;
 }
 
 .ra-page * {
@@ -22,12 +23,12 @@
 .ra-heading {
   display: flex;
   align-items: flex-start;
-  gap: 12px;
+  gap: 13px;
 }
 
 .ra-heading-icon {
-  width: 44px;
-  height: 44px;
+  width: 48px;
+  height: 48px;
   border-radius: 12px;
   background: #eaf7ef;
   color: #17643a;
@@ -40,14 +41,16 @@
 .ra-heading h1 {
   margin: 0;
   color: #111827;
-  font-size: 24px;
+  font-size: 25px;
+  line-height: 1.25;
   font-weight: 750;
 }
 
 .ra-heading p {
-  margin: 5px 0 0;
+  margin: 6px 0 0;
   color: #66756c;
-  font-size: 13px;
+  font-size: 14px;
+  line-height: 1.5;
 }
 
 .ra-header-actions {
@@ -56,8 +59,8 @@
 }
 
 .ra-secondary-button {
-  min-height: 40px;
-  padding: 0 14px;
+  min-height: 44px;
+  padding: 0 16px;
   border: 1px solid #dbe3de;
   border-radius: 9px;
   background: #ffffff;
@@ -65,8 +68,8 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 7px;
-  font-size: 12px;
+  gap: 8px;
+  font-size: 14px;
   font-weight: 650;
   cursor: pointer;
 }
@@ -77,8 +80,8 @@
 }
 
 .ra-icon-button {
-  width: 40px;
-  height: 40px;
+  width: 44px;
+  height: 44px;
   border: 1px solid #dbe3de;
   border-radius: 9px;
   background: #ffffff;
@@ -93,26 +96,26 @@
 
 .ra-kpi-grid {
   display: grid;
-  grid-template-columns:
-    repeat(6, minmax(0, 1fr));
+  grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: 13px;
   margin-bottom: 15px;
 }
 
 .ra-kpi-card {
-  min-height: 118px;
-  padding: 16px 14px;
+  min-width: 0;
+  min-height: 132px;
+  padding: 17px 15px;
   border: 1px solid #e1e7e3;
   border-radius: 12px;
   background: #ffffff;
   display: flex;
   align-items: flex-start;
-  gap: 11px;
+  gap: 12px;
 }
 
 .ra-kpi-icon {
-  width: 42px;
-  height: 42px;
+  width: 46px;
+  height: 46px;
   border-radius: 50%;
   display: flex;
   align-items: center;
@@ -142,10 +145,10 @@
 
 .ra-kpi-card span {
   display: block;
-  min-height: 31px;
+  min-height: 36px;
   color: #2a352f;
-  font-size: 11.5px;
-  line-height: 1.35;
+  font-size: 13px;
+  line-height: 1.4;
   font-weight: 700;
 }
 
@@ -153,7 +156,7 @@
   display: block;
   margin-top: 4px;
   color: #111814;
-  font-size: 22px;
+  font-size: 25px;
   line-height: 1.1;
   font-weight: 760;
 }
@@ -162,14 +165,15 @@
   display: block;
   margin-top: 7px;
   color: #7c8881;
-  font-size: 10.3px;
+  font-size: 12px;
+  line-height: 1.4;
 }
 
 /* FILTERS */
 
 .ra-filter-card {
   margin-bottom: 14px;
-  padding: 15px 17px;
+  padding: 16px 18px;
   border: 1px solid #e1e7e3;
   border-radius: 12px;
   background: #ffffff;
@@ -186,27 +190,27 @@
 
 .ra-filter-field label {
   display: block;
-  margin-bottom: 6px;
+  margin-bottom: 7px;
   color: #344139;
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 700;
 }
 
 .ra-filter-field select {
   width: 100%;
-  height: 40px;
-  padding: 0 32px 0 11px;
+  height: 44px;
+  padding: 0 34px 0 12px;
   border: 1px solid #dce3df;
   border-radius: 8px;
   background: #ffffff;
   color: #425047;
-  font-size: 12px;
+  font-size: 14px;
   outline: none;
 }
 
 .ra-date-range {
-  min-height: 40px;
-  padding: 0 10px;
+  min-height: 44px;
+  padding: 0 11px;
   border: 1px solid #dce3df;
   border-radius: 8px;
   background: #ffffff;
@@ -223,12 +227,12 @@
   outline: none;
   background: transparent;
   color: #425047;
-  font-size: 11.5px;
+  font-size: 13.5px;
 }
 
 .ra-date-range span {
   color: #87918b;
-  font-size: 10.5px;
+  font-size: 12px;
 }
 
 .ra-clear-wrap {
@@ -245,19 +249,17 @@
 }
 
 .ra-chart-grid-top {
-  grid-template-columns:
-    1.05fr 1.05fr 0.9fr;
+  grid-template-columns: 1.05fr 1.05fr 0.9fr;
 }
 
 .ra-chart-grid-bottom {
-  grid-template-columns:
-    0.9fr 1.3fr;
+  grid-template-columns: 0.9fr 1.3fr;
 }
 
 .ra-chart-card {
   min-width: 0;
-  min-height: 340px;
-  padding: 17px 18px;
+  min-height: 365px;
+  padding: 19px 20px;
   border: 1px solid #e1e7e3;
   border-radius: 12px;
   background: #ffffff;
@@ -266,24 +268,26 @@
 .ra-card-heading h2 {
   margin: 0;
   color: #222e27;
-  font-size: 14px;
+  font-size: 16px;
+  line-height: 1.35;
   font-weight: 720;
 }
 
 .ra-card-heading p {
-  margin: 5px 0 0;
+  margin: 6px 0 0;
   color: #748078;
-  font-size: 10.8px;
+  font-size: 12.5px;
+  line-height: 1.5;
 }
 
 .ra-chart-area {
   width: 100%;
-  height: 270px;
-  margin-top: 15px;
+  height: 280px;
+  margin-top: 16px;
 }
 
 .ra-barangay-chart-area {
-  height: 285px;
+  height: 295px;
 }
 
 /* EMPTY CHART */
@@ -291,7 +295,7 @@
 .ra-empty-chart {
   width: 100%;
   height: 100%;
-  min-height: 250px;
+  min-height: 260px;
   padding: 20px;
   display: flex;
   flex-direction: column;
@@ -301,9 +305,9 @@
 }
 
 .ra-empty-icon {
-  width: 54px;
-  height: 54px;
-  margin-bottom: 9px;
+  width: 60px;
+  height: 60px;
+  margin-bottom: 10px;
   border-radius: 50%;
   background: #eaf7ef;
   color: #188a4b;
@@ -314,32 +318,33 @@
 
 .ra-empty-chart strong {
   color: #27342c;
-  font-size: 12.5px;
+  font-size: 14px;
+  line-height: 1.4;
 }
 
 .ra-empty-chart span {
-  max-width: 310px;
-  margin-top: 5px;
+  max-width: 330px;
+  margin-top: 6px;
   color: #7a857e;
-  font-size: 10.5px;
-  line-height: 1.5;
+  font-size: 12.5px;
+  line-height: 1.55;
 }
 
 /* DONUT */
 
 .ra-donut-layout,
 .ra-species-layout {
-  min-height: 270px;
+  min-height: 280px;
   margin-top: 10px;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 10px;
+  gap: 12px;
 }
 
 .ra-donut-chart {
   width: 48%;
-  height: 220px;
+  height: 230px;
   flex-shrink: 0;
 }
 
@@ -351,32 +356,32 @@
 }
 
 .ra-legend-row {
-  min-height: 34px;
+  min-height: 40px;
   display: grid;
-  grid-template-columns:
-    10px minmax(0, 1fr) auto;
-  gap: 7px;
+  grid-template-columns: 11px minmax(0, 1fr) auto;
+  gap: 8px;
   align-items: center;
   border-bottom: 1px solid #f0f2f1;
   color: #435047;
-  font-size: 10.5px;
+  font-size: 12.5px;
+  line-height: 1.4;
 }
 
 .ra-legend-row strong {
   color: #26342c;
-  font-size: 10.5px;
+  font-size: 12.5px;
   white-space: nowrap;
 }
 
 .ra-legend-dot {
-  width: 8px;
-  height: 8px;
+  width: 9px;
+  height: 9px;
   border-radius: 50%;
 }
 
 .ra-total-box {
   margin-top: 12px;
-  padding: 12px 10px;
+  padding: 13px 11px;
   border: 1px solid #e0e5e2;
   border-radius: 8px;
   background: #fbfcfb;
@@ -387,50 +392,50 @@
 .ra-total-inline span {
   display: block;
   color: #69756e;
-  font-size: 10px;
+  font-size: 12px;
+  line-height: 1.4;
 }
 
 .ra-total-box strong {
   display: block;
   margin-top: 5px;
   color: #172019;
-  font-size: 20px;
+  font-size: 23px;
 }
 
 .ra-total-inline {
   margin-top: 12px;
-  padding-top: 10px;
+  padding-top: 11px;
   border-top: 1px solid #e6ebe8;
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 10px;
 }
 
 .ra-total-inline strong {
   color: #172019;
-  font-size: 18px;
+  font-size: 20px;
 }
 
 /* RESPONSIVE */
 
-@media (max-width: 1350px) {
+@media (max-width: 1500px) {
   .ra-kpi-grid {
-    grid-template-columns:
-      repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
+}
 
+@media (max-width: 1350px) {
   .ra-filter-card {
-    grid-template-columns:
-      repeat(2, minmax(0, 1fr));
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .ra-chart-grid-top {
-    grid-template-columns:
-      repeat(2, minmax(0, 1fr));
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .ra-chart-grid-top
-    .ra-chart-card:last-child {
+  .ra-chart-grid-top .ra-chart-card:last-child {
     grid-column: span 2;
   }
 }
@@ -456,20 +461,43 @@
     grid-template-columns: 1fr;
   }
 
-  .ra-chart-grid-top
-    .ra-chart-card:last-child {
+  .ra-chart-grid-top .ra-chart-card:last-child {
     grid-column: auto;
   }
 }
 
 @media (max-width: 620px) {
+  .ra-page {
+    padding: 18px 14px 30px;
+  }
+
+  .ra-heading h1 {
+    font-size: 21px;
+  }
+
+  .ra-heading p {
+    font-size: 13px;
+  }
+
+  .ra-header-actions {
+    flex-wrap: wrap;
+  }
+
+  .ra-secondary-button {
+    flex: 1;
+  }
+
   .ra-kpi-grid {
     grid-template-columns: 1fr;
   }
 
   .ra-date-range {
     flex-wrap: wrap;
-    padding: 8px 10px;
+    padding: 9px 11px;
+  }
+
+  .ra-date-range input {
+    min-width: 120px;
   }
 
   .ra-donut-layout,
@@ -479,5 +507,13 @@
 
   .ra-donut-chart {
     width: 100%;
+  }
+
+  .ra-legend {
+    width: 100%;
+  }
+
+  .ra-chart-card {
+    padding: 16px;
   }
 }

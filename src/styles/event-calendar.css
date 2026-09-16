@@ -5,7 +5,10 @@
   display: flex;
   flex-direction: column;
 
-  gap: 14px;
+  gap: 16px;
+
+  font-size: 15px;
+  line-height: 1.5;
 }
 
 /* =====================================================
@@ -13,7 +16,7 @@
 ===================================================== */
 
 .ec-page-header {
-  min-height: 55px;
+  min-height: 64px;
 
   display: flex;
   align-items: center;
@@ -28,14 +31,14 @@
   display: flex;
   align-items: center;
 
-  gap: 11px;
+  gap: 12px;
 }
 
 .ec-title-icon {
-  width: 42px;
-  height: 42px;
+  width: 46px;
+  height: 46px;
 
-  flex: 0 0 42px;
+  flex: 0 0 46px;
 
   display: grid;
   place-items: center;
@@ -52,25 +55,26 @@
 
   color: #17211b;
 
-  font-size: 21px;
-  line-height: 1.2;
+  font-size: 24px;
+  line-height: 1.25;
 
   font-weight: 700;
 }
 
 .ec-title-wrap p {
-  margin: 4px 0 0;
+  margin: 5px 0 0;
 
   color: #68766e;
 
-  font-size: 10.5px;
+  font-size: 14px;
+  line-height: 1.5;
 }
 
 .ec-header-actions {
   display: flex;
   align-items: center;
 
-  gap: 8px;
+  gap: 10px;
 }
 
 /* =====================================================
@@ -81,9 +85,11 @@
 .ec-secondary-btn,
 .ec-archive-btn,
 .ec-complete-btn {
-  min-height: 38px;
+  width: auto;
+  min-width: max-content;
+  min-height: 44px;
 
-  padding: 0 14px;
+  padding: 0 17px;
 
   border-radius: 7px;
 
@@ -91,18 +97,31 @@
   align-items: center;
   justify-content: center;
 
-  gap: 7px;
+  gap: 8px;
+
+  flex: 0 0 auto;
 
   cursor: pointer;
 
-  font-size: 10.5px;
+  font-family: inherit;
+  font-size: 14px;
+  line-height: 1;
   font-weight: 600;
+
+  white-space: nowrap;
 
   transition:
     background-color 150ms ease,
     border-color 150ms ease,
     transform 150ms ease,
     box-shadow 150ms ease;
+}
+
+.ec-primary-btn svg,
+.ec-secondary-btn svg,
+.ec-archive-btn svg,
+.ec-complete-btn svg {
+  flex: 0 0 auto;
 }
 
 .ec-primary-btn {
@@ -166,7 +185,7 @@
 ===================================================== */
 
 .ec-success-message {
-  padding: 10px 13px;
+  padding: 12px 15px;
 
   border: 1px solid #cde9d4;
   border-radius: 7px;
@@ -174,13 +193,15 @@
   display: flex;
   align-items: center;
 
-  gap: 8px;
+  gap: 9px;
 
   background: #eef9f1;
 
   color: #15723a;
 
-  font-size: 10.5px;
+  font-size: 14px;
+  line-height: 1.45;
+  font-weight: 500;
 
   animation: ecMessageIn 180ms ease-out;
 }
@@ -206,13 +227,13 @@
 
   grid-template-columns: repeat(5, minmax(0, 1fr));
 
-  gap: 10px;
+  gap: 12px;
 }
 
 .ec-kpi-card {
-  min-height: 82px;
+  min-height: 96px;
 
-  padding: 12px 14px;
+  padding: 15px 16px;
 
   border: 1px solid #e0e7e2;
   border-radius: 8px;
@@ -220,7 +241,7 @@
   display: flex;
   align-items: center;
 
-  gap: 11px;
+  gap: 13px;
 
   background: white;
 
@@ -239,10 +260,10 @@
 }
 
 .ec-kpi-icon {
-  width: 43px;
-  height: 43px;
+  width: 46px;
+  height: 46px;
 
-  flex: 0 0 43px;
+  flex: 0 0 46px;
 
   border-radius: 50%;
 
@@ -280,17 +301,18 @@
 .ec-kpi-card span {
   color: #56635b;
 
-  font-size: 9.5px;
+  font-size: 13px;
+  line-height: 1.35;
   font-weight: 600;
 }
 
 .ec-kpi-card strong {
-  margin-top: 4px;
+  margin-top: 5px;
 
   color: #152019;
 
-  font-size: 20px;
-  line-height: 1;
+  font-size: 23px;
+  line-height: 1.1;
 
   font-weight: 700;
 }
@@ -306,11 +328,11 @@
 
   grid-template-columns:
     minmax(0, 1fr)
-    315px;
+    330px;
 
   align-items: start;
 
-  gap: 12px;
+  gap: 14px;
 }
 
 .ec-calendar-card,
@@ -326,9 +348,9 @@
 ===================================================== */
 
 .ec-calendar-toolbar {
-  min-height: 62px;
+  min-height: 68px;
 
-  padding: 10px 14px;
+  padding: 12px 16px;
 
   border-bottom: 1px solid #e7ece8;
 
@@ -343,12 +365,14 @@
   display: flex;
   align-items: center;
 
-  gap: 7px;
+  gap: 8px;
 }
 
 .ec-month-navigation > button:not(.ec-today-btn) {
-  width: 32px;
-  height: 32px;
+  width: 40px;
+  height: 40px;
+
+  flex: 0 0 40px;
 
   border: 1px solid #dce5df;
   border-radius: 6px;
@@ -370,7 +394,7 @@
 }
 
 .ec-month-navigation strong {
-  min-width: 150px;
+  min-width: 170px;
 
   display: block;
 
@@ -378,14 +402,15 @@
 
   text-align: center;
 
-  font-size: 12.5px;
+  font-size: 16px;
+  line-height: 1.3;
   font-weight: 650;
 }
 
 .ec-today-btn {
-  min-height: 32px;
+  min-height: 40px;
 
-  padding: 0 10px;
+  padding: 0 14px;
 
   border: 1px solid #a7cdb4;
   border-radius: 6px;
@@ -396,8 +421,12 @@
 
   cursor: pointer;
 
-  font-size: 9.5px;
+  font-family: inherit;
+  font-size: 13px;
+  line-height: 1;
   font-weight: 600;
+
+  white-space: nowrap;
 }
 
 .ec-calendar-legend {
@@ -405,7 +434,7 @@
   align-items: center;
   justify-content: flex-end;
 
-  gap: 12px;
+  gap: 14px;
 
   flex-wrap: wrap;
 }
@@ -414,16 +443,20 @@
   display: inline-flex;
   align-items: center;
 
-  gap: 5px;
+  gap: 6px;
 
   color: #69766e;
 
-  font-size: 8.5px;
+  font-size: 12px;
+  line-height: 1.3;
+  font-weight: 500;
 }
 
 .ec-calendar-legend i {
-  width: 8px;
-  height: 8px;
+  width: 9px;
+  height: 9px;
+
+  flex: 0 0 9px;
 
   border-radius: 50%;
 }
@@ -459,7 +492,7 @@
 }
 
 .ec-week-header div {
-  min-height: 34px;
+  min-height: 42px;
 
   display: flex;
   align-items: center;
@@ -467,8 +500,9 @@
 
   color: #647168;
 
-  font-size: 9px;
-  font-weight: 650;
+  font-size: 12px;
+  line-height: 1;
+  font-weight: 700;
 
   text-transform: uppercase;
 }
@@ -487,9 +521,9 @@
   position: relative;
 
   min-width: 0;
-  min-height: 112px;
+  min-height: 126px;
 
-  padding: 7px;
+  padding: 8px;
 
   border: none;
   border-right: 1px solid #edf1ee;
@@ -503,6 +537,8 @@
   text-align: left;
 
   cursor: pointer;
+
+  font-family: inherit;
 
   transition:
     background-color 130ms ease,
@@ -532,15 +568,15 @@
 }
 
 .ec-day-number-row {
-  min-height: 23px;
+  min-height: 29px;
 
   display: flex;
   justify-content: flex-end;
 }
 
 .ec-day-number-row span {
-  width: 24px;
-  height: 24px;
+  width: 28px;
+  height: 28px;
 
   display: grid;
   place-items: center;
@@ -549,8 +585,9 @@
 
   color: #435048;
 
-  font-size: 9.5px;
-  font-weight: 600;
+  font-size: 13px;
+  line-height: 1;
+  font-weight: 650;
 }
 
 .ec-day-number-row span.today {
@@ -562,31 +599,36 @@
 .ec-day-events {
   min-width: 0;
 
-  margin-top: 4px;
+  margin-top: 5px;
 
   display: flex;
   flex-direction: column;
 
-  gap: 4px;
+  gap: 5px;
 }
 
 .ec-calendar-event {
   width: 100%;
-  min-height: 24px;
+  min-height: 30px;
 
-  padding: 4px 6px;
+  padding: 5px 7px;
 
   border-radius: 5px;
 
   display: flex;
   align-items: center;
 
-  gap: 4px;
+  gap: 5px;
 
   overflow: hidden;
 
-  font-size: 8px;
+  font-size: 11px;
+  line-height: 1.25;
   font-weight: 600;
+}
+
+.ec-calendar-event svg {
+  flex: 0 0 auto;
 }
 
 .ec-calendar-event span {
@@ -617,11 +659,12 @@
 }
 
 .ec-more-events {
-  padding-left: 3px;
+  padding-left: 4px;
 
   color: #77837b;
 
-  font-size: 7.8px;
+  font-size: 11px;
+  line-height: 1.3;
   font-weight: 600;
 }
 
@@ -633,7 +676,7 @@
   display: flex;
   flex-direction: column;
 
-  gap: 12px;
+  gap: 14px;
 }
 
 .ec-side-card {
@@ -641,9 +684,9 @@
 }
 
 .ec-side-heading {
-  min-height: 61px;
+  min-height: 70px;
 
-  padding: 12px 14px;
+  padding: 14px 16px;
 
   border-bottom: 1px solid #e7ece8;
 
@@ -659,30 +702,33 @@
 
   color: #7a867e;
 
-  font-size: 8px;
+  font-size: 11px;
+  line-height: 1.3;
+  font-weight: 600;
 
   text-transform: uppercase;
 }
 
 .ec-side-heading h2 {
-  margin: 4px 0 0;
+  margin: 5px 0 0;
 
   color: #29362e;
 
-  font-size: 12px;
+  font-size: 15px;
+  line-height: 1.35;
   font-weight: 650;
 }
 
 .ec-selected-events {
-  max-height: 360px;
+  max-height: 380px;
 
   overflow-y: auto;
 }
 
 .ec-side-empty {
-  min-height: 170px;
+  min-height: 180px;
 
-  padding: 20px;
+  padding: 22px;
 
   display: flex;
   flex-direction: column;
@@ -695,25 +741,27 @@
 }
 
 .ec-side-empty strong {
-  margin-top: 10px;
+  margin-top: 11px;
 
   color: #334138;
 
-  font-size: 11px;
+  font-size: 15px;
+  line-height: 1.3;
 }
 
 .ec-side-empty span {
-  margin-top: 4px;
+  margin-top: 6px;
 
   color: #849087;
 
-  font-size: 8.5px;
+  font-size: 13px;
+  line-height: 1.5;
 }
 
 .ec-side-event {
   width: 100%;
 
-  padding: 11px 12px;
+  padding: 13px 14px;
 
   border: none;
   border-bottom: 1px solid #edf1ee;
@@ -721,13 +769,15 @@
   display: flex;
   align-items: flex-start;
 
-  gap: 9px;
+  gap: 10px;
 
   background: white;
 
   text-align: left;
 
   cursor: pointer;
+
+  font-family: inherit;
 }
 
 .ec-side-event:hover {
@@ -736,7 +786,7 @@
 
 .ec-side-event-mark {
   width: 4px;
-  min-height: 42px;
+  min-height: 48px;
 
   flex: 0 0 4px;
 
@@ -773,7 +823,8 @@
 
   color: #344138;
 
-  font-size: 9.5px;
+  font-size: 14px;
+  line-height: 1.35;
   font-weight: 650;
 
   white-space: nowrap;
@@ -781,31 +832,35 @@
 }
 
 .ec-side-event-copy span {
-  margin-top: 3px;
+  margin-top: 4px;
 
   color: #68766e;
 
-  font-size: 8px;
+  font-size: 12px;
+  line-height: 1.4;
 }
 
 .ec-side-event-copy small {
-  margin-top: 3px;
+  margin-top: 4px;
 
   color: #879289;
 
-  font-size: 7.8px;
+  font-size: 12px;
+  line-height: 1.4;
 }
 
 .ec-side-title-line {
-  min-height: 51px;
+  min-height: 58px;
 
-  padding: 0 14px;
+  padding: 0 16px;
 
   border-bottom: 1px solid #e7ece8;
 
   display: flex;
   align-items: center;
   justify-content: space-between;
+
+  gap: 10px;
 }
 
 .ec-side-title-line h2 {
@@ -813,15 +868,16 @@
 
   color: #29362e;
 
-  font-size: 11px;
+  font-size: 15px;
+  line-height: 1.3;
   font-weight: 650;
 }
 
 .ec-side-title-line > span {
-  min-width: 22px;
-  height: 20px;
+  min-width: 28px;
+  height: 25px;
 
-  padding: 0 6px;
+  padding: 0 8px;
 
   border-radius: 999px;
 
@@ -832,12 +888,13 @@
 
   color: #087443;
 
-  font-size: 8px;
+  font-size: 12px;
+  line-height: 1;
   font-weight: 700;
 }
 
 .ec-upcoming-list {
-  max-height: 330px;
+  max-height: 350px;
 
   overflow-y: auto;
 }
@@ -845,7 +902,7 @@
 .ec-upcoming-event {
   width: 100%;
 
-  padding: 10px 12px;
+  padding: 12px 14px;
 
   border: none;
   border-bottom: 1px solid #edf1ee;
@@ -853,13 +910,15 @@
   display: flex;
   align-items: center;
 
-  gap: 9px;
+  gap: 11px;
 
   background: white;
 
   text-align: left;
 
   cursor: pointer;
+
+  font-family: inherit;
 }
 
 .ec-upcoming-event:hover {
@@ -867,10 +926,10 @@
 }
 
 .ec-upcoming-date {
-  width: 42px;
-  height: 47px;
+  width: 48px;
+  height: 54px;
 
-  flex: 0 0 42px;
+  flex: 0 0 48px;
 
   border-radius: 7px;
 
@@ -885,14 +944,15 @@
 }
 
 .ec-upcoming-date strong {
-  font-size: 14px;
+  font-size: 18px;
   line-height: 1;
 }
 
 .ec-upcoming-date span {
-  margin-top: 4px;
+  margin-top: 5px;
 
-  font-size: 7.5px;
+  font-size: 11px;
+  line-height: 1;
   font-weight: 700;
 }
 
@@ -908,7 +968,8 @@
 
   color: #344138;
 
-  font-size: 9.5px;
+  font-size: 14px;
+  line-height: 1.35;
   font-weight: 650;
 
   white-space: nowrap;
@@ -916,29 +977,32 @@
 }
 
 .ec-upcoming-event > div:last-child span {
-  margin-top: 3px;
+  margin-top: 4px;
 
   color: #69766e;
 
-  font-size: 8px;
+  font-size: 12px;
+  line-height: 1.4;
 }
 
 .ec-upcoming-event > div:last-child small {
-  margin-top: 2px;
+  margin-top: 3px;
 
   color: #8a958e;
 
-  font-size: 7.5px;
+  font-size: 12px;
+  line-height: 1.4;
 }
 
 .ec-small-empty {
-  padding: 28px 14px;
+  padding: 30px 16px;
 
   color: #849087;
 
   text-align: center;
 
-  font-size: 9px;
+  font-size: 13px;
+  line-height: 1.5;
 }
 
 /* =====================================================
@@ -948,13 +1012,14 @@
 .ec-status {
   min-width: max-content;
 
-  padding: 3px 7px;
+  padding: 5px 9px;
 
   border-radius: 4px;
 
   display: inline-block;
 
-  font-size: 8px;
+  font-size: 12px;
+  line-height: 1.2;
   font-weight: 650;
 
   white-space: nowrap;
@@ -1015,7 +1080,7 @@
 }
 
 .ec-modal {
-  width: min(720px, 100%);
+  width: min(760px, 100%);
 
   max-height: calc(100vh - 48px);
 
@@ -1035,7 +1100,7 @@
 }
 
 .ec-details-modal {
-  width: min(690px, 100%);
+  width: min(730px, 100%);
 }
 
 @keyframes ecModalIn {
@@ -1053,9 +1118,9 @@
 }
 
 .ec-modal-header {
-  min-height: 67px;
+  min-height: 76px;
 
-  padding: 14px 18px;
+  padding: 16px 20px;
 
   border-bottom: 1px solid #e8ede9;
 
@@ -1071,23 +1136,25 @@
 
   color: #17211b;
 
-  font-size: 15px;
+  font-size: 19px;
+  line-height: 1.3;
   font-weight: 650;
 }
 
 .ec-modal-header p {
-  margin: 4px 0 0;
+  margin: 5px 0 0;
 
   color: #748078;
 
-  font-size: 9px;
+  font-size: 13px;
+  line-height: 1.5;
 }
 
 .ec-modal-close {
-  width: 30px;
-  height: 30px;
+  width: 40px;
+  height: 40px;
 
-  flex: 0 0 30px;
+  flex: 0 0 40px;
 
   border: none;
   border-radius: 6px;
@@ -1107,15 +1174,15 @@
 }
 
 .ec-modal-body {
-  padding: 17px 18px;
+  padding: 20px;
 
   overflow-y: auto;
 }
 
 .ec-modal-footer {
-  min-height: 59px;
+  min-height: 68px;
 
-  padding: 10px 18px;
+  padding: 12px 20px;
 
   border-top: 1px solid #e8ede9;
 
@@ -1123,7 +1190,7 @@
   align-items: center;
   justify-content: flex-end;
 
-  gap: 8px;
+  gap: 12px;
 
   background: #fbfcfb;
 }
@@ -1136,11 +1203,11 @@
   display: flex;
   flex-direction: column;
 
-  gap: 13px;
+  gap: 16px;
 }
 
 .ec-form-section {
-  padding: 13px;
+  padding: 16px;
 
   border: 1px solid #e1e8e3;
   border-radius: 8px;
@@ -1149,8 +1216,8 @@
 }
 
 .ec-form-section-title {
-  margin-bottom: 12px;
-  padding-bottom: 8px;
+  margin-bottom: 15px;
+  padding-bottom: 10px;
 
   border-bottom: 1px solid #edf1ee;
 }
@@ -1160,7 +1227,8 @@
 
   color: #087443;
 
-  font-size: 10px;
+  font-size: 14px;
+  line-height: 1.35;
   font-weight: 700;
 
   text-transform: uppercase;
@@ -1172,7 +1240,7 @@
 
   grid-template-columns: repeat(2, minmax(0, 1fr));
 
-  gap: 12px;
+  gap: 15px;
 }
 
 .ec-form-field {
@@ -1181,7 +1249,7 @@
   display: flex;
   flex-direction: column;
 
-  gap: 6px;
+  gap: 7px;
 }
 
 .ec-form-field.full-width {
@@ -1191,7 +1259,8 @@
 .ec-form-field > span {
   color: #435149;
 
-  font-size: 10px;
+  font-size: 14px;
+  line-height: 1.35;
   font-weight: 600;
 }
 
@@ -1210,7 +1279,8 @@
   color: #2e3a33;
 
   font-family: inherit;
-  font-size: 10.5px;
+  font-size: 15px;
+  line-height: 1.4;
 
   transition:
     border-color 150ms ease,
@@ -1219,19 +1289,19 @@
 
 .ec-form-field input,
 .ec-form-field select {
-  height: 38px;
+  height: 46px;
 
-  padding: 0 11px;
+  padding: 0 13px;
 }
 
 .ec-form-field textarea {
-  min-height: 95px;
+  min-height: 120px;
 
-  padding: 12px 13px;
+  padding: 13px 14px;
 
-  resize: none;
+  resize: vertical;
 
-  line-height: 1.5;
+  line-height: 1.55;
 }
 
 .ec-form-field input:focus,
@@ -1252,12 +1322,15 @@
 .ec-form-field input::placeholder,
 .ec-form-field textarea::placeholder {
   color: #9aa6a0;
+
+  font-size: 14px;
 }
 
 .ec-form-field small {
   color: #d83b3b;
 
-  font-size: 8.5px;
+  font-size: 12px;
+  line-height: 1.4;
 }
 
 /* =====================================================
@@ -1267,11 +1340,12 @@
 .ec-detail-id {
   display: block;
 
-  margin-bottom: 3px;
+  margin-bottom: 4px;
 
   color: #087443;
 
-  font-size: 8px;
+  font-size: 12px;
+  line-height: 1.3;
   font-weight: 700;
 }
 
@@ -1279,24 +1353,27 @@
   display: flex;
   align-items: center;
 
-  gap: 3px;
+  gap: 5px;
 }
 
 .ec-detail-status-row {
-  margin-bottom: 14px;
+  margin-bottom: 16px;
 
   display: flex;
   align-items: center;
 
-  gap: 7px;
+  gap: 8px;
+
+  flex-wrap: wrap;
 }
 
 .ec-event-type-badge {
-  padding: 3px 7px;
+  padding: 5px 9px;
 
   border-radius: 4px;
 
-  font-size: 8px;
+  font-size: 12px;
+  line-height: 1.2;
   font-weight: 650;
 }
 
@@ -1325,13 +1402,13 @@
 
   grid-template-columns: repeat(2, minmax(0, 1fr));
 
-  gap: 10px;
+  gap: 12px;
 }
 
 .ec-detail-item {
   min-width: 0;
 
-  padding: 10px;
+  padding: 13px;
 
   border: 1px solid #e4e9e6;
   border-radius: 7px;
@@ -1339,7 +1416,7 @@
   display: flex;
   align-items: flex-start;
 
-  gap: 9px;
+  gap: 11px;
 
   background: #fbfcfb;
 }
@@ -1349,10 +1426,10 @@
 }
 
 .ec-detail-item-icon {
-  width: 28px;
-  height: 28px;
+  width: 34px;
+  height: 34px;
 
-  flex: 0 0 28px;
+  flex: 0 0 34px;
 
   border-radius: 6px;
 
@@ -1374,24 +1451,26 @@
 .ec-detail-item span {
   color: #7a867e;
 
-  font-size: 7.8px;
+  font-size: 12px;
+  line-height: 1.35;
 }
 
 .ec-detail-item strong {
-  margin-top: 4px;
+  margin-top: 5px;
 
   overflow-wrap: anywhere;
 
   color: #2c3930;
 
-  font-size: 9.5px;
+  font-size: 14px;
+  line-height: 1.45;
   font-weight: 600;
 }
 
 .ec-detail-description {
-  margin-top: 12px;
+  margin-top: 14px;
 
-  padding: 11px;
+  padding: 14px;
 
   border: 1px solid #e4e9e6;
   border-radius: 7px;
@@ -1402,33 +1481,35 @@
 .ec-detail-description span {
   color: #7a867e;
 
-  font-size: 8px;
+  font-size: 12px;
+  line-height: 1.35;
 }
 
 .ec-detail-description p {
-  margin: 5px 0 0;
+  margin: 6px 0 0;
 
   color: #46534b;
 
-  font-size: 9px;
-  line-height: 1.55;
+  font-size: 14px;
+  line-height: 1.6;
 }
 
 .ec-detail-meta {
-  margin-top: 12px;
+  margin-top: 14px;
 
-  padding-top: 10px;
+  padding-top: 12px;
 
   border-top: 1px solid #edf1ee;
 
   display: flex;
   justify-content: space-between;
 
-  gap: 10px;
+  gap: 12px;
 
   color: #89948d;
 
-  font-size: 7.8px;
+  font-size: 12px;
+  line-height: 1.4;
 }
 
 .ec-details-footer {
@@ -1439,7 +1520,7 @@
   display: flex;
   align-items: center;
 
-  gap: 7px;
+  gap: 10px;
 }
 
 /* =====================================================
@@ -1451,8 +1532,8 @@
 }
 
 .ec-event-menu-btn {
-  width: 30px;
-  height: 30px;
+  width: 40px;
+  height: 40px;
 
   border: none;
   border-radius: 6px;
@@ -1475,13 +1556,13 @@
   position: absolute;
 
   right: 0;
-  top: 35px;
+  top: 44px;
 
   z-index: 50;
 
-  width: 190px;
+  width: 210px;
 
-  padding: 5px;
+  padding: 6px;
 
   border: 1px solid #dce5df;
   border-radius: 8px;
@@ -1494,9 +1575,9 @@
 .ec-event-menu button {
   width: 100%;
 
-  min-height: 34px;
+  min-height: 42px;
 
-  padding: 0 9px;
+  padding: 0 11px;
 
   border: none;
   border-radius: 5px;
@@ -1504,7 +1585,7 @@
   display: flex;
   align-items: center;
 
-  gap: 8px;
+  gap: 9px;
 
   background: transparent;
 
@@ -1512,7 +1593,11 @@
 
   cursor: pointer;
 
-  font-size: 9px;
+  font-family: inherit;
+  font-size: 13px;
+  line-height: 1.3;
+
+  text-align: left;
 }
 
 .ec-event-menu button:hover {
@@ -1535,7 +1620,7 @@
   min-height: 260px;
   max-height: 450px;
 
-  padding: 14px;
+  padding: 16px;
 
   overflow-y: auto;
 }
@@ -1554,26 +1639,28 @@
 }
 
 .ec-archive-empty h3 {
-  margin: 10px 0 0;
+  margin: 11px 0 0;
 
   color: #2d3a31;
 
-  font-size: 12px;
+  font-size: 17px;
+  line-height: 1.35;
 }
 
 .ec-archive-empty p {
-  margin: 5px 0 0;
+  margin: 6px 0 0;
 
   color: #7a867e;
 
-  font-size: 9px;
+  font-size: 13px;
+  line-height: 1.5;
 }
 
 .ec-archive-row {
-  min-height: 62px;
+  min-height: 72px;
 
-  margin-bottom: 7px;
-  padding: 10px 12px;
+  margin-bottom: 9px;
+  padding: 12px 14px;
 
   border: 1px solid #e1e8e3;
   border-radius: 7px;
@@ -1582,7 +1669,7 @@
   align-items: center;
   justify-content: space-between;
 
-  gap: 12px;
+  gap: 14px;
 
   background: #fbfcfb;
 }
@@ -1593,33 +1680,40 @@
   display: flex;
   flex-direction: column;
 
-  gap: 3px;
+  gap: 4px;
 }
 
 .ec-archive-row strong {
   color: #344138;
 
-  font-size: 10.5px;
+  font-size: 14px;
+  line-height: 1.35;
 }
 
 .ec-archive-row span {
   color: #7b877f;
 
-  font-size: 8px;
+  font-size: 12px;
+  line-height: 1.4;
 }
 
 .ec-archive-row button {
-  min-height: 31px;
+  width: auto;
+  min-width: max-content;
+  min-height: 40px;
 
-  padding: 0 10px;
+  padding: 0 13px;
 
   border: 1px solid #9fcbb0;
   border-radius: 6px;
 
   display: inline-flex;
   align-items: center;
+  justify-content: center;
 
-  gap: 5px;
+  gap: 6px;
+
+  flex: 0 0 auto;
 
   background: #f2faf4;
 
@@ -1627,8 +1721,12 @@
 
   cursor: pointer;
 
-  font-size: 9px;
+  font-family: inherit;
+  font-size: 13px;
+  line-height: 1;
   font-weight: 600;
+
+  white-space: nowrap;
 }
 
 /* =====================================================
@@ -1649,6 +1747,10 @@
   .ec-calendar-legend {
     display: none;
   }
+
+  .ec-calendar-day {
+    min-height: 118px;
+  }
 }
 
 @media (max-width: 850px) {
@@ -1657,27 +1759,66 @@
   }
 
   .ec-calendar-day {
-    min-height: 92px;
+    min-height: 104px;
+
+    padding: 6px;
   }
 
   .ec-calendar-event {
-    font-size: 7.5px;
+    min-height: 27px;
+
+    padding: 4px 5px;
+
+    font-size: 10px;
+  }
+
+  .ec-day-number-row span {
+    font-size: 12px;
   }
 }
 
 @media (max-width: 700px) {
+  .event-calendar-page {
+    gap: 14px;
+  }
+
   .ec-page-header {
     align-items: flex-start;
 
     flex-direction: column;
   }
 
+  .ec-title-wrap {
+    align-items: flex-start;
+  }
+
+  .ec-title-wrap h1 {
+    font-size: 22px;
+  }
+
+  .ec-title-wrap p {
+    font-size: 14px;
+  }
+
   .ec-header-actions {
     width: 100%;
 
-    justify-content: flex-end;
+    justify-content: flex-start;
+
+    gap: 10px;
 
     flex-wrap: wrap;
+  }
+
+  .ec-primary-btn,
+  .ec-secondary-btn,
+  .ec-archive-btn,
+  .ec-complete-btn {
+    min-height: 44px;
+
+    padding: 0 16px;
+
+    font-size: 14px;
   }
 
   .ec-kpi-grid {
@@ -1692,24 +1833,59 @@
     align-items: flex-start;
 
     flex-direction: column;
+
+    padding: 12px;
+  }
+
+  .ec-month-navigation {
+    width: 100%;
+
+    justify-content: center;
   }
 
   .ec-month-navigation strong {
-    min-width: 120px;
+    min-width: 135px;
+
+    font-size: 15px;
+  }
+
+  .ec-week-header div {
+    min-height: 38px;
+
+    font-size: 11px;
   }
 
   .ec-calendar-day {
-    min-height: 80px;
+    min-height: 92px;
 
     padding: 5px;
   }
 
+  .ec-day-number-row {
+    min-height: 25px;
+  }
+
+  .ec-day-number-row span {
+    width: 25px;
+    height: 25px;
+
+    font-size: 12px;
+  }
+
   .ec-calendar-event {
-    padding: 3px 4px;
+    min-height: 25px;
+
+    padding: 4px;
+
+    font-size: 9.5px;
   }
 
   .ec-calendar-event svg {
     display: none;
+  }
+
+  .ec-more-events {
+    font-size: 10px;
   }
 
   .ec-form-grid,
@@ -1720,6 +1896,25 @@
   .ec-form-field.full-width,
   .ec-detail-item.full-width {
     grid-column: auto;
+  }
+
+  .ec-form-field > span {
+    font-size: 14px;
+  }
+
+  .ec-form-field input,
+  .ec-form-field select,
+  .ec-form-field textarea {
+    font-size: 16px;
+  }
+
+  .ec-form-field input,
+  .ec-form-field select {
+    height: 48px;
+  }
+
+  .ec-form-field textarea {
+    min-height: 125px;
   }
 
   .ec-detail-meta {
@@ -1741,53 +1936,313 @@
   .ec-modal-backdrop {
     padding: 12px;
   }
+
+  .ec-modal {
+    max-height: calc(100vh - 24px);
+  }
+
+  .ec-modal-header {
+    padding: 15px 16px;
+  }
+
+  .ec-modal-header h2 {
+    font-size: 18px;
+  }
+
+  .ec-modal-body {
+    padding: 16px;
+  }
+
+  .ec-modal-footer {
+    padding: 12px 16px;
+  }
+
+  .ec-archive-row {
+    align-items: flex-start;
+
+    flex-direction: column;
+  }
+
+  .ec-archive-row button {
+    align-self: flex-end;
+  }
 }
 
 @media (max-width: 480px) {
+  .ec-title-icon {
+    width: 44px;
+    height: 44px;
+
+    flex-basis: 44px;
+  }
+
   .ec-title-wrap h1 {
-    font-size: 18px;
+    font-size: 21px;
+  }
+
+  .ec-title-wrap p {
+    font-size: 13.5px;
+    line-height: 1.5;
+  }
+
+  .ec-header-actions {
+    display: grid;
+
+    grid-template-columns: 1fr;
+
+    width: 100%;
+  }
+
+  .ec-header-actions .ec-primary-btn,
+  .ec-header-actions .ec-secondary-btn,
+  .ec-header-actions .ec-archive-btn,
+  .ec-header-actions .ec-complete-btn {
+    width: 100%;
+
+    min-width: 0;
   }
 
   .ec-kpi-grid {
     grid-template-columns: 1fr;
   }
 
+  .ec-kpi-card {
+    min-height: 90px;
+  }
+
+  .ec-kpi-card span {
+    font-size: 13px;
+  }
+
+  .ec-kpi-card strong {
+    font-size: 22px;
+  }
+
+  .ec-month-navigation {
+    gap: 5px;
+  }
+
+  .ec-month-navigation > button:not(.ec-today-btn) {
+    width: 38px;
+    height: 38px;
+
+    flex-basis: 38px;
+  }
+
+  .ec-month-navigation strong {
+    min-width: 110px;
+
+    font-size: 14px;
+  }
+
+  .ec-today-btn {
+    min-height: 38px;
+
+    padding: 0 10px;
+
+    font-size: 12px;
+  }
+
   .ec-week-header div {
-    font-size: 7px;
+    min-height: 36px;
+
+    font-size: 10px;
   }
 
   .ec-calendar-day {
-    min-height: 68px;
+    min-height: 82px;
 
-    padding: 3px;
+    padding: 4px 3px;
+  }
+
+  .ec-day-number-row {
+    min-height: 24px;
   }
 
   .ec-day-number-row span {
-    width: 20px;
-    height: 20px;
+    width: 24px;
+    height: 24px;
 
-    font-size: 8px;
+    font-size: 11px;
+  }
+
+  .ec-day-events {
+    margin-top: 3px;
+
+    gap: 3px;
   }
 
   .ec-calendar-event {
-    min-height: 18px;
+    min-height: 23px;
 
-    font-size: 6.5px;
+    padding: 3px;
+
+    font-size: 9px;
+    line-height: 1.2;
   }
 
   .ec-more-events {
-    font-size: 6.5px;
+    padding-left: 2px;
+
+    font-size: 9px;
+  }
+
+  .ec-side-heading span {
+    font-size: 11px;
+  }
+
+  .ec-side-heading h2 {
+    font-size: 15px;
+  }
+
+  .ec-side-event-copy strong,
+  .ec-upcoming-event > div:last-child strong {
+    font-size: 14px;
+  }
+
+  .ec-side-event-copy span,
+  .ec-side-event-copy small,
+  .ec-upcoming-event > div:last-child span,
+  .ec-upcoming-event > div:last-child small {
+    font-size: 12px;
+  }
+
+  .ec-modal-backdrop {
+    padding: 8px;
+  }
+
+  .ec-modal {
+    max-height: calc(100vh - 16px);
+
+    border-radius: 9px;
+  }
+
+  .ec-modal-header {
+    min-height: 70px;
+
+    padding: 14px;
+  }
+
+  .ec-modal-header h2 {
+    font-size: 18px;
+  }
+
+  .ec-modal-header p {
+    font-size: 13px;
+  }
+
+  .ec-modal-body {
+    padding: 14px;
+  }
+
+  .ec-modal-footer {
+    padding: 12px 14px;
+
+    gap: 10px;
+
+    flex-wrap: wrap;
+  }
+
+  .ec-form-section {
+    padding: 14px;
+  }
+
+  .ec-form-section-title h3 {
+    font-size: 13px;
+  }
+
+  .ec-form-field > span {
+    font-size: 14px;
+  }
+
+  .ec-form-field input,
+  .ec-form-field select,
+  .ec-form-field textarea {
+    font-size: 16px;
+  }
+
+  .ec-form-field input,
+  .ec-form-field select {
+    height: 48px;
+  }
+
+  .ec-form-field textarea {
+    min-height: 125px;
+  }
+
+  .ec-form-field input::placeholder,
+  .ec-form-field textarea::placeholder {
+    font-size: 14px;
+  }
+
+  .ec-form-field small {
+    font-size: 12px;
+  }
+
+  .ec-detail-item span,
+  .ec-detail-description span,
+  .ec-detail-meta {
+    font-size: 12px;
+  }
+
+  .ec-detail-item strong,
+  .ec-detail-description p {
+    font-size: 14px;
+  }
+
+  .ec-detail-footer-actions {
+    width: 100%;
+
+    gap: 10px;
+  }
+
+  .ec-detail-footer-actions .ec-primary-btn,
+  .ec-detail-footer-actions .ec-secondary-btn,
+  .ec-detail-footer-actions .ec-archive-btn,
+  .ec-detail-footer-actions .ec-complete-btn {
+    flex: 1 1 auto;
+  }
+
+  .ec-event-menu {
+    width: 200px;
+  }
+
+  .ec-event-menu button {
+    min-height: 44px;
+
+    font-size: 13px;
+  }
+
+  .ec-archive-row strong {
+    font-size: 14px;
+  }
+
+  .ec-archive-row span {
+    font-size: 12px;
+  }
+
+  .ec-archive-row button {
+    min-height: 42px;
+
+    font-size: 13px;
   }
 }
+
+/* =====================================================
+   LOADING
+===================================================== */
 
 .event-page-loading {
   min-height: 470px;
   width: 100%;
+
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 8px;
+
+  gap: 9px;
+
   text-align: center;
 }
 
@@ -1801,13 +2256,18 @@
 
 .event-page-loading strong {
   margin-top: 4px;
-  font-size: 14px;
+
+  font-size: 16px;
+  line-height: 1.35;
   font-weight: 700;
+
   color: #1f2d25;
 }
 
 .event-page-loading span {
-  font-size: 12px;
+  font-size: 14px;
+  line-height: 1.5;
+
   color: #7b877f;
 }
 

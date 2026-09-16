@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import {  useCallback, useEffect, useMemo, useRef, useState, } from "react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import {
@@ -31,8 +31,6 @@ import { useAuth } from "../context/AuthContext";
 
 import "../styles/seedling-requests.css";
 
-const STORAGE_KEY = "menro_seedling_requests";
-const ARCHIVE_STORAGE_KEY = "menro_seedling_requests_archive";
 
 const TABS = [
   { id: "all", label: "All Requests" },
@@ -91,51 +89,259 @@ const BARANGAYS = [
   "Tughan",
 ];
 
-const PLANTING_SITES_STORAGE_KEY = "menro_planting_sites";
 const BARANGAY_GEOJSON_URL = "/data/juban-barangays.geojson";
 
 const REQUEST_TYPES = ["New Planting", "Replacement"];
 
+const ADMIN_REJECTION_REASONS = [
+  "The proposed tree planting activity does not meet MENRO requirements.",
+  "The purpose of the seedling request is not aligned with the intended MENRO program or activity.",
+  "MENRO cannot accommodate the request at this time due to operational limitations.",
+  "Other reason.",
+];
 
-function getStoredArray(key) {
-  try {
-    const stored = localStorage.getItem(key);
+const OTHER_REJECTION_REASON = "Other reason.";
 
-    if (!stored) {
-      return [];
-    }
+const API_BASE_URL =
+  import.meta.env.VITE_API_URL || "http://localhost:5000/api";
 
-    const parsed = JSON.parse(stored);
+function getAuthToken() {
+  return localStorage.getItem("token") || "";
+}
 
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
+async function apiRequest(path, options = {}) {
+  const token = getAuthToken();
+
+  if (!token) {
+    throw new Error(
+      "Authentication token is missing. Please log in again."
+    );
   }
+
+  const response = await fetch(`${API_BASE_URL}${path}`, {
+    ...options,
+    headers: {
+      ...(options.body
+        ? { "Content-Type": "application/json" }
+        : {}),
+      Authorization: `Bearer ${token}`,
+      ...(options.headers || {}),
+    },
+  });
+
+  const payload = await response
+    .json()
+    .catch(() => null);
+
+  if (!response.ok) {
+    throw new Error(
+      payload?.message ||
+        payload?.error ||
+        "Unable to complete the request."
+    );
+  }
+
+  return payload?.data ?? payload;
 }
 
-function getStoredRequests() {
-  return getStoredArray(STORAGE_KEY);
+function toDateValue(value) {
+  if (!value) return null;
+  if (value instanceof Date) return value;
+
+  if (typeof value === "string" || typeof value === "number") {
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? null : date;
+  }
+
+  const seconds = value.seconds ?? value._seconds;
+  if (Number.isFinite(Number(seconds))) {
+    return new Date(Number(seconds) * 1000);
+  }
+
+  return null;
 }
 
-function getStoredArchivedRequests() {
-  return getStoredArray(ARCHIVE_STORAGE_KEY);
+function toIsoString(value) {
+  const date = toDateValue(value);
+  return date ? date.toISOString() : "";
 }
 
-function getStoredPlantingSites() {
-  return getStoredArray(PLANTING_SITES_STORAGE_KEY);
+function normalizeRequestForUi(request = {}) {
+  const proposal = request.eventProposal || {};
+  const items =
+    Array.isArray(request.items) && request.items.length > 0
+      ? request.items
+      : request.inventoryId
+        ? [
+            {
+              inventoryId: request.inventoryId,
+              species: request.species || "",
+              scientificName: request.scientificName || "",
+              quantity: Number(request.quantity || 0),
+            },
+          ]
+        : [];
+
+  const uiStatus =
+    request.status === "Pending" ? "Pending Review" : request.status || "Pending Review";
+
+  return {
+    ...request,
+    backendStatus: request.status,
+    status: uiStatus,
+    requesterName:
+      request.participantName ||
+      request.requesterName ||
+      request.fullName ||
+      "",
+    requesterRole: request.requesterRole || "Participant",
+    organization:
+      request.organization ||
+      request.participantOrganization ||
+      request.barangay ||
+      "",
+    contactNumber:
+      request.contactNumber ||
+      request.participantContactNumber ||
+      "",
+    barangay: proposal.barangay || request.barangay || "",
+    requestType: request.requestType || "New Planting",
+    trees: items.map((item) => ({
+      inventoryId: item.inventoryId || "",
+      treeName: item.species || item.treeName || "Seedling",
+      scientificName: item.scientificName || "",
+      quantity: Number(item.quantity || 0),
+    })),
+    requestDate:
+      toIsoString(request.createdAt) ||
+      toIsoString(request.submittedAt) ||
+      request.requestDate ||
+      "",
+    reviewedDate:
+      toIsoString(request.reviewedAt) || request.reviewedDate || "",
+    reviewedBy:
+      request.reviewedBy ||
+      request.reviewedByName ||
+      request.staffReviewerName ||
+      request.reviewerName ||
+      "",
+    reviewFindings:
+      request.reviewFindings ||
+      request.reviewRemarks ||
+      request.staffRemarks ||
+      request.remarks ||
+      "",
+    approvedDate:
+      toIsoString(request.decisionAt) ||
+      toIsoString(request.approvedAt) ||
+      request.approvedDate ||
+      "",
+    rejectedDate:
+      toIsoString(request.decisionAt) ||
+      toIsoString(request.rejectedAt) ||
+      request.rejectedDate ||
+      "",
+    decisionDate:
+      toIsoString(request.decisionAt) ||
+      toIsoString(request.approvedAt) ||
+      toIsoString(request.rejectedAt) ||
+      "",
+    decisionReason:
+      request.decisionReason ||
+      request.reason ||
+      request.adminReason ||
+      request.rejectionReason ||
+      "",
+    eventName: proposal.eventName || request.eventName || "",
+    eventBarangay: proposal.barangay || request.eventBarangay || "",
+    plantingSiteId:
+      proposal.plantingSiteId || request.plantingSiteId || "",
+    plantingSiteName:
+      proposal.plantingSiteName || request.plantingSiteName || "",
+    plantingSiteLocation:
+      proposal.eventLocation ||
+      proposal.plantingLocation ||
+      request.plantingSiteLocation ||
+      request.plantingLocation ||
+      "",
+    plantingSiteLatitude:
+      proposal.latitude ?? request.plantingSiteLatitude ?? null,
+    plantingSiteLongitude:
+      proposal.longitude ?? request.plantingSiteLongitude ?? null,
+    proposedDate: proposal.proposedDate || request.proposedDate || "",
+    startTime: proposal.startTime || request.startTime || "",
+    endTime: proposal.endTime || request.endTime || "",
+    expectedParticipants:
+      proposal.expectedParticipants ?? request.expectedParticipants ?? "",
+    eventLocation: proposal.eventLocation || request.eventLocation || "",
+    eventDescription:
+      proposal.eventDescription || request.eventDescription || "",
+  };
 }
 
-function getParticipantId(currentUser) {
-  return (
-    currentUser?.uid ||
-    currentUser?.id ||
-    currentUser?.email ||
-    ""
-  );
-}
+
 
 function getPlantingSiteDisplayName(site) {
   return site?.siteName || site?.name || site?.id || "Planting Site";
+}
+
+function getSiteUtilization(site) {
+  const capacity = Number(site?.maximumCapacity || 0);
+  const planted = Number(site?.planted || 0);
+
+  if (capacity <= 0) return 0;
+
+  return Math.min(100, Math.round((planted / capacity) * 100));
+}
+
+function getSiteUtilizationStatus(site) {
+  const utilization = getSiteUtilization(site);
+
+  if (utilization >= 90) return "Full";
+  if (utilization >= 50) return "Partially Occupied";
+  return "Available";
+}
+
+function isPlantingSiteFull(site) {
+  return getSiteUtilizationStatus(site) === "Full";
+}
+
+function getPlantingSiteOptionLabel(site) {
+  const name = getPlantingSiteDisplayName(site);
+  const utilization = getSiteUtilization(site);
+  const status = getSiteUtilizationStatus(site);
+
+  return `${name} — ${status} (${utilization}%)`;
+}
+
+function hasStaffReviewData(request) {
+  if (!request) return false;
+
+  return Boolean(
+    request.reviewedBy ||
+      request.reviewFindings ||
+      request.reviewedDate ||
+      request.status === "Reviewed" ||
+      request.status === "Approved" ||
+      request.status === "Rejected" ||
+      request.status === "Released"
+  );
+}
+
+function formatLocalDateLabel(dateString = getLocalDateString()) {
+  if (!dateString) return "—";
+
+  const [year, month, day] = String(dateString).split("-").map(Number);
+
+  if (!year || !month || !day) {
+    return formatDate(dateString);
+  }
+
+  return new Date(year, month - 1, day).toLocaleDateString("en-US", {
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+  });
 }
 
 function getPlantingSiteLocationText(site) {
@@ -186,6 +392,14 @@ function formatTime(dateString) {
   });
 }
 
+function getLocalDateString(date = new Date()) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+
+  return `${year}-${month}-${day}`;
+}
+
 function getTotalSeedlings(trees = []) {
   return trees.reduce(
     (total, tree) => total + Number(tree.quantity || 0),
@@ -227,7 +441,7 @@ function getInitialForm() {
     trees: [
       {
         id: crypto.randomUUID(),
-        treeName: "",
+        inventoryId: "",
         quantity: "",
       },
     ],
@@ -267,14 +481,21 @@ function StatusBadge({ status }) {
 export default function SeedlingRequestsPage() {
   const { userRole, currentUser } = useAuth();
 
-  const [requests, setRequests] =
-    useState(getStoredRequests);
+  const [requests, setRequests] = useState([]);
+  const [archivedRequests, setArchivedRequests] = useState([]);
+  const [loadingRequests, setLoadingRequests] = useState(true);
+  const [requestError, setRequestError] = useState("");
+  const [actionLoading, setActionLoading] = useState(false);
+  const [decisionModal, setDecisionModal] = useState(null);
+  const [rejectionChoice, setRejectionChoice] = useState("");
+  const [otherRejectionReason, setOtherRejectionReason] = useState("");
+  const [decisionError, setDecisionError] = useState("");
+  const [reviewModal, setReviewModal] = useState(null);
+  const [reviewFindings, setReviewFindings] = useState("");
+  const [reviewError, setReviewError] = useState("");
 
-  const [archivedRequests, setArchivedRequests] =
-    useState(getStoredArchivedRequests);
-
-  const [plantingSites, setPlantingSites] =
-    useState(getStoredPlantingSites);
+  const [plantingSites, setPlantingSites] = useState([]);
+  const [loadingSites, setLoadingSites] = useState(false);
 
   const [activeTab, setActiveTab] = useState("all");
 
@@ -320,37 +541,74 @@ export default function SeedlingRequestsPage() {
   const moreMenuRef = useRef(null);
   const dateFilterRef = useRef(null);
 
-  useEffect(() => {
-    localStorage.setItem(
-      STORAGE_KEY,
-      JSON.stringify(requests)
-    );
-  }, [requests]);
-
-  useEffect(() => {
-    localStorage.setItem(
-      ARCHIVE_STORAGE_KEY,
-      JSON.stringify(archivedRequests)
-    );
-  }, [archivedRequests]);
 
 
   useEffect(() => {
-    const handleStorage = (event) => {
-      if (
-        !event.key ||
-        event.key === PLANTING_SITES_STORAGE_KEY
-      ) {
-        setPlantingSites(getStoredPlantingSites());
+    let cancelled = false;
+
+    async function loadPlantingSites() {
+      setLoadingSites(true);
+
+      try {
+        const data = await apiRequest("/sites");
+        const list = Array.isArray(data)
+          ? data
+          : Array.isArray(data?.data)
+            ? data.data
+            : [];
+
+        if (!cancelled) {
+          setPlantingSites(list);
+        }
+      } catch (error) {
+        console.error("Failed to load planting sites:", error);
+
+        if (!cancelled) {
+          setPlantingSites([]);
+        }
+      } finally {
+        if (!cancelled) {
+          setLoadingSites(false);
+        }
       }
-    };
+    }
 
-    window.addEventListener("storage", handleStorage);
+    void loadPlantingSites();
 
     return () => {
-      window.removeEventListener("storage", handleStorage);
+      cancelled = true;
     };
   }, []);
+
+  const loadRequests = useCallback(async () => {
+  if (userRole === "participant") {
+    return;
+  }
+
+  setLoadingRequests(true);
+  setRequestError("");
+
+  try {
+    const data = await apiRequest("/seedling-requests");
+    const list = Array.isArray(data) ? data : [];
+
+    setRequests(list.map(normalizeRequestForUi));
+  } catch (error) {
+    console.error("Failed to load seedling requests:", error);
+
+    setRequestError(
+      error.message || "Unable to load seedling requests."
+    );
+  } finally {
+    setLoadingRequests(false);
+  }
+}, [userRole]);
+
+useEffect(() => {
+  // Initial backend synchronization for the current role.
+  // eslint-disable-next-line react-hooks/set-state-in-effect
+  void loadRequests();
+}, [loadRequests]);
 
   useEffect(() => {
     const handleOutsideClick = (event) => {
@@ -597,7 +855,7 @@ export default function SeedlingRequestsPage() {
         ...previous.trees,
         {
           id: crypto.randomUUID(),
-          treeName: "",
+          inventoryId: "",
           quantity: "",
         },
       ],
@@ -666,10 +924,21 @@ export default function SeedlingRequestsPage() {
 
     if (!form.plantingSite) {
       errors.plantingSite = "Planting site is required.";
+    } else {
+      const selectedSite = plantingSites.find(
+        (site) => site.id === form.plantingSite
+      );
+
+      if (selectedSite && isPlantingSiteFull(selectedSite)) {
+        errors.plantingSite =
+          "Sites marked as Full are not available for new planting requests.";
+      }
     }
 
     if (!form.proposedDate) {
-      errors.proposedDate = "Proposed date is required.";
+      errors.proposedDate = "Proposed event date is required.";
+    } else if (form.proposedDate < getLocalDateString()) {
+      errors.proposedDate = "Proposed event date cannot be in the past.";
     }
 
     if (!form.startTime) {
@@ -771,67 +1040,182 @@ export default function SeedlingRequestsPage() {
     }, 3000);
   };
 
-  const updateRequestStatus = (
-    requestId,
-    status
-  ) => {
-    const now = new Date().toISOString();
+  const refreshSelectedRequest = (updated) => {
+    const normalized = normalizeRequestForUi(updated);
 
     setRequests((previous) =>
-      previous.map((request) => {
-        if (request.id !== requestId) {
-          return request;
-        }
-
-        const updates = { status };
-
-        if (status === "Reviewed") {
-          updates.reviewedDate = now;
-        }
-
-        if (status === "Approved") {
-          updates.approvedDate = now;
-        }
-
-        if (status === "Rejected") {
-          updates.rejectedDate = now;
-        }
-
-        return {
-          ...request,
-          ...updates,
-        };
-      })
+      previous.map((request) =>
+        request.id === normalized.id ? normalized : request
+      )
     );
 
-    setSelectedRequest((previous) => {
-      if (
-        !previous ||
-        previous.id !== requestId
-      ) {
-        return previous;
+    setSelectedRequest((previous) =>
+      previous?.id === normalized.id ? normalized : previous
+    );
+  };
+
+  const openReviewModal = (request) => {
+    setReviewModal({ request });
+    setReviewFindings("");
+    setReviewError("");
+  };
+
+  const closeReviewModal = () => {
+    if (actionLoading) return;
+    setReviewModal(null);
+    setReviewFindings("");
+    setReviewError("");
+  };
+
+  const submitReview = async () => {
+    const findings = reviewFindings.trim();
+
+    if (!findings) {
+      setReviewError("Review Findings / Remarks is required.");
+      return;
+    }
+
+    if (findings.length > 500) {
+      setReviewError("Review Findings / Remarks must be 500 characters or fewer.");
+      return;
+    }
+
+    if (!reviewModal?.request?.id) return;
+
+    const request = reviewModal.request;
+
+    setActionLoading(true);
+    setReviewError("");
+    setRequestError("");
+
+    try {
+      const payload = {
+        items: (request.trees || []).map((tree) => ({
+          inventoryId: tree.inventoryId,
+          quantity: Number(tree.quantity),
+        })),
+        purpose: request.purpose || "",
+        plantingLocation:
+          request.plantingLocation ||
+          request.plantingSiteLocation ||
+          request.eventLocation ||
+          "",
+        preferredReleaseDate: request.preferredReleaseDate || "",
+        reviewFindings: findings,
+      };
+
+      const updated = await apiRequest(
+        `/seedling-requests/${request.id}/review`,
+        {
+          method: "PATCH",
+          body: JSON.stringify(payload),
+        }
+      );
+
+      refreshSelectedRequest(updated);
+      setSuccessMessage(`${request.id} was reviewed successfully.`);
+      setReviewModal(null);
+      setReviewFindings("");
+    } catch (error) {
+      console.error(error);
+      setReviewError(error.message || "Unable to review the request.");
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const releaseRequest = async (request) => {
+    setActionLoading(true);
+    setRequestError("");
+
+    try {
+      const updated = await apiRequest(
+        `/seedling-requests/${request.id}/release`,
+        { method: "PATCH" }
+      );
+
+      refreshSelectedRequest(updated);
+      setSuccessMessage(`${request.id} was released successfully.`);
+    } catch (error) {
+      console.error(error);
+      setRequestError(error.message || "Unable to release the request.");
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const openDecisionModal = (request, action) => {
+    setDecisionModal({ request, action });
+    setRejectionChoice("");
+    setOtherRejectionReason("");
+    setDecisionError("");
+  };
+
+  const closeDecisionModal = () => {
+    if (actionLoading) return;
+    setDecisionModal(null);
+    setRejectionChoice("");
+    setOtherRejectionReason("");
+    setDecisionError("");
+  };
+
+  const submitDecision = async () => {
+    if (!decisionModal?.request?.id) return;
+
+    const { request, action } = decisionModal;
+    let payload = {};
+
+    if (action === "reject") {
+      if (!rejectionChoice) {
+        setDecisionError("Please select a reason for rejection.");
+        return;
       }
 
-      return {
-        ...previous,
-        status,
+      if (rejectionChoice === OTHER_REJECTION_REASON) {
+        const customReason = otherRejectionReason.trim();
 
-        reviewedDate:
-          status === "Reviewed"
-            ? now
-            : previous.reviewedDate,
+        if (!customReason) {
+          setDecisionError("Please specify the reason for rejection.");
+          return;
+        }
 
-        approvedDate:
-          status === "Approved"
-            ? now
-            : previous.approvedDate,
+        if (customReason.length > 500) {
+          setDecisionError("Custom rejection reason must be 500 characters or fewer.");
+          return;
+        }
 
-        rejectedDate:
-          status === "Rejected"
-            ? now
-            : previous.rejectedDate,
-      };
-    });
+        payload = { reason: customReason };
+      } else {
+        payload = { reason: rejectionChoice };
+      }
+    }
+
+    setActionLoading(true);
+    setDecisionError("");
+    setRequestError("");
+
+    try {
+      const updated = await apiRequest(
+        `/seedling-requests/${request.id}/${action}`,
+        {
+          method: "PATCH",
+          body: JSON.stringify(payload),
+        }
+      );
+
+      refreshSelectedRequest(updated);
+      setSuccessMessage(
+        `${request.id} was ${action === "approve" ? "approved" : "rejected"} successfully.`
+      );
+      setDecisionModal(null);
+      setRejectionChoice("");
+      setOtherRejectionReason("");
+    } catch (error) {
+      console.error(error);
+      setDecisionError(error.message || "Unable to save the MENRO decision.");
+    } finally {
+      setActionLoading(false);
+    }
   };
 
   const clearFilters = () => {
@@ -1085,16 +1469,6 @@ export default function SeedlingRequestsPage() {
           </div>
         </div>
 
-        <button
-          type="button"
-          className="sr-primary-btn"
-          onClick={() =>
-            setShowNewRequest(true)
-          }
-        >
-          <Plus size={16} />
-          New Request
-        </button>
       </section>
 
       {successMessage && (
@@ -1102,6 +1476,17 @@ export default function SeedlingRequestsPage() {
           <CircleCheckBig size={16} />
           {successMessage}
         </div>
+      )}
+
+      {requestError && (
+        <div className="sr-api-error" role="alert">
+          <CircleX size={16} />
+          {requestError}
+        </div>
+      )}
+
+      {loadingRequests && (
+        <div className="sr-api-loading">Loading seedling requests...</div>
       )}
 
       <section className="sr-kpi-grid">
@@ -1663,12 +2048,8 @@ export default function SeedlingRequestsPage() {
         <button
           type="button"
           className="sr-approve-btn"
-          onClick={() =>
-            updateRequestStatus(
-              request.id,
-              "Reviewed"
-            )
-          }
+          onClick={() => openReviewModal(request)}
+          disabled={actionLoading}
         >
           Review
         </button>
@@ -1681,12 +2062,8 @@ export default function SeedlingRequestsPage() {
           <button
             type="button"
             className="sr-approve-btn"
-            onClick={() =>
-              updateRequestStatus(
-                request.id,
-                "Approved"
-              )
-            }
+            onClick={() => openDecisionModal(request, "approve")}
+            disabled={actionLoading}
           >
             Approve
           </button>
@@ -1694,16 +2071,25 @@ export default function SeedlingRequestsPage() {
           <button
             type="button"
             className="sr-reject-btn"
-            onClick={() =>
-              updateRequestStatus(
-                request.id,
-                "Rejected"
-              )
-            }
+            onClick={() => openDecisionModal(request, "reject")}
+            disabled={actionLoading}
           >
             Reject
           </button>
         </>
+      )}
+
+    {/* STAFF - RELEASE APPROVED REQUEST */}
+    {userRole === "staff" &&
+      request.status === "Approved" && (
+        <button
+          type="button"
+          className="sr-approve-btn"
+          onClick={() => releaseRequest(request)}
+          disabled={actionLoading}
+        >
+          Release
+        </button>
       )}
   </div>
 </td>
@@ -1817,6 +2203,28 @@ export default function SeedlingRequestsPage() {
           </div>
         </div>
       </section>
+
+      <ReviewRequestModal
+        modal={reviewModal}
+        findings={reviewFindings}
+        setFindings={setReviewFindings}
+        error={reviewError}
+        loading={actionLoading}
+        onClose={closeReviewModal}
+        onSubmit={submitReview}
+      />
+
+      <AdminDecisionModal
+        modal={decisionModal}
+        rejectionChoice={rejectionChoice}
+        setRejectionChoice={setRejectionChoice}
+        otherRejectionReason={otherRejectionReason}
+        setOtherRejectionReason={setOtherRejectionReason}
+        error={decisionError}
+        loading={actionLoading}
+        onClose={closeDecisionModal}
+        onSubmit={submitDecision}
+      />
 
       {showNewRequest && (
         <div className="sr-modal-backdrop">
@@ -1993,10 +2401,10 @@ export default function SeedlingRequestsPage() {
                   </select>
                 </FormField>
 
-                <FormField label="Planting Site" error={formErrors.plantingSite}>
+                <FormField label="Planting Site *" error={formErrors.plantingSite}>
                   <select
                     value={form.plantingSite}
-                    disabled={!form.eventBarangay}
+                    disabled={!form.eventBarangay || loadingSites}
                     onChange={(event) => {
                       const siteId = event.target.value;
                       const site = plantingSites.find((item) => item.id === siteId);
@@ -2008,16 +2416,34 @@ export default function SeedlingRequestsPage() {
                       setFormErrors((previous) => ({ ...previous, plantingSite: "" }));
                     }}
                   >
-                    <option value="">{form.eventBarangay ? "Select planting site" : "Select barangay first"}</option>
+                    <option value="">
+                      {!form.eventBarangay
+                        ? "Select barangay first"
+                        : loadingSites
+                          ? "Loading planting sites..."
+                          : "Select planting site"}
+                    </option>
                     {plantingSitesForBarangay.map((site) => (
-                      <option key={site.id} value={site.id}>{site.id} - {getPlantingSiteDisplayName(site)}</option>
+                      <option
+                        key={site.id}
+                        value={site.id}
+                        disabled={isPlantingSiteFull(site)}
+                      >
+                        {getPlantingSiteOptionLabel(site)}
+                      </option>
                     ))}
                   </select>
+                  {form.eventBarangay && plantingSitesForBarangay.some(isPlantingSiteFull) && (
+                    <small className="sr-field-hint">
+                      Sites marked as Full are not available for new planting requests.
+                    </small>
+                  )}
                 </FormField>
 
-                <FormField label="Proposed Date" error={formErrors.proposedDate}>
+                <FormField label="Proposed Event Date *" error={formErrors.proposedDate}>
                   <input
                     type="date"
+                    min={getLocalDateString()}
                     value={form.proposedDate}
                     onChange={(event) => updateForm("proposedDate", event.target.value)}
                   />
@@ -2185,6 +2611,15 @@ export default function SeedlingRequestsPage() {
                   <p>{selectedRequest.eventDescription}</p>
                 </div>
               )}
+
+              {hasStaffReviewData(selectedRequest) && (
+                <StaffReviewSection request={selectedRequest} />
+              )}
+
+              {(selectedRequest.status === "Approved" ||
+                selectedRequest.status === "Rejected") && (
+                <MenroDecisionSection request={selectedRequest} />
+              )}
             </div>
 
             <div className="sr-modal-footer sr-details-footer">
@@ -2212,6 +2647,18 @@ export default function SeedlingRequestsPage() {
                   Close
                 </button>
 
+                {userRole === "staff" &&
+                  selectedRequest.status === "Pending Review" && (
+                    <button
+                      type="button"
+                      className="sr-approve-btn sr-large-action"
+                      onClick={() => openReviewModal(selectedRequest)}
+                      disabled={actionLoading}
+                    >
+                      Review
+                    </button>
+                  )}
+
                 {userRole === "admin" &&
                   selectedRequest.status ===
                     "Reviewed" && (
@@ -2219,12 +2666,7 @@ export default function SeedlingRequestsPage() {
                       <button
                         type="button"
                         className="sr-reject-btn sr-large-action"
-                        onClick={() =>
-                          updateRequestStatus(
-                            selectedRequest.id,
-                            "Rejected"
-                          )
-                        }
+                        onClick={() => openDecisionModal(selectedRequest, "reject")} disabled={actionLoading}
                       >
                         Reject
                       </button>
@@ -2232,16 +2674,23 @@ export default function SeedlingRequestsPage() {
                       <button
                         type="button"
                         className="sr-approve-btn sr-large-action"
-                        onClick={() =>
-                          updateRequestStatus(
-                            selectedRequest.id,
-                            "Approved"
-                          )
-                        }
+                        onClick={() => openDecisionModal(selectedRequest, "approve")} disabled={actionLoading}
                       >
                         Approve
                       </button>
                     </>
+                  )}
+
+                {userRole === "staff" &&
+                  selectedRequest.status === "Approved" && (
+                    <button
+                      type="button"
+                      className="sr-approve-btn sr-large-action"
+                      onClick={() => releaseRequest(selectedRequest)}
+                      disabled={actionLoading}
+                    >
+                      Release Seedlings
+                    </button>
                   )}
               </div>
             </div>
@@ -3069,6 +3518,308 @@ function ParticipantLocationPreview({ barangay, site }) {
   );
 }
 
+
+function StaffReviewSection({ request }) {
+  if (!request) return null;
+
+  return (
+    <div className="sr-menro-decision sr-staff-review">
+      <div className="sr-menro-decision-head">
+        <strong>MENRO Staff Review</strong>
+        <StatusBadge status="Reviewed" />
+      </div>
+
+      <div className="sr-menro-decision-grid">
+        <div>
+          <span>Reviewed By</span>
+          <strong>{request.reviewedBy || "—"}</strong>
+        </div>
+        <div>
+          <span>Review Date</span>
+          <strong>{formatDate(request.reviewedDate) || "—"}</strong>
+        </div>
+        <div className="full-width">
+          <span>Review Findings / Remarks</span>
+          <strong>{request.reviewFindings || "—"}</strong>
+        </div>
+        <div>
+          <span>Review Status</span>
+          <strong>Reviewed</strong>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function MenroDecisionSection({ request }) {
+  if (!request) return null;
+
+  const isApproved = request.status === "Approved";
+  const isRejected = request.status === "Rejected";
+
+  if (!isApproved && !isRejected) return null;
+
+  return (
+    <div className="sr-menro-decision">
+      <div className="sr-menro-decision-head">
+        <strong>MENRO Decision</strong>
+        <StatusBadge status={request.status} />
+      </div>
+
+      <div className="sr-menro-decision-grid">
+        <div>
+          <span>Status</span>
+          <strong>{request.status}</strong>
+        </div>
+        <div>
+          <span>Decision Date</span>
+          <strong>
+            {formatDate(
+              request.decisionDate ||
+                request.approvedDate ||
+                request.rejectedDate
+            )}
+          </strong>
+        </div>
+        {isRejected && (
+          <div className="full-width">
+            <span>Reason</span>
+            <strong>{request.decisionReason || "—"}</strong>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function ReviewRequestModal({
+  modal,
+  findings,
+  setFindings,
+  error,
+  loading,
+  onClose,
+  onSubmit,
+}) {
+  if (!modal) return null;
+
+  return (
+    <div className="sr-modal-backdrop" onMouseDown={onClose}>
+      <div
+        className="sr-modal sr-decision-modal"
+        onMouseDown={(event) => event.stopPropagation()}
+      >
+        <div className="sr-modal-header">
+          <div>
+            <h2>Review Seedling Request</h2>
+            <p>
+              Document your review findings before submitting this request for Admin decision.
+            </p>
+          </div>
+          <button
+            type="button"
+            className="sr-modal-close"
+            onClick={onClose}
+            disabled={loading}
+            aria-label="Close"
+          >
+            <X size={18} />
+          </button>
+        </div>
+
+        <div className="sr-modal-body">
+          <div className="sr-decision-request-summary">
+            <span>Request</span>
+            <strong>{modal.request.id}</strong>
+          </div>
+
+          <label className="sr-form-field">
+            <span>Review Findings / Remarks *</span>
+            <textarea
+              value={findings}
+              onChange={(event) => setFindings(event.target.value)}
+              maxLength={500}
+              placeholder="Enter what was checked or observed during the review..."
+              autoFocus
+            />
+            <small className="sr-decision-counter">
+              {findings.trim().length}/500 characters
+            </small>
+          </label>
+
+          <div className="sr-form-field">
+            <span>Review Date</span>
+            <input
+              type="text"
+              value={formatLocalDateLabel()}
+              readOnly
+            />
+          </div>
+
+          {error && <small className="sr-field-error">{error}</small>}
+        </div>
+
+        <div className="sr-modal-footer">
+          <button
+            type="button"
+            className="sr-secondary-btn"
+            onClick={onClose}
+            disabled={loading}
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            className="sr-approve-btn sr-large-action"
+            onClick={onSubmit}
+            disabled={loading || !findings.trim()}
+          >
+            {loading ? "Submitting..." : "Submit Review"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function AdminDecisionModal({
+  modal,
+  rejectionChoice,
+  setRejectionChoice,
+  otherRejectionReason,
+  setOtherRejectionReason,
+  error,
+  loading,
+  onClose,
+  onSubmit,
+}) {
+  if (!modal) return null;
+
+  const isApprove = modal.action === "approve";
+  const needsOtherReason = rejectionChoice === OTHER_REJECTION_REASON;
+
+  return (
+    <div className="sr-modal-backdrop" onMouseDown={onClose}>
+      <div
+        className="sr-modal sr-decision-modal"
+        onMouseDown={(event) => event.stopPropagation()}
+      >
+        <div className="sr-modal-header">
+          <div>
+            <h2>
+              {isApprove
+                ? "Approve Seedling Request"
+                : "Reject Seedling Request"}
+            </h2>
+            <p>
+              {isApprove
+                ? "Confirm approval of this seedling request. No approval reason is required."
+                : "Select a standardized rejection reason for this seedling request."}
+            </p>
+          </div>
+          <button
+            type="button"
+            className="sr-modal-close"
+            onClick={onClose}
+            disabled={loading}
+            aria-label="Close"
+          >
+            <X size={18} />
+          </button>
+        </div>
+
+        <div className="sr-modal-body">
+          <div className="sr-decision-request-summary">
+            <span>Request</span>
+            <strong>{modal.request.id}</strong>
+          </div>
+
+          {isApprove ? (
+            <p className="sr-decision-confirm-text">
+              Are you sure you want to approve this seedling request?
+            </p>
+          ) : (
+            <>
+              <label className="sr-form-field">
+                <span>Reason for Rejection *</span>
+                <select
+                  value={rejectionChoice}
+                  onChange={(event) => {
+                    setRejectionChoice(event.target.value);
+                  }}
+                >
+                  <option value="">Select rejection reason</option>
+                  {ADMIN_REJECTION_REASONS.map((reason) => (
+                    <option key={reason} value={reason}>
+                      {reason}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              {needsOtherReason && (
+                <label className="sr-form-field">
+                  <span>Please specify the reason *</span>
+                  <textarea
+                    value={otherRejectionReason}
+                    onChange={(event) =>
+                      setOtherRejectionReason(event.target.value)
+                    }
+                    maxLength={500}
+                    placeholder="Enter the custom rejection reason..."
+                  />
+                  <small className="sr-decision-counter">
+                    {otherRejectionReason.trim().length}/500 characters
+                  </small>
+                </label>
+              )}
+            </>
+          )}
+
+          <div className="sr-form-field">
+            <span>Decision Date</span>
+            <input type="text" value={formatLocalDateLabel()} readOnly />
+          </div>
+
+          {error && <small className="sr-field-error">{error}</small>}
+        </div>
+
+        <div className="sr-modal-footer">
+          <button
+            type="button"
+            className="sr-secondary-btn"
+            onClick={onClose}
+            disabled={loading}
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            className={
+              isApprove
+                ? "sr-approve-btn sr-large-action"
+                : "sr-reject-btn sr-large-action"
+            }
+            onClick={onSubmit}
+            disabled={
+              loading ||
+              (!isApprove &&
+                (!rejectionChoice ||
+                  (needsOtherReason && !otherRejectionReason.trim())))
+            }
+          >
+            {loading
+              ? "Saving..."
+              : isApprove
+                ? "Confirm Approval"
+                : "Confirm Rejection"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function ParticipantSeedlingRequest({ currentUser }) {
   const [form, setForm] = useState(() => ({
     requesterName:
@@ -3096,7 +3847,7 @@ function ParticipantSeedlingRequest({ currentUser }) {
     trees: [
       {
         id: crypto.randomUUID(),
-        treeName: "",
+        inventoryId: "",
         quantity: "",
       },
     ],
@@ -3120,25 +3871,112 @@ function ParticipantSeedlingRequest({ currentUser }) {
 
   const [formErrors, setFormErrors] = useState({});
   const [successMessage, setSuccessMessage] = useState("");
-  const [plantingSites, setPlantingSites] =
-    useState(getStoredPlantingSites);
+  const [apiError, setApiError] = useState("");
+  const [availableInventory, setAvailableInventory] = useState([]);
+  const [myRequests, setMyRequests] = useState([]);
+  const [selectedMyRequest, setSelectedMyRequest] = useState(null);
+  const [loadingParticipantData, setLoadingParticipantData] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
+  const [plantingSites, setPlantingSites] = useState([]);
+  const [loadingSites, setLoadingSites] = useState(false);
 
   useEffect(() => {
-    const handleStorage = (event) => {
-      if (
-        !event.key ||
-        event.key === PLANTING_SITES_STORAGE_KEY
-      ) {
-        setPlantingSites(getStoredPlantingSites());
-      }
-    };
+    let cancelled = false;
 
-    window.addEventListener("storage", handleStorage);
+    async function loadPlantingSites() {
+      setLoadingSites(true);
+
+      try {
+        const data = await apiRequest("/sites");
+        const list = Array.isArray(data)
+          ? data
+          : Array.isArray(data?.data)
+            ? data.data
+            : [];
+
+        if (!cancelled) {
+          setPlantingSites(list);
+        }
+      } catch (error) {
+        console.error("Failed to load planting sites:", error);
+
+        if (!cancelled) {
+          setPlantingSites([]);
+        }
+      } finally {
+        if (!cancelled) {
+          setLoadingSites(false);
+        }
+      }
+    }
+
+    void loadPlantingSites();
 
     return () => {
-      window.removeEventListener("storage", handleStorage);
+      cancelled = true;
     };
   }, []);
+
+  const loadParticipantData = useCallback(async () => {
+  setLoadingParticipantData(true);
+  setApiError("");
+
+  try {
+    const [inventoryData, requestData] = await Promise.all([
+      apiRequest("/inventory/available"),
+      apiRequest("/seedling-requests/my"),
+    ]);
+
+    const inventoryList = (
+      Array.isArray(inventoryData) ? inventoryData : []
+    )
+      .filter(
+        (item) =>
+          Number(item.availableQuantity || 0) > 0
+      )
+      .sort((a, b) =>
+        String(a.species || "").localeCompare(
+          String(b.species || "")
+        )
+      );
+
+    const requestList = (
+      Array.isArray(requestData) ? requestData : []
+    )
+      .map(normalizeRequestForUi)
+      .sort((a, b) => {
+        const aTime =
+          toDateValue(a.requestDate)?.getTime() || 0;
+
+        const bTime =
+          toDateValue(b.requestDate)?.getTime() || 0;
+
+        return bTime - aTime;
+      });
+
+    setAvailableInventory(inventoryList);
+    setMyRequests(requestList);
+  } catch (error) {
+    console.error(
+      "Failed to load participant seedling request data:",
+      error
+    );
+
+    setApiError(
+      error.message ||
+        "Unable to load your seedling request data."
+    );
+  } finally {
+    setLoadingParticipantData(false);
+  }
+}, []);
+
+useEffect(() => {
+  // Initial participant data synchronization with the backend.
+  // eslint-disable-next-line react-hooks/set-state-in-effect
+  void loadParticipantData();
+}, [loadParticipantData]);
+
 
   const plantingSitesForBarangay = plantingSites.filter(
     (site) =>
@@ -3204,7 +4042,7 @@ function ParticipantSeedlingRequest({ currentUser }) {
         ...previous.trees,
         {
           id: crypto.randomUUID(),
-          treeName: "",
+          inventoryId: "",
           quantity: "",
         },
       ],
@@ -3251,19 +4089,31 @@ function ParticipantSeedlingRequest({ currentUser }) {
         "Enter a valid 11-digit mobile number.";
     }
 
-    const invalidTree = form.trees.some(
-      (tree) =>
-        !tree.treeName.trim() ||
-        !tree.quantity ||
-        !Number.isInteger(
-          Number(tree.quantity)
-        ) ||
-        Number(tree.quantity) <= 0
-    );
+    const selectedInventoryIds = form.trees
+      .map((tree) => tree.inventoryId)
+      .filter(Boolean);
 
-    if (invalidTree) {
+    if (new Set(selectedInventoryIds).size !== selectedInventoryIds.length) {
+      errors.trees = "The same seedling cannot be selected more than once.";
+    }
+
+    const invalidTree = form.trees.some((tree) => {
+      const inventory = availableInventory.find(
+        (item) => item.id === tree.inventoryId
+      );
+      const quantity = Number(tree.quantity);
+
+      return (
+        !tree.inventoryId ||
+        !inventory ||
+        !Number.isInteger(quantity) ||
+        quantity < 1
+      );
+    });
+
+    if (invalidTree && !errors.trees) {
       errors.trees =
-        "Enter a tree name and valid quantity for every row.";
+        "Select a seedling and enter a positive whole-number quantity of at least 1.";
     }
 
     if (!form.purpose.trim()) {
@@ -3286,9 +4136,29 @@ function ParticipantSeedlingRequest({ currentUser }) {
         "Barangay is required.";
     }
 
+    if (!form.plantingSite) {
+      errors.plantingSite =
+        "A registered planting site is required.";
+    } else {
+      const selectedSite = plantingSites.find(
+        (site) => site.id === form.plantingSite
+      );
+
+      if (!selectedSite) {
+        errors.plantingSite =
+          "A registered planting site is required.";
+      } else if (isPlantingSiteFull(selectedSite)) {
+        errors.plantingSite =
+          "Sites marked as Full are not available for new planting requests.";
+      }
+    }
+
     if (!form.proposedDate) {
       errors.proposedDate =
-        "Proposed date is required.";
+        "Proposed event date is required.";
+    } else if (form.proposedDate < getLocalDateString()) {
+      errors.proposedDate =
+        "Proposed event date cannot be in the past.";
     }
 
     if (!form.startTime) {
@@ -3344,7 +4214,41 @@ function ParticipantSeedlingRequest({ currentUser }) {
     }));
   };
 
-  const handleSubmit = (event) => {
+  const resetParticipantForm = () => {
+    setForm({
+      requesterName:
+        currentUser?.displayName ||
+        currentUser?.fullName ||
+        currentUser?.name ||
+        "",
+      requesterRole: "Participant",
+      organization:
+        currentUser?.organization ||
+        currentUser?.barangay ||
+        "",
+      contactNumber:
+        currentUser?.contactNumber ||
+        currentUser?.phoneNumber ||
+        currentUser?.phone ||
+        "",
+      trees: [{ id: crypto.randomUUID(), inventoryId: "", quantity: "" }],
+      purpose: "",
+      preferredReleaseDate: "",
+      eventName: "",
+      eventBarangay: currentUser?.barangay || "",
+      plantingSite: "",
+      proposedDate: "",
+      startTime: "",
+      endTime: "",
+      expectedParticipants: "",
+      eventLocation: "",
+      eventDescription: "",
+      confirmedInformation: false,
+    });
+    setFormErrors({});
+  };
+
+  const handleSubmit = async (event) => {
     event.preventDefault();
 
     const errors = validateForm();
@@ -3354,188 +4258,98 @@ function ParticipantSeedlingRequest({ currentUser }) {
       return;
     }
 
-    const existingRequests =
-      getStoredRequests();
-
-    const existingArchived =
-      getStoredArchivedRequests();
-
-    const now =
-      new Date().toISOString();
-
     const selectedSite =
-      plantingSites.find(
-        (site) =>
-          site.id === form.plantingSite
-      ) || null;
+      plantingSites.find((site) => site.id === form.plantingSite) || null;
 
-    const newRequest = {
-      id: createRequestId(
-        existingRequests,
-        existingArchived
-      ),
+    if (!selectedSite) {
+      setFormErrors((previous) => ({
+        ...previous,
+        plantingSite: "A registered planting site is required.",
+      }));
+      return;
+    }
 
-      requesterName:
-        form.requesterName.trim(),
+    const latitude = Number(selectedSite.latitude);
+    const longitude = Number(selectedSite.longitude);
 
-      requesterRole:
-        form.requesterRole.trim(),
+    if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
+      setFormErrors((previous) => ({
+        ...previous,
+        plantingSite: "The selected planting site has invalid GPS coordinates.",
+      }));
+      return;
+    }
 
-      organization:
-        form.organization.trim(),
-
-      contactNumber:
-        form.contactNumber.trim(),
-
-      barangay:
-        form.eventBarangay,
-
-      requestType: "New Planting",
-
-      trees: form.trees.map((tree) => ({
-        treeName:
-          tree.treeName.trim(),
-
-        quantity:
-          Number(tree.quantity),
+    const payload = {
+      participantName: form.requesterName.trim(),
+      organization: form.organization.trim(),
+      contactNumber: form.contactNumber.replace(/\s/g, ""),
+      items: form.trees.map((tree) => ({
+        inventoryId: tree.inventoryId,
+        quantity: Number(tree.quantity),
       })),
-
-      purpose:
-        form.purpose.trim(),
-
-      purposeDetails: "",
-
-      preferredReleaseDate:
-        form.preferredReleaseDate,
-
-      eventName:
-        form.eventName.trim(),
-
-      eventBarangay:
-        form.eventBarangay,
-
-      plantingSiteId:
-        selectedSite?.id || "",
-
-      plantingSiteName:
-        selectedSite ? getPlantingSiteDisplayName(selectedSite) : "",
-
-      plantingSiteLocation:
-        getPlantingSiteLocationText(selectedSite),
-
-      plantingSiteLatitude:
-        selectedSite?.latitude ?? null,
-
-      plantingSiteLongitude:
-        selectedSite?.longitude ?? null,
-
-      proposedDate:
-        form.proposedDate,
-
-      startTime:
-        form.startTime,
-
-      endTime:
-        form.endTime,
-
-      expectedParticipants:
-        Number(form.expectedParticipants),
-
-      eventLocation:
-        getPlantingSiteLocationText(selectedSite),
-
-      eventDescription:
-        form.eventDescription.trim(),
-
-      confirmedInformation:
-        form.confirmedInformation,
-
-      requestDate: now,
-      createdAt: now,
-      dateSubmitted: now,
-      submittedAt: now,
-
-      reviewedDate: null,
-
-      approvedDate: null,
-
-      rejectedDate: null,
-
-      status: "Pending Review",
-
-      createdByRole: "participant",
-
-      participantId: getParticipantId(currentUser),
-      createdByUid: getParticipantId(currentUser),
-      userId: getParticipantId(currentUser),
+      purpose: form.purpose.trim(),
+      plantingLocation: getPlantingSiteLocationText(selectedSite),
+      preferredReleaseDate: form.preferredReleaseDate,
+      eventProposal: {
+        eventName: form.eventName.trim(),
+        barangay: form.eventBarangay,
+        plantingSiteId: selectedSite.id,
+        proposedDate: form.proposedDate,
+        startTime: form.startTime,
+        endTime: form.endTime,
+        eventLocation: getPlantingSiteLocationText(selectedSite),
+        latitude,
+        longitude,
+        expectedParticipants: Number(form.expectedParticipants),
+        eventDescription: form.eventDescription.trim(),
+      },
     };
 
-    localStorage.setItem(
-      STORAGE_KEY,
-      JSON.stringify([
-        newRequest,
-        ...existingRequests,
-      ])
-    );
+    setSubmitting(true);
+    setApiError("");
 
-    setSuccessMessage(
-      "You successfully submitted your seedling request."
-    );
+    try {
+      await apiRequest("/seedling-requests", {
+        method: "POST",
+        body: JSON.stringify(payload),
+      });
 
-    setForm({
-      requesterName:
-        currentUser?.displayName ||
-        currentUser?.fullName ||
-        currentUser?.name ||
-        "",
+      setSuccessMessage("You successfully submitted your seedling request.");
+      resetParticipantForm();
+      await loadParticipantData();
 
-      requesterRole: "Participant",
-
-      organization:
-        currentUser?.organization ||
-        currentUser?.barangay ||
-        "",
-
-      contactNumber:
-        currentUser?.contactNumber ||
-        currentUser?.phoneNumber ||
-        currentUser?.phone ||
-        "",
-
-      trees: [
-        {
-          id: crypto.randomUUID(),
-          treeName: "",
-          quantity: "",
-        },
-      ],
-
-      purpose: "",
-      preferredReleaseDate: "",
-
-      eventName: "",
-      eventBarangay:
-        currentUser?.barangay || "",
-      plantingSite: "",
-      proposedDate: "",
-      startTime: "",
-      endTime: "",
-      expectedParticipants: "",
-      eventLocation: "",
-      eventDescription: "",
-
-      confirmedInformation: false,
-    });
-
-    setFormErrors({});
-
-    window.setTimeout(() => {
-      setSuccessMessage("");
-    }, 3500);
+      window.setTimeout(() => {
+        setSuccessMessage("");
+      }, 3500);
+    } catch (error) {
+      console.error(error);
+      setApiError(error.message || "Unable to submit the seedling request.");
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
     <div className="seedling-requests-page participant-seedling-page">
+      {apiError && (
+      <div
+        role="alert"
+        style={{
+          marginBottom: "16px",
+          padding: "12px 14px",
+          borderRadius: "8px",
+          border: "1px solid #fecaca",
+          background: "#fef2f2",
+          color: "#991b1b",
+          fontSize: "14px",
+          lineHeight: "1.5",
+        }}
+      >
+        {apiError}
+      </div>
+    )}
+
       <section className="sr-page-header participant-request-header">
         <div className="sr-title-wrap">
           <div className="sr-title-icon">
@@ -3678,8 +4492,8 @@ function ParticipantSeedlingRequest({ currentUser }) {
 
           <div className="sr-tree-section participant-tree-section">
             <div className="sr-tree-column-labels">
-              <span>Tree Name</span>
-              <span>Quantity</span>
+              <span>Tree *</span>
+              <span>Quantity *</span>
               <span />
             </div>
 
@@ -3688,22 +4502,50 @@ function ParticipantSeedlingRequest({ currentUser }) {
                 className="sr-tree-row"
                 key={tree.id}
               >
-                <input
-                  type="text"
-                  placeholder="Enter tree or seedling name"
-                  value={tree.treeName}
+                <select
+                  value={tree.inventoryId}
                   onChange={(event) =>
                     updateTree(
                       tree.id,
-                      "treeName",
+                      "inventoryId",
                       event.target.value
                     )
                   }
-                />
+                  disabled={loadingParticipantData}
+                  aria-label="Tree"
+                >
+                  <option value="">
+                    {loadingParticipantData
+                      ? "Loading available seedlings..."
+                      : availableInventory.length > 0
+                        ? "Select tree"
+                        : "No seedlings currently available"}
+                  </option>
+
+                  {availableInventory.map((item) => {
+                    const selectedElsewhere =
+                      form.trees.some(
+                        (otherTree) =>
+                          otherTree.id !== tree.id &&
+                          otherTree.inventoryId === item.id
+                      );
+
+                    return (
+                      <option
+                        key={item.id}
+                        value={item.id}
+                        disabled={selectedElsewhere}
+                      >
+                        {item.species} — {Number(item.availableQuantity || 0)} available
+                      </option>
+                    );
+                  })}
+                </select>
 
                 <input
                   type="number"
                   min="1"
+                  step="1"
                   placeholder="Quantity"
                   value={tree.quantity}
                   onChange={(event) =>
@@ -3713,6 +4555,7 @@ function ParticipantSeedlingRequest({ currentUser }) {
                       event.target.value
                     )
                   }
+                  aria-label="Quantity"
                 />
 
                 <button
@@ -3846,7 +4689,7 @@ function ParticipantSeedlingRequest({ currentUser }) {
               </FormField>
 
               <FormField
-                label="Planting Site (Optional)"
+                label="Planting Site *"
                 error={formErrors.plantingSite}
               >
                 <select
@@ -3857,15 +4700,17 @@ function ParticipantSeedlingRequest({ currentUser }) {
                     )
                   }
                   disabled={
-                    !form.eventBarangay
+                    !form.eventBarangay || loadingSites
                   }
                 >
                   <option value="">
-                    {form.eventBarangay
-                      ? plantingSitesForBarangay.length > 0
-                        ? "Select planting site (optional)"
-                        : "No registered planting site yet"
-                      : "Select barangay first"}
+                    {!form.eventBarangay
+                      ? "Select barangay first"
+                      : loadingSites
+                        ? "Loading planting sites..."
+                        : plantingSitesForBarangay.length > 0
+                          ? "Select planting site"
+                          : "No registered planting site yet"}
                   </option>
 
                   {plantingSitesForBarangay.map(
@@ -3873,20 +4718,28 @@ function ParticipantSeedlingRequest({ currentUser }) {
                       <option
                         key={site.id}
                         value={site.id}
+                        disabled={isPlantingSiteFull(site)}
                       >
-                        {getPlantingSiteDisplayName(site)}
+                        {getPlantingSiteOptionLabel(site)}
                       </option>
                     )
                   )}
                 </select>
+                {form.eventBarangay &&
+                  plantingSitesForBarangay.some(isPlantingSiteFull) && (
+                    <small className="sr-field-hint">
+                      Sites marked as Full are not available for new planting requests.
+                    </small>
+                  )}
               </FormField>
 
               <FormField
-                label="Proposed Date"
+                label="Proposed Event Date *"
                 error={formErrors.proposedDate}
               >
                 <input
                   type="date"
+                  min={getLocalDateString()}
                   value={form.proposedDate}
                   onChange={(event) =>
                     updateForm(
@@ -4044,45 +4897,7 @@ function ParticipantSeedlingRequest({ currentUser }) {
             <button
                 type="button"
                 className="sr-participant-clear-btn"
-                onClick={() =>
-                  setForm({
-                    requesterName:
-                      currentUser?.displayName ||
-                      currentUser?.fullName ||
-                      currentUser?.name ||
-                      "",
-                    requesterRole: "Participant",
-                    organization:
-                      currentUser?.organization ||
-                      currentUser?.barangay ||
-                      "",
-                    contactNumber:
-                      currentUser?.contactNumber ||
-                      currentUser?.phoneNumber ||
-                      currentUser?.phone ||
-                      "",
-                    trees: [
-                      {
-                        id: crypto.randomUUID(),
-                        treeName: "",
-                        quantity: "",
-                      },
-                    ],
-                    purpose: "",
-                    preferredReleaseDate: "",
-                    eventName: "",
-                    eventBarangay:
-                      currentUser?.barangay || "",
-                    plantingSite: "",
-                    proposedDate: "",
-                    startTime: "",
-                    endTime: "",
-                    expectedParticipants: "",
-                    eventLocation: "",
-                    eventDescription: "",
-                    confirmedInformation: false,
-                  })
-                }
+                onClick={resetParticipantForm}
               >
                 <RotateCcw size={15} />
                 Clear
@@ -4091,13 +4906,159 @@ function ParticipantSeedlingRequest({ currentUser }) {
             <button
               type="submit"
               className="sr-primary-btn participant-submit-btn"
+              disabled={submitting || loadingParticipantData}
             >
               <Check size={15} />
-              Submit Request
+              {submitting ? "Submitting..." : "Submit Request"}
             </button>
           </div>
         </form>
       </section>
+      <section className="sr-record-card participant-my-requests">
+        <div className="participant-form-header">
+          <h2>My Seedling Requests</h2>
+          <p>View the current status and MENRO decision for your submitted requests.</p>
+        </div>
+
+        {loadingParticipantData ? (
+          <div className="sr-api-loading">Loading your requests...</div>
+        ) : myRequests.length === 0 ? (
+          <div className="sr-empty-state sr-participant-empty">
+            <ClipboardList size={32} strokeWidth={1.5} />
+            <h2>No requests yet</h2>
+            <p>Your submitted seedling requests will appear here.</p>
+          </div>
+        ) : (
+          <div className="sr-table-scroll">
+            <table className="sr-table sr-participant-request-table">
+              <thead>
+                <tr>
+                  <th>Request</th>
+                  <th>Seedlings</th>
+                  <th>Planting Event</th>
+                  <th>Status</th>
+                  <th>Submitted</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {myRequests.map((request) => (
+                  <tr key={request.id}>
+                    <td className="sr-request-id">{request.id}</td>
+                    <td>
+                      <div className="sr-tree-list">
+                        {(request.trees || []).map((tree) => (
+                          <span key={`${request.id}-${tree.inventoryId}-${tree.treeName}`}>
+                            {tree.treeName} ({tree.quantity})
+                          </span>
+                        ))}
+                      </div>
+                    </td>
+                    <td>
+                      <div className="sr-primary-text">{request.eventName || "—"}</div>
+                      <div className="sr-secondary-text">{request.eventBarangay || "—"}</div>
+                    </td>
+                    <td><StatusBadge status={request.status} /></td>
+                    <td>{formatDate(request.requestDate)}</td>
+                    <td>
+                      <button
+                        type="button"
+                        className="sr-view-btn"
+                        title="View request details"
+                        onClick={() => setSelectedMyRequest(request)}
+                      >
+                        <Eye size={15} />
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
+
+      {selectedMyRequest && (
+        <div className="sr-modal-backdrop" onMouseDown={() => setSelectedMyRequest(null)}>
+          <div
+            className="sr-modal sr-details-modal"
+            onMouseDown={(event) => event.stopPropagation()}
+          >
+            <div className="sr-modal-header">
+              <div>
+                <span className="sr-detail-id">{selectedMyRequest.id}</span>
+                <h2>Seedling Request Details</h2>
+                <p>Submitted {formatDate(selectedMyRequest.requestDate)}</p>
+              </div>
+              <button
+                type="button"
+                className="sr-modal-close"
+                onClick={() => setSelectedMyRequest(null)}
+                aria-label="Close"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="sr-modal-body">
+              <div className="sr-detail-status-line">
+                <StatusBadge status={selectedMyRequest.status} />
+              </div>
+
+              <div className="sr-details-grid">
+                <DetailItem label="Organization / Barangay" value={selectedMyRequest.organization || "—"} />
+                <DetailItem label="Contact Number" value={selectedMyRequest.contactNumber || "—"} />
+                <DetailItem label="Planting Event" value={selectedMyRequest.eventName || "—"} />
+                <DetailItem label="Barangay" value={selectedMyRequest.eventBarangay || "—"} />
+                <DetailItem label="Planting Site" value={selectedMyRequest.plantingSiteName || selectedMyRequest.plantingSiteLocation || "—"} />
+                <DetailItem label="Preferred Release Date" value={formatDate(selectedMyRequest.preferredReleaseDate)} />
+              </div>
+
+              <div className="sr-detail-seedlings">
+                <h3>Requested Seedlings</h3>
+                {(selectedMyRequest.trees || []).map((tree) => (
+                  <div
+                    className="sr-detail-tree-row"
+                    key={`${selectedMyRequest.id}-${tree.inventoryId}-${tree.treeName}`}
+                  >
+                    <span>{tree.treeName}</span>
+                    <strong>{tree.quantity}</strong>
+                  </div>
+                ))}
+                <div className="sr-detail-tree-total">
+                  <span>Total Requested</span>
+                  <strong>
+                    {(selectedMyRequest.trees || []).reduce(
+                      (sum, tree) => sum + Number(tree.quantity || 0),
+                      0
+                    )}
+                  </strong>
+                </div>
+              </div>
+
+              {hasStaffReviewData(selectedMyRequest) && (
+                <StaffReviewSection request={selectedMyRequest} />
+              )}
+
+              {(selectedMyRequest.status === "Approved" ||
+                selectedMyRequest.status === "Rejected") && (
+                <MenroDecisionSection request={selectedMyRequest} />
+              )}
+            </div>
+
+            <div className="sr-modal-footer">
+              <button
+                type="button"
+                className="sr-secondary-btn"
+                onClick={() => setSelectedMyRequest(null)}
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }

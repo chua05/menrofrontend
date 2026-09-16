@@ -283,7 +283,7 @@ export default function SeedlingsPage() {
   const { userRole } = useAuth();
 
   const canManage =
-    userRole === "admin";
+    userRole === "staff";
 
   const [seedlings, setSeedlings] =
     useState([]);

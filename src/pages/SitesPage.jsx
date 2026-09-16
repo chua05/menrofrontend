@@ -209,6 +209,7 @@ export default function SitesPage() {
 
   const activeDrawingRef = useRef(null);
 
+
   const [sites, setSites] = useState([]);
   const [archivedSites, setArchivedSites] = useState([]);
 
@@ -549,96 +550,15 @@ export default function SitesPage() {
       return null;
     }
   }
+  
 
-  function clearSiteMapObjects() {
-    const map = mapRef.current;
 
-    if (!map) {
-      sitePolygonsRef.current = [];
-      siteMarkersRef.current = [];
-      return;
-    }
-
-    sitePolygonsRef.current.forEach((polygon) => {
-      map.removeLayer(polygon);
-    });
-
-    siteMarkersRef.current.forEach((marker) => {
-      map.removeLayer(marker);
-    });
-
-    sitePolygonsRef.current = [];
-    siteMarkersRef.current = [];
-  }
-
-  function renderSitesOnMap(map, records, handleClick) {
-    clearSiteMapObjects();
-
-    records.forEach((site) => {
-      const status = getSiteStatus(site);
-      const utilizationColors = getUtilizationColor(status);
-
-      const polygonPath = Array.isArray(site.polygon)
-        ? site.polygon
-            .filter(
-              (point) =>
-                Number.isFinite(Number(point.lat)) &&
-                Number.isFinite(Number(point.lng))
-            )
-            .map((point) => [
-              Number(point.lat),
-              Number(point.lng),
-            ])
-        : [];
-
-      if (polygonPath.length >= 3) {
-        const polygon = L.polygon(polygonPath, {
-          color: utilizationColors.stroke,
-          opacity: 0.95,
-          weight: 1.5,
-          fillColor: utilizationColors.fill,
-          fillOpacity: 0.24,
-        }).addTo(map);
-
-        polygon.on("click", () => handleClick(site));
-        sitePolygonsRef.current.push(polygon);
-      }
-
-      const latitude = Number(site.latitude);
-      const longitude = Number(site.longitude);
-
-      if (
-        !Number.isFinite(latitude) ||
-        !Number.isFinite(longitude)
-      ) {
-        return;
-      }
-
-      const conditionColor = getConditionColor(
-        site.treeCondition || "Not Yet Monitored"
-      );
-
-      const marker = L.circleMarker([latitude, longitude], {
-        radius: 7,
-        color: "#ffffff",
-        weight: 2,
-        fillColor: conditionColor,
-        fillOpacity: 1,
-      }).addTo(map);
-
-      marker.bindTooltip(site.siteName || site.id || site.siteId || "Planting Site", {
-        direction: "top",
-        offset: [0, -6],
-      });
-
-      marker.on("click", () => handleClick(site));
-      siteMarkersRef.current.push(marker);
-    });
-  }
 
   useEffect(() => {
     let cancelled = false;
     let boundaryLayer = null;
+
+    
 
     async function initializeMap() {
       try {
@@ -892,19 +812,126 @@ export default function SitesPage() {
   }, []);
 
   useEffect(() => {
-    if (!mapReady || !mapRef.current) {
+  if (!mapReady || !mapRef.current) {
+    return;
+  }
+
+  const map = mapRef.current;
+
+  sitePolygonsRef.current.forEach((polygon) => {
+    if (map.hasLayer(polygon)) {
+      map.removeLayer(polygon);
+    }
+  });
+
+  siteMarkersRef.current.forEach((marker) => {
+    if (map.hasLayer(marker)) {
+      map.removeLayer(marker);
+    }
+  });
+
+  sitePolygonsRef.current = [];
+  siteMarkersRef.current = [];
+
+  const handleSiteClick = (site) => {
+    setSelectedSite(site);
+    setActiveDetailTab("information");
+  };
+
+  filteredSites.forEach((site) => {
+    const status = getSiteStatus(site);
+    const utilizationColors =
+      getUtilizationColor(status);
+
+    const polygonPath = Array.isArray(site.polygon)
+      ? site.polygon
+          .filter(
+            (point) =>
+              Number.isFinite(Number(point.lat)) &&
+              Number.isFinite(Number(point.lng))
+          )
+          .map((point) => [
+            Number(point.lat),
+            Number(point.lng),
+          ])
+      : [];
+
+    if (polygonPath.length >= 3) {
+      const polygon = L.polygon(polygonPath, {
+        color: utilizationColors.stroke,
+        opacity: 0.95,
+        weight: 1.5,
+        fillColor: utilizationColors.fill,
+        fillOpacity: 0.24,
+      }).addTo(map);
+
+      polygon.on("click", () => {
+        handleSiteClick(site);
+      });
+
+      sitePolygonsRef.current.push(polygon);
+    }
+
+    const latitude = Number(site.latitude);
+    const longitude = Number(site.longitude);
+
+    if (
+      !Number.isFinite(latitude) ||
+      !Number.isFinite(longitude)
+    ) {
       return;
     }
 
-    renderSitesOnMap(
-      mapRef.current,
-      filteredSites,
-      (site) => {
-        setSelectedSite(site);
-        setActiveDetailTab("information");
+    const conditionColor = getConditionColor(
+      site.treeCondition || "Not Yet Monitored"
+    );
+
+    const marker = L.circleMarker(
+      [latitude, longitude],
+      {
+        radius: 7,
+        color: "#ffffff",
+        weight: 2,
+        fillColor: conditionColor,
+        fillOpacity: 1,
+      }
+    ).addTo(map);
+
+    marker.bindTooltip(
+      site.siteName ||
+        site.id ||
+        site.siteId ||
+        "Planting Site",
+      {
+        direction: "top",
+        offset: [0, -6],
       }
     );
-  }, [mapReady, filteredSites]);
+
+    marker.on("click", () => {
+      handleSiteClick(site);
+    });
+
+    siteMarkersRef.current.push(marker);
+  });
+
+  return () => {
+    sitePolygonsRef.current.forEach((polygon) => {
+      if (map.hasLayer(polygon)) {
+        map.removeLayer(polygon);
+      }
+    });
+
+    siteMarkersRef.current.forEach((marker) => {
+      if (map.hasLayer(marker)) {
+        map.removeLayer(marker);
+      }
+    });
+
+    sitePolygonsRef.current = [];
+    siteMarkersRef.current = [];
+  };
+}, [mapReady, filteredSites]);
 
   function showSuccess(message) {
     setSuccessMessage(message);
@@ -1249,8 +1276,49 @@ export default function SitesPage() {
       return;
     }
 
+    // Validate latitude/longitude before opening the drawing UI
+    const latitude = Number(form.latitude);
+    const longitude = Number(form.longitude);
+
+    if (
+      form.latitude === "" ||
+      form.longitude === "" ||
+      !Number.isFinite(latitude) ||
+      !Number.isFinite(longitude) ||
+      latitude < -90 ||
+      latitude > 90 ||
+      longitude < -180 ||
+      longitude > 180
+    ) {
+      setFormErrors((previous) => ({
+        ...previous,
+        latitude:
+          previous.latitude || "Enter a valid latitude.",
+        longitude:
+          previous.longitude || "Enter a valid longitude.",
+      }));
+
+      setMapError(
+        "Provide valid latitude and longitude before drawing the site boundary."
+      );
+
+      return;
+    }
+
     removeActiveDrawingControl();
     setShowAddModal(false);
+
+    // Center the map on the provided coordinates to focus drawing
+    try {
+      const map = mapRef.current;
+      const targetZoom = Math.max(map.getZoom() || 13, 15);
+      map.flyTo([latitude, longitude], targetZoom, {
+        animate: true,
+      });
+    } catch (err) {
+      // Non-fatal: ensure drawing can still proceed
+      console.warn("Failed to center map before drawing:", err);
+    }
 
     const map = mapRef.current;
     const points = [];
@@ -2338,7 +2406,7 @@ function SiteInformation({
   return (
     <div className="ps-info-sections">
       <InfoSection
-        title="Basic Information"
+        title="Site Information"
         icon={Sprout}
       >
         <InfoRow

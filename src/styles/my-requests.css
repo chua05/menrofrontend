@@ -6,6 +6,8 @@
   width: 100%;
   padding: 32px;
   color: #17231c;
+  font-size: 15px;
+  line-height: 1.5;
 }
 
 /* =========================================================
@@ -28,8 +30,8 @@
 }
 
 .myr-title-icon {
-  width: 48px;
-  height: 48px;
+  width: 50px;
+  height: 50px;
   flex-shrink: 0;
   display: flex;
   align-items: center;
@@ -42,22 +44,22 @@
 .myr-title-group h1 {
   margin: 0;
   color: #111b15;
-  font-size: 24px;
+  font-size: 26px;
   font-weight: 700;
   line-height: 1.25;
 }
 
 .myr-title-group p {
-  margin: 5px 0 0;
+  margin: 6px 0 0;
   color: #69766e;
-  font-size: 13px;
+  font-size: 15px;
   font-weight: 400;
-  line-height: 1.5;
+  line-height: 1.55;
 }
 
 .myr-request-button {
-  min-height: 42px;
-  padding: 0 17px;
+  min-height: 46px;
+  padding: 0 19px;
   flex-shrink: 0;
 
   display: inline-flex;
@@ -71,8 +73,10 @@
   color: #ffffff;
 
   font-family: inherit;
-  font-size: 13px;
+  font-size: 15px;
+  line-height: 1.2;
   font-weight: 600;
+  white-space: nowrap;
 
   cursor: pointer;
   transition:
@@ -103,13 +107,13 @@
 
 .myr-summary-card {
   min-width: 0;
-  min-height: 88px;
+  min-height: 98px;
 
   display: flex;
   align-items: center;
   gap: 14px;
 
-  padding: 15px 16px;
+  padding: 16px;
 
   border: 1px solid #dce4df;
   border-radius: 9px;
@@ -120,26 +124,27 @@
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 5px;
 }
 
 .myr-summary-card span {
   color: #58655d;
-  font-size: 12px;
+  font-size: 14px;
+  line-height: 1.4;
   font-weight: 500;
   white-space: nowrap;
 }
 
 .myr-summary-card strong {
   color: #101a14;
-  font-size: 22px;
+  font-size: 25px;
   font-weight: 700;
-  line-height: 1;
+  line-height: 1.1;
 }
 
 .myr-summary-icon {
-  width: 44px;
-  height: 44px;
+  width: 46px;
+  height: 46px;
   flex-shrink: 0;
 
   display: flex;
@@ -208,6 +213,7 @@
 .myr-table-wrapper {
   width: 100%;
   overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 .myr-table {
@@ -222,13 +228,14 @@
 }
 
 .myr-table th {
-  height: 52px;
+  height: 54px;
   padding: 0 16px;
 
   border-bottom: 1px solid #dfe6e2;
 
   color: #536158;
-  font-size: 11px;
+  font-size: 13px;
+  line-height: 1.35;
   font-weight: 700;
   text-align: left;
   text-transform: uppercase;
@@ -238,14 +245,14 @@
 }
 
 .myr-table td {
-  min-height: 60px;
-  padding: 14px 16px;
+  min-height: 64px;
+  padding: 15px 16px;
 
   border-bottom: 1px solid #edf1ef;
 
   color: #27342c;
-  font-size: 12px;
-  line-height: 1.45;
+  font-size: 14px;
+  line-height: 1.5;
   vertical-align: middle;
 }
 
@@ -267,18 +274,20 @@
 }
 
 .myr-row-number {
-  color: #7b8780 !important;
+  color: #6f7b74 !important;
 }
 
 .myr-request-id {
   color: #18251d;
+  font-size: 14px;
   font-weight: 600;
   white-space: nowrap;
 }
 
 .myr-purpose-text {
   display: block;
-  max-width: 260px;
+  max-width: 280px;
+  line-height: 1.55;
 }
 
 .myr-seedling-count {
@@ -290,8 +299,8 @@
 }
 
 .myr-view-button {
-  width: 36px;
-  height: 36px;
+  width: 40px;
+  height: 40px;
 
   display: inline-flex;
   align-items: center;
@@ -345,9 +354,8 @@
 
 .myr-empty-illustration {
   position: relative;
-
-  width: 94px;
-  height: 94px;
+  width: 98px;
+  height: 98px;
 
   display: flex;
   align-items: center;
@@ -365,8 +373,8 @@
   right: 2px;
   bottom: 7px;
 
-  width: 40px;
-  height: 40px;
+  width: 42px;
+  height: 42px;
 
   display: flex;
   align-items: center;
@@ -380,16 +388,16 @@
 .myr-empty-state h2 {
   margin: 0;
   color: #111b15;
-  font-size: 17px;
+  font-size: 19px;
   font-weight: 700;
 }
 
 .myr-empty-state p {
-  max-width: 520px;
-  margin: 8px 0 0;
-  color: #748078;
-  font-size: 13px;
-  line-height: 1.6;
+  max-width: 540px;
+  margin: 9px 0 0;
+  color: #6b7870;
+  font-size: 15px;
+  line-height: 1.65;
 }
 
 /* =========================================================
@@ -401,12 +409,12 @@
   align-items: center;
   justify-content: center;
 
-  min-height: 26px;
-  padding: 3px 10px;
+  min-height: 30px;
+  padding: 4px 11px;
 
   border-radius: 999px;
 
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 600;
   line-height: 1.2;
   white-space: nowrap;
@@ -442,7 +450,7 @@
 ========================================================= */
 
 .myr-pagination {
-  min-height: 68px;
+  min-height: 72px;
 
   display: flex;
   align-items: center;
@@ -456,8 +464,9 @@
 }
 
 .myr-pagination-info {
-  color: #66736b;
-  font-size: 12px;
+  color: #5e6b63;
+  font-size: 14px;
+  line-height: 1.45;
 }
 
 .myr-pagination-actions {
@@ -468,8 +477,8 @@
 
 .myr-page-arrow,
 .myr-current-page {
-  width: 38px;
-  height: 38px;
+  width: 42px;
+  height: 42px;
 
   display: inline-flex;
   align-items: center;
@@ -482,12 +491,7 @@
   border: 1px solid #d6dfd9;
   background: #ffffff;
   color: #4b5b51;
-
   cursor: pointer;
-
-  transition:
-    background 0.15s ease,
-    border-color 0.15s ease;
 }
 
 .myr-page-arrow:hover:not(:disabled) {
@@ -505,23 +509,23 @@
   background: #eaf6ee;
   color: #157642;
 
-  font-size: 13px;
+  font-size: 15px;
   font-weight: 600;
 }
 
 .myr-page-size {
-  height: 38px;
+  min-height: 42px;
 
   display: flex;
   align-items: center;
 
-  padding: 0 13px;
+  padding: 0 14px;
 
   border: 1px solid #d6dfd9;
   border-radius: 7px;
 
   color: #59675f;
-  font-size: 12px;
+  font-size: 14px;
 }
 
 /* =========================================================
@@ -570,33 +574,33 @@
 
 .myr-modal-label {
   display: block;
-  margin-bottom: 3px;
+  margin-bottom: 4px;
 
   color: #23804d;
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.05em;
 }
 
 .myr-modal-header h2 {
   margin: 0;
-
   color: #142018;
-  font-size: 20px;
+  font-size: 22px;
+  line-height: 1.3;
   font-weight: 700;
 }
 
 .myr-modal-header p {
-  margin: 4px 0 0;
-
-  color: #738078;
-  font-size: 12px;
+  margin: 5px 0 0;
+  color: #68766e;
+  font-size: 14px;
+  line-height: 1.5;
 }
 
 .myr-modal-close {
-  width: 36px;
-  height: 36px;
+  width: 40px;
+  height: 40px;
   flex-shrink: 0;
 
   display: flex;
@@ -631,7 +635,7 @@
   gap: 12px;
 
   margin-bottom: 18px;
-  padding: 15px 16px;
+  padding: 16px;
 
   border: 1px solid #dfe6e2;
   border-radius: 8px;
@@ -647,14 +651,15 @@
 }
 
 .myr-details-status-row span:first-child {
-  color: #6c796f;
-  font-size: 11px;
+  color: #637067;
+  font-size: 13px;
   font-weight: 500;
 }
 
 .myr-details-status-row strong {
   color: #1b2820;
-  font-size: 13px;
+  font-size: 15px;
+  line-height: 1.45;
 }
 
 /* =========================================================
@@ -682,7 +687,7 @@
 }
 
 .myr-section-title > svg {
-  margin-top: 1px;
+  margin-top: 2px;
   flex-shrink: 0;
 }
 
@@ -690,16 +695,17 @@
   margin: 0;
 
   color: #1a281f;
-  font-size: 14px;
+  font-size: 17px;
+  line-height: 1.4;
   font-weight: 700;
 }
 
 .myr-section-title p {
-  margin: 3px 0 0;
+  margin: 4px 0 0;
 
-  color: #7a867e;
-  font-size: 11px;
-  line-height: 1.4;
+  color: #6f7c74;
+  font-size: 13px;
+  line-height: 1.5;
 }
 
 /* =========================================================
@@ -722,22 +728,22 @@
 
 .myr-readonly-field label {
   display: block;
-
-  margin-bottom: 6px;
+  margin-bottom: 7px;
 
   color: #526057;
-  font-size: 11px;
+  font-size: 13.5px;
+  line-height: 1.4;
   font-weight: 600;
 }
 
 .myr-readonly-field > div {
-  min-height: 40px;
+  min-height: 46px;
 
   display: flex;
   align-items: center;
   gap: 9px;
 
-  padding: 9px 11px;
+  padding: 10px 12px;
 
   border: 1px solid #d9e1dc;
   border-radius: 7px;
@@ -745,7 +751,8 @@
   background: #fafbfa;
 
   color: #29362e;
-  font-size: 12px;
+  font-size: 14px;
+  line-height: 1.5;
 }
 
 .myr-readonly-field > div svg {
@@ -759,7 +766,7 @@
 }
 
 .myr-readonly-textarea {
-  min-height: 80px !important;
+  min-height: 96px !important;
   align-items: flex-start !important;
 }
 
@@ -775,10 +782,10 @@
 
 .myr-seedling-item {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 130px;
+  grid-template-columns: minmax(0, 1fr) 140px;
   gap: 12px;
 
-  padding: 12px 14px;
+  padding: 13px 14px;
 
   border: 1px solid #dfe5e1;
   border-radius: 7px;
@@ -790,17 +797,19 @@
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: 4px;
 }
 
 .myr-seedling-item span {
-  color: #748078;
-  font-size: 10px;
+  color: #68766e;
+  font-size: 12.5px;
+  line-height: 1.4;
 }
 
 .myr-seedling-item strong {
   color: #26342b;
-  font-size: 12px;
+  font-size: 14px;
+  line-height: 1.45;
   font-weight: 600;
 }
 
@@ -817,13 +826,13 @@
 }
 
 .myr-total-seedlings span {
-  color: #647168;
-  font-size: 11px;
+  color: #5d6a62;
+  font-size: 13px;
 }
 
 .myr-total-seedlings strong {
   color: #167843;
-  font-size: 17px;
+  font-size: 20px;
   font-weight: 700;
 }
 
@@ -832,7 +841,7 @@
 ========================================================= */
 
 .myr-remarks-box {
-  padding: 12px 14px;
+  padding: 13px 14px;
 
   border: 1px solid #d9e5dc;
   border-radius: 7px;
@@ -840,8 +849,8 @@
   background: #f6faf7;
 
   color: #334039;
-  font-size: 12px;
-  line-height: 1.6;
+  font-size: 14px;
+  line-height: 1.65;
 }
 
 /* =========================================================
@@ -860,10 +869,10 @@
 }
 
 .myr-close-button {
-  min-width: 86px;
-  min-height: 39px;
+  min-width: 96px;
+  min-height: 44px;
 
-  padding: 0 16px;
+  padding: 0 18px;
 
   border: 1px solid #cfd9d3;
   border-radius: 7px;
@@ -872,7 +881,8 @@
   color: #37463d;
 
   font-family: inherit;
-  font-size: 12px;
+  font-size: 14.5px;
+  line-height: 1.2;
   font-weight: 600;
 
   cursor: pointer;
@@ -918,6 +928,7 @@
   .myr-page-header {
     align-items: stretch;
     flex-direction: column;
+    gap: 18px;
   }
 
   .myr-title-group {
@@ -925,11 +936,16 @@
   }
 
   .myr-title-group h1 {
-    font-size: 21px;
+    font-size: 23px;
+  }
+
+  .myr-title-group p {
+    font-size: 15px;
   }
 
   .myr-request-button {
     width: 100%;
+    min-height: 48px;
   }
 
   .myr-summary-grid {
@@ -937,7 +953,7 @@
   }
 
   .myr-summary-card {
-    min-height: 78px;
+    min-height: 88px;
   }
 
   .myr-pagination {
@@ -952,11 +968,11 @@
   }
 
   .myr-modal-overlay {
-    padding: 12px;
+    padding: 10px;
   }
 
   .myr-details-modal {
-    max-height: calc(100vh - 24px);
+    max-height: calc(100vh - 20px);
   }
 
   .myr-modal-header,
@@ -972,5 +988,9 @@
 
   .myr-seedling-item {
     grid-template-columns: 1fr;
+  }
+
+  .myr-modal-footer .myr-close-button {
+    width: 100%;
   }
 }
