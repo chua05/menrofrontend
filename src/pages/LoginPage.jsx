@@ -210,7 +210,7 @@ export default function LoginPage() {
 
         redirectByRole(role);
       } catch (err) {
-        console.error(err);
+        console.error("Google sign in failed:", err?.code || err?.message);
         setSuccess("");
         setError(
           err.response?.status === 429 || /Too many requests\. Please slow down\./i.test(err.response?.data?.message || "")
