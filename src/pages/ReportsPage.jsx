@@ -13,7 +13,6 @@ import {
   FiSearch,
   FiUsers,
   FiX,
-  FiCheck,
   FiAlertCircle,
   FiPackage,
   FiMapPin,
@@ -71,11 +70,6 @@ const REPORT_TYPES = [
   },
 ];
 
-const REPORT_STORAGE_KEY = "menro_generated_reports";
-
-const getToday = () =>
-  new Date().toISOString().split("T")[0];
-
 function getReportTypeLabel(typeId) {
   return (
     REPORT_TYPES.find((type) => type.id === typeId)?.label ||
@@ -100,41 +94,9 @@ function formatDate(dateString) {
   });
 }
 
-function normalizeReports(value) {
-  if (!Array.isArray(value)) return [];
-
-  return value.filter(Boolean).map((report) => ({
-    id: report.id || report.reportId || "",
-    type: report.type || report.reportType || "",
-    typeId: report.typeId || "",
-    date: report.date || report.dateGenerated || "",
-    generatedBy: report.generatedBy || "",
-    status: report.status || "Generated",
-    dateFrom: report.dateFrom || "",
-    dateTo: report.dateTo || "",
-    fileUrl: report.fileUrl || "",
-    fileName: report.fileName || "",
-  }));
-}
-
-function getStoredReports() {
-  try {
-    const stored = localStorage.getItem(REPORT_STORAGE_KEY);
-
-    if (!stored) return [];
-
-    return normalizeReports(JSON.parse(stored));
-  } catch {
-    return [];
-  }
-}
-
-function saveReports(reports) {
-  localStorage.setItem(
-    REPORT_STORAGE_KEY,
-    JSON.stringify(reports)
-  );
-}
+// The backend does not yet provide generated report history or files.
+// Browser-stored metadata is not evidence that a report was generated.
+const reports = [];
 
 function ReportTypeIcon({ type }) {
   const Icon = type.icon;
@@ -150,11 +112,7 @@ function ReportTypeIcon({ type }) {
 }
 
 export default function ReportsPage() {
-  const { currentUser, userRole } = useAuth();
-
-  const [reports, setReports] = useState(() =>
-    getStoredReports()
-  );
+  const { userRole } = useAuth();
 
   const [selectedType, setSelectedType] = useState("");
   const [dateFrom, setDateFrom] = useState("");
@@ -165,9 +123,7 @@ export default function ReportsPage() {
   const [filterStatus, setFilterStatus] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
 
-  const [successMsg, setSuccessMsg] = useState("");
   const [errorMsg, setErrorMsg] = useState("");
-  const [isGenerating, setIsGenerating] = useState(false);
 
   const [currentPage, setCurrentPage] = useState(1);
   const [rowsPerPage, setRowsPerPage] = useState(10);
@@ -200,7 +156,6 @@ export default function ReportsPage() {
       );
     });
   }, [
-    reports,
     filterType,
     filterStatus,
     searchTerm,
@@ -239,8 +194,7 @@ export default function ReportsPage() {
     setCurrentPage(1);
   };
 
-  const handleGenerate = async () => {
-    setSuccessMsg("");
+  const handleGenerate = () => {
     setErrorMsg("");
 
     if (!selectedType) {
@@ -255,64 +209,9 @@ export default function ReportsPage() {
       return;
     }
 
-    setIsGenerating(true);
-
-    try {
-      /*
-       * This creates only the report metadata.
-       *
-       * The actual report content must come from the
-       * real system records / backend.
-       *
-       * No fake records are created here.
-       */
-
-      const reportId = `RPT-${Date.now()}`;
-
-      const generatedReport = {
-        id: reportId,
-        typeId: selectedType,
-        type: getReportTypeLabel(selectedType),
-        date: getToday(),
-        dateFrom,
-        dateTo,
-        generatedBy:
-          currentUser?.displayName ||
-          currentUser?.fullName ||
-          currentUser?.email ||
-          "",
-        status: "Generated",
-        fileUrl: "",
-        fileName: "",
-      };
-
-      const updatedReports = [
-        generatedReport,
-        ...reports,
-      ];
-
-      saveReports(updatedReports);
-      setReports(updatedReports);
-
-      setSuccessMsg(
-        "Report generated successfully."
-      );
-
-      setSelectedType("");
-      setDateFrom("");
-      setDateTo("");
-      setCurrentPage(1);
-
-      window.setTimeout(() => {
-        setSuccessMsg("");
-      }, 3000);
-    } catch {
-      setErrorMsg(
-        "Unable to generate the report. Please try again."
-      );
-    } finally {
-      setIsGenerating(false);
-    }
+    setErrorMsg(
+      "Report generation is not available yet. The backend must provide a generated file and report history."
+    );
   };
 
   const handleDownload = (report) => {
@@ -401,37 +300,6 @@ export default function ReportsPage() {
           </span>
         </div>
       </div>
-
-      {/* =========================
-          SUCCESS MESSAGE
-      ========================= */}
-
-      {successMsg && (
-        <div className="reports-alert reports-alert-success">
-          <div className="reports-alert-icon">
-            <FiCheck size={14} />
-          </div>
-
-          <div className="reports-alert-content">
-            <strong>Success</strong>
-
-            <span>
-              {successMsg}
-            </span>
-          </div>
-
-          <button
-            type="button"
-            className="reports-alert-close"
-            onClick={() =>
-              setSuccessMsg("")
-            }
-            aria-label="Close success message"
-          >
-            <FiX size={15} />
-          </button>
-        </div>
-      )}
 
       {/* =========================
           ERROR MESSAGE
@@ -595,30 +463,10 @@ export default function ReportsPage() {
             type="button"
             className="reports-primary-button generate-button"
             onClick={handleGenerate}
-            disabled={
-              !selectedType ||
-              isGenerating ||
-              !isAdminOrStaff
-            }
+            disabled={!selectedType || !isAdminOrStaff}
           >
-            {isGenerating ? (
-              <>
-                <FiRefreshCw
-                  className="reports-spin"
-                  size={15}
-                />
-
-                Generating...
-              </>
-            ) : (
-              <>
-                <FiFileText
-                  size={15}
-                />
-
-                Generate Report
-              </>
-            )}
+            <FiFileText size={15} />
+            Generate Report
           </button>
         </div>
 
@@ -899,13 +747,13 @@ export default function ReportsPage() {
 
               <h3>
                 {reports.length === 0
-                  ? "No reports generated yet."
+                  ? "No generated reports available."
                   : "No reports found."}
               </h3>
 
               <p>
                 {reports.length === 0
-                  ? "Generate a report to view it here."
+                  ? "Generated report history requires backend support."
                   : "Try adjusting your filters or search term."}
               </p>
 

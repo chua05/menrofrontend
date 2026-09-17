@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
+import * as exifr from "exifr";
 
 import {
-  FiAlertCircle,
   FiCamera,
   FiCheck,
   FiCheckCircle,
@@ -76,20 +76,23 @@ const PARTICIPANT_TYPES = [
 ];
 
 const STATUS_OPTIONS = [
-  "Passed Automated Check",
-  "Flagged",
-  "Reviewed",
+  "Pending Review",
   "Approved",
   "Rejected",
 ];
 
 const VERIFICATION_CLASSES = {
-  "Passed Automated Check": "pr-status-pass",
-  Flagged: "pr-status-flagged",
-  Reviewed: "pr-status-reviewed",
+  "Pending Review": "pr-status-reviewed",
   Approved: "pr-status-approved",
   Rejected: "pr-status-rejected",
 };
+
+function displayReportStatus(status) {
+  const normalized = String(status || "").trim().toLowerCase();
+  if (normalized === "approved") return "Approved";
+  if (normalized === "rejected") return "Rejected";
+  return "Pending Review";
+}
 
 function formatDate(value) {
   if (!value) return "—";
@@ -209,7 +212,6 @@ export default function PlantingPage() {
 
   const isParticipant = userRole === "participant";
   const canReview = userRole === "staff";
-  const canDecide = userRole === "admin";
 
   const cameraInputRef = useRef(null);
   const uploadInputRef = useRef(null);
@@ -246,9 +248,12 @@ export default function PlantingPage() {
   const [locationLoading, setLocationLoading] = useState(false);
   const [locationMapError, setLocationMapError] = useState("");
   const [verificationRemarks, setVerificationRemarks] = useState("");
+  const [decision, setDecision] = useState("");
+  const [reportError, setReportError] = useState("");
 
   const [photoFiles, setPhotoFiles] = useState([]);
   const [photoPreviews, setPhotoPreviews] = useState([]);
+  const [locationPhotoSignature, setLocationPhotoSignature] = useState("");
 
   const [form, setForm] = useState({
     participantType: "",
@@ -360,6 +365,7 @@ export default function PlantingPage() {
 
   async function loadReports() {
     setLoading(true);
+    setReportError("");
 
     try {
       const endpoint = isParticipant
@@ -370,13 +376,9 @@ export default function PlantingPage() {
       setRecords(Array.isArray(response.data) ? response.data : []);
     } catch (error) {
       setRecords([]);
-
-      if (!isSessionError(error)) {
-        showPopup(
-          error.message || "Failed to load planting reports.",
-          "error"
-        );
-      }
+      setReportError(isSessionError(error)
+        ? error.message
+        : "Unable to load planting reports. Please try again.");
     } finally {
       setLoading(false);
     }
@@ -399,7 +401,7 @@ export default function PlantingPage() {
 
       if (!isSessionError(error)) {
         showPopup(
-          error.message || "Failed to load registered planting sites.",
+          "Unable to load registered planting sites. Please try again.",
           "error"
         );
       }
@@ -425,7 +427,7 @@ export default function PlantingPage() {
 
       if (!isSessionError(error)) {
         showPopup(
-          error.message || "Failed to load planting events.",
+          "Unable to load planting events. Please try again.",
           "error"
         );
       }
@@ -443,7 +445,7 @@ export default function PlantingPage() {
 
       if (!isSessionError(error)) {
         showPopup(
-          error.message || "Failed to load your released distributions.",
+          "Unable to load your released distributions. Please try again.",
           "error"
         );
       }
@@ -820,19 +822,16 @@ export default function PlantingPage() {
 ]);
 
   const visibleRecords = useMemo(() => {
-    if (!isParticipant) return records;
-
-    return records.filter(
-      (record) => record.participantId === currentIdentity.id
-    );
-  }, [records, isParticipant, currentIdentity.id]);
+    // The participant endpoint already scopes records to the authenticated user.
+    return records;
+  }, [records]);
 
   const filteredRecords = useMemo(() => {
     const search = searchTerm.trim().toLowerCase();
 
     return visibleRecords.filter((record) => {
       const matchesStatus =
-        statusFilter === "All" || record.verificationStatus === statusFilter;
+        statusFilter === "All" || displayReportStatus(record.verificationStatus) === statusFilter;
 
       const searchableText = [
         record.id,
@@ -855,11 +854,7 @@ export default function PlantingPage() {
     const total = visibleRecords.length;
 
     const pending = visibleRecords.filter((record) =>
-      ["Passed Automated Check", "Flagged"].includes(record.verificationStatus)
-    ).length;
-
-    const reviewed = visibleRecords.filter(
-      (record) => record.verificationStatus === "Reviewed"
+      displayReportStatus(record.verificationStatus) === "Pending Review"
     ).length;
 
     const approved = visibleRecords.filter(
@@ -877,7 +872,7 @@ export default function PlantingPage() {
         return totalValue + (Number.isFinite(quantity) ? quantity : 0);
       }, 0);
 
-    return { total, pending, reviewed, approved, rejected, totalTrees };
+    return { total, pending, approved, rejected, totalTrees };
   }, [visibleRecords]);
 
   const capturedSiteDistance = useMemo(() => {
@@ -967,6 +962,7 @@ export default function PlantingPage() {
     previewUrlsRef.current = [];
     setPhotoFiles([]);
     setPhotoPreviews([]);
+    setLocationPhotoSignature("");
 
     if (cameraInputRef.current) cameraInputRef.current.value = "";
     if (uploadInputRef.current) uploadInputRef.current.value = "";
@@ -1004,6 +1000,12 @@ export default function PlantingPage() {
     const distribution = distributions.find(
       (item) => String(item.id) === String(selectedId)
     );
+
+    if (distribution && Array.isArray(distribution.items) && distribution.items.length > 0 &&
+        !distribution.quantityReleased) {
+      showPopup("Planting reports for itemized releases require backend support. Your released seedlings are still recorded.", "error");
+      return;
+    }
 
     if (!distribution) {
       setForm((previous) => ({
@@ -1089,6 +1091,7 @@ export default function PlantingPage() {
 
     navigator.geolocation.getCurrentPosition(
       (position) => {
+        setLocationPhotoSignature("");
         setForm((previous) => ({
           ...previous,
           latitude: position.coords.latitude.toFixed(6),
@@ -1142,15 +1145,9 @@ export default function PlantingPage() {
     );
   }
 
-  function handlePhotoChange(event) {
+  async function handlePhotoChange(event) {
     const selectedFiles = Array.from(event.target.files || []);
     if (selectedFiles.length === 0) return;
-
-    if (!hasGps) {
-      showPopup("Capture your GPS location before adding planting photos.", "error");
-      event.target.value = "";
-      return;
-    }
 
     const remainingSlots = MAX_EVIDENCE_PHOTOS - photoFiles.length;
 
@@ -1210,6 +1207,30 @@ export default function PlantingPage() {
       newSignatures.add(signature);
     }
 
+    if (!hasGps) {
+      try {
+        const metadata = await exifr.parse(selectedFiles[0]);
+        const capturedAt = metadata?.DateTimeOriginal ?? metadata?.CreateDate;
+        const date = capturedAt instanceof Date ? capturedAt : new Date(capturedAt);
+        if (!Number.isFinite(metadata?.latitude) || !Number.isFinite(metadata?.longitude) ||
+            Number.isNaN(date.getTime())) {
+          throw new Error("The original photo must contain GPS coordinates and capture time. Select the original geotagged photo or capture location at the planting site.");
+        }
+        setForm((previous) => ({
+          ...previous,
+          latitude: String(metadata.latitude),
+          longitude: String(metadata.longitude),
+          accuracy: "",
+          locationCapturedAt: date.toISOString(),
+        }));
+        setLocationPhotoSignature(`${selectedFiles[0].name}|${selectedFiles[0].size}|${selectedFiles[0].lastModified}`);
+      } catch (metadataError) {
+        showPopup(metadataError.message || "Unable to read the original photo location and time.", "error");
+        event.target.value = "";
+        return;
+      }
+    }
+
     const newPreviews = selectedFiles.map((file) => ({
       id: `${file.name}-${file.size}-${file.lastModified}-${Math.random()}`,
       url: URL.createObjectURL(file),
@@ -1229,6 +1250,11 @@ export default function PlantingPage() {
 
   function removeSelectedPhoto(index) {
     const preview = photoPreviews[index];
+    const file = photoFiles[index];
+    if (file && locationPhotoSignature === `${file.name}|${file.size}|${file.lastModified}`) {
+      setLocationPhotoSignature("");
+      setForm((previous) => ({ ...previous, latitude: "", longitude: "", accuracy: "", locationCapturedAt: "" }));
+    }
 
     if (preview?.url) {
       URL.revokeObjectURL(preview.url);
@@ -1261,6 +1287,12 @@ export default function PlantingPage() {
 
     if (!form.distributionId) {
       showPopup("Please select a released seedling distribution.", "error");
+      return;
+    }
+
+    const selectedDistribution = distributions.find((item) => item.id === form.distributionId);
+    if (selectedDistribution?.items?.length && !selectedDistribution.quantityReleased) {
+      showPopup("Planting reports for itemized releases require backend support.", "error");
       return;
     }
 
@@ -1358,47 +1390,15 @@ export default function PlantingPage() {
     if (actionLoading) return;
     setSelectedRecord(null);
     setVerificationRemarks("");
+    setDecision("");
     setShowViewModal(false);
-  }
-
-  async function reviewRecord() {
-    if (
-      !selectedRecord ||
-      !canReview ||
-      !["Passed Automated Check", "Flagged"].includes(
-        selectedRecord.verificationStatus
-      )
-    ) {
-      return;
-    }
-
-    setActionLoading(true);
-
-    try {
-      const response = await apiRequest(
-        `/planting-reports/${selectedRecord.id}/review`,
-        {
-          method: "PATCH",
-          body: JSON.stringify({ remarks: verificationRemarks.trim() }),
-        }
-      );
-
-      setSelectedRecord(response.data);
-      setVerificationRemarks("");
-      showPopup(response.message || "Planting report reviewed successfully.");
-      await loadReports();
-    } catch (error) {
-      showPopup(error.message || "Failed to review planting report.", "error");
-    } finally {
-      setActionLoading(false);
-    }
   }
 
   async function approveRecord() {
     if (
       !selectedRecord ||
-      !canDecide ||
-      selectedRecord.verificationStatus !== "Reviewed"
+      !canReview ||
+      displayReportStatus(selectedRecord.verificationStatus) !== "Pending Review"
     ) {
       return;
     }
@@ -1416,6 +1416,7 @@ export default function PlantingPage() {
 
       setSelectedRecord(response.data);
       setVerificationRemarks("");
+      setDecision("");
       showPopup(response.message || "Planting report approved successfully.");
       await loadReports();
     } catch (error) {
@@ -1428,8 +1429,8 @@ export default function PlantingPage() {
   async function rejectRecord() {
     if (
       !selectedRecord ||
-      !canDecide ||
-      selectedRecord.verificationStatus !== "Reviewed"
+      !canReview ||
+      displayReportStatus(selectedRecord.verificationStatus) !== "Pending Review"
     ) {
       return;
     }
@@ -1457,6 +1458,7 @@ export default function PlantingPage() {
 
       setSelectedRecord(response.data);
       setVerificationRemarks("");
+      setDecision("");
       showPopup(response.message || "Planting report rejected successfully.");
       await loadReports();
     } catch (error) {
@@ -1467,22 +1469,22 @@ export default function PlantingPage() {
   }
 
   function getStatusIcon(status) {
-    if (status === "Approved" || status === "Passed Automated Check") {
+    if (status === "Approved") {
       return <FiCheckCircle size={12} />;
     }
 
     if (status === "Rejected") return <FiXCircle size={12} />;
-    if (status === "Flagged") return <FiAlertCircle size={12} />;
     return <FiClock size={12} />;
   }
 
   function renderStatusBadge(status) {
-    const statusClass = VERIFICATION_CLASSES[status] || "pr-status-default";
+    const label = displayReportStatus(status);
+    const statusClass = VERIFICATION_CLASSES[label];
 
     return (
       <span className={`pr-status-badge ${statusClass}`}>
-        {getStatusIcon(status)}
-        {status || "—"}
+        {getStatusIcon(label)}
+        {label}
       </span>
     );
   }
@@ -1490,12 +1492,15 @@ export default function PlantingPage() {
   const staffCanReviewSelected =
     canReview &&
     selectedRecord &&
-    ["Passed Automated Check", "Flagged"].includes(
-      selectedRecord.verificationStatus
-    );
+    displayReportStatus(selectedRecord.verificationStatus) === "Pending Review";
 
-  const adminCanDecideSelected =
-    canDecide && selectedRecord?.verificationStatus === "Reviewed";
+  if (loading) {
+    return <div className="pr-page"><div style={{ minHeight: "420px", display: "grid", placeItems: "center", color: "#526159", fontSize: "13px", fontWeight: 600 }}>Loading planting reports...</div></div>;
+  }
+
+  if (reportError) {
+    return <div className="pr-page"><div role="alert" style={{ minHeight: "420px", display: "grid", placeContent: "center", justifyItems: "center", gap: "14px", color: "#526159", fontSize: "13px", fontWeight: 600 }}><span>{reportError}</span><button type="button" className="pr-secondary-button" onClick={loadReports}>Retry</button></div></div>;
+  }
 
   return (
     <div className="pr-page">
@@ -1527,7 +1532,7 @@ export default function PlantingPage() {
                 ? "Submit planting evidence and track the verification status of your reports."
                 : canReview
                 ? "Review geo-tagged planting reports after automated verification."
-                : "Review staff-reviewed planting reports and make the final approval decision."}
+                : "View planting reports and staff decisions."}
             </p>
           </div>
         </div>
@@ -1566,10 +1571,10 @@ export default function PlantingPage() {
           <div className="pr-card-icon"><FiCheckCircle size={19} /></div>
           <div>
             <div className="pr-card-value">
-              {isParticipant ? summary.approved : summary.reviewed}
+              {summary.approved}
             </div>
             <div className="pr-card-label">
-              {isParticipant ? "Approved" : "Reviewed"}
+              Approved
             </div>
           </div>
         </div>
@@ -1636,14 +1641,7 @@ export default function PlantingPage() {
           </button>
         </div>
 
-        {loading ? (
-          <div className="pr-empty-state">
-            <div className="pr-empty-title">Loading planting reports...</div>
-            <div className="pr-empty-text">
-              Please wait while the latest records are being retrieved.
-            </div>
-          </div>
-        ) : filteredRecords.length === 0 ? (
+        {filteredRecords.length === 0 ? (
           <div className="pr-empty-state">
             <div className="pr-empty-icon"><FiGitBranch size={25} /></div>
             <div className="pr-empty-title">
@@ -1820,8 +1818,11 @@ export default function PlantingPage() {
                       >
                         <option value="">Select released seedling distribution</option>
                         {distributions.map((distribution) => (
-                          <option key={distribution.id} value={distribution.id}>
-                            {distribution.species || "Seedling"} — {distribution.quantityReleased ?? 0} released
+                          <option key={distribution.id} value={distribution.id}
+                            disabled={Array.isArray(distribution.items) && distribution.items.length > 0 && !distribution.quantityReleased}>
+                            {Array.isArray(distribution.items) && distribution.items.length > 0
+                              ? `${distribution.items.map((item) => `${item.species}: ${item.releasedQuantity}`).join(", ")} — report unavailable`
+                              : `${distribution.species || "Seedling"} — ${distribution.quantityReleased ?? "Unknown"} released`}
                           </option>
                         ))}
                       </select>
@@ -1829,6 +1830,11 @@ export default function PlantingPage() {
                       {distributions.length === 0 && (
                         <div className="pr-helper-text">
                           No released seedling distributions are currently available for your account.
+                        </div>
+                      )}
+                      {distributions.some((distribution) => Array.isArray(distribution.items) && distribution.items.length > 0 && !distribution.quantityReleased) && (
+                        <div className="pr-helper-text" role="status">
+                          Itemized releases are recorded, but this planting report endpoint still requires a single-species distribution. MENRO backend support is needed before a report can be submitted for these releases.
                         </div>
                       )}
                     </div>
@@ -1848,7 +1854,7 @@ export default function PlantingPage() {
                       <input
                         className="pr-input pr-readonly"
                         value={form.quantityReleased}
-                        placeholder="0"
+                        placeholder="Select a supported distribution"
                         readOnly
                       />
                     </div>
@@ -2074,17 +2080,17 @@ export default function PlantingPage() {
 
                           {!hasGps && (
                             <div className="pr-helper-text pr-helper-emphasis">
-                              Capture your GPS location first. Photo capture/upload remains disabled until location is recorded.
+                              Capture GPS at the planting site, or upload the original geotagged photo from your device. Edited or compressed copies may lose location and capture time.
                             </div>
                           )}
 
-                          <div className={`pr-upload-box ${!hasGps ? "pr-upload-box-disabled" : ""}`}>
+                          <div className="pr-upload-box">
                             <input
                               ref={cameraInputRef}
                               type="file"
                               accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp"
                               capture="environment"
-                              disabled={!hasGps || photoFiles.length >= MAX_EVIDENCE_PHOTOS}
+                              disabled={photoFiles.length >= MAX_EVIDENCE_PHOTOS}
                               onChange={handlePhotoChange}
                               className="pr-file-input"
                             />
@@ -2094,7 +2100,7 @@ export default function PlantingPage() {
                               type="file"
                               accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp"
                               multiple
-                              disabled={!hasGps || photoFiles.length >= MAX_EVIDENCE_PHOTOS}
+                              disabled={photoFiles.length >= MAX_EVIDENCE_PHOTOS}
                               onChange={handlePhotoChange}
                               className="pr-file-input"
                             />
@@ -2116,7 +2122,7 @@ export default function PlantingPage() {
                     >
                       <button
                         type="button"
-                        disabled={!hasGps || photoFiles.length >= MAX_EVIDENCE_PHOTOS}
+                        disabled={photoFiles.length >= MAX_EVIDENCE_PHOTOS}
                         onClick={() => cameraInputRef.current?.click()}
                         className="pr-primary-button"
                       >
@@ -2126,7 +2132,7 @@ export default function PlantingPage() {
 
                       <button
                         type="button"
-                        disabled={!hasGps || photoFiles.length >= MAX_EVIDENCE_PHOTOS}
+                        disabled={photoFiles.length >= MAX_EVIDENCE_PHOTOS}
                         onClick={() => uploadInputRef.current?.click()}
                         className="pr-secondary-button"
                       >
@@ -2322,7 +2328,7 @@ export default function PlantingPage() {
 
                 {selectedRecord.remarks && (
                   <div className="pr-drawer-note">
-                    <div className="pr-info-label">Remarks</div>
+                    <div className="pr-info-label">{displayReportStatus(selectedRecord.verificationStatus) === "Rejected" ? "Rejection Reason" : "Remarks"}</div>
                     <div className="pr-drawer-note-text">{selectedRecord.remarks}</div>
                   </div>
                 )}
@@ -2499,68 +2505,26 @@ export default function PlantingPage() {
                 {Array.isArray(selectedRecord.suspiciousFlags) &&
                   selectedRecord.suspiciousFlags.length > 0 && (
                     <div className="pr-drawer-note">
-                      <div className="pr-info-label">Verification Flags</div>
-                      <div className="pr-drawer-note-text">
-                        {selectedRecord.suspiciousFlags.join(", ")}
-                      </div>
+                      <div className="pr-info-label">Automated Verification Issues</div>
+                      <ul className="pr-verification-issues">
+                        {selectedRecord.suspiciousFlags.map((issue, index) => (
+                          <li key={`${index}-${String(issue)}`}>{String(issue)}</li>
+                        ))}
+                      </ul>
                     </div>
                   )}
 
-                {(staffCanReviewSelected || adminCanDecideSelected) && (
+                {staffCanReviewSelected && (
                   <div className="pr-drawer-verification-box">
-                    <label className="pr-label">
-                      {staffCanReviewSelected
-                        ? "Staff Review Remarks"
-                        : "Admin Decision Remarks"}
-                    </label>
-
-                    <textarea
-                      value={verificationRemarks}
-                      onChange={(event) => setVerificationRemarks(event.target.value)}
-                      placeholder={
-                        staffCanReviewSelected
-                          ? "Enter staff review notes, if necessary..."
-                          : "Enter decision notes. Remarks are required when rejecting."
-                      }
-                      className="pr-textarea"
-                    />
-
+                    <div className="pr-drawer-section-title">MENRO Staff Review</div>
+                    <div className="pr-info-value">Current Status: Pending Review</div>
                     <div className="pr-drawer-verification-actions">
-                      {staffCanReviewSelected && (
-                        <button
-                          type="button"
-                          className="pr-primary-button"
-                          onClick={reviewRecord}
-                          disabled={actionLoading}
-                        >
-                          <FiCheck size={14} />
-                          {actionLoading ? "Saving..." : "Review Report"}
-                        </button>
-                      )}
-
-                      {adminCanDecideSelected && (
-                        <>
-                          <button
-                            type="button"
-                            className="pr-danger-button"
-                            onClick={rejectRecord}
-                            disabled={actionLoading}
-                          >
-                            <FiXCircle size={14} />
-                            Reject
-                          </button>
-
-                          <button
-                            type="button"
-                            className="pr-primary-button"
-                            onClick={approveRecord}
-                            disabled={actionLoading}
-                          >
-                            <FiCheck size={14} />
-                            Approve
-                          </button>
-                        </>
-                      )}
+                      <button type="button" className="pr-danger-button" onClick={() => setDecision("reject")} disabled={actionLoading}>
+                        <FiXCircle size={14} /> Reject
+                      </button>
+                      <button type="button" className="pr-primary-button" onClick={() => setDecision("approve")} disabled={actionLoading}>
+                        <FiCheck size={14} /> Approve
+                      </button>
                     </div>
                   </div>
                 )}
@@ -2628,6 +2592,33 @@ export default function PlantingPage() {
               </section>
             </div>
           </aside>
+        </div>
+      )}
+      {decision && selectedRecord && (
+        <div className="pr-overlay pr-decision-overlay" onMouseDown={(event) => {
+          if (event.target === event.currentTarget && !actionLoading) setDecision("");
+        }}>
+          <div className="pr-modal-small" role="dialog" aria-modal="true" aria-label={decision === "approve" ? "Approve planting report" : "Reject planting report"}>
+            <div className="pr-modal-header">
+              <div>
+                <h2 className="pr-modal-title">{decision === "approve" ? "Approve Planting Report?" : "Reject Planting Report"}</h2>
+                <p className="pr-modal-subtitle">{decision === "approve" ? "Confirm that the submitted planting evidence is acceptable." : "Provide the reason the submitted planting evidence is unacceptable."}</p>
+              </div>
+              <button type="button" className="pr-close-button" onClick={() => setDecision("")} disabled={actionLoading} aria-label="Close decision"><FiX size={17} /></button>
+            </div>
+            {decision === "reject" && (
+              <div className="pr-modal-body">
+                <label className="pr-label" htmlFor="pr-rejection-reason">Reason for Rejection <span className="pr-required">*</span></label>
+                <textarea id="pr-rejection-reason" className="pr-textarea" value={verificationRemarks} onChange={(event) => setVerificationRemarks(event.target.value)} placeholder="Explain why this report is being rejected" />
+              </div>
+            )}
+            <div className="pr-modal-footer">
+              <button type="button" className="pr-secondary-button" onClick={() => setDecision("")} disabled={actionLoading}>Cancel</button>
+              <button type="button" className={decision === "approve" ? "pr-primary-button" : "pr-danger-button"} onClick={decision === "approve" ? approveRecord : rejectRecord} disabled={actionLoading || (decision === "reject" && !verificationRemarks.trim())}>
+                {actionLoading ? "Saving..." : decision === "approve" ? "Approve" : "Confirm Rejection"}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

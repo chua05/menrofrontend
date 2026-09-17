@@ -1,4 +1,5 @@
 import {  useCallback, useEffect, useMemo, useRef, useState, } from "react";
+import { createPortal } from "react-dom";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import {
@@ -28,6 +29,7 @@ import {
 } from "lucide-react";
 
 import { useAuth } from "../context/AuthContext";
+import { auth } from "../firebase/config";
 
 import "../styles/seedling-requests.css";
 
@@ -105,12 +107,14 @@ const OTHER_REJECTION_REASON = "Other reason.";
 const API_BASE_URL =
   import.meta.env.VITE_API_URL || "http://localhost:5000/api";
 
-function getAuthToken() {
-  return localStorage.getItem("token") || "";
+async function getAuthToken() {
+  const token = await auth.currentUser?.getIdToken();
+  if (token) localStorage.setItem("token", token);
+  return token || localStorage.getItem("token") || "";
 }
 
 async function apiRequest(path, options = {}) {
-  const token = getAuthToken();
+  const token = await getAuthToken();
 
   if (!token) {
     throw new Error(
@@ -207,6 +211,7 @@ function normalizeRequestForUi(request = {}) {
     barangay: proposal.barangay || request.barangay || "",
     requestType: request.requestType || "New Planting",
     trees: items.map((item) => ({
+      ...item,
       inventoryId: item.inventoryId || "",
       treeName: item.species || item.treeName || "Seedling",
       scientificName: item.scientificName || "",
@@ -269,13 +274,13 @@ function normalizeRequestForUi(request = {}) {
     plantingSiteLongitude:
       proposal.longitude ?? request.plantingSiteLongitude ?? null,
     proposedDate: proposal.proposedDate || request.proposedDate || "",
-    startTime: proposal.startTime || request.startTime || "",
-    endTime: proposal.endTime || request.endTime || "",
+    startTime: proposal.proposedStartTime || proposal.startTime || request.startTime || "",
+    endTime: proposal.proposedEndTime || proposal.endTime || request.endTime || "",
     expectedParticipants:
       proposal.expectedParticipants ?? request.expectedParticipants ?? "",
     eventLocation: proposal.eventLocation || request.eventLocation || "",
     eventDescription:
-      proposal.eventDescription || request.eventDescription || "",
+      proposal.description || proposal.eventDescription || request.eventDescription || "",
   };
 }
 
@@ -484,6 +489,7 @@ export default function SeedlingRequestsPage() {
   const [requests, setRequests] = useState([]);
   const [archivedRequests, setArchivedRequests] = useState([]);
   const [loadingRequests, setLoadingRequests] = useState(true);
+  const [loadError, setLoadError] = useState("");
   const [requestError, setRequestError] = useState("");
   const [actionLoading, setActionLoading] = useState(false);
   const [decisionModal, setDecisionModal] = useState(null);
@@ -493,6 +499,11 @@ export default function SeedlingRequestsPage() {
   const [reviewModal, setReviewModal] = useState(null);
   const [reviewFindings, setReviewFindings] = useState("");
   const [reviewError, setReviewError] = useState("");
+  const [releaseModal, setReleaseModal] = useState(null);
+  const [releaseInventory, setReleaseInventory] = useState([]);
+  const [releaseEntries, setReleaseEntries] = useState([]);
+  const [releaseLoading, setReleaseLoading] = useState(false);
+  const [releaseError, setReleaseError] = useState("");
 
   const [plantingSites, setPlantingSites] = useState([]);
   const [loadingSites, setLoadingSites] = useState(false);
@@ -586,7 +597,7 @@ export default function SeedlingRequestsPage() {
   }
 
   setLoadingRequests(true);
-  setRequestError("");
+  setLoadError("");
 
   try {
     const data = await apiRequest("/seedling-requests");
@@ -596,9 +607,7 @@ export default function SeedlingRequestsPage() {
   } catch (error) {
     console.error("Failed to load seedling requests:", error);
 
-    setRequestError(
-      error.message || "Unable to load seedling requests."
-    );
+    setLoadError("Unable to load seedling requests. Please try again.");
   } finally {
     setLoadingRequests(false);
   }
@@ -1124,23 +1133,91 @@ useEffect(() => {
     }
   };
 
-  const releaseRequest = async (request) => {
+  const releaseRequest = async (request, items) => {
     setActionLoading(true);
     setRequestError("");
 
     try {
       const updated = await apiRequest(
         `/seedling-requests/${request.id}/release`,
-        { method: "PATCH" }
+        { method: "PATCH", body: JSON.stringify({ items }) }
       );
 
       refreshSelectedRequest(updated);
       setSuccessMessage(`${request.id} was released successfully.`);
+      return true;
     } catch (error) {
       console.error(error);
       setRequestError(error.message || "Unable to release the request.");
+      setReleaseError(error.message || "Unable to release the request.");
+      return false;
     } finally {
       setActionLoading(false);
+    }
+  };
+
+  const openReleaseModal = async (request) => {
+    if (userRole !== "staff" || request.status !== "Approved") return;
+    setReleaseModal(request);
+    setReleaseInventory([]);
+    setReleaseEntries((request.trees || []).map(() => ({ quantity: "", reason: "" })));
+    setReleaseError("");
+    setReleaseLoading(true);
+    try {
+      const inventory = await apiRequest("/inventory");
+      if (!Array.isArray(inventory)) throw new Error("Inventory is unavailable.");
+      setReleaseInventory(inventory);
+    } catch (error) {
+      console.error("Unable to load inventory for release:", error);
+      setReleaseError("Unable to load current stock. Please close and try again.");
+    } finally {
+      setReleaseLoading(false);
+    }
+  };
+
+  const confirmRelease = async () => {
+    if (!releaseModal || releaseLoading || actionLoading) return;
+    const trees = releaseModal.trees || [];
+    if (!trees.length || releaseInventory.length === 0) {
+      setReleaseError("Current stock is required before release.");
+      return;
+    }
+    for (let index = 0; index < trees.length; index += 1) {
+      const tree = trees[index];
+      const quantity = Number(releaseEntries[index]?.quantity);
+      const rawQuantity = releaseEntries[index]?.quantity;
+      const requested = Number(tree.quantity);
+      const stock = releaseInventory.find((item) => item.id === tree.inventoryId);
+      const available = Number(stock?.availableQuantity) + (releaseModal.inventoryReserved === true ? Number(stock?.reservedQuantity || 0) : 0);
+      if (rawQuantity === "" || !Number.isInteger(quantity) || quantity <= 0 || quantity > requested) {
+        setReleaseError(`Enter a released quantity for ${tree.treeName} greater than zero and no more than requested.`);
+        return;
+      }
+      if (!stock || !Number.isFinite(available)) {
+        setReleaseError(`Current inventory for ${tree.treeName} is unavailable. Please try again.`);
+        return;
+      }
+      if (quantity > available) {
+        setReleaseError(`Released quantity for ${tree.treeName} cannot exceed the available inventory.`);
+        return;
+      }
+      if (quantity < requested) {
+        if (!releaseEntries[index]?.reason?.trim()) {
+          setReleaseError(`Enter the actual short-release reason for ${tree.treeName}.`);
+          return;
+        }
+      }
+    }
+    setReleaseError("");
+    const items = trees.map((tree, index) => ({
+      inventoryId: tree.inventoryId,
+      releasedQuantity: Number(releaseEntries[index].quantity),
+      shortReleaseReason: Number(releaseEntries[index].quantity) < Number(tree.quantity)
+        ? releaseEntries[index].reason.trim() : "",
+    }));
+    if (await releaseRequest(releaseModal, items)) {
+      setReleaseModal(null);
+      void loadRequests();
     }
   };
 
@@ -1446,6 +1523,14 @@ useEffect(() => {
     />
   );
 }
+
+  if (loadingRequests) {
+    return <div className="seedling-requests-page"><div style={{ minHeight: "420px", display: "grid", placeItems: "center", color: "#526159", fontSize: "13px", fontWeight: 600 }}>Loading seedling requests...</div></div>;
+  }
+
+  if (loadError) {
+    return <div className="seedling-requests-page"><div role="alert" style={{ minHeight: "420px", display: "grid", placeContent: "center", justifyItems: "center", gap: "14px", color: "#526159", fontSize: "13px", fontWeight: 600 }}><span>{loadError}</span><button type="button" className="sr-secondary-btn" onClick={loadRequests}>Retry</button></div></div>;
+  }
 
   return (
     <div className="seedling-requests-page">
@@ -2042,19 +2127,6 @@ useEffect(() => {
       <Eye size={15} />
     </button>
 
-    {/* STAFF - REVIEW REQUEST */}
-    {userRole === "staff" &&
-      request.status === "Pending Review" && (
-        <button
-          type="button"
-          className="sr-approve-btn"
-          onClick={() => openReviewModal(request)}
-          disabled={actionLoading}
-        >
-          Review
-        </button>
-      )}
-
     {/* ADMIN - APPROVE OR REJECT REVIEWED REQUEST */}
     {userRole === "admin" &&
       request.status === "Reviewed" && (
@@ -2079,18 +2151,6 @@ useEffect(() => {
         </>
       )}
 
-    {/* STAFF - RELEASE APPROVED REQUEST */}
-    {userRole === "staff" &&
-      request.status === "Approved" && (
-        <button
-          type="button"
-          className="sr-approve-btn"
-          onClick={() => releaseRequest(request)}
-          disabled={actionLoading}
-        >
-          Release
-        </button>
-      )}
   </div>
 </td>
                   </tr>
@@ -2213,6 +2273,63 @@ useEffect(() => {
         onClose={closeReviewModal}
         onSubmit={submitReview}
       />
+
+      {releaseModal && createPortal(
+        <div className="sr-modal-backdrop sr-review-backdrop" onMouseDown={(event) => {
+          if (event.target === event.currentTarget && !actionLoading) setReleaseModal(null);
+        }}>
+          <div className="sr-modal sr-decision-modal" role="dialog" aria-modal="true" aria-label="Release seedlings">
+            <div className="sr-modal-header">
+              <div><h2>Release Seedlings</h2><p>Confirm actual quantities against current inventory.</p></div>
+              <button type="button" className="sr-modal-close" onClick={() => setReleaseModal(null)} disabled={actionLoading} aria-label="Close"><X size={18} /></button>
+            </div>
+            <div className="sr-modal-body">
+              <div className="sr-details-grid">
+                <DetailItem label="Request No." value={releaseModal.id} />
+                <DetailItem label="Requester" value={releaseModal.requesterName} />
+                <DetailItem label="Organization / Barangay" value={releaseModal.organization || releaseModal.eventBarangay} />
+                <DetailItem label="Planting Site" value={releaseModal.plantingSiteName} />
+                <DetailItem label="Proposed Event" value={releaseModal.eventName} fullWidth />
+              </div>
+              {releaseLoading ? <p>Loading current inventory...</p> : (releaseModal.trees || []).map((tree, index) => {
+                const stock = releaseInventory.find((item) => item.id === tree.inventoryId);
+                const entered = releaseEntries[index]?.quantity ?? "";
+                const available = stock && Number(stock.availableQuantity) + (releaseModal.inventoryReserved === true ? Number(stock.reservedQuantity || 0) : 0);
+                const difference = entered === "" ? null : Number(tree.quantity) - Number(entered);
+                return (
+                  <div className="sr-release-item" key={`${tree.inventoryId}-${index}`}>
+                    <h3>{tree.treeName}</h3>
+                    <div className="sr-details-grid">
+                      <DetailItem label="Requested" value={tree.quantity} />
+                      <DetailItem label="Current Available Stock" value={Number.isFinite(available) ? available : "Unavailable"} />
+                    </div>
+                    <label className="sr-form-field">
+                      <span>Actual Released Quantity *</span>
+                      <input type="number" min="1" step="1" max={Math.min(Number(tree.quantity), Number.isFinite(available) ? available : 0)} value={entered} onChange={(event) => setReleaseEntries((previous) => previous.map((entry, itemIndex) => itemIndex === index ? { ...entry, quantity: event.target.value } : entry))} placeholder="Enter actual quantity" />
+                    </label>
+                    {difference !== null && Number(entered) > 0 && Number.isFinite(difference) && (
+                      <div className="sr-release-calculation">Difference: {difference} · {difference === 0 ? "Complete Release" : "Partial Release"}</div>
+                    )}
+                    {difference > 0 && Number(entered) > 0 && (
+                      <label className="sr-form-field">
+                        <span>Reason for Short Release *</span>
+                        <textarea value={releaseEntries[index]?.reason || ""} onChange={(event) => setReleaseEntries((previous) => previous.map((entry, itemIndex) => itemIndex === index ? { ...entry, reason: event.target.value } : entry))} placeholder="Enter the actual reason" />
+                      </label>
+                    )}
+                  </div>
+                );
+              })}
+              {releaseError && <p className="sr-field-error" role="alert">{releaseError}</p>}
+            </div>
+            <div className="sr-modal-footer">
+              <button type="button" className="sr-secondary-btn" onClick={() => setReleaseModal(null)} disabled={actionLoading}>Cancel</button>
+              <button type="button" className="sr-approve-btn sr-large-action" onClick={confirmRelease} disabled={releaseLoading || actionLoading || releaseInventory.length === 0}>
+                {actionLoading ? "Releasing..." : "Confirm Release"}
+              </button>
+            </div>
+          </div>
+        </div>, document.body
+      )}
 
       <AdminDecisionModal
         modal={decisionModal}
@@ -2605,6 +2722,20 @@ useEffect(() => {
                 </div>
               </div>
 
+              {Array.isArray(selectedRequest.releasedItems) && selectedRequest.releasedItems.length > 0 && (
+                <div className="sr-detail-seedlings">
+                  <h3>Recorded Seedling Release</h3>
+                  {selectedRequest.releasedItems.map((item, index) => (
+                    <div className="sr-detail-tree-row" key={`${item.inventoryId}-${index}-released`}>
+                      <span>{item.species} — {item.releasedQuantity} released of {item.requestedQuantity} requested; difference {item.difference}</span>
+                      {item.shortReleaseReason && <span>{item.shortReleaseReason}</span>}
+                    </div>
+                  ))}
+                  {selectedRequest.releasedBy && <div className="sr-detail-tree-row"><span>Released By</span><strong>{selectedRequest.releasedBy}</strong></div>}
+                  {selectedRequest.releasedAt && <div className="sr-detail-tree-row"><span>Released At</span><strong>{formatDate(selectedRequest.releasedAt)}</strong></div>}
+                </div>
+              )}
+
               {selectedRequest.eventDescription && (
                 <div className="sr-detail-remarks">
                   <span>Event Description</span>
@@ -2686,7 +2817,7 @@ useEffect(() => {
                     <button
                       type="button"
                       className="sr-approve-btn sr-large-action"
-                      onClick={() => releaseRequest(selectedRequest)}
+                      onClick={() => openReleaseModal(selectedRequest)}
                       disabled={actionLoading}
                     >
                       Release Seedlings
@@ -3603,8 +3734,8 @@ function ReviewRequestModal({
 }) {
   if (!modal) return null;
 
-  return (
-    <div className="sr-modal-backdrop" onMouseDown={onClose}>
+  return createPortal(
+    <div className="sr-modal-backdrop sr-review-backdrop" onMouseDown={onClose}>
       <div
         className="sr-modal sr-decision-modal"
         onMouseDown={(event) => event.stopPropagation()}
@@ -3678,7 +3809,8 @@ function ReviewRequestModal({
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 
@@ -3873,18 +4005,19 @@ function ParticipantSeedlingRequest({ currentUser }) {
   const [successMessage, setSuccessMessage] = useState("");
   const [apiError, setApiError] = useState("");
   const [availableInventory, setAvailableInventory] = useState([]);
-  const [myRequests, setMyRequests] = useState([]);
-  const [selectedMyRequest, setSelectedMyRequest] = useState(null);
   const [loadingParticipantData, setLoadingParticipantData] = useState(true);
+  const [participantLoadError, setParticipantLoadError] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [plantingSites, setPlantingSites] = useState([]);
   const [loadingSites, setLoadingSites] = useState(false);
+  const [sitesError, setSitesError] = useState("");
 
   useEffect(() => {
     let cancelled = false;
 
     async function loadPlantingSites() {
       setLoadingSites(true);
+      setSitesError("");
 
       try {
         const data = await apiRequest("/sites");
@@ -3892,7 +4025,9 @@ function ParticipantSeedlingRequest({ currentUser }) {
           ? data
           : Array.isArray(data?.data)
             ? data.data
-            : [];
+            : null;
+
+        if (!list) throw new Error("Invalid planting site response.");
 
         if (!cancelled) {
           setPlantingSites(list);
@@ -3901,7 +4036,7 @@ function ParticipantSeedlingRequest({ currentUser }) {
         console.error("Failed to load planting sites:", error);
 
         if (!cancelled) {
-          setPlantingSites([]);
+          setSitesError(error.message || "Unable to load planting sites.");
         }
       } finally {
         if (!cancelled) {
@@ -3919,13 +4054,10 @@ function ParticipantSeedlingRequest({ currentUser }) {
 
   const loadParticipantData = useCallback(async () => {
   setLoadingParticipantData(true);
-  setApiError("");
+  setParticipantLoadError("");
 
   try {
-    const [inventoryData, requestData] = await Promise.all([
-      apiRequest("/inventory/available"),
-      apiRequest("/seedling-requests/my"),
-    ]);
+    const inventoryData = await apiRequest("/inventory/available");
 
     const inventoryList = (
       Array.isArray(inventoryData) ? inventoryData : []
@@ -3940,32 +4072,14 @@ function ParticipantSeedlingRequest({ currentUser }) {
         )
       );
 
-    const requestList = (
-      Array.isArray(requestData) ? requestData : []
-    )
-      .map(normalizeRequestForUi)
-      .sort((a, b) => {
-        const aTime =
-          toDateValue(a.requestDate)?.getTime() || 0;
-
-        const bTime =
-          toDateValue(b.requestDate)?.getTime() || 0;
-
-        return bTime - aTime;
-      });
-
     setAvailableInventory(inventoryList);
-    setMyRequests(requestList);
   } catch (error) {
     console.error(
       "Failed to load participant seedling request data:",
       error
     );
 
-    setApiError(
-      error.message ||
-        "Unable to load your seedling request data."
-    );
+    setParticipantLoadError("Unable to load available seedlings. Please try again.");
   } finally {
     setLoadingParticipantData(false);
   }
@@ -3980,7 +4094,8 @@ useEffect(() => {
 
   const plantingSitesForBarangay = plantingSites.filter(
     (site) =>
-      site.barangay === form.eventBarangay
+      String(site.barangay || "").trim().toLocaleLowerCase() ===
+      String(form.eventBarangay || "").trim().toLocaleLowerCase()
   );
 
   const selectedPlantingSite =
@@ -4261,7 +4376,7 @@ useEffect(() => {
     const selectedSite =
       plantingSites.find((site) => site.id === form.plantingSite) || null;
 
-    if (!selectedSite) {
+    if (!selectedSite || !plantingSitesForBarangay.some((site) => site.id === selectedSite.id)) {
       setFormErrors((previous) => ({
         ...previous,
         plantingSite: "A registered planting site is required.",
@@ -4329,6 +4444,14 @@ useEffect(() => {
       setSubmitting(false);
     }
   };
+
+  if (loadingParticipantData) {
+    return <div className="seedling-requests-page participant-seedling-page"><div style={{ minHeight: "420px", display: "grid", placeItems: "center", color: "#526159", fontSize: "13px", fontWeight: 600 }}>Loading available seedlings...</div></div>;
+  }
+
+  if (participantLoadError) {
+    return <div className="seedling-requests-page participant-seedling-page"><div role="alert" style={{ minHeight: "420px", display: "grid", placeContent: "center", justifyItems: "center", gap: "14px", color: "#526159", fontSize: "13px", fontWeight: 600 }}><span>{participantLoadError}</span><button type="button" className="sr-secondary-btn" onClick={loadParticipantData}>Retry</button></div></div>;
+  }
 
   return (
     <div className="seedling-requests-page participant-seedling-page">
@@ -4700,7 +4823,7 @@ useEffect(() => {
                     )
                   }
                   disabled={
-                    !form.eventBarangay || loadingSites
+                    !form.eventBarangay || loadingSites || Boolean(sitesError)
                   }
                 >
                   <option value="">
@@ -4708,6 +4831,8 @@ useEffect(() => {
                       ? "Select barangay first"
                       : loadingSites
                         ? "Loading planting sites..."
+                        : sitesError
+                          ? "Planting sites unavailable"
                         : plantingSitesForBarangay.length > 0
                           ? "Select planting site"
                           : "No registered planting site yet"}
@@ -4725,6 +4850,7 @@ useEffect(() => {
                     )
                   )}
                 </select>
+                {sitesError && <small className="sr-field-hint" role="alert">{sitesError}</small>}
                 {form.eventBarangay &&
                   plantingSitesForBarangay.some(isPlantingSiteFull) && (
                     <small className="sr-field-hint">
@@ -4914,150 +5040,6 @@ useEffect(() => {
           </div>
         </form>
       </section>
-      <section className="sr-record-card participant-my-requests">
-        <div className="participant-form-header">
-          <h2>My Seedling Requests</h2>
-          <p>View the current status and MENRO decision for your submitted requests.</p>
-        </div>
-
-        {loadingParticipantData ? (
-          <div className="sr-api-loading">Loading your requests...</div>
-        ) : myRequests.length === 0 ? (
-          <div className="sr-empty-state sr-participant-empty">
-            <ClipboardList size={32} strokeWidth={1.5} />
-            <h2>No requests yet</h2>
-            <p>Your submitted seedling requests will appear here.</p>
-          </div>
-        ) : (
-          <div className="sr-table-scroll">
-            <table className="sr-table sr-participant-request-table">
-              <thead>
-                <tr>
-                  <th>Request</th>
-                  <th>Seedlings</th>
-                  <th>Planting Event</th>
-                  <th>Status</th>
-                  <th>Submitted</th>
-                  <th>Action</th>
-                </tr>
-              </thead>
-              <tbody>
-                {myRequests.map((request) => (
-                  <tr key={request.id}>
-                    <td className="sr-request-id">{request.id}</td>
-                    <td>
-                      <div className="sr-tree-list">
-                        {(request.trees || []).map((tree) => (
-                          <span key={`${request.id}-${tree.inventoryId}-${tree.treeName}`}>
-                            {tree.treeName} ({tree.quantity})
-                          </span>
-                        ))}
-                      </div>
-                    </td>
-                    <td>
-                      <div className="sr-primary-text">{request.eventName || "—"}</div>
-                      <div className="sr-secondary-text">{request.eventBarangay || "—"}</div>
-                    </td>
-                    <td><StatusBadge status={request.status} /></td>
-                    <td>{formatDate(request.requestDate)}</td>
-                    <td>
-                      <button
-                        type="button"
-                        className="sr-view-btn"
-                        title="View request details"
-                        onClick={() => setSelectedMyRequest(request)}
-                      >
-                        <Eye size={15} />
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </section>
-
-      {selectedMyRequest && (
-        <div className="sr-modal-backdrop" onMouseDown={() => setSelectedMyRequest(null)}>
-          <div
-            className="sr-modal sr-details-modal"
-            onMouseDown={(event) => event.stopPropagation()}
-          >
-            <div className="sr-modal-header">
-              <div>
-                <span className="sr-detail-id">{selectedMyRequest.id}</span>
-                <h2>Seedling Request Details</h2>
-                <p>Submitted {formatDate(selectedMyRequest.requestDate)}</p>
-              </div>
-              <button
-                type="button"
-                className="sr-modal-close"
-                onClick={() => setSelectedMyRequest(null)}
-                aria-label="Close"
-              >
-                <X size={18} />
-              </button>
-            </div>
-
-            <div className="sr-modal-body">
-              <div className="sr-detail-status-line">
-                <StatusBadge status={selectedMyRequest.status} />
-              </div>
-
-              <div className="sr-details-grid">
-                <DetailItem label="Organization / Barangay" value={selectedMyRequest.organization || "—"} />
-                <DetailItem label="Contact Number" value={selectedMyRequest.contactNumber || "—"} />
-                <DetailItem label="Planting Event" value={selectedMyRequest.eventName || "—"} />
-                <DetailItem label="Barangay" value={selectedMyRequest.eventBarangay || "—"} />
-                <DetailItem label="Planting Site" value={selectedMyRequest.plantingSiteName || selectedMyRequest.plantingSiteLocation || "—"} />
-                <DetailItem label="Preferred Release Date" value={formatDate(selectedMyRequest.preferredReleaseDate)} />
-              </div>
-
-              <div className="sr-detail-seedlings">
-                <h3>Requested Seedlings</h3>
-                {(selectedMyRequest.trees || []).map((tree) => (
-                  <div
-                    className="sr-detail-tree-row"
-                    key={`${selectedMyRequest.id}-${tree.inventoryId}-${tree.treeName}`}
-                  >
-                    <span>{tree.treeName}</span>
-                    <strong>{tree.quantity}</strong>
-                  </div>
-                ))}
-                <div className="sr-detail-tree-total">
-                  <span>Total Requested</span>
-                  <strong>
-                    {(selectedMyRequest.trees || []).reduce(
-                      (sum, tree) => sum + Number(tree.quantity || 0),
-                      0
-                    )}
-                  </strong>
-                </div>
-              </div>
-
-              {hasStaffReviewData(selectedMyRequest) && (
-                <StaffReviewSection request={selectedMyRequest} />
-              )}
-
-              {(selectedMyRequest.status === "Approved" ||
-                selectedMyRequest.status === "Rejected") && (
-                <MenroDecisionSection request={selectedMyRequest} />
-              )}
-            </div>
-
-            <div className="sr-modal-footer">
-              <button
-                type="button"
-                className="sr-secondary-btn"
-                onClick={() => setSelectedMyRequest(null)}
-              >
-                Close
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
     </div>
   );

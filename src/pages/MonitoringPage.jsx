@@ -410,6 +410,8 @@ export default function MonitoringPage() {
   const [records, setRecords] = useState([]);
   const [plantingReports, setPlantingReports] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
+  const [retryKey, setRetryKey] = useState(0);
   const [actionLoading, setActionLoading] = useState(false);
 
   const [searchTerm, setSearchTerm] = useState("");
@@ -459,7 +461,7 @@ export default function MonitoringPage() {
 
     async function loadMonitoringData() {
       setLoading(true);
-      setFormError("");
+      setLoadError("");
 
       try {
         const monitoringPath =
@@ -521,10 +523,7 @@ export default function MonitoringPage() {
         if (!cancelled) {
           setRecords([]);
           setPlantingReports([]);
-          setFormError(
-            error.message ||
-              "Unable to load survival monitoring data."
-          );
+          setLoadError("Unable to load survival monitoring data. Please try again.");
         }
       } finally {
         if (!cancelled) {
@@ -538,7 +537,7 @@ export default function MonitoringPage() {
     return () => {
       cancelled = true;
     };
-  }, [isParticipant, userRole]);
+  }, [isParticipant, userRole, retryKey]);
 
   useEffect(() => {
     if (!toast) return undefined;
@@ -1368,39 +1367,13 @@ export default function MonitoringPage() {
   if (loading) {
     return (
       <div className="sm-page">
-        <div
-          style={{
-            minHeight: "520px",
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "center",
-            justifyContent: "center",
-            gap: "8px",
-            textAlign: "center",
-          }}
-        >
-          <FiRefreshCw
-            size={25}
-            style={{
-              animation:
-                "sm-monitoring-spin 1s linear infinite",
-            }}
-          />
-          <strong>
-            Loading survival monitoring...
-          </strong>
-          <span>
-            Collecting the latest monitoring records.
-          </span>
-          <style>
-            {`@keyframes sm-monitoring-spin {
-              from { transform: rotate(0deg); }
-              to { transform: rotate(360deg); }
-            }`}
-          </style>
-        </div>
+        <div style={{ minHeight: "420px", display: "grid", placeItems: "center", color: "#526159", fontSize: "13px", fontWeight: 600 }}>Loading survival monitoring...</div>
       </div>
     );
+  }
+
+  if (loadError) {
+    return <div className="sm-page"><div role="alert" style={{ minHeight: "420px", display: "grid", placeContent: "center", justifyItems: "center", gap: "14px", color: "#526159", fontSize: "13px", fontWeight: 600 }}><span>{loadError}</span><button type="button" className="sm-secondary-button" onClick={() => setRetryKey((key) => key + 1)}>Retry</button></div></div>;
   }
 
   return (

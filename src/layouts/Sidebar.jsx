@@ -1,5 +1,6 @@
 import { NavLink, useNavigate } from "react-router-dom";
 import {useState,} from "react";
+import { createPortal } from "react-dom";
 import {
   LayoutDashboard,
   ClipboardList,
@@ -434,7 +435,7 @@ export default function Sidebar({ isOpen, onClose }) {
         </button>
       </div>
 
-      {showLogoutConfirm && (
+      {showLogoutConfirm && createPortal(
   <div
     style={{
       position: "fixed",
@@ -461,11 +462,11 @@ export default function Sidebar({ isOpen, onClose }) {
       aria-labelledby="logout-title"
       aria-describedby="logout-description"
       style={{
-        width: "280px",
+        width: "360px",
         maxWidth: "calc(100vw - 32px)",
         background: "#ffffff",
         borderRadius: "10px",
-        padding: "18px",
+        padding: "22px",
         boxShadow:
           "0 12px 32px rgba(0, 0, 0, 0.16)",
       }}
@@ -474,7 +475,7 @@ export default function Sidebar({ isOpen, onClose }) {
         id="logout-title"
         style={{
           margin: "0 0 6px",
-          fontSize: "15px",
+          fontSize: "19px",
           lineHeight: "1.3",
           fontWeight: 700,
           color: "#1f2d25",
@@ -487,7 +488,7 @@ export default function Sidebar({ isOpen, onClose }) {
         id="logout-description"
         style={{
           margin: 0,
-          fontSize: "13px",
+          fontSize: "14px",
           lineHeight: "1.45",
           color: "#66736b",
         }}
@@ -500,7 +501,8 @@ export default function Sidebar({ isOpen, onClose }) {
           display: "flex",
           alignItems: "center",
           justifyContent: "flex-end",
-          gap: "8px",
+          gap: "10px",
+          flexWrap: "wrap",
           marginTop: "16px",
         }}
       >
@@ -511,15 +513,15 @@ export default function Sidebar({ isOpen, onClose }) {
             setShowLogoutConfirm(false)
           }
           style={{
-            width: "76px",
-            height: "34px",
-            padding: 0,
+            minWidth: "90px",
+            minHeight: "40px",
+            padding: "0 14px",
             margin: 0,
             border: "1px solid #d7dfda",
             borderRadius: "7px",
             background: "#ffffff",
             color: "#445149",
-            fontSize: "12px",
+            fontSize: "14px",
             lineHeight: 1,
             fontWeight: 600,
             cursor: loggingOut
@@ -529,7 +531,7 @@ export default function Sidebar({ isOpen, onClose }) {
             display: "inline-flex",
             alignItems: "center",
             justifyContent: "center",
-            flex: "0 0 76px",
+            flex: "0 0 auto",
           }}
         >
           Cancel
@@ -540,15 +542,15 @@ export default function Sidebar({ isOpen, onClose }) {
           onClick={handleLogout}
           disabled={loggingOut}
           style={{
-            width: loggingOut ? "100px" : "76px",
-            height: "34px",
-            padding: 0,
+            minWidth: "90px",
+            minHeight: "40px",
+            padding: "0 14px",
             margin: 0,
             border: "none",
             borderRadius: "7px",
             background: "#087443",
             color: "#ffffff",
-            fontSize: "12px",
+            fontSize: "14px",
             lineHeight: 1,
             fontWeight: 600,
             cursor: loggingOut
@@ -558,9 +560,7 @@ export default function Sidebar({ isOpen, onClose }) {
             display: "inline-flex",
             alignItems: "center",
             justifyContent: "center",
-            flex: loggingOut
-              ? "0 0 100px"
-              : "0 0 76px",
+            flex: "0 0 auto",
             whiteSpace: "nowrap",
           }}
         >
@@ -571,7 +571,7 @@ export default function Sidebar({ isOpen, onClose }) {
       </div>
     </div>
   </div>
-)}
+, document.body)}
 
     </aside>
   );

@@ -361,6 +361,17 @@
   gap: 16px;
 }
 
+.participant-dashboard-welcome {
+  grid-column: 1 / -1;
+  min-width: 0;
+  margin: 0;
+  color: #17211b;
+  font-size: 23px;
+  line-height: 1.3;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
 .participant-dashboard .dashboard-filter-row,
 .participant-dashboard .dashboard-kpi-grid,
 .participant-dashboard .dashboard-warning {

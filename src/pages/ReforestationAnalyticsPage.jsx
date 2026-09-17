@@ -338,8 +338,8 @@ export default function ReforestationAnalyticsPage() {
         setMonitoringRecords(monitoring);
         setPlantingSites(sites);
         setLoadError("");
-      } catch (error) {
-        if (!cancelled) setLoadError(error.message || "Unable to load analytics.");
+      } catch {
+        if (!cancelled) setLoadError("Unable to load analytics. Please try again.");
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -1010,6 +1010,14 @@ export default function ReforestationAnalyticsPage() {
     URL.revokeObjectURL(url);
   };
 
+  if (loading) {
+    return <div className="ra-page"><div style={{ minHeight: "420px", display: "grid", placeItems: "center", color: "#526159", fontSize: "13px", fontWeight: 600 }}>Loading analytics...</div></div>;
+  }
+
+  if (loadError) {
+    return <div className="ra-page"><div role="alert" style={{ minHeight: "420px", display: "grid", placeContent: "center", justifyItems: "center", gap: "14px", color: "#526159", fontSize: "13px", fontWeight: 600 }}><span>{loadError}</span><button type="button" className="ra-secondary-button" onClick={() => { setLoading(true); setRefreshKey((key) => key + 1); }}>Retry</button></div></div>;
+  }
+
   return (
     <div className="ra-page">
       {/* HEADER */}
@@ -1058,8 +1066,6 @@ export default function ReforestationAnalyticsPage() {
         </div>
       </div>
 
-      {loading && <p role="status">Loading analytics...</p>}
-      {loadError && <p role="alert">{loadError}</p>}
 
       {/* KPI CARDS */}
       <div className="ra-kpi-grid">

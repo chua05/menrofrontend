@@ -29,23 +29,45 @@ import {
   Clock,
 } from "lucide-react";
 
-import { useAuth } from "../context/AuthContext";
+import { auth } from "../firebase/config";
 import "../styles/my-requests.css";
 
-const STORAGE_KEY = "menro_seedling_requests";
+const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
 const BARANGAY_GEOJSON_URL = "/data/juban-barangays.geojson";
 const PAGE_SIZE = 10;
 
-function getStoredRequests() {
-  try {
-    const stored = localStorage.getItem(STORAGE_KEY);
-    if (!stored) return [];
-    const parsed = JSON.parse(stored);
-    return Array.isArray(parsed) ? parsed : [];
-  } catch (error) {
-    console.error("Unable to read seedling requests:", error);
-    return [];
-  }
+function requestTimestamp(value) {
+  if (!value) return "";
+  const seconds = value?.seconds ?? value?._seconds;
+  if (Number.isFinite(Number(seconds))) return new Date(Number(seconds) * 1000).toISOString();
+  return value;
+}
+
+function normalizeMyRequest(request) {
+  const proposal = request.eventProposal || {};
+  return {
+    ...request,
+    status: request.status === "Pending" ? "Pending Review" : request.status,
+    trees: Array.isArray(request.items) && request.items.length > 0
+      ? request.items
+      : Array.isArray(request.trees) ? request.trees
+        : request.inventoryId ? [{ inventoryId: request.inventoryId, species: request.species, quantity: request.quantity }] : [],
+    requesterName: request.participantName || request.requesterName,
+    organization: request.organization || request.participantOrganization,
+    contactNumber: request.contactNumber || request.participantContactNumber,
+    eventName: proposal.eventName || request.eventName,
+    eventBarangay: proposal.barangay || request.eventBarangay,
+    plantingSiteName: proposal.plantingSiteName || request.plantingSiteName,
+    plantingSiteLatitude: proposal.latitude ?? request.plantingSiteLatitude,
+    plantingSiteLongitude: proposal.longitude ?? request.plantingSiteLongitude,
+    proposedDate: proposal.proposedDate || request.proposedDate,
+    startTime: proposal.proposedStartTime || proposal.startTime || request.startTime,
+    endTime: proposal.proposedEndTime || proposal.endTime || request.endTime,
+    expectedParticipants: proposal.expectedParticipants ?? request.expectedParticipants,
+    eventLocation: proposal.eventLocation || request.eventLocation,
+    eventDescription: proposal.description || proposal.eventDescription || request.eventDescription,
+    requestDate: requestTimestamp(request.createdAt || request.submittedAt || request.requestDate),
+  };
 }
 
 function formatDate(value) {
@@ -199,7 +221,7 @@ function getExpectedParticipants(request) {
 }
 
 function getSubmittedDate(request) {
-  return (
+  return requestTimestamp(
     request?.createdAt ||
     request?.requestDate ||
     request?.dateSubmitted ||
@@ -216,6 +238,7 @@ function StatusBadge({ status }) {
     "Under Review": "myr-status myr-status-under-review",
     Reviewed: "myr-status myr-status-reviewed",
     Approved: "myr-status myr-status-approved",
+    Released: "myr-status myr-status-approved",
     Rejected: "myr-status myr-status-rejected",
   };
 
@@ -719,46 +742,58 @@ function MyRequestLocationPreview({ request }) {
 
 export default function MyRequestsPage() {
   const navigate = useNavigate();
-  const { currentUser } = useAuth();
 
   const [requests, setRequests] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
+  const [retryKey, setRetryKey] = useState(0);
   const [selectedRequest, setSelectedRequest] = useState(null);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
+  const [invitationFeedback, setInvitationFeedback] = useState("");
+  const [invitationToken, setInvitationToken] = useState("");
+  const [invitationError, setInvitationError] = useState("");
+  const [linkedEvent, setLinkedEvent] = useState(null);
   const [currentPage, setCurrentPage] = useState(1);
 
   useEffect(() => {
-    const loadRequests = () => {
-      setRequests(getStoredRequests());
-    };
+    let cancelled = false;
+    async function loadRequests() {
+      setLoading(true);
+      setLoadError("");
+      try {
+        if (typeof auth.authStateReady === "function") await auth.authStateReady();
+        const token = await auth.currentUser?.getIdToken();
+        if (!token) throw new Error("Your session has expired. Please sign in again.");
+        const response = await fetch(`${API_BASE_URL}/seedling-requests/my`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const payload = await response.json().catch(() => null);
+        if (!response.ok) throw new Error(payload?.message || "Unable to load your requests.");
+        const data = payload?.data ?? payload;
+        if (!Array.isArray(data)) throw new Error("Invalid request response.");
+        if (!cancelled) setRequests(data.map(normalizeMyRequest));
+      } catch (error) {
+        console.error("Unable to load your seedling requests:", error);
+        if (!cancelled) setLoadError(error.message === "Your session has expired. Please sign in again."
+          ? error.message : "Unable to load your seedling requests. Please try again.");
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+    void loadRequests();
+    return () => { cancelled = true; };
+  }, [retryKey]);
 
-    loadRequests();
-    window.addEventListener("storage", loadRequests);
-
-    return () => {
-      window.removeEventListener("storage", loadRequests);
-    };
-  }, []);
-
-  const participantId =
-    currentUser?.uid || currentUser?.id || currentUser?.email || "";
 
   const participantRequests = useMemo(() => {
-    if (!participantId) return [];
-
     return requests
-      .filter((request) => {
-        return (
-          request?.participantId === participantId ||
-          request?.createdByUid === participantId ||
-          request?.userId === participantId
-        );
-      })
+      .slice()
       .sort((a, b) => {
         const dateA = new Date(getSubmittedDate(a) || 0).getTime();
         const dateB = new Date(getSubmittedDate(b) || 0).getTime();
         return dateB - dateA;
       });
-  }, [requests, participantId]);
+  }, [requests]);
 
   const counts = useMemo(() => {
     return {
@@ -809,6 +844,9 @@ export default function MyRequestsPage() {
   };
 
   const handleViewRequest = (request) => {
+    setInvitationToken("");
+    setInvitationError("");
+    setLinkedEvent(null);
     setSelectedRequest(request);
     setShowDetailsModal(true);
   };
@@ -816,7 +854,88 @@ export default function MyRequestsPage() {
   const handleCloseDetails = () => {
     setShowDetailsModal(false);
     setSelectedRequest(null);
+    setInvitationFeedback("");
   };
+
+  useEffect(() => {
+    if (!showDetailsModal || !selectedRequest?.eventId) return;
+    let cancelled = false;
+    async function loadLinkedEvent() {
+      try {
+        const token = await auth.currentUser?.getIdToken();
+        if (!token) return;
+        const response = await fetch(`${API_BASE_URL}/events/${encodeURIComponent(selectedRequest.eventId)}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const payload = await response.json().catch(() => null);
+        if (response.ok && !cancelled) setLinkedEvent(payload?.data || null);
+      } catch {
+        // The proposal remains visible when the linked event cannot be loaded.
+      }
+    }
+    void loadLinkedEvent();
+    return () => { cancelled = true; };
+  }, [showDetailsModal, selectedRequest?.eventId]);
+
+  useEffect(() => {
+    const eventId = selectedRequest?.eventId;
+    const eligible = showDetailsModal && ["Approved", "Released"].includes(selectedRequest?.status) &&
+      Number(selectedRequest?.expectedParticipants) > 0 && eventId;
+    if (!eligible) return;
+    let cancelled = false;
+    async function loadInvitation() {
+      try {
+        const token = await auth.currentUser?.getIdToken();
+        if (!token) throw new Error("Your session has expired.");
+        const response = await fetch(`${API_BASE_URL}/guest-events/invitation/${encodeURIComponent(eventId)}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const payload = await response.json().catch(() => null);
+        if (!response.ok) throw new Error(payload?.message || "Invitation link is not available.");
+        if (!cancelled && typeof payload?.data?.token === "string") setInvitationToken(payload.data.token);
+      } catch (error) {
+        if (!cancelled) setInvitationError(error.message || "Invitation link is not available.");
+      }
+    }
+    void loadInvitation();
+    return () => { cancelled = true; };
+  }, [showDetailsModal, selectedRequest?.eventId, selectedRequest?.status, selectedRequest?.expectedParticipants]);
+
+  const invitationUrl = (() => {
+    if (!["Approved", "Released"].includes(selectedRequest?.status) ||
+        Number(selectedRequest.expectedParticipants) <= 0 ||
+        !invitationToken) return "";
+    return `${window.location.origin}/join-event/${encodeURIComponent(invitationToken)}`;
+  })();
+
+  const copyInvitation = async () => {
+    try {
+      await navigator.clipboard.writeText(invitationUrl);
+      setInvitationFeedback("Event link copied.");
+    } catch {
+      setInvitationFeedback("Unable to copy the event link. Please try again.");
+    }
+  };
+
+  const shareInvitation = async () => {
+    if (navigator.share) {
+      try {
+        await navigator.share({ url: invitationUrl });
+      } catch (error) {
+        if (error.name !== "AbortError") setInvitationFeedback("Unable to share the event link.");
+      }
+    } else {
+      await copyInvitation();
+    }
+  };
+
+  if (loading) {
+    return <div className="myr-page"><div style={{ minHeight: "420px", display: "grid", placeItems: "center", color: "#526159", fontSize: "13px", fontWeight: 600 }}>Loading your requests...</div></div>;
+  }
+
+  if (loadError) {
+    return <div className="myr-page"><div role="alert" style={{ minHeight: "420px", display: "grid", placeContent: "center", justifyItems: "center", gap: "14px", color: "#526159", fontSize: "13px", fontWeight: 600 }}><span>{loadError}</span><button type="button" className="myr-request-button" onClick={() => setRetryKey((key) => key + 1)}>Retry</button></div></div>;
+  }
 
   return (
     <div className="myr-page">
@@ -1333,6 +1452,70 @@ export default function MyRequestsPage() {
                     {selectedRequest.reviewRemarks || selectedRequest.remarks}
                   </div>
                 </section>
+              )}
+
+              {(["Approved", "Released", "Rejected"].includes(selectedRequest.status)) && (
+                <section className="myr-detail-section">
+                  <div className="myr-section-title"><FileText size={18} /><div><h3>MENRO Decision</h3><p>Decision information recorded by MENRO.</p></div></div>
+                  <div className="myr-form-grid">
+                    <div className="myr-readonly-field"><label>Decision Date</label><div><CalendarDays size={16} /><span>{formatDateTime(requestTimestamp(selectedRequest.decisionAt || selectedRequest.approvedAt || selectedRequest.rejectedAt))}</span></div></div>
+                    {selectedRequest.status === "Rejected" && (
+                      <div className="myr-readonly-field myr-field-full"><label>Reason for Rejection</label><div><FileText size={16} /><span>{selectedRequest.decisionReason || selectedRequest.reason || selectedRequest.rejectionReason || "—"}</span></div></div>
+                    )}
+                  </div>
+                </section>
+              )}
+
+              {(["Approved", "Released"].includes(selectedRequest.status)) && (
+                linkedEvent && <section className="myr-detail-section">
+                  <div className="myr-section-title"><CalendarDays size={18} /><div><h3>Scheduled Event</h3><p>Details from the linked planting event.</p></div></div>
+                  <div className="myr-form-grid">
+                    <div className="myr-readonly-field"><label>Event</label><div><span>{linkedEvent.name}</span></div></div>
+                    <div className="myr-readonly-field"><label>Status</label><div><span>{linkedEvent.status}</span></div></div>
+                    <div className="myr-readonly-field"><label>Schedule</label><div><span>{linkedEvent.date} {linkedEvent.startTime}–{linkedEvent.endTime}</span></div></div>
+                    <div className="myr-readonly-field"><label>Planting Site</label><div><span>{linkedEvent.plantingSiteName || linkedEvent.location}</span></div></div>
+                  </div>
+                </section>
+              )}
+
+              {(["Approved", "Released"].includes(selectedRequest.status)) && (
+                <section className="myr-detail-section">
+                  <div className="myr-section-title"><Trees size={18} /><div><h3>Seedling Release</h3><p>Actual release details appear when MENRO records them.</p></div></div>
+                  {Array.isArray(selectedRequest.releasedItems) && selectedRequest.releasedItems.length > 0 ? (
+                    <div className="myr-seedling-list">
+                      {selectedRequest.releasedItems.map((item, index) => (
+                        <div className="myr-seedling-item" key={`${item.inventoryId || index}-release`}>
+                          <div><span>Seedling</span><strong>{item.species || item.treeName || "—"}</strong></div>
+                          <div><span>Released / Requested</span><strong>{item.releasedQuantity} / {item.requestedQuantity}</strong></div>
+                          {Number.isFinite(Number(item.requestedQuantity)) && Number.isFinite(Number(item.releasedQuantity)) && (
+                            <div><span>Difference</span><strong>{Number(item.requestedQuantity) - Number(item.releasedQuantity)}</strong></div>
+                          )}
+                          {item.shortReleaseReason && <div><span>Short-release reason</span><strong>{item.shortReleaseReason}</strong></div>}
+                        </div>
+                      ))}
+                    </div>
+                  ) : <p>Awaiting Seedling Release</p>}
+                  {(selectedRequest.releasedBy || selectedRequest.releasedAt) && (
+                    <div className="myr-form-grid">
+                      {selectedRequest.releasedBy && <div className="myr-readonly-field"><label>Released By</label><div><UserRound size={16} /><span>{selectedRequest.releasedBy}</span></div></div>}
+                      {selectedRequest.releasedAt && <div className="myr-readonly-field"><label>Released At</label><div><CalendarDays size={16} /><span>{formatDateTime(requestTimestamp(selectedRequest.releasedAt))}</span></div></div>}
+                    </div>
+                  )}
+                </section>
+              )}
+
+              {invitationUrl && (
+                <section className="myr-detail-section">
+                  <div className="myr-section-title"><Users size={18} /><div><h3>Guest Invitation</h3><p>Invite additional participants to this planting event.</p></div></div>
+                  <div className="myr-invitation-actions">
+                    <button type="button" className="myr-close-button" onClick={copyInvitation}>Copy Event Link</button>
+                    <button type="button" className="myr-close-button" onClick={shareInvitation}>Share</button>
+                  </div>
+                  {invitationFeedback && <p role="status">{invitationFeedback}</p>}
+                </section>
+              )}
+              {invitationError && Number(selectedRequest.expectedParticipants) > 0 && (
+                <p role="status">{invitationError}</p>
               )}
             </div>
 

@@ -142,6 +142,7 @@ export default function UsersPage() {
 
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
 
   const [search, setSearch] = useState("");
   const [roleFilter, setRoleFilter] = useState("");
@@ -212,7 +213,7 @@ export default function UsersPage() {
   const fetchUsers = async () => {
     try {
       setLoading(true);
-      setErrorMessage("");
+      setLoadError("");
 
       const token = await getFreshToken();
 
@@ -241,7 +242,9 @@ export default function UsersPage() {
     } catch (error) {
       console.error(error);
       setUsers([]);
-      setErrorMessage(error.message || "Failed to retrieve users.");
+      setLoadError(error.message === "Authentication token not found."
+        ? "Your session has expired. Please sign in again."
+        : "Unable to load registered users. Please try again.");
     } finally {
       setLoading(false);
     }
@@ -252,6 +255,7 @@ export default function UsersPage() {
 
   const loadUsers = async () => {
     try {
+      setLoadError("");
       const token = await getFreshToken();
 
       if (!token) {
@@ -290,9 +294,9 @@ export default function UsersPage() {
       if (cancelled) return;
 
       setUsers([]);
-      setErrorMessage(
-        error.message || "Failed to retrieve users."
-      );
+      setLoadError(error.message === "Authentication token not found."
+        ? "Your session has expired. Please sign in again."
+        : "Unable to load registered users. Please try again.");
       setLoading(false);
     }
   };
@@ -570,6 +574,14 @@ export default function UsersPage() {
       showError(error.message || "Failed to update user status.");
     }
   };
+
+  if (loading) {
+    return <div className="ru-page"><div style={{ minHeight: "420px", display: "grid", placeItems: "center", color: "#526159", fontSize: "13px", fontWeight: 600 }}>Loading users...</div></div>;
+  }
+
+  if (loadError) {
+    return <div className="ru-page"><div className="ru-empty-state" role="alert" style={{ minHeight: "420px" }}><h2>{loadError}</h2><button type="button" className="ru-secondary-btn" onClick={fetchUsers}>Retry</button></div></div>;
+  }
 
   return (
     <div className="ru-page">

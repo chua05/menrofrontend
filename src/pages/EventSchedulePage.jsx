@@ -19,7 +19,6 @@ import {
   XCircle,
   Activity,
   Leaf,
-  RefreshCw,
 } from "lucide-react";
 
 import { useAuth } from "../context/AuthContext";
@@ -313,6 +312,11 @@ export default function EventSchedulePage() {
 
   const [events, setEvents] =
     useState([]);
+  const [contributions, setContributions] = useState([]);
+  const [contributionItem, setContributionItem] = useState("");
+  const [contributionQuantity, setContributionQuantity] = useState("");
+  const [contributionError, setContributionError] = useState("");
+  const [contributionLoading, setContributionLoading] = useState(false);
 
   const [
     archivedEvents,
@@ -324,6 +328,7 @@ export default function EventSchedulePage() {
 
   const [loading, setLoading] =
     useState(true);
+  const [initialError, setInitialError] = useState("");
 
   const [
     actionLoading,
@@ -578,7 +583,7 @@ export default function EventSchedulePage() {
 
   async function loadInitialData() {
     setLoading(true);
-    setPageError("");
+    setInitialError("");
 
     try {
       await Promise.all([
@@ -594,9 +599,8 @@ export default function EventSchedulePage() {
         error
       );
 
-      setPageError(
-        error.message ||
-          "Unable to load event calendar data."
+      setInitialError(
+        "Unable to load event calendar data. Please try again."
       );
     } finally {
       setLoading(false);
@@ -1140,7 +1144,50 @@ export default function EventSchedulePage() {
   ) => {
     setSelectedEvent(event);
     setShowEventMenu(false);
+    setContributionItem("");
+    setContributionQuantity("");
+    setContributionError("");
+    setContributions([]);
+    if (userRole === "participant" && event?.id) {
+      void apiRequest(`/events/${encodeURIComponent(event.id)}/contributions/my`)
+        .then((response) => setContributions(Array.isArray(response.data) ? response.data : []))
+        .catch((error) => setContributionError(error.message));
+    }
   };
+
+  async function recordContribution(eventSubmit) {
+    eventSubmit.preventDefault();
+    if (!selectedEvent?.id || !contributionItem) return;
+    const quantity = Number(contributionQuantity);
+    if (!Number.isInteger(quantity) || quantity <= 0) {
+      setContributionError("Enter a positive whole-number quantity.");
+      return;
+    }
+    setContributionLoading(true);
+    setContributionError("");
+    try {
+      const id = encodeURIComponent(selectedEvent.id);
+      await apiRequest(`/events/${id}/join`, { method: "POST" });
+      await apiRequest(`/events/${id}/contributions`, {
+        method: "POST",
+        body: JSON.stringify({ inventoryId: contributionItem, quantity }),
+      });
+      const [eventResponse, ownResponse] = await Promise.all([
+        apiRequest(`/events/${id}`),
+        apiRequest(`/events/${id}/contributions/my`),
+      ]);
+      if (eventResponse.data) {
+        setSelectedEvent(eventResponse.data);
+        setEvents((previous) => previous.map((item) => item.id === selectedEvent.id ? eventResponse.data : item));
+      }
+      setContributions(Array.isArray(ownResponse.data) ? ownResponse.data : []);
+      setContributionQuantity("");
+    } catch (error) {
+      setContributionError(error.message || "Unable to record planting.");
+    } finally {
+      setContributionLoading(false);
+    }
+  }
 
   const openEditEvent = () => {
     if (!selectedEvent) {
@@ -1649,22 +1696,13 @@ export default function EventSchedulePage() {
   if (loading) {
     return (
       <div className="event-calendar-page">
-        <div className="dashboard-loading">
-          <RefreshCw
-            className="dashboard-loading-spin"
-            size={25}
-          />
-
-          <strong>
-            Loading events...
-          </strong>
-
-          <span>
-            Collecting the latest planting event records.
-          </span>
-        </div>
+        <div style={{ minHeight: "420px", display: "grid", placeItems: "center", color: "#526159", fontSize: "13px", fontWeight: 600 }}>Loading events...</div>
       </div>
     );
+  }
+
+  if (initialError) {
+    return <div className="event-calendar-page"><div role="alert" style={{ minHeight: "420px", display: "grid", placeContent: "center", justifyItems: "center", gap: "14px", color: "#526159", fontSize: "13px", fontWeight: 600 }}><span>{initialError}</span><button type="button" className="ec-secondary-btn" onClick={loadInitialData}>Retry</button></div></div>;
   }
 
   return (
@@ -2493,6 +2531,20 @@ export default function EventSchedulePage() {
                     />
                   )}
 
+                  {selectedEvent.sourceRequestId && selectedEvent.allocationReleasedAt &&
+                    Array.isArray(selectedEvent.seedlingItems) && selectedEvent.seedlingItems.map((item, index) => (
+                      <DetailItem
+                        key={`${item.inventoryId}-${index}`}
+                        icon={Sprout}
+                        label={`${item.species} Allocation`}
+                        value={item.quantity}
+                      />
+                    ))}
+
+                  {selectedEvent.sourceRequestId && !selectedEvent.allocationReleasedAt && (
+                    <DetailItem icon={Sprout} label="Event Allocation" value="Awaiting Seedling Release" />
+                  )}
+
                   <DetailItem
                     icon={Users}
                     label="Organizer / Created By"
@@ -2503,6 +2555,40 @@ export default function EventSchedulePage() {
                     fullWidth
                   />
                 </div>
+
+                {userRole === "participant" && selectedEvent.allocationReleasedAt &&
+                  Array.isArray(selectedEvent.seedlingItems) && selectedEvent.seedlingItems.length > 0 && (
+                    <div className="ec-detail-description">
+                      <h3>Record My Planting</h3>
+                      <p>Joining registers you for this event; it does not confirm physical attendance.</p>
+                      <form onSubmit={recordContribution}>
+                        <label className="ec-form-field full-width">
+                          <span>Seedling *</span>
+                          <select required value={contributionItem} onChange={(event) => setContributionItem(event.target.value)}>
+                            <option value="">Select allocated seedling</option>
+                            {selectedEvent.seedlingItems.map((item) => (
+                              <option key={item.inventoryId} value={item.inventoryId}>
+                                {item.species} — {Math.max(0, Number(item.quantity) - Number(selectedEvent.recordedSeedlingsByInventory?.[item.inventoryId] || 0))} remaining
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                        <label className="ec-form-field full-width">
+                          <span>Quantity planted *</span>
+                          <input type="number" min="1" step="1" required value={contributionQuantity}
+                            onChange={(event) => setContributionQuantity(event.target.value)} />
+                        </label>
+                        {contributionError && <p role="alert">{contributionError}</p>}
+                        <button className="ec-primary-btn" type="submit" disabled={contributionLoading}>
+                          {contributionLoading ? "Recording..." : "Join and Record Planting"}
+                        </button>
+                      </form>
+                      <h3>My Contributions</h3>
+                      {contributions.length ? <ul>{contributions.map((item) => (
+                        <li key={item.id}>{item.species}: {item.quantity}</li>
+                      ))}</ul> : <p>No planting contributions recorded yet.</p>}
+                    </div>
+                  )}
 
                 {selectedEvent.description && (
                   <div className="ec-detail-description">

@@ -1137,3 +1137,77 @@ button:disabled {
     width: 100%;
   }
 }
+
+/* Report details reuse the submit form's centered overlay and field styling. */
+.pr-drawer-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  padding: 22px;
+  background: rgba(16, 24, 20, 0.48);
+  backdrop-filter: blur(2px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.pr-report-drawer {
+  width: min(880px, 100%);
+  max-height: 92vh;
+  overflow-y: auto;
+  background: #fff;
+  border-radius: 15px;
+  box-shadow: 0 22px 70px rgba(0, 0, 0, 0.22);
+}
+
+.pr-drawer-header {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  padding: 20px 22px;
+  background: #fff;
+  border-bottom: 1px solid #e6ebe8;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.pr-drawer-title { margin: 0; color: #1e2923; font-size: 21px; line-height: 1.3; }
+.pr-drawer-heading-meta { display: flex; align-items: center; gap: 10px; margin-top: 8px; flex-wrap: wrap; }
+.pr-drawer-report-id, .pr-info-subvalue, .pr-history-meta { color: #6f7b74; font-size: 12px; }
+.pr-drawer-close { width: 40px; height: 40px; flex: 0 0 40px; display: grid; place-items: center; border: 1px solid #e0e5e2; border-radius: 8px; background: #fff; color: #69756e; cursor: pointer; }
+.pr-drawer-close:hover { background: #f7f9f8; }
+.pr-drawer-body { padding: 22px; }
+.pr-drawer-section { padding: 0 0 22px; margin-bottom: 22px; border-bottom: 1px solid #e6ebe8; }
+.pr-drawer-section-last { border-bottom: 0; margin-bottom: 0; padding-bottom: 0; }
+.pr-drawer-section-title { display: flex; align-items: center; gap: 8px; margin-bottom: 14px; color: #26352d; font-size: 15px; font-weight: 700; }
+.pr-info-grid, .pr-location-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.pr-info-block { min-width: 0; padding: 12px 14px; border: 1px solid #e7ebe8; border-radius: 9px; background: #f8faf9; }
+.pr-info-label { color: #6e7b73; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .035em; margin-bottom: 5px; }
+.pr-info-value { color: #334139; font-size: 14px; line-height: 1.55; overflow-wrap: anywhere; }
+.pr-drawer-note, .pr-drawer-verification-box { margin-top: 14px; padding: 14px; border: 1px solid #e2e7e4; border-radius: 9px; background: #fafbfa; }
+.pr-drawer-note-text { color: #334139; font-size: 14px; line-height: 1.6; white-space: pre-wrap; }
+.pr-drawer-photo-wrap { overflow: hidden; border-radius: 9px; border: 1px solid #e2e7e4; background: #f8faf9; }
+.pr-drawer-photo { width: 100%; height: 180px; object-fit: cover; display: block; }
+.pr-photo-caption-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; margin-top: 7px; }
+.pr-photo-caption { color: #6f7b74; font-size: 12px; }
+.pr-photo-view-button { border: 0; background: transparent; color: #17643a; cursor: pointer; display: inline-flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 700; }
+.pr-photo-unavailable { display: flex; gap: 12px; align-items: center; padding: 18px; color: #6f7b74; background: #f8faf9; border-radius: 9px; }
+.pr-photo-unavailable-title { color: #334139; font-weight: 700; }
+.pr-photo-unavailable-text { font-size: 13px; }
+.pr-drawer-verification-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 14px; }
+.pr-verification-issues { margin: 6px 0 0; padding-left: 18px; color: #854d0e; font-size: 13px; line-height: 1.6; }
+.pr-history { display: grid; gap: 14px; }
+.pr-history-item { display: flex; align-items: flex-start; gap: 11px; }
+.pr-history-marker { width: 25px; height: 25px; flex: 0 0 25px; border-radius: 50%; display: grid; place-items: center; background: #edf8f1; color: #17643a; }
+.pr-history-marker.is-rejected { background: #fff3f2; color: #b42318; }
+.pr-history-title { color: #334139; font-size: 14px; font-weight: 700; }
+.pr-decision-overlay { z-index: 2010; }
+
+@media (max-width: 640px) {
+  .pr-drawer-backdrop { padding: 12px; }
+  .pr-report-drawer { max-height: 96vh; }
+  .pr-drawer-header, .pr-drawer-body { padding: 16px; }
+  .pr-info-grid, .pr-location-grid { grid-template-columns: 1fr; }
+}

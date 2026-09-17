@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import L from "leaflet";
+import { auth } from "../firebase/config";
 
 import {
   FiActivity,
@@ -15,7 +16,7 @@ import {
 import "leaflet/dist/leaflet.css";
 import "../styles/map-visualization.css";
 
-const PLANTING_SITES_STORAGE_KEY = "menro_planting_sites";
+const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
 const PLANTING_REPORTS_STORAGE_KEY = "menro_planting_reports";
 const MONITORING_STORAGE_KEY = "menro_survival_monitoring";
 
@@ -185,24 +186,13 @@ function getSiteBarangay(site) {
 }
 
 function getSiteLatitude(site) {
-  return (
-    Number(site?.latitude) ||
-    Number(site?.lat) ||
-    Number(site?.coordinates?.lat) ||
-    Number(site?.location?.lat) ||
-    null
-  );
+  const value = site?.latitude ?? site?.lat ?? site?.coordinates?.lat ?? site?.location?.lat;
+  return value === null || value === undefined || value === "" ? null : Number(value);
 }
 
 function getSiteLongitude(site) {
-  return (
-    Number(site?.longitude) ||
-    Number(site?.lng) ||
-    Number(site?.lon) ||
-    Number(site?.coordinates?.lng) ||
-    Number(site?.location?.lng) ||
-    null
-  );
+  const value = site?.longitude ?? site?.lng ?? site?.lon ?? site?.coordinates?.lng ?? site?.location?.lng;
+  return value === null || value === undefined || value === "" ? null : Number(value);
 }
 
 function getSitePolygon(site) {
@@ -328,9 +318,9 @@ export default function MapVisualizationPage() {
   const barangayLayerRef = useRef(null);
   const siteLayerRef = useRef(null);
 
-  const [plantingSites, setPlantingSites] = useState(() =>
-    loadStorageArray(PLANTING_SITES_STORAGE_KEY)
-  );
+  const [plantingSites, setPlantingSites] = useState([]);
+  const [sitesLoading, setSitesLoading] = useState(true);
+  const [sitesError, setSitesError] = useState("");
 
   const [plantingReports, setPlantingReports] = useState(() =>
     loadStorageArray(PLANTING_REPORTS_STORAGE_KEY)
@@ -349,10 +339,26 @@ export default function MapVisualizationPage() {
 
   const [selectedSite, setSelectedSite] = useState(null);
 
-  const refreshData = () => {
-    setPlantingSites(
-      loadStorageArray(PLANTING_SITES_STORAGE_KEY)
-    );
+  const refreshData = async () => {
+    setSitesLoading(true);
+    setSitesError("");
+    try {
+      if (typeof auth.authStateReady === "function") await auth.authStateReady();
+      const token = await auth.currentUser?.getIdToken();
+      if (!token) throw new Error("Your session has expired. Please sign in again.");
+      const response = await fetch(`${API_BASE_URL}/sites`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const payload = await response.json().catch(() => null);
+      if (!response.ok) throw new Error(payload?.message || "Unable to load planting sites.");
+      if (!Array.isArray(payload?.data)) throw new Error("Invalid planting site response.");
+      setPlantingSites(payload.data);
+    } catch (error) {
+      console.error("Unable to load map planting sites:", error);
+      setSitesError(error.message || "Unable to load planting sites.");
+    } finally {
+      setSitesLoading(false);
+    }
 
     setPlantingReports(
       loadStorageArray(PLANTING_REPORTS_STORAGE_KEY)
@@ -362,6 +368,12 @@ export default function MapVisualizationPage() {
       loadStorageArray(MONITORING_STORAGE_KEY)
     );
   };
+
+  useEffect(() => {
+    // Initial backend synchronization; the same action powers Refresh Map.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void refreshData();
+  }, []);
 
   useEffect(() => {
     let isMounted = true;
@@ -1026,6 +1038,9 @@ export default function MapVisualizationPage() {
           </button>
         </div>
       </div>
+
+      {sitesLoading && <p role="status">Loading planting sites...</p>}
+      {sitesError && <p role="alert">{sitesError} Use Refresh Map to retry.</p>}
 
       <div className="mv-kpi-grid">
         <div className="mv-kpi-card">

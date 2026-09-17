@@ -16,6 +16,7 @@ import ProtectedRoute from "./routes/ProtectedRoute";
 
 import LoginPage from "./pages/LoginPage";
 import RegisterPage from "./pages/RegisterPage";
+import GuestEventPage from "./pages/GuestEventPage";
 
 /* =========================
    SHARED
@@ -71,6 +72,8 @@ function App() {
             path="/register"
             element={<RegisterPage />}
           />
+
+          <Route path="/join-event/:token" element={<GuestEventPage />} />
 
           {/* =========================
               ADMIN
