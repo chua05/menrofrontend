@@ -89,6 +89,12 @@ const VERIFICATION_CLASSES = {
   Rejected: "pr-status-rejected",
 };
 
+const TESTING_LOCATION_FLAGS = new Set([
+  "GPS_MISMATCH",
+  "GPS_METADATA_MISSING",
+  "OUTSIDE_REGISTERED_SITE",
+]);
+
 function displayReportStatus(status) {
   const normalized = String(status || "").trim().toLowerCase();
   if (normalized === "draft" || normalized === "pending") return "Pending";
@@ -975,8 +981,8 @@ export default function PlantingPage() {
     }
 
     return {
-      type: "flagged",
-      label: `Outside registered site tolerance (${capturedSiteDistance.toFixed(1)} m away). This submission will be flagged for review.`,
+      type: "warning",
+      label: `Captured location is ${capturedSiteDistance.toFixed(1)} m from the registered site. This does not block testing submission.`,
     };
   }, [form.siteId, hasGps, capturedSiteDistance]);
 
@@ -1195,7 +1201,7 @@ export default function PlantingPage() {
 
         if (error.code === error.PERMISSION_DENIED) {
           message =
-            "Location permission was denied. Allow location access before submitting a planting report.";
+            "Location permission was denied. You can still attach photo evidence during testing.";
         } else if (error.code === error.POSITION_UNAVAILABLE) {
           message =
             "Your GPS location is currently unavailable. Make sure location services are turned on.";
@@ -1575,6 +1581,17 @@ export default function PlantingPage() {
     canReview &&
     selectedRecord &&
     displayReportStatus(selectedRecord.verificationStatus) === "Pending Review";
+
+  const visibleVerificationIssues = Array.isArray(selectedRecord?.suspiciousFlags)
+    ? selectedRecord.suspiciousFlags.filter((issue) =>
+        !isParticipant || !TESTING_LOCATION_FLAGS.has(issue)
+      )
+    : [];
+  const participantLocationOnlyResult = isParticipant &&
+    selectedRecord?.automatedVerificationStatus === "Flagged" &&
+    Array.isArray(selectedRecord.suspiciousFlags) &&
+    selectedRecord.suspiciousFlags.length > 0 &&
+    visibleVerificationIssues.length === 0;
 
   if (loading) {
     return <div className="pr-page"><div style={{ minHeight: "420px", display: "grid", placeItems: "center", color: "#526159", fontSize: "13px", fontWeight: 600 }}>Loading planting reports...</div></div>;
@@ -2575,7 +2592,9 @@ export default function PlantingPage() {
 
                   <div className="pr-info-block">
                     <div className="pr-info-label">Automated Result</div>
-                    <div className="pr-info-value">{selectedRecord.automatedVerificationStatus || "—"}</div>
+                    <div className="pr-info-value">{participantLocationOnlyResult
+                      ? "Location findings are non-blocking during testing"
+                      : selectedRecord.automatedVerificationStatus || "—"}</div>
                   </div>
 
                   <div className="pr-info-block">
@@ -2601,12 +2620,11 @@ export default function PlantingPage() {
                   </div>
                 </div>
 
-                {Array.isArray(selectedRecord.suspiciousFlags) &&
-                  selectedRecord.suspiciousFlags.length > 0 && (
+                {visibleVerificationIssues.length > 0 && (
                     <div className="pr-drawer-note">
                       <div className="pr-info-label">Automated Verification Issues</div>
                       <ul className="pr-verification-issues">
-                        {selectedRecord.suspiciousFlags.map((issue, index) => (
+                        {visibleVerificationIssues.map((issue, index) => (
                           <li key={`${index}-${String(issue)}`}>{String(issue)}</li>
                         ))}
                       </ul>
