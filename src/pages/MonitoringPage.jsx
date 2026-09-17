@@ -472,7 +472,7 @@ export default function MonitoringPage() {
         ] = await Promise.all([
           apiRequest(monitoringPath),
           apiRequest(
-            "/planting-reports"
+            isParticipant ? "/planting-reports/my-reports" : "/planting-reports"
           ),
         ]);
 
@@ -1369,7 +1369,7 @@ export default function MonitoringPage() {
     );
   }
 
-  if (loadError) {
+  if (loadError && !isParticipant) {
     return <div className="sm-page"><div role="alert" style={{ minHeight: "420px", display: "grid", placeContent: "center", justifyItems: "center", gap: "14px", color: "#526159", fontSize: "13px", fontWeight: 600 }}><span>{loadError}</span><button type="button" className="sm-secondary-button" onClick={() => setRetryKey((key) => key + 1)}>Retry</button></div></div>;
   }
 
@@ -1421,6 +1421,10 @@ export default function MonitoringPage() {
         </div>
       </div>
 
+      {isParticipant && loadError && (
+        <p role="status">Monitoring data is unavailable right now. Refresh to try again.</p>
+      )}
+
       {/* KPI CARDS */}
       <div className="sm-kpi-grid">
         <div className="sm-kpi-card">
@@ -1429,7 +1433,7 @@ export default function MonitoringPage() {
           </div>
           <div>
             <div className="sm-kpi-label">Total Monitoring Records</div>
-            <div className="sm-kpi-value">{summary.totalRecords}</div>
+            <div className="sm-kpi-value">{loadError ? "—" : summary.totalRecords}</div>
             <div className="sm-kpi-note">Active records</div>
           </div>
         </div>
@@ -1440,7 +1444,7 @@ export default function MonitoringPage() {
           </div>
           <div>
             <div className="sm-kpi-label">Total Trees Monitored</div>
-            <div className="sm-kpi-value">{summary.totalTreesMonitored}</div>
+            <div className="sm-kpi-value">{loadError ? "—" : summary.totalTreesMonitored}</div>
             <div className="sm-kpi-note">From verified reports</div>
           </div>
         </div>
@@ -1451,7 +1455,7 @@ export default function MonitoringPage() {
           </div>
           <div>
             <div className="sm-kpi-label">Average Survival Rate</div>
-            <div className="sm-kpi-value">{summary.survivalRate}%</div>
+            <div className="sm-kpi-value">{loadError ? "—" : `${summary.survivalRate}%`}</div>
             <div className="sm-kpi-note">Across all records</div>
           </div>
         </div>
@@ -1462,7 +1466,7 @@ export default function MonitoringPage() {
           </div>
           <div>
             <div className="sm-kpi-label">Total Trees Lost</div>
-            <div className="sm-kpi-value">{summary.dead}</div>
+            <div className="sm-kpi-value">{loadError ? "—" : summary.dead}</div>
             <div className="sm-kpi-note">Dead trees recorded</div>
           </div>
         </div>
@@ -1881,13 +1885,17 @@ export default function MonitoringPage() {
               </div>
 
               <strong>
-                {visibleRecords.length === 0
+                {loadError
+                  ? "Monitoring data unavailable"
+                  : visibleRecords.length === 0
                   ? "No monitoring records yet"
                   : "No matching monitoring records"}
               </strong>
 
               <p>
-                {visibleRecords.length === 0
+                {loadError
+                  ? "Refresh the page to try loading your records again."
+                  : visibleRecords.length === 0
                   ? isParticipant
                     ? "Your monitoring records will appear here after you submit updates for verified planting reports."
                     : "Survival monitoring records will appear here once participants submit updates for verified planting reports."

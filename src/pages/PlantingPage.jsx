@@ -76,12 +76,14 @@ const PARTICIPANT_TYPES = [
 ];
 
 const STATUS_OPTIONS = [
+  "Pending",
   "Pending Review",
   "Approved",
   "Rejected",
 ];
 
 const VERIFICATION_CLASSES = {
+  Pending: "pr-status-reviewed",
   "Pending Review": "pr-status-reviewed",
   Approved: "pr-status-approved",
   Rejected: "pr-status-rejected",
@@ -89,9 +91,11 @@ const VERIFICATION_CLASSES = {
 
 function displayReportStatus(status) {
   const normalized = String(status || "").trim().toLowerCase();
+  if (normalized === "draft" || normalized === "pending") return "Pending";
   if (normalized === "approved") return "Approved";
   if (normalized === "rejected") return "Rejected";
-  return "Pending Review";
+  if (normalized === "pending review") return "Pending Review";
+  return status || "Pending";
 }
 
 function formatDate(value) {
@@ -214,6 +218,8 @@ export default function PlantingPage() {
   const canReview = userRole === "staff";
 
   const cameraInputRef = useRef(null);
+  const cameraVideoRef = useRef(null);
+  const cameraStreamRef = useRef(null);
   const uploadInputRef = useRef(null);
   const previewUrlsRef = useRef([]);
   const locationMapContainerRef = useRef(null);
@@ -252,6 +258,7 @@ export default function PlantingPage() {
   const [reportError, setReportError] = useState("");
 
   const [photoFiles, setPhotoFiles] = useState([]);
+  const [cameraOpen, setCameraOpen] = useState(false);
   const [photoPreviews, setPhotoPreviews] = useState([]);
   const [locationPhotoSignature, setLocationPhotoSignature] = useState("");
 
@@ -260,6 +267,7 @@ export default function PlantingPage() {
     organizationAffiliation: "",
     barangay: "",
     distributionId: "",
+    inventoryId: "",
     species: "",
     quantityReleased: "",
     quantity: "",
@@ -441,7 +449,7 @@ export default function PlantingPage() {
       const response = await apiRequest("/distributions/my-distributions");
       const raw = Array.isArray(response.data) ? response.data : [];
 
-      const normalized = raw.map((d) => ({
+      const normalized = raw.filter((d) => d.status === "Released").map((d) => ({
         // normalize common id fields
         id: d.id || d.distributionId || d.releaseId || d.distribution_id || "",
         // preserve existing fields
@@ -454,7 +462,7 @@ export default function PlantingPage() {
             }))
           : undefined,
         // normalize single-species quantity
-        quantityReleased: d.quantityReleased ?? d.releasedQuantity ?? d.quantity_released ?? d.quantity ?? null,
+        quantityReleased: d.totalQuantityReleased ?? d.quantityReleased ?? d.releasedQuantity ?? d.quantity_released ?? null,
       }));
 
       setDistributions(normalized);
@@ -518,6 +526,17 @@ export default function PlantingPage() {
 
     return () => window.clearTimeout(timeout);
   }, [popup]);
+
+  useEffect(() => {
+    if (cameraOpen && cameraVideoRef.current && cameraStreamRef.current) {
+      cameraVideoRef.current.srcObject = cameraStreamRef.current;
+      void cameraVideoRef.current.play().catch(() => {});
+    }
+  }, [cameraOpen]);
+
+  useEffect(() => () => {
+    cameraStreamRef.current?.getTracks().forEach((track) => track.stop());
+  }, []);
 
   useEffect(() => {
     if (!showSubmitModal || !locationMapContainerRef.current) return undefined;
@@ -844,6 +863,14 @@ export default function PlantingPage() {
     return records;
   }, [records]);
 
+  const eligibleDistributions = useMemo(() => distributions.filter((distribution) =>
+    !records.some((report) =>
+      (String(report.distributionId || "") === String(distribution.id) ||
+        (distribution.eventId && String(report.eventId || "") === String(distribution.eventId))) &&
+      !["Pending", "Draft"].includes(report.verificationStatus)
+    )
+  ), [distributions, records]);
+
   const filteredRecords = useMemo(() => {
     const search = searchTerm.trim().toLowerCase();
 
@@ -954,11 +981,13 @@ export default function PlantingPage() {
   }, [form.siteId, hasGps, capturedSiteDistance]);
 
   function resetForm() {
+    stopCamera();
     setForm({
       participantType: "",
       organizationAffiliation: "",
       barangay: currentUser?.barangay || "",
       distributionId: "",
+      inventoryId: "",
       species: "",
       quantityReleased: "",
       quantity: "",
@@ -998,6 +1027,52 @@ export default function PlantingPage() {
     resetForm();
   }
 
+  function stopCamera() {
+    cameraStreamRef.current?.getTracks().forEach((track) => track.stop());
+    cameraStreamRef.current = null;
+    setCameraOpen(false);
+  }
+
+  async function startCamera() {
+    if (cameraStreamRef.current) return;
+    if (!navigator.mediaDevices?.getUserMedia) {
+      showPopup("Camera access is unavailable in this browser. Use Upload Existing Photos instead.", "error");
+      return;
+    }
+    if (!hasGps) captureLocation();
+    try {
+      cameraStreamRef.current = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" }, audio: false });
+      setCameraOpen(true);
+    } catch (error) {
+      showPopup(error.name === "NotAllowedError"
+        ? "Camera permission was denied. Use Upload Existing Photos instead."
+        : "Camera is unavailable. Use Upload Existing Photos instead.", "error");
+    }
+  }
+
+  async function captureCameraPhoto() {
+    if (!hasGps) {
+      showPopup("Capture your GPS location at the planting site before taking a photo.", "error");
+      return;
+    }
+    const video = cameraVideoRef.current;
+    if (!video?.videoWidth || !video?.videoHeight) return;
+    const canvas = document.createElement("canvas");
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    const context = canvas.getContext("2d");
+    if (!context) return;
+    context.drawImage(video, 0, 0);
+    const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.95));
+    if (!blob) {
+      showPopup("Unable to capture the photo. Please try again.", "error");
+      return;
+    }
+    const file = new File([blob], `planting-${Date.now()}.jpg`, { type: "image/jpeg" });
+    await handlePhotoChange({ target: { files: [file], value: "" } });
+    stopCamera();
+  }
+
   function updateFormField(field, value) {
     setForm((previous) => {
       const next = { ...previous, [field]: value };
@@ -1019,16 +1094,11 @@ export default function PlantingPage() {
       (item) => String(item.id) === String(selectedId)
     );
 
-    if (distribution && Array.isArray(distribution.items) && distribution.items.length > 0 &&
-        !distribution.quantityReleased) {
-      showPopup("Planting reports for itemized releases require backend support. Your released seedlings are still recorded.", "error");
-      return;
-    }
-
     if (!distribution) {
       setForm((previous) => ({
         ...previous,
         distributionId: "",
+        inventoryId: "",
         species: "",
         quantityReleased: "",
         quantity: "",
@@ -1039,8 +1109,9 @@ export default function PlantingPage() {
     setForm((previous) => ({
       ...previous,
       distributionId: distribution.id,
-      species: distribution.species || "",
-      quantityReleased: distribution.quantityReleased ?? "",
+      inventoryId: distribution.items?.length === 1 ? distribution.items[0].inventoryId : distribution.inventoryId || "",
+      species: distribution.items?.length === 1 ? distribution.items[0].species : distribution.species || "",
+      quantityReleased: distribution.items?.length === 1 ? distribution.items[0].releasedQuantity : distribution.quantityReleased ?? "",
       quantity: "",
       organizationAffiliation:
         previous.organizationAffiliation || distribution.organization || "",
@@ -1309,8 +1380,12 @@ export default function PlantingPage() {
     }
 
     const selectedDistribution = distributions.find((item) => item.id === form.distributionId);
-    if (selectedDistribution?.items?.length && !selectedDistribution.quantityReleased) {
-      showPopup("Planting reports for itemized releases require backend support.", "error");
+    if (!selectedDistribution || selectedDistribution.status !== "Released") {
+      showPopup("Select a valid released distribution.", "error");
+      return;
+    }
+    if (selectedDistribution.items?.length > 1) {
+      showPopup("This release contains multiple species. The current submission API accepts only one requester item per event.", "error");
       return;
     }
 
@@ -1358,6 +1433,7 @@ export default function PlantingPage() {
     const payload = new FormData();
 
     payload.append("distributionId", form.distributionId);
+    if (form.inventoryId) payload.append("inventoryId", form.inventoryId);
     payload.append("siteId", form.siteId);
     payload.append("participantType", form.participantType);
     payload.append("participantBarangay", form.barangay);
@@ -1720,6 +1796,11 @@ export default function PlantingPage() {
                       >
                         <FiEye size={15} />
                       </button>
+                      {isParticipant && displayReportStatus(record.verificationStatus) === "Pending" && (
+                        <button type="button" className="pr-view-button" title="Submit planting report" aria-label={`Submit planting report for ${record.id}`} onClick={openSubmitModal}>
+                          <FiPlus size={15} />
+                        </button>
+                      )}
                     </td>
                   </tr>
                 ))}
@@ -1837,24 +1918,26 @@ export default function PlantingPage() {
                         onChange={handleDistributionChange}
                       >
                         <option value="">Select released seedling distribution</option>
-                        {distributions.map((distribution) => (
-                          <option key={distribution.id} value={distribution.id}
-                            disabled={Array.isArray(distribution.items) && distribution.items.length > 0 && !distribution.quantityReleased}>
+                        {eligibleDistributions.map((distribution) => (
+                          <option key={distribution.id} value={distribution.id}>
                             {Array.isArray(distribution.items) && distribution.items.length > 0
-                              ? `${distribution.items.map((item) => `${item.species}: ${item.releasedQuantity}`).join(", ")} — report unavailable`
+                              ? `${distribution.items.map((item) => `${item.species}: ${item.releasedQuantity}`).join(", ")}`
                               : `${distribution.species || "Seedling"} — ${distribution.quantityReleased ?? "Unknown"} released`}
                           </option>
                         ))}
                       </select>
 
-                      {distributions.length === 0 && (
+                      {eligibleDistributions.length === 0 && (
                         <div className="pr-helper-text">
                           No released seedling distributions are currently available for your account.
                         </div>
                       )}
-                      {distributions.some((distribution) => Array.isArray(distribution.items) && distribution.items.length > 0 && !distribution.quantityReleased) && (
+                      {distributions.find((distribution) => distribution.id === form.distributionId)?.items?.length > 1 && (
                         <div className="pr-helper-text" role="status">
-                          Itemized releases are recorded, but this planting report endpoint still requires a single-species distribution. MENRO backend support is needed before a report can be submitted for these releases.
+                          {distributions.find((distribution) => distribution.id === form.distributionId).items.map((item) => (
+                            <div key={item.inventoryId || item.species}>{item.species}: {item.releasedQuantity} released</div>
+                          ))}
+                          This backend currently accepts one requester item per event, so this multi-species release cannot be submitted as one complete report yet.
                         </div>
                       )}
                     </div>
@@ -2143,7 +2226,7 @@ export default function PlantingPage() {
                       <button
                         type="button"
                         disabled={photoFiles.length >= MAX_EVIDENCE_PHOTOS}
-                        onClick={() => cameraInputRef.current?.click()}
+                        onClick={startCamera}
                         className="pr-primary-button"
                       >
                         <FiCamera size={14} />
@@ -2160,6 +2243,16 @@ export default function PlantingPage() {
                         Upload Existing Photos
                       </button>
                     </div>
+
+                    {cameraOpen && (
+                      <div className="pr-camera-preview">
+                        <video ref={cameraVideoRef} autoPlay playsInline muted style={{ width: "100%", maxHeight: 320, objectFit: "contain" }} />
+                        <div className="pr-upload-button">
+                          <button type="button" className="pr-primary-button" onClick={captureCameraPhoto}>Capture Photo</button>
+                          <button type="button" className="pr-secondary-button" onClick={stopCamera}>Cancel Camera</button>
+                        </div>
+                      </div>
+                    )}
 
                     <div className="pr-helper-text" style={{ marginTop: "10px" }}>
                       {photoFiles.length} / {MAX_EVIDENCE_PHOTOS} photos selected

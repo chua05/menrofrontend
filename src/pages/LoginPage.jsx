@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { FiMail, FiLock, FiEye, FiEyeOff } from "react-icons/fi";
 import { FcGoogle } from "react-icons/fc";
@@ -26,6 +26,7 @@ const API_BASE_URL =
     : configuredApiUrl || "http://localhost:5000/api";
 
 export default function LoginPage() {
+  const signInInProgress = useRef(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] =
     useState("");
@@ -71,6 +72,7 @@ export default function LoginPage() {
 
   const handleLogin = async (e) => {
     e.preventDefault();
+    if (signInInProgress.current) return;
 
     setError("");
     setSuccess("");
@@ -82,6 +84,7 @@ export default function LoginPage() {
       return;
     }
 
+    signInInProgress.current = true;
     setLoading(true);
 
     try {
@@ -157,18 +160,23 @@ export default function LoginPage() {
         );
       } else {
         setError(
-          err.response?.data?.message ||
+          err.response?.status === 429 || /Too many requests\. Please slow down\./i.test(err.response?.data?.message || "")
+            ? "Sign in is temporarily unavailable. Please try again later."
+            : err.response?.data?.message ||
             err.message ||
             "Login failed."
         );
       }
     } finally {
+      signInInProgress.current = false;
       setLoading(false);
     }
   };
 
   const handleGoogleLogin =
     async () => {
+      if (signInInProgress.current) return;
+      signInInProgress.current = true;
       setError("");
       setSuccess("");
       setLoading(true);
@@ -223,11 +231,14 @@ export default function LoginPage() {
         console.error(err);
         setSuccess("");
         setError(
-          err.response?.data?.message ||
+          err.response?.status === 429 || /Too many requests\. Please slow down\./i.test(err.response?.data?.message || "")
+            ? "Sign in is temporarily unavailable. Please try again later."
+            : err.response?.data?.message ||
             err.message ||
             "Google sign in failed."
         );
       } finally {
+        signInInProgress.current = false;
         setLoading(false);
       }
     };
