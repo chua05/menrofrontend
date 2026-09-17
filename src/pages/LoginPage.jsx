@@ -122,15 +122,6 @@ export default function LoginPage() {
       const role =
         userData.role;
 
-      console.log(
-        "ROLE:",
-        role
-      );
-      console.log(
-        "USER:",
-        userData
-      );
-
       await showLoginSuccess();
 
       redirectByRole(role);
@@ -215,20 +206,11 @@ export default function LoginPage() {
         const role =
           userData.role;
 
-        console.log(
-          "ROLE:",
-          role
-        );
-        console.log(
-          "USER:",
-          userData
-        );
-
         await showLoginSuccess();
 
         redirectByRole(role);
       } catch (err) {
-        console.error(err);
+        console.error("Google sign in failed:", err?.code || err?.message);
         setSuccess("");
         setError(
           err.response?.status === 429 || /Too many requests\. Please slow down\./i.test(err.response?.data?.message || "")
