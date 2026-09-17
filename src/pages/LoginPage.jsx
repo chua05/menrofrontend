@@ -16,8 +16,14 @@ import axios from "axios";
 import menroLogo from "../assets/menro-logo.png";
 import "../styles/login.css";
 
+const configuredApiUrl = import.meta.env.VITE_API_URL?.trim().replace(/\/$/, "");
+const localApiUrl = /^https?:\/\/(localhost|127\.0\.0\.1)(?::|\/|$)/i.test(
+  configuredApiUrl || "",
+);
 const API_BASE_URL =
-  import.meta.env.VITE_API_URL || "http://localhost:5000/api";
+  import.meta.env.PROD && (!configuredApiUrl || localApiUrl)
+    ? "https://menrobk-1.onrender.com/api"
+    : configuredApiUrl || "http://localhost:5000/api";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");

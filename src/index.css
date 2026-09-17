@@ -353,3 +353,12 @@ textarea {
     @apply font-sans;
   }
 }
+
+/* Keep body copy, form text, and table text readable across the application. */
+#root :is(p, label, th, td, input, select, textarea) {
+  font-size: max(14px, 1em);
+}
+
+#root small {
+  font-size: max(13px, 0.875em);
+}

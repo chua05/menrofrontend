@@ -849,6 +849,22 @@
   animation: srBackdropIn 160ms ease-out;
 }
 
+.sr-review-backdrop {
+  z-index: 2100;
+}
+
+.sr-release-item {
+  margin-top: 16px;
+  padding: 14px;
+  border: 1px solid #dce5df;
+  border-radius: 9px;
+  background: #fbfcfb;
+}
+
+.sr-release-item h3 { margin: 0 0 12px; font-size: 15px; color: #26352d; }
+.sr-release-item .sr-form-field { margin-top: 12px; }
+.sr-release-calculation { margin-top: 10px; color: #526159; font-size: 13px; font-weight: 600; }
+
 @keyframes srBackdropIn {
   from {
     opacity: 0;
@@ -3025,4 +3041,15 @@
 .sr-status-released {
   background: #e8f5ec;
   color: #0f6f38;
+}
+
+.participant-seedling-page .participant-request-form .sr-form-field > span,
+.participant-seedling-page .participant-request-form .sr-tree-column-labels {
+  font-size: 15px;
+}
+
+#root .participant-seedling-page .participant-request-form .sr-field-hint,
+.participant-seedling-page .participant-request-form .sr-field-error,
+.participant-seedling-page .participant-tree-section .sr-tree-heading p {
+  font-size: 14px;
 }

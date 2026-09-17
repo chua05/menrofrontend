@@ -320,6 +320,8 @@ export default function SeedlingsPage() {
 
   const [errorMessage, setErrorMessage] =
     useState("");
+  const [loadError, setLoadError] = useState("");
+  const [retryKey, setRetryKey] = useState(0);
 
   const [loading, setLoading] =
     useState(true);
@@ -342,7 +344,7 @@ export default function SeedlingsPage() {
 
     async function loadInventory() {
       setLoading(true);
-      setErrorMessage("");
+      setLoadError("");
 
       try {
         const response =
@@ -373,10 +375,7 @@ export default function SeedlingsPage() {
         );
 
         if (!cancelled) {
-          setErrorMessage(
-            error.message ||
-              "Unable to load seedling inventory."
-          );
+          setLoadError("Unable to load seedling inventory. Please try again.");
         }
       } finally {
         if (!cancelled) {
@@ -390,7 +389,7 @@ export default function SeedlingsPage() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [retryKey]);
 
 
   useEffect(() => {
@@ -1105,6 +1104,10 @@ export default function SeedlingsPage() {
         </div>
       </div>
     );
+  }
+
+  if (loadError) {
+    return <div className="seedlings-page"><div role="alert" style={{ minHeight: "420px", display: "grid", placeContent: "center", justifyItems: "center", gap: "14px", color: "#526159", fontSize: "13px", fontWeight: 600 }}><span>{loadError}</span><button type="button" className="sd-secondary-btn" onClick={() => setRetryKey((key) => key + 1)}>Retry</button></div></div>;
   }
 
   return (

@@ -216,11 +216,14 @@ export default function SitesPage() {
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
   const [pageError, setPageError] = useState("");
+  const [loadError, setLoadError] = useState("");
 
   const [mapReady, setMapReady] = useState(false);
   const [mapError, setMapError] = useState("");
 
   const [selectedSite, setSelectedSite] = useState(null);
+  const [detailsSite, setDetailsSite] = useState(null);
+  const [detailsError, setDetailsError] = useState("");
 
   const [activeDetailTab, setActiveDetailTab] =
     useState("information");
@@ -375,6 +378,19 @@ export default function SitesPage() {
     setSites(records);
   }
 
+  async function handleViewFullDetails() {
+    if (!selectedSite) return;
+    const id = selectedSite.id || selectedSite.siteId;
+    setDetailsSite(selectedSite);
+    setDetailsError("");
+    try {
+      const response = await apiRequest(`/sites/${encodeURIComponent(id)}`);
+      if (response.data) setDetailsSite(response.data);
+    } catch (error) {
+      setDetailsError(error.message || "Unable to refresh site details.");
+    }
+  }
+
   async function loadArchivedSites() {
     if (!canManage) {
       setArchivedSites([]);
@@ -392,7 +408,7 @@ export default function SitesPage() {
 
   async function loadSiteData() {
     setLoading(true);
-    setPageError("");
+    setLoadError("");
 
     try {
       await Promise.all([
@@ -407,9 +423,8 @@ export default function SitesPage() {
         error
       );
 
-      setPageError(
-        error.message ||
-          "Unable to load planting sites."
+      setLoadError(
+        "Unable to load planting sites. Please try again."
       );
     } finally {
       setLoading(false);
@@ -1458,7 +1473,13 @@ export default function SitesPage() {
       : 0;
 
   return (
-    <div className="planting-sites-page">
+    <div className="planting-sites-page" style={{ position: "relative" }}>
+      {(loading || loadError) && (
+        <div role={loadError ? "alert" : "status"} style={{ position: "absolute", inset: 0, zIndex: 1000, minHeight: "420px", display: "grid", placeContent: "center", justifyItems: "center", gap: "14px", background: "#f8faf9", color: "#526159", fontSize: "13px", fontWeight: 600 }}>
+          <span>{loadError || "Loading registered planting sites..."}</span>
+          {loadError && <button type="button" className="ps-secondary-btn" onClick={loadSiteData}>Retry</button>}
+        </div>
+      )}
       <section className="ps-page-header">
         <div className="ps-title-wrap">
           <div className="ps-title-icon">
@@ -1817,6 +1838,7 @@ export default function SitesPage() {
               <button
                 type="button"
                 className="ps-secondary-btn ps-drawer-action"
+                onClick={handleViewFullDetails}
               >
                 <Eye size={15} />
 
@@ -1828,6 +1850,7 @@ export default function SitesPage() {
                   <button
                     type="button"
                     className="ps-primary-btn ps-drawer-action"
+                    onClick={() => setPageError("Editing planting sites requires a backend update endpoint. No changes were saved.")}
                   >
                     <Edit3 size={14} />
 
@@ -1854,6 +1877,32 @@ export default function SitesPage() {
           </aside>
         )}
       </section>
+
+      {detailsSite && (
+        <div className="ps-modal-backdrop" onMouseDown={() => setDetailsSite(null)}>
+          <div className="ps-modal" role="dialog" aria-modal="true" aria-label="Planting site details" onMouseDown={(event) => event.stopPropagation()}>
+            <div className="ps-modal-header">
+              <div><h2>{detailsSite.siteName}</h2><p>Planting Site Details</p></div>
+              <button type="button" className="ps-close-btn" onClick={() => setDetailsSite(null)} aria-label="Close site details"><X size={18} /></button>
+            </div>
+            <div className="ps-modal-body">
+              {detailsError && <p role="alert">{detailsError}</p>}
+              <SiteInformation
+                site={detailsSite}
+                status={getSiteStatus(detailsSite)}
+                utilization={getUtilization(detailsSite)}
+                available={Math.max(0, Number(detailsSite.maximumCapacity || 0) - Number(detailsSite.planted || 0))}
+              />
+              {Array.isArray(detailsSite.polygon) && detailsSite.polygon.length > 0 && (
+                <p>Saved boundary: {detailsSite.polygon.length} points</p>
+              )}
+            </div>
+            <div className="ps-modal-footer">
+              <button type="button" className="ps-secondary-btn" onClick={() => setDetailsSite(null)}>Close</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {showAddModal && (
         <div className="ps-modal-backdrop">

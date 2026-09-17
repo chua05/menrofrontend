@@ -13,7 +13,6 @@ import {
   FileCheck2,
   MapPin,
   PackageCheck,
-  RefreshCw,
   Sprout,
   Trees,
   Users,
@@ -1342,6 +1341,8 @@ export default function DashboardPage() {
 
   const [loadError, setLoadError] =
     useState("");
+  const [fatalLoadError, setFatalLoadError] = useState("");
+  const [retryKey, setRetryKey] = useState(0);
 
   const [barangay, setBarangay] =
     useState("All Barangays");
@@ -1379,6 +1380,7 @@ export default function DashboardPage() {
     let cancelled = false;
 
     const loadDashboard = async () => {
+      setFatalLoadError("");
       try {
         const token =
           await getFreshToken();
@@ -1505,9 +1507,9 @@ export default function DashboardPage() {
         setMonitoring([]);
 
         setLoadError(
-          error.message ||
-            "Some dashboard records could not be loaded."
+          "Unable to load dashboard records. Please try again."
         );
+        setFatalLoadError("Unable to load dashboard records. Please try again.");
       } finally {
         if (!cancelled) {
           setLoading(false);
@@ -1520,7 +1522,7 @@ export default function DashboardPage() {
     return () => {
       cancelled = true;
     };
-  }, [isManagement, isParticipant]);
+  }, [isManagement, isParticipant, retryKey]);
 
   const participantIdentity =
     useMemo(
@@ -1530,6 +1532,10 @@ export default function DashboardPage() {
         ),
       [currentUser]
     );
+
+  const participantName = String(
+    currentUser?.fullName || currentUser?.displayName || currentUser?.name || ""
+  ).trim();
 
   const visibleRequests =
     useMemo(() => {
@@ -2244,23 +2250,13 @@ export default function DashboardPage() {
   if (loading) {
     return (
       <div className="admin-dashboard">
-        <div className="dashboard-loading">
-          <RefreshCw
-            className="dashboard-loading-spin"
-            size={25}
-          />
-
-          <strong>
-            Loading dashboard...
-          </strong>
-
-          <span>
-            Collecting the latest
-            MENRO records.
-          </span>
-        </div>
+        <div style={{ minHeight: "420px", display: "grid", placeItems: "center", color: "#526159", fontSize: "13px", fontWeight: 600 }}>Loading dashboard...</div>
       </div>
     );
+  }
+
+  if (fatalLoadError) {
+    return <div className="admin-dashboard"><div role="alert" style={{ minHeight: "420px", display: "grid", placeContent: "center", justifyItems: "center", gap: "14px", color: "#526159", fontSize: "13px", fontWeight: 600 }}><span>{fatalLoadError}</span><button type="button" className="dashboard-secondary-button" onClick={() => { setLoading(true); setRetryKey((key) => key + 1); }}>Retry</button></div></div>;
   }
 
   return (
@@ -2271,10 +2267,16 @@ export default function DashboardPage() {
           : ""
       }`}
     >
-      {loadError && (
+      {loadError && !isParticipant && (
         <div className="dashboard-warning">
           {loadError} Available API records are shown where possible.
         </div>
+      )}
+
+      {isParticipant && (
+        <h1 className="participant-dashboard-welcome">
+          {participantName ? `Welcome, ${participantName}!` : "Welcome!"}
+        </h1>
       )}
 
       <div className="dashboard-filter-row">
