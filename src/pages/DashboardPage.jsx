@@ -1387,12 +1387,16 @@ export default function DashboardPage() {
 
         const endpointCalls = [
           apiGet(
-            "/seedling-requests",
+            isParticipant
+              ? "/seedling-requests/my"
+              : "/seedling-requests",
             token
           ),
           apiGet("/sites", token),
           apiGet(
-            "/planting-reports",
+            isParticipant
+              ? "/planting-reports/my-reports"
+              : "/planting-reports",
             token
           ),
           apiGet("/events", token),
