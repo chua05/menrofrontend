@@ -956,7 +956,7 @@ export default function PlantingPage() {
     if (!hasGps) {
       return {
         type: "waiting",
-        label: "Waiting for captured GPS location.",
+        label: "GPS location is optional during testing.",
       };
     }
 
@@ -1039,7 +1039,6 @@ export default function PlantingPage() {
       showPopup("Camera access is unavailable in this browser. Use Upload Existing Photos instead.", "error");
       return;
     }
-    if (!hasGps) captureLocation();
     try {
       cameraStreamRef.current = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" }, audio: false });
       setCameraOpen(true);
@@ -1051,10 +1050,6 @@ export default function PlantingPage() {
   }
 
   async function captureCameraPhoto() {
-    if (!hasGps) {
-      showPopup("Capture your GPS location at the planting site before taking a photo.", "error");
-      return;
-    }
     const video = cameraVideoRef.current;
     if (!video?.videoWidth || !video?.videoHeight) return;
     const canvas = document.createElement("canvas");
@@ -1301,22 +1296,19 @@ export default function PlantingPage() {
         const metadata = await exifr.parse(selectedFiles[0]);
         const capturedAt = metadata?.DateTimeOriginal ?? metadata?.CreateDate;
         const date = capturedAt instanceof Date ? capturedAt : new Date(capturedAt);
-        if (!Number.isFinite(metadata?.latitude) || !Number.isFinite(metadata?.longitude) ||
-            Number.isNaN(date.getTime())) {
-          throw new Error("The original photo must contain GPS coordinates and capture time. Select the original geotagged photo or capture location at the planting site.");
+        if (Number.isFinite(metadata?.latitude) && Number.isFinite(metadata?.longitude) &&
+            !Number.isNaN(date.getTime())) {
+          setForm((previous) => ({
+            ...previous,
+            latitude: String(metadata.latitude),
+            longitude: String(metadata.longitude),
+            accuracy: "",
+            locationCapturedAt: date.toISOString(),
+          }));
+          setLocationPhotoSignature(`${selectedFiles[0].name}|${selectedFiles[0].size}|${selectedFiles[0].lastModified}`);
         }
-        setForm((previous) => ({
-          ...previous,
-          latitude: String(metadata.latitude),
-          longitude: String(metadata.longitude),
-          accuracy: "",
-          locationCapturedAt: date.toISOString(),
-        }));
-        setLocationPhotoSignature(`${selectedFiles[0].name}|${selectedFiles[0].size}|${selectedFiles[0].lastModified}`);
-      } catch (metadataError) {
-        showPopup(metadataError.message || "Unable to read the original photo location and time.", "error");
-        event.target.value = "";
-        return;
+      } catch {
+        // Missing/unreadable EXIF must not prevent a valid image from being attached.
       }
     }
 
@@ -1412,14 +1404,6 @@ export default function PlantingPage() {
       return;
     }
 
-    if (!hasGps) {
-      showPopup(
-        "Please capture your GPS location before submitting the planting report.",
-        "error"
-      );
-      return;
-    }
-
     if (photoFiles.length === 0) {
       showPopup("Please add at least one planting evidence photo before submitting the report.", "error");
       return;
@@ -1441,10 +1425,12 @@ export default function PlantingPage() {
     payload.append("quantityPlanted", String(quantity));
     payload.append("plantingDate", form.plantingDate);
     payload.append("plantingLocation", form.siteName);
-    payload.append("latitude", form.latitude);
-    payload.append("longitude", form.longitude);
-    payload.append("accuracy", form.accuracy);
-    payload.append("locationCapturedAt", form.locationCapturedAt);
+    if (hasGps) {
+      payload.append("latitude", form.latitude);
+      payload.append("longitude", form.longitude);
+      payload.append("accuracy", form.accuracy);
+      payload.append("locationCapturedAt", form.locationCapturedAt);
+    }
     payload.append("eventId", form.eventId || "");
     payload.append("eventName", form.eventName || "");
     payload.append("remarks", form.remarks.trim());
@@ -2094,7 +2080,7 @@ export default function PlantingPage() {
                     <div className="pr-gps-top">
                       <div>
                         <div className="pr-gps-title">
-                          Captured GPS Location <span className="pr-required">*</span>
+                          Captured GPS Location
                         </div>
                       </div>
 
@@ -2183,7 +2169,7 @@ export default function PlantingPage() {
 
                           {!hasGps && (
                             <div className="pr-helper-text pr-helper-emphasis">
-                              Capture GPS at the planting site, or upload the original geotagged photo from your device. Edited or compressed copies may lose location and capture time.
+                              Photo location is optional during testing. Original geotagged photos retain more information for verification.
                             </div>
                           )}
 
