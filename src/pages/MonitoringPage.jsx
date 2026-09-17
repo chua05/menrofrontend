@@ -282,29 +282,26 @@ function buildMediaUrl(value) {
 }
 
 async function getAuthToken(forceRefresh = false) {
-  if (
-    typeof auth.authStateReady === "function"
-  ) {
-    await auth.authStateReady();
+  try {
+    if (auth && typeof auth.authStateReady === "function") {
+      await auth.authStateReady();
+    }
+
+    const firebaseUser = auth ? auth.currentUser : null;
+
+    if (firebaseUser) {
+      const token = await firebaseUser.getIdToken(forceRefresh);
+      window.localStorage.setItem("token", token);
+      return token;
+    }
+  } catch (err) {
+    // Fall through to try localStorage token
+    console.warn("getAuthToken: firebase auth unavailable, falling back to stored token", err);
   }
 
-  const firebaseUser = auth.currentUser;
-
-  if (!firebaseUser) {
-    return "";
-  }
-
-  const token =
-    await firebaseUser.getIdToken(
-      forceRefresh
-    );
-
-  window.localStorage.setItem(
-    "token",
-    token
-  );
-
-  return token;
+  // Fallback: some pages store token in localStorage for compatibility.
+  const tokenFromStorage = window.localStorage.getItem("token") || "";
+  return tokenFromStorage;
 }
 
 async function apiRequest(

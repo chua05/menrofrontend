@@ -439,7 +439,25 @@ export default function PlantingPage() {
 
     try {
       const response = await apiRequest("/distributions/my-distributions");
-      setDistributions(Array.isArray(response.data) ? response.data : []);
+      const raw = Array.isArray(response.data) ? response.data : [];
+
+      const normalized = raw.map((d) => ({
+        // normalize common id fields
+        id: d.id || d.distributionId || d.releaseId || d.distribution_id || "",
+        // preserve existing fields
+        ...d,
+        // normalize items array and per-item releasedQuantity field names
+        items: Array.isArray(d.items)
+          ? d.items.map((it) => ({
+              ...it,
+              releasedQuantity: it.releasedQuantity ?? it.quantityReleased ?? it.quantity_released ?? it.released ?? null,
+            }))
+          : undefined,
+        // normalize single-species quantity
+        quantityReleased: d.quantityReleased ?? d.releasedQuantity ?? d.quantity_released ?? d.quantity ?? null,
+      }));
+
+      setDistributions(normalized);
     } catch (error) {
       setDistributions([]);
 
@@ -1406,11 +1424,13 @@ export default function PlantingPage() {
     setActionLoading(true);
 
     try {
+      const remarksToSend = verificationRemarks.trim() || "Requirements met";
+
       const response = await apiRequest(
         `/planting-reports/${selectedRecord.id}/approve`,
         {
           method: "PATCH",
-          body: JSON.stringify({ remarks: verificationRemarks.trim() }),
+          body: JSON.stringify({ remarks: remarksToSend }),
         }
       );
 
