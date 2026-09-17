@@ -9,6 +9,7 @@ import { AuthProvider } from "./context/AuthContext";
 
 import DashboardLayout from "./layouts/DashboardLayout";
 import ProtectedRoute from "./routes/ProtectedRoute";
+import { RootRedirect, GuestOnlyRoute } from "./routes/RootRedirect";
 
 /* =========================
    AUTH
@@ -57,22 +58,25 @@ function App() {
 
           <Route
             path="/"
-            element={
-              <Navigate
-                to="/login"
-                replace
-              />
-            }
+            element={<RootRedirect />}
           />
 
           <Route
             path="/login"
-            element={<LoginPage />}
+            element={
+              <GuestOnlyRoute>
+                <LoginPage />
+              </GuestOnlyRoute>
+            }
           />
 
           <Route
             path="/register"
-            element={<RegisterPage />}
+            element={
+              <GuestOnlyRoute>
+                <RegisterPage />
+              </GuestOnlyRoute>
+            }
           />
 
           <Route path="/join-event/:token" element={<GuestEventPage />} />
