@@ -122,15 +122,6 @@ export default function LoginPage() {
       const role =
         userData.role;
 
-      console.log(
-        "ROLE:",
-        role
-      );
-      console.log(
-        "USER:",
-        userData
-      );
-
       await showLoginSuccess();
 
       redirectByRole(role);
@@ -214,15 +205,6 @@ export default function LoginPage() {
 
         const role =
           userData.role;
-
-        console.log(
-          "ROLE:",
-          role
-        );
-        console.log(
-          "USER:",
-          userData
-        );
 
         await showLoginSuccess();
 
