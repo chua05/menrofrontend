@@ -1237,7 +1237,7 @@ useEffect(() => {
   };
 
   const submitDecision = async () => {
-    if (!decisionModal?.request?.id) return;
+    if (actionLoading || !decisionModal?.request?.id) return;
 
     const { request, action } = decisionModal;
     let payload = {};
@@ -1276,7 +1276,7 @@ useEffect(() => {
         `/seedling-requests/${request.id}/${action}`,
         {
           method: "PATCH",
-          body: JSON.stringify(payload),
+          ...(action === "reject" ? { body: JSON.stringify(payload) } : {}),
         }
       );
 
@@ -1287,9 +1287,27 @@ useEffect(() => {
       setDecisionModal(null);
       setRejectionChoice("");
       setOtherRejectionReason("");
+      if (action === "approve") void loadRequests();
     } catch (error) {
-      console.error(error);
-      setDecisionError(error.message || "Unable to save the MENRO decision.");
+      // Log full error for diagnostics but avoid exposing internal
+      // configuration messages (such as secret validation) to Admin users.
+      console.error("Admin decision API error:", error);
+
+      const rawMessage = error?.message || "";
+
+      if (action === "approve") {
+        // If backend indicates a guest-invitation/server-secret configuration
+        // issue, surface a safe administrative message instead of raw text.
+        if (/GUEST_INVITATION_SECRET|invitation secret|guest invitation|secret/i.test(rawMessage)) {
+          setDecisionError(
+            "Unable to approve the request due to a server configuration error. Please contact the system administrator."
+          );
+        } else {
+          setDecisionError("Unable to approve the request. Please try again.");
+        }
+      } else {
+        setDecisionError(rawMessage || "Unable to save the MENRO decision.");
+      }
     } finally {
       setActionLoading(false);
     }
