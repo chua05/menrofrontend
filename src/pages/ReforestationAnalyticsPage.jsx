@@ -321,18 +321,36 @@ export default function ReforestationAnalyticsPage() {
     let cancelled = false;
     async function loadAnalyticsData() {
       try {
-        if (typeof auth.authStateReady === "function") {
+        // Wait for firebase auth to be ready when available.
+        if (auth && typeof auth.authStateReady === "function") {
           await auth.authStateReady();
         }
-        const token = await auth.currentUser?.getIdToken();
+
+        // Prefer current firebase ID token when available.
+        let token = "";
+        if (auth && auth.currentUser) {
+          token = await auth.currentUser.getIdToken();
+        }
+
+        // Fallback to stored token for compatibility with HMR/dev
+        // or if auth isn't ready yet.
+        if (!token) {
+          token = window.localStorage.getItem("token") || "";
+        }
+
         if (!token) throw new Error("Your session has expired. Please sign in again.");
+
         const [inventory, reports, monitoring, sites] = await Promise.all([
-          loadApiRecords("/inventory", token),
+          loadApiRecords("/distributions", token),
           loadApiRecords("/planting-reports", token),
           loadApiRecords("/monitoring", token),
           loadApiRecords("/sites", token),
         ]);
         if (cancelled) return;
+        // The backend exposes released/distributed seedling records via
+        // the /distributions endpoint. Store them in `seedlings` state
+        // (keeps existing variable usage in the UI) so KPI cards and
+        // export use real released quantities.
         setSeedlings(inventory);
         setPlantingReports(reports);
         setMonitoringRecords(monitoring);
@@ -580,23 +598,28 @@ export default function ReforestationAnalyticsPage() {
 
   const totalSeedlingsDistributed = useMemo(() => {
     return seedlings
-      .filter(
-        (seedling) =>
-          seedling?.archived !== true
-      )
-      .reduce((total, seedling) => {
-        return (
-          total +
-          (
-            Number(
-              seedling?.distributed
-            ) ||
-            Number(
-              seedling?.distributedQuantity
-            ) ||
-            0
-          )
-        );
+      .filter((record) => record?.archived !== true)
+      .reduce((total, record) => {
+        // distributions may be single-species (quantityReleased/quantity)
+        // or itemized with an `items` array. Normalize common fields.
+        const single =
+          Number(record?.quantityReleased) ||
+          Number(record?.releasedQuantity) ||
+          Number(record?.distributedQuantity) ||
+          Number(record?.quantity) ||
+          0;
+
+        let itemsTotal = 0;
+        if (Array.isArray(record?.items)) {
+          itemsTotal = record.items.reduce((s, it) => {
+            return (
+              s +
+              (Number(it?.releasedQuantity) || Number(it?.quantity) || Number(it?.qty) || 0)
+            );
+          }, 0);
+        }
+
+        return total + Math.max(single, itemsTotal);
       }, 0);
   }, [seedlings]);
 
