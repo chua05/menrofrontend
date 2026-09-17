@@ -9,6 +9,7 @@ import { AuthProvider } from "./context/AuthContext";
 
 import DashboardLayout from "./layouts/DashboardLayout";
 import ProtectedRoute from "./routes/ProtectedRoute";
+import { RootRedirect, GuestOnlyRoute } from "./routes/RootRedirect";
 
 /* =========================
    AUTH
@@ -17,6 +18,8 @@ import ProtectedRoute from "./routes/ProtectedRoute";
 import LoginPage from "./pages/LoginPage";
 import RegisterPage from "./pages/RegisterPage";
 import GuestEventPage from "./pages/GuestEventPage";
+import TermsOfServicePage from "./pages/TermsOfServicePage";
+import PrivacyPolicyPage from "./pages/PrivacyPolicyPage";
 
 /* =========================
    SHARED
@@ -55,25 +58,31 @@ function App() {
 
           <Route
             path="/"
-            element={
-              <Navigate
-                to="/login"
-                replace
-              />
-            }
+            element={<RootRedirect />}
           />
 
           <Route
             path="/login"
-            element={<LoginPage />}
+            element={
+              <GuestOnlyRoute>
+                <LoginPage />
+              </GuestOnlyRoute>
+            }
           />
 
           <Route
             path="/register"
-            element={<RegisterPage />}
+            element={
+              <GuestOnlyRoute>
+                <RegisterPage />
+              </GuestOnlyRoute>
+            }
           />
 
           <Route path="/join-event/:token" element={<GuestEventPage />} />
+
+          <Route path="/terms-of-service" element={<TermsOfServicePage />} />
+          <Route path="/privacy-policy" element={<PrivacyPolicyPage />} />
 
           {/* =========================
               ADMIN

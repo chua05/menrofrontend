@@ -11,6 +11,7 @@ import {
   googleProvider,
 } from "../firebase/config";
 import { useAuth } from "../context/AuthContext";
+import { dashboardPathForRole } from "../utils/roleRoutes";
 import axios from "axios";
 
 import menroLogo from "../assets/menro-logo.png";
@@ -43,15 +44,7 @@ export default function LoginPage() {
   const { login } = useAuth();
 
   const redirectByRole = (role) => {
-    if (role === "admin") {
-      navigate("/admin/dashboard");
-    } else if (role === "staff") {
-      navigate("/staff/dashboard");
-    } else {
-      navigate(
-        "/participant/dashboard"
-      );
-    }
+    navigate(dashboardPathForRole(role));
   };
 
   const showLoginSuccess =

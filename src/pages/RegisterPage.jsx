@@ -73,6 +73,10 @@ export default function RegisterPage() {
       e.contactNumber = "Enter a valid mobile number";
     }
 
+    if (!form.organization.trim()) {
+      e.organization = "Required";
+    }
+
     if (!form.password || form.password.length < 6) {
       e.password = "Min. 6 characters";
     }
@@ -255,7 +259,10 @@ export default function RegisterPage() {
               </Field>
 
               <div className="register-full-width">
-                <Field label="Organization (optional)">
+                <Field
+                  label="Organization"
+                  error={errors.organization}
+                >
                   <input
                     type="text"
                     placeholder="e.g. Juban Environment Office"
@@ -361,9 +368,13 @@ export default function RegisterPage() {
 
               <label htmlFor="terms">
                 I agree to the{" "}
-                <a href="#">Terms of Service</a>
+                <Link to="/terms-of-service" target="_blank" rel="noopener noreferrer">
+                  Terms of Service
+                </Link>
                 {" "}and{" "}
-                <a href="#">Privacy Policy</a>
+                <Link to="/privacy-policy" target="_blank" rel="noopener noreferrer">
+                  Privacy Policy
+                </Link>
               </label>
             </div>
 
