@@ -7,9 +7,9 @@ export default function TermsOfServicePage() {
   return (
     <div className="legal-page">
       <div className="legal-shell">
-        <Link to="/register" className="legal-back-link">
+        <Link to="/" className="legal-back-link">
           <FiArrowLeft size={14} />
-          Back to registration
+          Back to home
         </Link>
 
         <section className="legal-card">

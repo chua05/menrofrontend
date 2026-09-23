@@ -1,7 +1,7 @@
 # Graph Report - menrosystem  (2026-09-24)
 
 ## Corpus Check
-- 56 files · ~127,356 words
+- 56 files · ~127,389 words
 - Verdict: corpus is large enough that graph structure adds value.
 - Unclassified: 23 file(s) not represented in the graph (top: .css 20, (none) 2, .geojson 1)
 

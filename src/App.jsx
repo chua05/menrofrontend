@@ -9,7 +9,7 @@ import { AuthProvider } from "./context/AuthContext";
 
 import DashboardLayout from "./layouts/DashboardLayout";
 import ProtectedRoute from "./routes/ProtectedRoute";
-import { RootRedirect, GuestOnlyRoute } from "./routes/RootRedirect";
+import { GuestOnlyRoute } from "./routes/RootRedirect";
 
 /* =========================
    AUTH
@@ -21,6 +21,7 @@ import CompleteProfilePage from "./pages/CompleteProfilePage";
 import GuestEventPage from "./pages/GuestEventPage";
 import TermsOfServicePage from "./pages/TermsOfServicePage";
 import PrivacyPolicyPage from "./pages/PrivacyPolicyPage";
+import LandingPage from "./pages/LandingPage";
 
 /* =========================
    SHARED
@@ -59,7 +60,7 @@ function App() {
 
           <Route
             path="/"
-            element={<RootRedirect />}
+            element={<LandingPage />}
           />
 
           <Route
