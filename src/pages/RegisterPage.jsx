@@ -3,6 +3,10 @@ import { Link, useNavigate } from "react-router-dom";
 import { FiUser, FiMail, FiLock, FiEye, FiEyeOff } from "react-icons/fi";
 import { FcGoogle } from "react-icons/fc";
 import axios from "axios";
+import { signInWithPopup } from "firebase/auth";
+import { auth, googleProvider } from "../firebase/config";
+import { useAuth } from "../context/AuthContext";
+import { JUBAN_BARANGAYS, USER_TYPES, userTypeField } from "../utils/userTypes";
 
 import menroLogo from "../assets/menro-logo.png";
 import "../styles/register.css";
@@ -28,13 +32,16 @@ const Field = ({ label, error, children }) => (
 
 export default function RegisterPage() {
   const navigate = useNavigate();
+  const { login } = useAuth();
 
   const [form, setForm] = useState({
     fullName: "",
     username: "",
     email: "",
     contactNumber: "",
-    organization: "",
+    userType: "",
+    userTypeDetail: "",
+    barangay: "",
     password: "",
     confirmPassword: "",
   });
@@ -49,7 +56,21 @@ export default function RegisterPage() {
     setForm((prev) => ({
       ...prev,
       [field]: e.target.value,
+      ...(field === "userType" ? { userTypeDetail: "", barangay: "" } : {}),
     }));
+
+  const updateContactNumber = (event) => {
+    const digitsOnly = event.target.value.replace(/\D/g, "").slice(0, 11);
+
+    setForm((previous) => ({
+      ...previous,
+      contactNumber: digitsOnly,
+    }));
+
+    if (errors.contactNumber) {
+      setErrors((previous) => ({ ...previous, contactNumber: "" }));
+    }
+  };
 
   const validate = () => {
     const e = {};
@@ -73,9 +94,10 @@ export default function RegisterPage() {
       e.contactNumber = "Enter a valid mobile number";
     }
 
-    if (!form.organization.trim()) {
-      e.organization = "Required";
-    }
+    if (!form.userType) e.userType = "Please select your user type.";
+    const conditional = userTypeField(form.userType);
+    if (conditional?.kind === "barangay" && !form.barangay) e.barangay = conditional.error;
+    if (conditional?.kind === "detail" && !form.userTypeDetail.trim()) e.userTypeDetail = conditional.error;
 
     if (!form.password || form.password.length < 6) {
       e.password = "Min. 6 characters";
@@ -114,7 +136,9 @@ export default function RegisterPage() {
           email: form.email,
           contactNumber: form.contactNumber,
           password: form.password,
-          organization: form.organization,
+          userType: form.userType,
+          userTypeDetail: form.userTypeDetail.trim(),
+          barangay: form.barangay,
         }
       );
 
@@ -131,6 +155,27 @@ export default function RegisterPage() {
       setLoading(false);
     }
   };
+
+  const handleGoogleRegister = async () => {
+    setErrors({});
+    setLoading(true);
+    try {
+      const result = await signInWithPopup(auth, googleProvider);
+      const token = await result.user.getIdToken();
+      const response = await axios.post(`${API_BASE_URL}/auth/verify`, {}, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const userData = response.data.data;
+      login(userData, userData.role, token);
+      navigate(userData.profileComplete === false ? "/complete-profile" : "/participant/dashboard", { replace: true });
+    } catch (error) {
+      setErrors({ general: error.response?.data?.message || error.message || "Google registration failed." });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const conditionalField = userTypeField(form.userType);
 
   return (
     <div className="register-page">
@@ -247,12 +292,14 @@ export default function RegisterPage() {
                   />
 
                   <input
-                    type="text"
+                    type="tel"
                     inputMode="numeric"
+                    pattern="[0-9]*"
                     maxLength={11}
+                    autoComplete="tel"
                     placeholder="09123456789"
                     value={form.contactNumber}
-                    onChange={update("contactNumber")}
+                    onChange={updateContactNumber}
                     className="register-input"
                   />
                 </div>
@@ -260,18 +307,27 @@ export default function RegisterPage() {
 
               <div className="register-full-width">
                 <Field
-                  label="Organization"
-                  error={errors.organization}
+                  label="User Type *"
+                  error={errors.userType}
                 >
-                  <input
-                    type="text"
-                    placeholder="e.g. Juban Environment Office"
-                    value={form.organization}
-                    onChange={update("organization")}
+                  <select
+                    value={form.userType}
+                    onChange={update("userType")}
                     className="register-input register-input-no-icon"
-                  />
+                  >
+                    <option value="">Select user type</option>
+                    {USER_TYPES.map((type) => <option key={type} value={type}>{type}</option>)}
+                  </select>
                 </Field>
               </div>
+
+              {conditionalField?.kind === "barangay" && (
+                <div className="register-full-width"><Field label={conditionalField.label} error={errors.barangay}><select value={form.barangay} onChange={update("barangay")} className="register-input register-input-no-icon"><option value="">Select barangay</option>{JUBAN_BARANGAYS.map((barangay) => <option key={barangay}>{barangay}</option>)}</select></Field></div>
+              )}
+
+              {conditionalField?.kind === "detail" && (
+                <div className="register-full-width"><Field label={conditionalField.label} error={errors.userTypeDetail}><input type="text" value={form.userTypeDetail} onChange={update("userTypeDetail")} className="register-input register-input-no-icon" /></Field></div>
+              )}
 
               <Field
                 label="Password"
@@ -404,6 +460,8 @@ export default function RegisterPage() {
           <button
             type="button"
             className="register-google-btn"
+            onClick={handleGoogleRegister}
+            disabled={loading}
           >
             <FcGoogle size={17} />
             Continue with Google

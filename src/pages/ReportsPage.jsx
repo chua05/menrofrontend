@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { useAuth } from "../context/AuthContext";
+import { formatDisplayId } from "../utils/displayId";
 import {
   FiBarChart2,
   FiCalendar,
@@ -675,7 +676,7 @@ export default function ReportsPage() {
 
                     <td>
                       <strong className="report-id">
-                        {report.id}
+                        {formatDisplayId("RPT", report.reportNumber, report.id)}
                       </strong>
                     </td>
 

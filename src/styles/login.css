@@ -281,7 +281,8 @@
   gap: 12px;
 }
 
-.login-password-label a {
+.login-password-label a,
+.login-forgot-button {
   color: #087443;
 
   font-size: 9.5px;
@@ -290,7 +291,15 @@
   text-decoration: none;
 }
 
-.login-password-label a:hover {
+.login-forgot-button {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+}
+
+.login-password-label a:hover,
+.login-forgot-button:hover {
   text-decoration: underline;
 }
 
@@ -606,6 +615,82 @@
   font-weight: 500;
 
   letter-spacing: 0.08em;
+}
+
+/* =====================================================
+   LOGIN SUCCESS CONFIRMATION
+===================================================== */
+
+.login-success-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 3000;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(10, 24, 16, 0.5);
+}
+
+.login-success-modal {
+  width: min(390px, 100%);
+  padding: 36px 30px 30px;
+  border: 1px solid rgba(211, 224, 216, 0.95);
+  border-radius: 18px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 22px;
+  background: #fff;
+  box-shadow: 0 28px 75px rgba(12, 40, 24, 0.25);
+  text-align: center;
+  animation: loginSuccessEnter 180ms ease-out;
+}
+
+.login-success-icon {
+  color: #087443;
+}
+
+.login-success-modal h2 {
+  margin: 0;
+  color: #17211b;
+  font-size: 20px;
+  line-height: 1.35;
+  font-weight: 720;
+}
+
+.login-success-button {
+  min-width: 155px;
+  min-height: 44px;
+  padding: 0 22px;
+  border: 0;
+  border-radius: 9px;
+  background: #087443;
+  color: #fff;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background-color 150ms ease, transform 150ms ease;
+}
+
+.login-success-button:hover:not(:disabled) {
+  background: #096b40;
+  transform: translateY(-1px);
+}
+
+.login-success-button:focus-visible {
+  outline: 3px solid rgba(8, 116, 67, 0.25);
+  outline-offset: 3px;
+}
+
+.login-success-button:disabled {
+  opacity: 0.7;
+  cursor: wait;
+}
+
+@keyframes loginSuccessEnter {
+  from { opacity: 0; transform: translateY(8px) scale(0.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
 }
 
 /* =====================================================

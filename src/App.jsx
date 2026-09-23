@@ -17,6 +17,7 @@ import { RootRedirect, GuestOnlyRoute } from "./routes/RootRedirect";
 
 import LoginPage from "./pages/LoginPage";
 import RegisterPage from "./pages/RegisterPage";
+import CompleteProfilePage from "./pages/CompleteProfilePage";
 import GuestEventPage from "./pages/GuestEventPage";
 import TermsOfServicePage from "./pages/TermsOfServicePage";
 import PrivacyPolicyPage from "./pages/PrivacyPolicyPage";
@@ -83,6 +84,7 @@ function App() {
 
           <Route path="/terms-of-service" element={<TermsOfServicePage />} />
           <Route path="/privacy-policy" element={<PrivacyPolicyPage />} />
+          <Route path="/complete-profile" element={<CompleteProfilePage />} />
 
           {/* =========================
               ADMIN

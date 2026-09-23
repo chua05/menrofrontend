@@ -22,6 +22,7 @@ import {
 
 import { useAuth } from "../context/AuthContext";
 import { auth } from "../firebase/config";
+import { formatDisplayId } from "../utils/displayId";
 import "../styles/registered-users.css";
 
 const API_BASE_URL =
@@ -82,6 +83,7 @@ function toRegistryUser(user) {
   return {
     id: user?.uid || user?.id || user?.email || "",
     uid: user?.uid || "",
+    userNumber: user?.userNumber || "",
     fullName: user?.fullName || "Unnamed User",
     username: user?.username || "",
     email: user?.email || "",
@@ -1070,7 +1072,7 @@ export default function UsersPage() {
               <div className="ru-detail-grid">
                 <DetailItem
                   label="User ID"
-                  value={selectedUser.uid || selectedUser.id}
+                  value={formatDisplayId("USR", selectedUser.userNumber, selectedUser.uid, selectedUser.id)}
                 />
 
                 <DetailItem

@@ -20,6 +20,9 @@ export function RootRedirect() {
   const { effectiveUser, effectiveRole } = useEffectiveAuth();
 
   if (effectiveUser) {
+    if (effectiveRole === "participant" && effectiveUser.profileComplete === false) {
+      return <Navigate to="/complete-profile" replace />;
+    }
     return <Navigate to={dashboardPathForRole(effectiveRole)} replace />;
   }
 
@@ -32,6 +35,9 @@ export function GuestOnlyRoute({ children }) {
   const { effectiveUser, effectiveRole } = useEffectiveAuth();
 
   if (effectiveUser) {
+    if (effectiveRole === "participant" && effectiveUser.profileComplete === false) {
+      return <Navigate to="/complete-profile" replace />;
+    }
     return <Navigate to={dashboardPathForRole(effectiveRole)} replace />;
   }
 

@@ -1,10 +1,12 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
+import { CheckCircle2 } from "lucide-react";
 import { FiMail, FiLock, FiEye, FiEyeOff } from "react-icons/fi";
 import { FcGoogle } from "react-icons/fc";
 import {
   signInWithEmailAndPassword,
   signInWithPopup,
+  sendPasswordResetEmail,
 } from "firebase/auth";
 import {
   auth,
@@ -26,6 +28,68 @@ const API_BASE_URL =
     ? "https://menrobk-1.onrender.com/api"
     : configuredApiUrl || "http://localhost:5000/api";
 
+const isFirebaseNetworkError = (error) =>
+  error?.code === "auth/network-request-failed";
+
+const wait = (milliseconds) =>
+  new Promise((resolve) => window.setTimeout(resolve, milliseconds));
+
+const signInWithNetworkRetry = async (email, password) => {
+  try {
+    return await signInWithEmailAndPassword(auth, email, password);
+  } catch (error) {
+    // Firebase occasionally reports a transient fetch failure even while the
+    // browser is online. Retry once; genuine credential errors are never retried.
+    if (!isFirebaseNetworkError(error) || navigator.onLine === false) {
+      throw error;
+    }
+
+    await wait(500);
+    return signInWithEmailAndPassword(auth, email, password);
+  }
+};
+
+const getLoginErrorMessage = (error, provider = "email") => {
+  if (error?.response?.status === 429 ||
+      /Too many requests\. Please slow down\./i.test(error?.response?.data?.message || "")) {
+    return "Sign in is temporarily unavailable. Please try again later.";
+  }
+
+  if (isFirebaseNetworkError(error)) {
+    return navigator.onLine === false
+      ? "You appear to be offline. Reconnect to the internet, then try again."
+      : "Unable to reach Firebase Authentication. Check your connection or disable any VPN/ad blocker, then try again.";
+  }
+
+  const firebaseMessages = {
+    "auth/invalid-credential": "Invalid email or password.",
+    "auth/user-not-found": "Account not found.",
+    "auth/wrong-password": "Incorrect password.",
+    "auth/invalid-email": "Please enter a valid email address.",
+    "auth/user-disabled": "This account has been disabled. Please contact the administrator.",
+    "auth/too-many-requests": "Too many failed attempts. Please wait a while, then try again.",
+    "auth/popup-closed-by-user": "Google sign-in was cancelled.",
+    "auth/popup-blocked": "The Google sign-in window was blocked. Allow pop-ups, then try again.",
+    "auth/unauthorized-domain": "Google sign-in is not enabled for this website. Please contact the administrator.",
+  };
+
+  if (firebaseMessages[error?.code]) {
+    return firebaseMessages[error.code];
+  }
+
+  if (error?.response?.data?.message) {
+    return error.response.data.message;
+  }
+
+  if (error?.code === "ERR_NETWORK") {
+    return "Signed in to Firebase, but the MENRO server could not be reached. Please try again shortly.";
+  }
+
+  return provider === "google"
+    ? "Google sign-in failed. Please try again."
+    : "Login failed. Please try again.";
+};
+
 export default function LoginPage() {
   const signInInProgress = useRef(false);
   const [email, setEmail] = useState("");
@@ -39,29 +103,31 @@ export default function LoginPage() {
     useState("");
   const [loading, setLoading] =
     useState(false);
+  const [resetLoading, setResetLoading] = useState(false);
+  const [pendingLogin, setPendingLogin] = useState(null);
+  const [acknowledging, setAcknowledging] = useState(false);
+  const successButtonRef = useRef(null);
 
   const navigate = useNavigate();
   const { login } = useAuth();
 
-  const redirectByRole = (role) => {
-    navigate(dashboardPathForRole(role));
+  useEffect(() => {
+    if (pendingLogin) successButtonRef.current?.focus();
+  }, [pendingLogin]);
+
+  const queueSuccessfulLogin = (userData, token, destination) => {
+    setError("");
+    setSuccess("");
+    setPendingLogin({ userData, token, destination });
   };
 
-  const showLoginSuccess =
-    async () => {
-      setSuccess(
-        "Signed in successfully. Redirecting..."
-      );
-
-      await new Promise(
-        (resolve) => {
-          window.setTimeout(
-            resolve,
-            700
-          );
-        }
-      );
-    };
+  const acknowledgeSuccessfulLogin = () => {
+    if (!pendingLogin || acknowledging) return;
+    setAcknowledging(true);
+    const { userData, token, destination } = pendingLogin;
+    login(userData, userData.role, token);
+    navigate(destination, { replace: true });
+  };
 
   const handleLogin = async (e) => {
     e.preventDefault();
@@ -70,10 +136,17 @@ export default function LoginPage() {
     setError("");
     setSuccess("");
 
-    if (!email || !password) {
+    const normalizedEmail = email.trim().toLowerCase();
+
+    if (!normalizedEmail || !password) {
       setError(
         "Please fill in all fields."
       );
+      return;
+    }
+
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
+      setError("Please enter a valid email address.");
       return;
     }
 
@@ -81,12 +154,10 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
-      const credential =
-        await signInWithEmailAndPassword(
-          auth,
-          email,
-          password
-        );
+      const credential = await signInWithNetworkRetry(
+        normalizedEmail,
+        password
+      );
 
       const token =
         await credential.user.getIdToken();
@@ -106,51 +177,15 @@ export default function LoginPage() {
       const userData =
         response.data.data;
 
-      login(
+      queueSuccessfulLogin(
         userData,
-        userData.role,
-        token
+        token,
+        dashboardPathForRole(userData.role)
       );
-
-      const role =
-        userData.role;
-
-      await showLoginSuccess();
-
-      redirectByRole(role);
     } catch (err) {
       setSuccess("");
-
-      if (
-        err.code ===
-        "auth/user-not-found"
-      ) {
-        setError(
-          "Account not found."
-        );
-      } else if (
-        err.code ===
-        "auth/wrong-password"
-      ) {
-        setError(
-          "Incorrect password."
-        );
-      } else if (
-        err.code ===
-        "auth/invalid-credential"
-      ) {
-        setError(
-          "Invalid email or password."
-        );
-      } else {
-        setError(
-          err.response?.status === 429 || /Too many requests\. Please slow down\./i.test(err.response?.data?.message || "")
-            ? "Sign in is temporarily unavailable. Please try again later."
-            : err.response?.data?.message ||
-            err.message ||
-            "Login failed."
-        );
-      }
+      console.error("Email sign in failed:", err?.code || err?.message);
+      setError(getLoginErrorMessage(err));
     } finally {
       signInInProgress.current = false;
       setLoading(false);
@@ -190,33 +225,47 @@ export default function LoginPage() {
         const userData =
           response.data.data;
 
-        login(
-          userData,
-          userData.role,
-          token
-        );
-
-        const role =
-          userData.role;
-
-        await showLoginSuccess();
-
-        redirectByRole(role);
+        if (userData.role === "participant" && userData.profileComplete === false) {
+          login(userData, userData.role, token);
+          navigate("/complete-profile", { replace: true });
+        } else {
+          queueSuccessfulLogin(
+            userData,
+            token,
+            dashboardPathForRole(userData.role)
+          );
+        }
       } catch (err) {
         console.error("Google sign in failed:", err?.code || err?.message);
         setSuccess("");
-        setError(
-          err.response?.status === 429 || /Too many requests\. Please slow down\./i.test(err.response?.data?.message || "")
-            ? "Sign in is temporarily unavailable. Please try again later."
-            : err.response?.data?.message ||
-            err.message ||
-            "Google sign in failed."
-        );
+        setError(getLoginErrorMessage(err, "google"));
       } finally {
         signInInProgress.current = false;
         setLoading(false);
       }
     };
+
+  const handleForgotPassword = async () => {
+    setError("");
+    setSuccess("");
+    const normalizedEmail = email.trim().toLowerCase();
+    if (!normalizedEmail) { setError("Please enter your email address first."); return; }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
+      setError("Please enter a valid email address.");
+      return;
+    }
+    setResetLoading(true);
+    try {
+      await sendPasswordResetEmail(auth, normalizedEmail);
+      setSuccess("If this email uses a MENRO email/password account, Firebase sent a reset link. Google accounts should continue with Google.");
+    } catch (resetError) {
+      setError(resetError.code === "auth/invalid-email"
+        ? "Please enter a valid email address."
+        : "Unable to send a password reset email. If this account uses Google, sign in with Google instead.");
+    } finally {
+      setResetLoading(false);
+    }
+  };
 
   return (
     <div className="login-page">
@@ -298,6 +347,7 @@ export default function LoginPage() {
 
                 <input
                   type="email"
+                  autoComplete="email"
                   placeholder="Enter your email"
                   value={email}
                   onChange={(e) =>
@@ -313,9 +363,9 @@ export default function LoginPage() {
             <div className="login-field">
               <div className="login-label login-password-label">
                 <span>Password</span>
-                <a href="#">
-                  Forgot password?
-                </a>
+                <button type="button" className="login-forgot-button" onClick={handleForgotPassword} disabled={loading || resetLoading}>
+                  {resetLoading ? "Sending..." : "Forgot password?"}
+                </button>
               </div>
 
               <div className="login-input-wrap">
@@ -330,7 +380,7 @@ export default function LoginPage() {
                       ? "text"
                       : "password"
                   }
-                  autoComplete="new-password"
+                  autoComplete="current-password"
                   placeholder="Enter your password"
                   value={password}
                   onChange={(e) =>
@@ -382,10 +432,8 @@ export default function LoginPage() {
               className="login-primary-btn"
             >
               {loading
-                ? success
-                  ? "Redirecting..."
-                  : "Signing in..."
-                : "Sign in →"}
+                ? "Continuing..."
+                : "Continue →"}
             </button>
           </form>
 
@@ -419,6 +467,29 @@ export default function LoginPage() {
           © 2025 MENRO JUBAN, SORSOGON
         </footer>
       </main>
+
+      {pendingLogin && (
+        <div className="login-success-backdrop">
+          <section
+            className="login-success-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="login-success-title"
+          >
+            <CheckCircle2 className="login-success-icon" size={58} strokeWidth={1.7} aria-hidden="true" />
+            <h2 id="login-success-title">You have successfully logged in!</h2>
+            <button
+              ref={successButtonRef}
+              type="button"
+              className="login-success-button"
+              onClick={acknowledgeSuccessfulLogin}
+              disabled={acknowledging}
+            >
+              {acknowledging ? "Continuing..." : "OK, got it!"}
+            </button>
+          </section>
+        </div>
+      )}
     </div>
   );
 }

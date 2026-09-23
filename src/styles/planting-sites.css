@@ -471,11 +471,14 @@
   position: absolute;
 
   left: 14px;
-  bottom: 16px;
+  top: 230px;
+  bottom: auto;
 
   z-index: 4;
 
   width: 250px;
+  max-height: calc(100% - 246px);
+  overflow-y: auto;
 
   padding: 16px;
 
@@ -1660,9 +1663,11 @@
 
   .ps-map-legend {
     left: 10px;
-    bottom: 12px;
+    top: 215px;
+    bottom: auto;
 
     width: min(225px, calc(100% - 20px));
+    max-height: calc(100% - 227px);
 
     padding: 13px;
   }

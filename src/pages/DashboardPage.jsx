@@ -35,6 +35,8 @@ import {
 
 import { useAuth } from "../context/AuthContext";
 import { auth } from "../firebase/config";
+import { formatDisplayId } from "../utils/displayId";
+import { JUBAN_BARANGAYS } from "../utils/userTypes";
 import "../styles/dashboard-page.css";
 
 const API_BASE_URL =
@@ -46,34 +48,6 @@ const JUBAN_FALLBACK_CENTER = {
   lng: 124.0,
 };
 
-const BARANGAYS = [
-  "Añog",
-  "Aroroy",
-  "Bacolod",
-  "Binanuahan",
-  "Biriran",
-  "Buraburan",
-  "Calateo",
-  "Calmayon",
-  "Caruhayon",
-  "Catanagan",
-  "Catanusan",
-  "Cogon",
-  "Embarcadero",
-  "Guruyan",
-  "Lajong",
-  "Maalo",
-  "North Poblacion",
-  "South Poblacion",
-  "Puting Sapa",
-  "Rangas",
-  "Sablayan",
-  "Sipaya",
-  "Taboc",
-  "Tinago",
-  "Tughan",
-];
-
 const SURVIVAL_COLORS = [
   "#16813d",
   "#287e47",
@@ -83,6 +57,12 @@ const SURVIVAL_COLORS = [
   "#455d7a",
   "#94a3b8",
 ];
+const EMPTY_RECORDS = [];
+
+// Give Recharts a valid first-frame size before ResizeObserver measures the
+// responsive containers. This prevents development warnings during mount.
+const ACTIVITY_CHART_INITIAL_SIZE = { width: 640, height: 280 };
+const SURVIVAL_CHART_INITIAL_SIZE = { width: 220, height: 185 };
 
 function unwrapArray(payload) {
   if (Array.isArray(payload)) return payload;
@@ -180,8 +160,46 @@ function normalizeStatus(value) {
   return String(value || "").trim().toLowerCase();
 }
 
+function normalizeBarangay(value) {
+  return String(value || "").trim().toLocaleLowerCase();
+}
+
+function addRecordAliases(map, record, fields) {
+  fields.forEach((field) => {
+    const value = record?.[field];
+    if (value !== undefined && value !== null && String(value).trim()) {
+      map.set(String(value), record);
+    }
+  });
+}
+
+function linkedRecord(map, values) {
+  for (const value of values) {
+    if (value !== undefined && value !== null && map.has(String(value))) {
+      return map.get(String(value));
+    }
+  }
+  return null;
+}
+
+function directBarangay(record) {
+  return String(
+    record?.barangay ||
+      record?.eventBarangay ||
+      record?.siteBarangay ||
+      record?.plantingBarangay ||
+      record?.eventProposal?.barangay ||
+      ""
+  ).trim();
+}
+
 function getDate(record) {
   const candidates = [
+    record?.monitoredAt,
+    record?.monitoredDate,
+    record?.releasedAt,
+    record?.recordedAt,
+    record?.plantingDate,
     record?.createdAt,
     record?.updatedAt,
     record?.submittedAt,
@@ -373,20 +391,25 @@ function getStockQuantity(record) {
 function getDistributedQuantity(record) {
   return (
     Number(
-      record?.distributedQuantity ??
+      record?.totalQuantityReleased ??
+        record?.releasedQuantity ??
+        record?.distributedQuantity ??
         record?.quantity ??
         record?.totalQuantity ??
         record?.totalSeedlings ??
         0
     ) ||
-    sumItemQuantities(record?.items) ||
+    (Array.isArray(record?.items)
+      ? record.items.reduce((total, item) => total + Number(item?.releasedQuantity ?? item?.quantity ?? 0), 0)
+      : 0) ||
     sumItemQuantities(record?.seedlings)
   );
 }
 
 function getPlantedQuantity(record) {
   return Number(
-    record?.quantity ??
+    record?.quantityPlanted ??
+      record?.quantity ??
       record?.treesPlanted ??
       record?.plantedQuantity ??
       record?.seedlingsPlanted ??
@@ -397,6 +420,8 @@ function getPlantedQuantity(record) {
 }
 
 function getSurvivalRate(record) {
+  const history = Array.isArray(record?.history) ? record.history : [];
+  if (history.length > 0) return getSurvivalRate(history[history.length - 1]);
   const direct = Number(
     record?.survivalRate ??
       record?.survival_rate ??
@@ -418,6 +443,23 @@ function getSurvivalRate(record) {
   }
 
   return null;
+}
+
+function getMonitoringCounts(record) {
+  const history = Array.isArray(record?.history) ? record.history : [];
+  if (history.length > 0) return getMonitoringCounts(history[history.length - 1]);
+  const healthy = Number(record?.healthyCount ?? record?.healthy ?? 0) || 0;
+  const damaged = Number(record?.damagedCount ?? record?.damaged ?? 0) || 0;
+  const dead = Number(record?.deadCount ?? record?.dead ?? 0) || 0;
+  const total = Number(record?.totalMonitored ?? record?.totalChecked) || healthy + damaged + dead;
+  return { surviving: healthy + damaged, total };
+}
+
+function monitoringHistoryEntries(records) {
+  return records.flatMap((record) => {
+    if (!Array.isArray(record?.history)) return [record];
+    return record.history.map((entry) => ({ ...entry, barangay: record.barangay, siteId: record.siteId }));
+  });
 }
 
 function getRequestStatus(record) {
@@ -548,7 +590,7 @@ function buildMonthlyActivity(distributions, reports, monitoring) {
     }
   });
 
-  monitoring.forEach((record) => {
+  monitoringHistoryEntries(monitoring).forEach((record) => {
     const bucket = buckets.get(monthKey(getDate(record)));
     const rate = getSurvivalRate(record);
 
@@ -578,24 +620,23 @@ function buildSurvivalByBarangay(monitoring) {
 
   monitoring.forEach((record) => {
     const barangay = record?.barangay;
-    const rate = getSurvivalRate(record);
+    const counts = getMonitoringCounts(record);
 
-    if (!barangay || rate === null) return;
+    if (!barangay) return;
 
     if (!grouped.has(barangay)) {
-      grouped.set(barangay, []);
+      grouped.set(barangay, { surviving: 0, total: 0 });
     }
 
-    grouped.get(barangay).push(rate);
+    const current = grouped.get(barangay);
+    current.surviving += counts.surviving;
+    current.total += counts.total;
   });
 
   return Array.from(grouped.entries())
-    .map(([barangay, rates]) => ({
+    .map(([barangay, counts]) => ({
       barangay,
-      rate: Math.round(
-        rates.reduce((sum, value) => sum + value, 0) /
-          rates.length
-      ),
+      rate: counts.total > 0 ? Math.round((counts.surviving / counts.total) * 100) : 0,
     }))
     .sort((a, b) => b.rate - a.rate)
     .slice(0, 7);
@@ -618,7 +659,7 @@ function createRecentActivities({
       }`,
       type: "approved",
       title: `Seedling request ${
-        record?.id || record?.requestId || ""
+        formatDisplayId("REQ", record?.requestNumber, record?.requestId, record?.id)
       }`.trim(),
       detail: `${
         record?.purpose || record?.activity || "Seedling request"
@@ -638,7 +679,7 @@ function createRecentActivities({
       }`,
       type: "report",
       title: `Planting report ${
-        record?.id || record?.reportId || ""
+        formatDisplayId("RPT", record?.reportNumber, record?.reportId, record?.id)
       }`.trim(),
       detail: `${
         record?.siteName ||
@@ -662,7 +703,7 @@ function createRecentActivities({
       }`,
       type: "monitoring",
       title: `Monitoring update ${
-        record?.id || record?.recordId || ""
+        formatDisplayId("MON", record?.monitoringNumber, record?.recordId, record?.id)
       }`.trim(),
       detail: `${
         record?.siteName ||
@@ -1523,8 +1564,16 @@ export default function DashboardPage() {
 
     loadDashboard();
 
+    const intervalId = window.setInterval(() => {
+      if (document.visibilityState === "visible") loadDashboard();
+    }, 60_000);
+    const handleFocus = () => loadDashboard();
+    window.addEventListener("focus", handleFocus);
+
     return () => {
       cancelled = true;
+      window.clearInterval(intervalId);
+      window.removeEventListener("focus", handleFocus);
     };
   }, [isManagement, isParticipant, retryKey]);
 
@@ -1598,6 +1647,120 @@ export default function DashboardPage() {
       participantIdentity,
     ]);
 
+  const scopedManagementData = useMemo(() => {
+    const siteById = new Map();
+    sites.forEach((site) => addRecordAliases(siteById, site, ["id", "siteId"]));
+
+    const requestById = new Map();
+    requests.forEach((request) =>
+      addRecordAliases(requestById, request, ["id", "requestId", "requestNumber"])
+    );
+
+    const eventById = new Map();
+    events.forEach((event) => addRecordAliases(eventById, event, ["id", "eventId"]));
+
+    const distributionById = new Map();
+    distributions.forEach((distribution) =>
+      addRecordAliases(distributionById, distribution, ["id", "distributionId"])
+    );
+
+    const reportById = new Map();
+    reports.forEach((report) =>
+      addRecordAliases(reportById, report, ["id", "reportId", "plantingReportId"])
+    );
+
+    const siteBarangay = (record) =>
+      directBarangay(
+        linkedRecord(siteById, [
+          record?.siteId,
+          record?.plantingSiteId,
+          record?.eventProposal?.plantingSiteId,
+        ])
+      );
+    const requestBarangay = (record) => {
+      const request = linkedRecord(requestById, [
+        record?.requestId,
+        record?.seedlingRequestId,
+        record?.distributionId,
+        record?.requestNumber,
+      ]);
+      return directBarangay(request) || siteBarangay(request);
+    };
+    const eventBarangay = (record) => {
+      const event = linkedRecord(eventById, [record?.eventId, record?.relatedEventId]);
+      return directBarangay(event) || siteBarangay(event) || requestBarangay(event);
+    };
+    const distributionBarangay = (record) => {
+      const distribution = linkedRecord(distributionById, [
+        record?.distributionId,
+        record?.releaseId,
+      ]);
+      return (
+        directBarangay(distribution) ||
+        siteBarangay(distribution) ||
+        requestBarangay(distribution) ||
+        eventBarangay(distribution)
+      );
+    };
+    const reportBarangay = (record) => {
+      const report = linkedRecord(reportById, [
+        record?.plantingReportId,
+        record?.reportId,
+      ]);
+      return (
+        directBarangay(report) ||
+        siteBarangay(report) ||
+        requestBarangay(report) ||
+        eventBarangay(report) ||
+        distributionBarangay(report)
+      );
+    };
+    const resolveBarangay = (record, type) => {
+      const direct = directBarangay(record);
+      if (direct) return direct;
+      if (type === "site") return "";
+      if (type === "request") return siteBarangay(record);
+      if (type === "event") return siteBarangay(record) || requestBarangay(record);
+      if (type === "distribution") {
+        return siteBarangay(record) || requestBarangay(record) || eventBarangay(record);
+      }
+      if (type === "report") {
+        return siteBarangay(record) || requestBarangay(record) || eventBarangay(record) || distributionBarangay(record);
+      }
+      return (
+        siteBarangay(record) ||
+        requestBarangay(record) ||
+        eventBarangay(record) ||
+        reportBarangay(record) ||
+        distributionBarangay(record)
+      );
+    };
+
+    if (barangay === "All Barangays") {
+      return { requests, sites, distributions, reports, events, monitoring };
+    }
+
+    const selected = normalizeBarangay(barangay);
+    const filter = (records, type) =>
+      records.filter((record) => normalizeBarangay(resolveBarangay(record, type)) === selected);
+
+    return {
+      requests: filter(requests, "request"),
+      sites: filter(sites, "site"),
+      distributions: filter(distributions, "distribution"),
+      reports: filter(reports, "report"),
+      events: filter(events, "event"),
+      monitoring: filter(monitoring, "monitoring"),
+    };
+  }, [barangay, distributions, events, monitoring, reports, requests, sites]);
+
+  const dashboardRequests = isParticipant ? visibleRequests : scopedManagementData.requests;
+  const dashboardReports = isParticipant ? visibleReports : scopedManagementData.reports;
+  const dashboardMonitoring = isParticipant ? visibleMonitoring : scopedManagementData.monitoring;
+  const dashboardEvents = isParticipant ? events : scopedManagementData.events;
+  const dashboardDistributions = isParticipant ? EMPTY_RECORDS : scopedManagementData.distributions;
+  const filteredSites = isParticipant ? sites : scopedManagementData.sites;
+
   const upcomingEvents =
     useMemo(() => {
       const today = new Date();
@@ -1609,7 +1772,7 @@ export default function DashboardPage() {
         0
       );
 
-      return events
+      return dashboardEvents
         .map((event) => ({
           ...event,
           parsedDate:
@@ -1627,23 +1790,14 @@ export default function DashboardPage() {
             b.parsedDate
         )
         .slice(0, 4);
-    }, [events]);
+    }, [dashboardEvents]);
 
-  const filteredSites =
-    useMemo(() => {
-      if (
-        barangay ===
-        "All Barangays"
-      ) {
-        return sites;
-      }
-
-      return sites.filter(
-        (site) =>
-          site?.barangay ===
-          barangay
-      );
-    }, [barangay, sites]);
+  const barangayOptions = useMemo(() =>
+    [...new Set([
+      ...JUBAN_BARANGAYS,
+      ...sites.map((site) => String(site?.barangay || "").trim()).filter(Boolean),
+    ])]
+      .sort((a, b) => a.localeCompare(b)), [sites]);
 
   const managementSummary =
     useMemo(() => {
@@ -1656,7 +1810,7 @@ export default function DashboardPage() {
         );
 
       const totalDistributed =
-        distributions.reduce(
+        dashboardDistributions.reduce(
           (total, item) =>
             total +
             getDistributedQuantity(
@@ -1666,7 +1820,7 @@ export default function DashboardPage() {
         );
 
       const totalPlanted =
-        reports.reduce(
+        dashboardReports.reduce(
           (total, item) =>
             total +
             getPlantedQuantity(
@@ -1675,34 +1829,33 @@ export default function DashboardPage() {
           0
         );
 
-      const rates =
-        monitoring
-          .map(
-            getSurvivalRate
-          )
-          .filter(
-            (value) =>
-              value !== null
-          );
+      const monitoringCounts = dashboardMonitoring.reduce((total, record) => {
+        const counts = getMonitoringCounts(record);
+        return {
+          surviving: total.surviving + counts.surviving,
+          total: total.total + counts.total,
+        };
+      }, { surviving: 0, total: 0 });
 
-      const survivalRate =
-        rates.length > 0
-          ? Math.round(
-              rates.reduce(
-                (sum, value) =>
-                  sum + value,
-                0
-              ) / rates.length
-            )
-          : null;
+      const survivalRate = monitoringCounts.total > 0
+        ? Math.round((monitoringCounts.surviving / monitoringCounts.total) * 100)
+        : null;
 
       const participantCount =
         users.filter(
-          (user) =>
-            normalizeStatus(
-              user?.role
-            ) ===
-            "participant"
+          (user) => {
+            if (normalizeStatus(user?.role) !== "participant") return false;
+            if (barangay === "All Barangays") return true;
+
+            const hasMatchingProfileBarangay =
+              normalizeBarangay(user?.barangay) === normalizeBarangay(barangay);
+            const userId = String(user?.uid || user?.id || "");
+            const hasMatchingRequest = dashboardRequests.some(
+              (request) => String(request?.participantId || "") === userId
+            );
+
+            return hasMatchingProfileBarangay || hasMatchingRequest;
+          }
         ).length;
 
       return {
@@ -1715,13 +1868,13 @@ export default function DashboardPage() {
           participantCount,
         activeEvents:
           upcomingEvents.length,
-        totalSites: sites.length,
+        totalSites: filteredSites.length,
         totalRequests:
-          requests.length,
+          dashboardRequests.length,
         totalReports:
-          reports.length,
+          dashboardReports.length,
         verifiedReports:
-          reports.filter(
+          dashboardReports.filter(
             (record) =>
               [
                 "verified",
@@ -1734,12 +1887,13 @@ export default function DashboardPage() {
           ).length,
       };
     }, [
-      distributions,
+      dashboardDistributions,
+      dashboardMonitoring,
+      dashboardReports,
+      dashboardRequests,
+      barangay,
+      filteredSites,
       inventory,
-      monitoring,
-      reports,
-      requests,
-      sites,
       upcomingEvents,
       users,
     ]);
@@ -1820,23 +1974,14 @@ export default function DashboardPage() {
     useMemo(
       () =>
         buildMonthlyActivity(
-          isParticipant
-            ? []
-            : distributions,
-          isParticipant
-            ? visibleReports
-            : reports,
-          isParticipant
-            ? visibleMonitoring
-            : monitoring
+          dashboardDistributions,
+          dashboardReports,
+          dashboardMonitoring
         ),
       [
-        distributions,
-        isParticipant,
-        monitoring,
-        reports,
-        visibleMonitoring,
-        visibleReports,
+        dashboardDistributions,
+        dashboardMonitoring,
+        dashboardReports,
       ]
     );
 
@@ -1844,14 +1989,10 @@ export default function DashboardPage() {
     useMemo(
       () =>
         buildSurvivalByBarangay(
-          isParticipant
-            ? visibleMonitoring
-            : monitoring
+          dashboardMonitoring
         ),
       [
-        isParticipant,
-        monitoring,
-        visibleMonitoring,
+        dashboardMonitoring,
       ]
     );
 
@@ -1860,22 +2001,22 @@ export default function DashboardPage() {
       () =>
         createRecentActivities({
           requests:
-            visibleRequests,
+            dashboardRequests,
           reports:
-            visibleReports,
+            dashboardReports,
           monitoring:
-            visibleMonitoring,
+            dashboardMonitoring,
           events:
             isParticipant
               ? []
-              : events,
+              : dashboardEvents,
         }),
       [
-        events,
+        dashboardEvents,
+        dashboardMonitoring,
+        dashboardReports,
+        dashboardRequests,
         isParticipant,
-        visibleMonitoring,
-        visibleReports,
-        visibleRequests,
       ]
     );
 
@@ -1889,7 +2030,7 @@ export default function DashboardPage() {
           const treesPlanted =
             getSitePlanted(
               site,
-              reports
+              dashboardReports
             );
 
           const utilization =
@@ -1909,6 +2050,7 @@ export default function DashboardPage() {
               site?.id ||
               site?.siteId ||
               "—",
+            displayId: formatDisplayId("SITE", site?.siteId, site?.id),
             barangay:
               site?.barangay ||
               "—",
@@ -1918,7 +2060,7 @@ export default function DashboardPage() {
             condition:
               getSiteCondition(
                 site,
-                monitoring
+                dashboardMonitoring
               ),
           };
         })
@@ -1930,8 +2072,8 @@ export default function DashboardPage() {
         .slice(0, 6),
     [
       filteredSites,
-      monitoring,
-      reports,
+      dashboardMonitoring,
+      dashboardReports,
     ]
   );
 
@@ -1961,11 +2103,7 @@ export default function DashboardPage() {
       id: "allocated",
       label:
         "Seedlings Distributed",
-      value:
-        managementSummary.totalDistributed >
-        0
-          ? managementSummary.totalDistributed.toLocaleString()
-          : "—",
+      value: managementSummary.totalDistributed.toLocaleString(),
       icon: Sprout,
       className:
         "kpi-green",
@@ -1991,19 +2129,19 @@ export default function DashboardPage() {
       note:
         managementSummary.participants >
         0
-          ? `${managementSummary.totalUsers} registered users`
-          : "No participant records yet",
+          ? barangay === "All Barangays"
+            ? `${managementSummary.totalUsers} registered users`
+            : `Registered or active in ${barangay}`
+          : barangay === "All Barangays"
+            ? "No participant records yet"
+            : `No participants recorded in ${barangay}`,
       route: `${routeBase}/registered-users`,
     },
     {
       id: "planted",
       label:
         "Trees Planted",
-      value:
-        managementSummary.totalPlanted >
-        0
-          ? managementSummary.totalPlanted.toLocaleString()
-          : "—",
+      value: managementSummary.totalPlanted.toLocaleString(),
       icon: Trees,
       className:
         "kpi-orange",
@@ -2038,11 +2176,7 @@ export default function DashboardPage() {
       id: "events",
       label:
         "Upcoming Events",
-      value:
-        managementSummary.activeEvents >
-        0
-          ? managementSummary.activeEvents
-          : "—",
+      value: managementSummary.activeEvents,
       icon:
         CalendarDays,
       className:
@@ -2254,7 +2388,9 @@ export default function DashboardPage() {
   if (loading) {
     return (
       <div className="admin-dashboard">
-        <div style={{ minHeight: "420px", display: "grid", placeItems: "center", color: "#526159", fontSize: "13px", fontWeight: 600 }}>Loading dashboard...</div>
+        <div className="dashboard-loading" role="status" aria-live="polite">
+          Loading dashboard...
+        </div>
       </div>
     );
   }
@@ -2297,7 +2433,7 @@ export default function DashboardPage() {
               All Barangays
             </option>
 
-            {BARANGAYS.map(
+            {barangayOptions.map(
               (name) => (
                 <option key={name}>
                   {name}
@@ -2391,8 +2527,7 @@ export default function DashboardPage() {
             </select>
           </div>
 
-          {hasActivityData ? (
-            <>
+          <>
               <div className="activity-legend">
                 {!isParticipant && (
                   <span>
@@ -2417,6 +2552,7 @@ export default function DashboardPage() {
                 <ResponsiveContainer
                   width="100%"
                   height="100%"
+                  initialDimension={ACTIVITY_CHART_INITIAL_SIZE}
                 >
                   <BarChart
                     data={
@@ -2490,6 +2626,7 @@ export default function DashboardPage() {
                   <ResponsiveContainer
                     width="100%"
                     height="100%"
+                    initialDimension={ACTIVITY_CHART_INITIAL_SIZE}
                   >
                     <LineChart
                       data={
@@ -2531,19 +2668,15 @@ export default function DashboardPage() {
                     </LineChart>
                   </ResponsiveContainer>
                 </div>
+                {!hasActivityData && (
+                  <div className="dashboard-chart-zero-message">
+                    {isParticipant
+                      ? "No planting or monitoring activity has been recorded yet."
+                      : "No distribution, planting, or monitoring activity has been recorded in this period."}
+                  </div>
+                )}
               </div>
-            </>
-          ) : (
-            <EmptyState
-              icon={BarChart3}
-              title="No activity data yet"
-              text={
-                isParticipant
-                  ? "Your planting activity will appear here after you submit planting and monitoring records."
-                  : "Planting activity trends will appear here once distribution, planting, and monitoring records are available."
-              }
-            />
-          )}
+          </>
 
           <div className="activity-summary">
             {isParticipant ? (
@@ -2600,10 +2733,7 @@ export default function DashboardPage() {
                   </span>
 
                   <strong>
-                    {managementSummary.totalDistributed >
-                    0
-                      ? managementSummary.totalDistributed.toLocaleString()
-                      : "—"}
+                    {managementSummary.totalDistributed.toLocaleString()}
                   </strong>
                 </div>
 
@@ -2613,10 +2743,7 @@ export default function DashboardPage() {
                   </span>
 
                   <strong>
-                    {managementSummary.totalPlanted >
-                    0
-                      ? managementSummary.totalPlanted.toLocaleString()
-                      : "—"}
+                    {managementSummary.totalPlanted.toLocaleString()}
                   </strong>
                 </div>
 
@@ -2640,8 +2767,7 @@ export default function DashboardPage() {
                   </span>
 
                   <strong>
-                    {managementSummary.verifiedReports ||
-                      "—"}
+                    {managementSummary.verifiedReports}
                   </strong>
                 </div>
               </>
@@ -2892,19 +3018,16 @@ export default function DashboardPage() {
               </h2>
             </div>
 
-            {survivalBarangays.length >
-            0 ? (
               <div className="survival-content">
                 <div className="survival-chart-wrap">
                   <ResponsiveContainer
                     width="100%"
                     height="100%"
+                    initialDimension={SURVIVAL_CHART_INITIAL_SIZE}
                   >
                     <PieChart>
                       <Pie
-                        data={
-                          survivalBarangays
-                        }
+                        data={survivalBarangays.some((item) => item.rate > 0) ? survivalBarangays : [{ barangay: "Zero survival", rate: 1 }]}
                         dataKey="rate"
                         nameKey="barangay"
                         innerRadius={
@@ -2915,7 +3038,7 @@ export default function DashboardPage() {
                         }
                         stroke="none"
                       >
-                        {survivalBarangays.map(
+                        {(survivalBarangays.some((item) => item.rate > 0) ? survivalBarangays : [{ barangay: "Zero survival", rate: 1 }]).map(
                           (
                             _,
                             index
@@ -2924,12 +3047,7 @@ export default function DashboardPage() {
                               key={
                                 index
                               }
-                              fill={
-                                SURVIVAL_COLORS[
-                                  index %
-                                    SURVIVAL_COLORS.length
-                                ]
-                              }
+                              fill={survivalBarangays.some((item) => item.rate > 0) ? SURVIVAL_COLORS[index % SURVIVAL_COLORS.length] : "#e5e9e7"}
                             />
                           )
                         )}
@@ -2939,10 +3057,7 @@ export default function DashboardPage() {
 
                   <div className="survival-center">
                     <strong>
-                      {overallSurvival !==
-                      null
-                        ? `${overallSurvival}%`
-                        : "—"}
+                      {overallSurvival !== null ? `${overallSurvival}%` : "0%"}
                     </strong>
 
                     <span>
@@ -2988,17 +3103,11 @@ export default function DashboardPage() {
                       </div>
                     )
                   )}
+                  {survivalBarangays.length === 0 && (
+                    <span className="dashboard-chart-zero-copy">No survival monitoring records have been submitted yet.</span>
+                  )}
                 </div>
               </div>
-            ) : (
-              <EmptyState
-                icon={
-                  CircleCheckBig
-                }
-                title="No data available"
-                text="Survival rate per barangay will be shown here once monitoring records are added."
-              />
-            )}
 
             <button
               type="button"
@@ -3058,7 +3167,7 @@ export default function DashboardPage() {
                           <td>
                             <strong>
                               {
-                                site.id
+                                site.displayId
                               }
                             </strong>
                           </td>

@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import L from "leaflet";
+import "leaflet/dist/leaflet.css";
 import {
   FiActivity,
   FiArchive,
@@ -29,7 +31,10 @@ import {
 } from "recharts";
 
 import { useAuth } from "../context/AuthContext";
+import FormAlert from "../components/FormAlert";
 import { auth } from "../firebase/config";
+import { formatDisplayId } from "../utils/displayId";
+import * as exifr from "exifr";
 import "../styles/survival-monitoring.css";
 
 const API_BASE_URL =
@@ -38,6 +43,12 @@ const API_BASE_URL =
 const MAX_PHOTO_SIZE = 10 * 1024 * 1024;
 
 const CONDITION_META = {
+  "Not Yet Monitored": {
+    color: "#64748b",
+    soft: "#f1f5f9",
+    label: "Not Yet Monitored",
+    description: "No monitoring entry submitted",
+  },
   Healthy: {
     color: "#138a4b",
     soft: "#eaf7ef",
@@ -191,32 +202,35 @@ function getPlantingReportId(report) {
 }
 
 function normalizeMonitoringRecord(record) {
+  const history = Array.isArray(record?.history) ? record.history : [];
+  const latest = history.length > 0 ? history[history.length - 1] : null;
   const totalChecked = Number(
-    record?.totalMonitored ??
+    latest?.totalMonitored ?? record?.totalMonitored ??
       record?.quantityPlanted ??
       0
   );
 
   const healthy = Number(
-    record?.healthyCount ??
+    latest?.healthyCount ?? record?.healthyCount ??
       record?.healthy ??
       0
   );
 
   const damaged = Number(
-    record?.damagedCount ??
+    latest?.damagedCount ?? record?.damagedCount ??
       record?.damaged ??
       0
   );
 
   const dead = Number(
-    record?.deadCount ??
+    latest?.deadCount ?? record?.deadCount ??
       record?.dead ??
       0
   );
 
   return {
     ...record,
+    history,
     id: getRecordId(record),
     siteId:
       record?.siteId ||
@@ -232,7 +246,7 @@ function normalizeMonitoringRecord(record) {
       record?.participant ||
       "",
     monitoredDate:
-      record?.monitoringDate ||
+      latest?.monitoredDate || record?.monitoringDate ||
       record?.monitoredDate ||
       "",
     nextMonitoringDate:
@@ -242,14 +256,14 @@ function normalizeMonitoringRecord(record) {
     damaged,
     dead,
     survivalRate:
-      record?.survivalRate ??
+      latest?.survivalRate ?? record?.survivalRate ??
       getSurvivalRate(
         healthy,
         damaged,
         totalChecked
       ),
     condition:
-      record?.condition ||
+      latest?.condition || record?.condition ||
       deriveCondition(
         healthy,
         damaged,
@@ -398,6 +412,8 @@ export default function MonitoringPage() {
   const cameraInputRef = useRef(null);
   const uploadInputRef = useRef(null);
   const previewUrlRef = useRef(null);
+  const locationMapContainerRef = useRef(null);
+  const hasLoadedMonitoringRef = useRef(false);
 
   const currentIdentity = useMemo(
     () => getCurrentUserIdentity(currentUser),
@@ -406,6 +422,7 @@ export default function MonitoringPage() {
 
   const [records, setRecords] = useState([]);
   const [plantingReports, setPlantingReports] = useState([]);
+  const [sites, setSites] = useState([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
   const [retryKey, setRetryKey] = useState(0);
@@ -427,6 +444,7 @@ export default function MonitoringPage() {
 
   const [toast, setToast] = useState("");
   const [formError, setFormError] = useState("");
+  const [formSuccess, setFormSuccess] = useState("");
   const [locationLoading, setLocationLoading] = useState(false);
 
   const [photoFile, setPhotoFile] = useState(null);
@@ -457,7 +475,7 @@ export default function MonitoringPage() {
     let cancelled = false;
 
     async function loadMonitoringData() {
-      setLoading(true);
+      if (!hasLoadedMonitoringRef.current) setLoading(true);
       setLoadError("");
 
       try {
@@ -466,14 +484,12 @@ export default function MonitoringPage() {
             ? "/monitoring/my-records"
             : "/monitoring";
 
-        const [
-          monitoringResponse,
-          plantingResponse,
-        ] = await Promise.all([
+        const [monitoringResponse, plantingResponse, sitesResponse] = await Promise.all([
           apiRequest(monitoringPath),
           apiRequest(
             isParticipant ? "/planting-reports/my-reports" : "/planting-reports"
           ),
+          apiRequest("/sites"),
         ]);
 
         if (cancelled) return;
@@ -511,6 +527,7 @@ export default function MonitoringPage() {
                 "approved"
           )
         );
+        setSites(Array.isArray(sitesResponse.data) ? sitesResponse.data : []);
       } catch (error) {
         console.error(
           "Failed to load survival monitoring data:",
@@ -520,10 +537,12 @@ export default function MonitoringPage() {
         if (!cancelled) {
           setRecords([]);
           setPlantingReports([]);
+          setSites([]);
           setLoadError("Unable to load survival monitoring data. Please try again.");
         }
       } finally {
         if (!cancelled) {
+          hasLoadedMonitoringRef.current = true;
           setLoading(false);
         }
       }
@@ -537,11 +556,29 @@ export default function MonitoringPage() {
   }, [isParticipant, userRole, retryKey]);
 
   useEffect(() => {
+    const refresh = () => setRetryKey((current) => current + 1);
+    const interval = window.setInterval(() => {
+      if (document.visibilityState === "visible") refresh();
+    }, 60_000);
+    window.addEventListener("focus", refresh);
+    return () => {
+      window.clearInterval(interval);
+      window.removeEventListener("focus", refresh);
+    };
+  }, []);
+
+  useEffect(() => {
     if (!toast) return undefined;
 
     const timeout = window.setTimeout(() => setToast(""), 3200);
     return () => window.clearTimeout(timeout);
   }, [toast]);
+
+  useEffect(() => {
+    if (!formSuccess) return undefined;
+    const timeout = window.setTimeout(() => setFormSuccess(""), 4000);
+    return () => window.clearTimeout(timeout);
+  }, [formSuccess]);
 
   useEffect(() => {
     function handleOutsideMenu(event) {
@@ -636,6 +673,46 @@ export default function MonitoringPage() {
         String(currentIdentity.id)
     );
   }, [plantingReports, isParticipant, currentIdentity.id]);
+
+  const selectedLifecycle = useMemo(() => records.find((record) =>
+    String(record.plantingReportId) === String(form.plantingReportId)
+  ) || null, [records, form.plantingReportId]);
+
+  const selectedSite = useMemo(() => sites.find((site) =>
+    String(site.id || site.siteId) === String(form.siteId)
+  ) || null, [sites, form.siteId]);
+
+  useEffect(() => {
+    if (!showForm || !locationMapContainerRef.current || !selectedSite || !form.latitude || !form.longitude) {
+      return undefined;
+    }
+    const siteLatitude = Number(selectedSite.latitude);
+    const siteLongitude = Number(selectedSite.longitude);
+    const photoLatitude = Number(form.latitude);
+    const photoLongitude = Number(form.longitude);
+    if (![siteLatitude, siteLongitude, photoLatitude, photoLongitude].every(Number.isFinite)) return undefined;
+
+    const map = L.map(locationMapContainerRef.current, { zoomControl: true, attributionControl: true });
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      attribution: "&copy; OpenStreetMap contributors",
+      maxZoom: 20,
+    }).addTo(map);
+    const bounds = L.latLngBounds([[siteLatitude, siteLongitude], [photoLatitude, photoLongitude]]);
+    const polygon = Array.isArray(selectedSite.polygon)
+      ? selectedSite.polygon.map((point) => [Number(point.lat), Number(point.lng)]).filter(([lat, lng]) => Number.isFinite(lat) && Number.isFinite(lng))
+      : [];
+    if (polygon.length >= 3) {
+      L.polygon(polygon, { color: "#17643a", weight: 2, fillOpacity: 0.12 }).addTo(map);
+      polygon.forEach((point) => bounds.extend(point));
+    }
+    L.circleMarker([siteLatitude, siteLongitude], { radius: 8, color: "#17643a", fillColor: "#22c55e", fillOpacity: 0.9 })
+      .bindTooltip("Registered planting site").addTo(map);
+    L.circleMarker([photoLatitude, photoLongitude], { radius: 8, color: "#991b1b", fillColor: "#ef4444", fillOpacity: 0.95 })
+      .bindTooltip("Photo EXIF location").addTo(map);
+    map.fitBounds(bounds.pad(0.25), { maxZoom: 18 });
+    window.setTimeout(() => map.invalidateSize(), 0);
+    return () => map.remove();
+  }, [showForm, selectedSite, form.latitude, form.longitude]);
 
   const visibleRecords = useMemo(() => {
     const active = records.filter((record) => record.archived !== true);
@@ -773,15 +850,18 @@ export default function MonitoringPage() {
     const start = getRangeStart(trendRange);
     const grouped = new Map();
 
-    visibleRecords.forEach((record) => {
-      const dateValue = record.monitoredDate || record.date;
+    const entries = visibleRecords.flatMap((record) =>
+      (record.history || []).map((entry) => ({ ...entry, lifecycleId: record.id }))
+    );
+    entries.forEach((record) => {
+      const dateValue = record.monitoredDate || record.monitoringDate || record.monitoredAt || record.createdAt;
       if (!dateValue) return;
 
-      const date = new Date(`${String(dateValue).slice(0, 10)}T00:00:00`);
-      if (Number.isNaN(date.getTime())) return;
+      const date = normalizeTimestamp(dateValue);
+      if (!date) return;
       if (start && date < start) return;
 
-      const key = getMonthKey(dateValue);
+      const key = getMonthKey(date.toISOString());
       if (!key) return;
 
       const current = grouped.get(key) || {
@@ -791,25 +871,31 @@ export default function MonitoringPage() {
       };
 
       current.alive +=
-        (Number(record.healthy) || 0) + (Number(record.damaged) || 0);
-      current.total += Number(record.totalChecked) || 0;
+        (Number(record.healthyCount ?? record.healthy) || 0) +
+        (Number(record.damagedCount ?? record.damaged) || 0);
+      current.total += Number(record.totalMonitored ?? record.totalChecked) || 0;
 
       grouped.set(key, current);
     });
 
-    return [...grouped.values()]
-      .sort((a, b) => a.month.localeCompare(b.month))
-      .map((item) => ({
-        month: getMonthLabel(item.month),
-        survivalRate:
-          item.total > 0 ? Math.round((item.alive / item.total) * 100) : 0,
-      }));
+    const monthCount = trendRange === "12" ? 12 : 6;
+    if (trendRange !== "all" || grouped.size === 0) {
+      const now = new Date();
+      for (let offset = monthCount - 1; offset >= 0; offset -= 1) {
+        const date = new Date(now.getFullYear(), now.getMonth() - offset, 1);
+        const month = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+        if (!grouped.has(month)) grouped.set(month, { month, alive: 0, total: 0 });
+      }
+    }
+    return [...grouped.values()].sort((a, b) => a.month.localeCompare(b.month)).map((item) => ({
+      month: getMonthLabel(item.month),
+      survivalRate: item.total > 0 ? Math.round((item.alive / item.total) * 100) : 0,
+    }));
   }, [visibleRecords, trendRange]);
 
-  const hasGps =
-    form.latitude !== "" &&
-    form.longitude !== "" &&
-    form.locationCapturedAt !== "";
+  const hasMonitoringHistory = visibleRecords.some((record) => (record.history || []).length > 0);
+
+  const hasGps = form.latitude !== "" && form.longitude !== "";
 
   function clearPreview() {
     setPhotoFile(null);
@@ -820,6 +906,7 @@ export default function MonitoringPage() {
     }
 
     setPhotoPreview("");
+    setForm((previous) => ({ ...previous, latitude: "", longitude: "", accuracy: "", locationCapturedAt: "" }));
 
     if (cameraInputRef.current) {
       cameraInputRef.current.value = "";
@@ -860,12 +947,14 @@ export default function MonitoringPage() {
   async function openForm() {
     await refreshPlantingReports();
     resetForm();
+    setFormSuccess("");
     setShowForm(true);
   }
 
   function closeForm() {
     setShowForm(false);
     resetForm();
+    setFormSuccess("");
   }
 
   function updateFormField(field, value) {
@@ -875,6 +964,7 @@ export default function MonitoringPage() {
     }));
 
     if (formError) setFormError("");
+    if (formSuccess) setFormSuccess("");
   }
 
   function handlePlantingReportChange(event) {
@@ -926,69 +1016,41 @@ export default function MonitoringPage() {
     setFormError("");
   }
 
-  function captureLocation() {
-    setFormError("");
-
-    if (!navigator.geolocation) {
-      setFormError(
-        "Location services are not supported by this browser or device."
-      );
-      return;
+  async function verifyPhotoLocation(file = photoFile) {
+    if (!file) {
+      setFormError("Please upload or take a photo first.");
+      return false;
     }
-
     setLocationLoading(true);
-
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        setForm((previous) => ({
-          ...previous,
-          latitude: position.coords.latitude.toFixed(6),
-          longitude: position.coords.longitude.toFixed(6),
-          accuracy: Number(position.coords.accuracy).toFixed(1),
-          locationCapturedAt: new Date(position.timestamp).toISOString(),
-        }));
-
-        setLocationLoading(false);
-        setToast("Current GPS location captured.");
-      },
-      (error) => {
-        setLocationLoading(false);
-
-        let message =
-          "Unable to capture your current location. Please enable location services and try again.";
-
-        if (error.code === error.PERMISSION_DENIED) {
-          message =
-            "Location permission was denied. Allow location access in your browser and try again.";
-        } else if (error.code === error.POSITION_UNAVAILABLE) {
-          message =
-            "Your current location is unavailable. Make sure GPS or device location is turned on.";
-        } else if (error.code === error.TIMEOUT) {
-          message =
-            "Location request timed out. Move to an area with a better GPS signal and try again.";
-        }
-
-        setFormError(message);
-      },
-      {
-        enableHighAccuracy: true,
-        timeout: 15000,
-        maximumAge: 0,
+    try {
+      const metadata = await exifr.parse(file, { gps: true, tiff: true, exif: true });
+      const latitude = Number(metadata?.latitude);
+      const longitude = Number(metadata?.longitude);
+      if (!Number.isFinite(latitude) || latitude < -90 || latitude > 90 ||
+          !Number.isFinite(longitude) || longitude < -180 || longitude > 180) {
+        throw new Error();
       }
-    );
+      const captured = metadata?.DateTimeOriginal ?? metadata?.CreateDate;
+      setForm((previous) => ({
+        ...previous,
+        latitude: String(latitude), longitude: String(longitude), accuracy: "",
+        locationCapturedAt: captured && !Number.isNaN(new Date(captured).getTime())
+          ? new Date(captured).toISOString() : "",
+      }));
+      setFormError("");
+      return true;
+    } catch {
+      setForm((previous) => ({ ...previous, latitude: "", longitude: "", accuracy: "", locationCapturedAt: "" }));
+      setFormError("This photo does not contain GPS location metadata. Please upload an original geotagged photo with location information.");
+      return false;
+    } finally {
+      setLocationLoading(false);
+    }
   }
 
-  function handlePhotoChange(event) {
+  async function handlePhotoChange(event) {
     const file = event.target.files?.[0];
     if (!file) return;
-
-    if (!hasGps) {
-      setFormError(
-        "Capture the current GPS location before taking or uploading a monitoring photo."
-      );
-      event.target.value = "";
-      return;
-    }
 
     const allowedTypes = ["image/jpeg", "image/png", "image/webp"];
 
@@ -1013,12 +1075,13 @@ export default function MonitoringPage() {
 
     setPhotoFile(file);
     setPhotoPreview(preview);
-    setFormError("");
+    await verifyPhotoLocation(file);
   }
 
   async function handleSubmit(event) {
     event.preventDefault();
     setFormError("");
+    setFormSuccess("");
 
     if (!form.plantingReportId) {
       setFormError(
@@ -1027,10 +1090,16 @@ export default function MonitoringPage() {
       return;
     }
 
-    if (!form.monitoredDate) {
-      setFormError(
-        "Monitoring date is required."
-      );
+    if (selectedLifecycle?.status === "Not Yet Available") {
+      setFormError(`Monitoring is not available yet. You can submit the first monitoring record starting on ${selectedLifecycle.startMonitoringDate}.`);
+      return;
+    }
+    if (selectedLifecycle?.status === "Next Monitoring Scheduled") {
+      setFormError(`Monitoring is not due yet. You can submit the next monitoring record starting on ${selectedLifecycle.nextMonitoringDate}.`);
+      return;
+    }
+    if (selectedLifecycle?.status === "Monitoring Completed") {
+      setFormError("The two-year monitoring period for this planting record has been completed. No additional monitoring record can be submitted.");
       return;
     }
 
@@ -1103,13 +1172,6 @@ export default function MonitoringPage() {
       return;
     }
 
-    if (!hasGps) {
-      setFormError(
-        "Capture the current GPS location before submitting."
-      );
-      return;
-    }
-
     if (!photoFile) {
       setFormError(
         "A monitoring photo is required."
@@ -1117,14 +1179,8 @@ export default function MonitoringPage() {
       return;
     }
 
-    if (
-      form.endOfMonitoring &&
-      form.maturityStatus !==
-        "Mature"
-    ) {
-      setFormError(
-        "A monitoring cycle can only be ended when the trees are marked Mature."
-      );
+    if (!hasGps) {
+      setFormError("This photo does not contain GPS location metadata. Please upload an original geotagged photo with location information.");
       return;
     }
 
@@ -1151,38 +1207,8 @@ export default function MonitoringPage() {
         String(dead)
       );
       payload.append(
-        "monitoringDate",
-        form.monitoredDate
-      );
-      payload.append(
-        "nextMonitoringDate",
-        form.nextMonitoringDate || ""
-      );
-      payload.append(
         "maturityStatus",
         form.maturityStatus
-      );
-      payload.append(
-        "endOfMonitoring",
-        String(
-          form.endOfMonitoring
-        )
-      );
-      payload.append(
-        "latitude",
-        form.latitude
-      );
-      payload.append(
-        "longitude",
-        form.longitude
-      );
-      payload.append(
-        "accuracy",
-        form.accuracy
-      );
-      payload.append(
-        "locationCapturedAt",
-        form.locationCapturedAt
       );
       payload.append(
         "remarks",
@@ -1207,19 +1233,10 @@ export default function MonitoringPage() {
           response.data || {}
         );
 
-      setRecords(
-        (previous) => [
-          newRecord,
-          ...previous,
-        ]
-      );
+      setRecords((previous) => [newRecord, ...previous.filter((item) => item.id !== newRecord.id)]);
 
-      setShowForm(false);
       resetForm();
-
-      setToast(
-        "Monitoring record submitted successfully."
-      );
+      setFormSuccess("Your monitoring record was submitted successfully.");
     } catch (error) {
       console.error(
         "Failed to submit monitoring record:",
@@ -1304,7 +1321,7 @@ export default function MonitoringPage() {
   async function archiveRecord(record) {
     const confirmed =
       window.confirm(
-        `Archive monitoring record ${record.id}? It will be removed from the active list but kept in Firestore.`
+        `Archive monitoring record ${formatDisplayId("MON", record.monitoringNumber, record.monitoringId, record.id)}? It will be removed from the active list but kept in Firestore.`
       );
 
     if (!confirmed) return;
@@ -1415,7 +1432,7 @@ export default function MonitoringPage() {
               onClick={openForm}
             >
               <FiPlus size={15} />
-              Add Monitoring Record
+              Monitor Planted Trees
             </button>
           )}
         </div>
@@ -1432,7 +1449,7 @@ export default function MonitoringPage() {
             <FiFileText size={20} />
           </div>
           <div>
-            <div className="sm-kpi-label">Total Monitoring Records</div>
+            <div className="sm-kpi-label">Monitoring Lifecycles</div>
             <div className="sm-kpi-value">{loadError ? "—" : summary.totalRecords}</div>
             <div className="sm-kpi-note">Active records</div>
           </div>
@@ -1643,6 +1660,9 @@ export default function MonitoringPage() {
                 </LineChart>
               </ResponsiveContainer>
             )}
+            {!hasMonitoringHistory && (
+              <div className="sm-chart-zero-message">No survival monitoring records have been submitted yet.</div>
+            )}
           </div>
         </section>
 
@@ -1770,20 +1790,20 @@ export default function MonitoringPage() {
       {/* RECORDS */}
       <section className="sm-records-card">
         <div className="sm-records-header">
-          <h2>Monitoring Records</h2>
+          <h2>Monitoring Lifecycles</h2>
         </div>
 
         <div className="sm-table-wrap">
           <table className="sm-table">
             <thead>
               <tr>
-                <th>Record ID</th>
+                <th>Monitoring ID</th>
+                <th>Planting Report</th>
                 <th>Planting Site</th>
-                <th>Species</th>
-                <th>Date Monitored</th>
-                <th>Trees Checked</th>
-                <th>Survival Rate</th>
-                <th>Condition</th>
+                <th>Start Monitoring Date</th>
+                <th>Next Monitoring Date</th>
+                <th>Status</th>
+                <th>Latest Condition</th>
                 <th className="sm-actions-heading">Actions</th>
               </tr>
             </thead>
@@ -1797,8 +1817,9 @@ export default function MonitoringPage() {
                   return (
                     <tr key={record.id}>
                       <td>
-                        <span className="sm-record-id">{record.id}</span>
+                        <span className="sm-record-id">{formatDisplayId("MON", record.monitoringNumber, record.monitoringId, record.id)}</span>
                       </td>
+                      <td>{formatDisplayId("RPT", record.plantingReportNumber, record.plantingReportId)}</td>
                       <td>
                         <strong className="sm-site-name">
                           {record.siteName || "—"}
@@ -1809,12 +1830,9 @@ export default function MonitoringPage() {
                           </span>
                         )}
                       </td>
-                      <td>{record.species || "—"}</td>
-                      <td>{formatDate(record.monitoredDate)}</td>
-                      <td>{record.totalChecked ?? "—"}</td>
-                      <td>
-                        <strong>{record.survivalRate ?? 0}%</strong>
-                      </td>
+                      <td>{formatDate(record.startMonitoringDate)}</td>
+                      <td>{record.nextMonitoringDate ? formatDate(record.nextMonitoringDate) : record.history?.length ? "No further monitoring required" : "Available after first monitoring submission"}</td>
+                      <td>{record.status}</td>
                       <td>
                         <span
                           className="sm-condition-badge"
@@ -1931,7 +1949,7 @@ export default function MonitoringPage() {
           <div className="sm-modal">
             <div className="sm-modal-header">
               <div>
-                <h2>Add Monitoring Record</h2>
+                <h2>Monitor Planted Trees</h2>
                 <p>
                   Monitor a verified planting report and document the current
                   survival condition.
@@ -1949,8 +1967,16 @@ export default function MonitoringPage() {
 
             <form onSubmit={handleSubmit}>
               <div className="sm-modal-body">
-                {formError && (
-                  <div className="sm-error-box">{formError}</div>
+                <FormAlert type="error">{formError}</FormAlert>
+                <FormAlert type="success">{formSuccess}</FormAlert>
+                {!formError && !formSuccess && selectedLifecycle?.status === "Not Yet Available" && (
+                  <FormAlert type="info">Monitoring is not available yet. You can submit the first monitoring record starting on {formatDate(selectedLifecycle.startMonitoringDate)}, which is two weeks after the planting event.</FormAlert>
+                )}
+                {!formError && !formSuccess && selectedLifecycle?.status === "Next Monitoring Scheduled" && (
+                  <FormAlert type="info">Monitoring is not due yet. You can submit the next monitoring record starting on {formatDate(selectedLifecycle.nextMonitoringDate)}.</FormAlert>
+                )}
+                {!formError && !formSuccess && selectedLifecycle?.status === "Monitoring Completed" && (
+                  <FormAlert type="info">The two-year monitoring period for this planting record has been completed. No additional monitoring record can be submitted.</FormAlert>
                 )}
 
                 <div className="sm-form-section">
@@ -1974,11 +2000,7 @@ export default function MonitoringPage() {
                         key={getPlantingReportId(report)}
                         value={getPlantingReportId(report)}
                       >
-                        {getPlantingReportId(report)} —{" "}
-                        {report.siteName ||
-                          report.plantingLocation ||
-                          "Planting Site"}{" "}
-                        — {report.species || "Tree"}
+                        {formatDisplayId("RPT", report.reportNumber, report.reportId, getPlantingReportId(report))} — {report.eventName || "Planting Event"} — {report.siteName || report.plantingLocation || "Planting Site"}
                       </option>
                     ))}
                   </select>
@@ -1991,58 +2013,34 @@ export default function MonitoringPage() {
                   )}
 
                   {form.plantingReportId && (
-                    <div className="sm-selected-report">
-                      <div>
-                        <span>Planting Site</span>
-                        <strong>{form.siteName || "—"}</strong>
+                    <>
+                      <div className="sm-selected-report">
+                        <div>
+                          <span>Planting Site</span>
+                          <strong>{form.siteName || "—"}</strong>
+                        </div>
+                        <div>
+                          <span>Barangay</span>
+                          <strong>{form.barangay || "—"}</strong>
+                        </div>
+                        <div>
+                          <span>Species</span>
+                          <strong>{form.species || "—"}</strong>
+                        </div>
                       </div>
-                      <div>
-                        <span>Barangay</span>
-                        <strong>{form.barangay || "—"}</strong>
-                      </div>
-                      <div>
-                        <span>Species</span>
-                        <strong>{form.species || "—"}</strong>
-                      </div>
-                    </div>
+                    </>
                   )}
                 </div>
 
-                <div className="sm-form-section">
+                <div className="sm-form-section sm-summary-section">
                   <div className="sm-form-section-title">
                     <FiActivity size={15} />
                     Monitoring Summary
                   </div>
 
                   <div className="sm-form-grid">
-                    <div>
-                      <label className="sm-label">
-                        Monitoring Date <span>*</span>
-                      </label>
-                      <input
-                        type="date"
-                        className="sm-input"
-                        value={form.monitoredDate}
-                        onChange={(event) =>
-                          updateFormField("monitoredDate", event.target.value)
-                        }
-                      />
-                    </div>
-
-                    <div>
-                      <label className="sm-label">Next Monitoring Date</label>
-                      <input
-                        type="date"
-                        className="sm-input"
-                        value={form.nextMonitoringDate}
-                        onChange={(event) =>
-                          updateFormField(
-                            "nextMonitoringDate",
-                            event.target.value
-                          )
-                        }
-                      />
-                    </div>
+                    <div><label className="sm-label">Start Monitoring Date</label><div className="sm-input">{selectedLifecycle?.startMonitoringDate ? formatDate(selectedLifecycle.startMonitoringDate) : "Select a planting report"}</div></div>
+                    <div><label className="sm-label">Next Monitoring Date</label><div className="sm-input">{selectedLifecycle?.nextMonitoringDate ? formatDate(selectedLifecycle.nextMonitoringDate) : "Available after first monitoring submission"}</div></div>
 
                     <div>
                       <label className="sm-label">
@@ -2132,32 +2130,6 @@ export default function MonitoringPage() {
                       </select>
                     </div>
 
-                    <div>
-                      <label className="sm-label">
-                        End Monitoring
-                      </label>
-                      <label
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          gap: "8px",
-                          minHeight: "42px",
-                        }}
-                      >
-                        <input
-                          type="checkbox"
-                          checked={form.endOfMonitoring}
-                          disabled={form.maturityStatus !== "Mature"}
-                          onChange={(event) =>
-                            updateFormField(
-                              "endOfMonitoring",
-                              event.target.checked
-                            )
-                          }
-                        />
-                        End monitoring for this planting report
-                      </label>
-                    </div>
                   </div>
 
                   <div className="sm-helper">
@@ -2166,55 +2138,57 @@ export default function MonitoringPage() {
                   </div>
                 </div>
 
-                <div className="sm-form-section">
+                <div className="sm-form-section sm-location-section">
                   <div className="sm-form-section-title">
                     <FiMapPin size={15} />
-                    Current GPS Location
+                    Photo Location Verification
                   </div>
 
                   <div className="sm-gps-card">
                     <div>
                       <strong>
                         {hasGps
-                          ? "Location captured"
-                          : "Capture monitoring location"}
+                          ? "Photo GPS found"
+                          : "Verify photo location"}
                       </strong>
                       <span>
-                        GPS is required before a monitoring photo can be
-                        uploaded.
+                        Location is read from the selected photo's EXIF metadata.
                       </span>
                     </div>
 
                     <button
                       type="button"
                       className="sm-secondary-button"
-                      onClick={captureLocation}
+                      onClick={() => void verifyPhotoLocation()}
                       disabled={locationLoading}
                     >
                       <FiMapPin size={14} />
-                      {locationLoading ? "Capturing..." : "Capture GPS"}
+                      {locationLoading ? "Reading Photo..." : "Verify Photo Location"}
                     </button>
                   </div>
 
                   {hasGps && (
-                    <div className="sm-gps-values">
-                      <div>
-                        <span>Latitude</span>
-                        <strong>{form.latitude}</strong>
+                    <>
+                      <div className="sm-gps-values">
+                        <div>
+                          <span>Latitude</span>
+                          <strong>{form.latitude}</strong>
+                        </div>
+                        <div>
+                          <span>Longitude</span>
+                          <strong>{form.longitude}</strong>
+                        </div>
+                        <div>
+                          <span>Source</span>
+                          <strong>Photo EXIF metadata</strong>
+                        </div>
                       </div>
-                      <div>
-                        <span>Longitude</span>
-                        <strong>{form.longitude}</strong>
-                      </div>
-                      <div>
-                        <span>Accuracy</span>
-                        <strong>± {form.accuracy} m</strong>
-                      </div>
-                    </div>
+                      {selectedSite && <div ref={locationMapContainerRef} className="sm-location-map" aria-label="Photo and planting site location map" />}
+                    </>
                   )}
                 </div>
 
-                <div className="sm-form-section">
+                <div className="sm-form-section sm-photo-section">
                   <div className="sm-form-section-title">
                     <FiCamera size={15} />
                     Monitoring Photo
@@ -2226,7 +2200,6 @@ export default function MonitoringPage() {
                     accept="image/jpeg,image/png,image/webp"
                     capture="environment"
                     className="sm-hidden-input"
-                    disabled={!hasGps}
                     onChange={handlePhotoChange}
                   />
 
@@ -2235,7 +2208,6 @@ export default function MonitoringPage() {
                     type="file"
                     accept="image/jpeg,image/png,image/webp"
                     className="sm-hidden-input"
-                    disabled={!hasGps}
                     onChange={handlePhotoChange}
                   />
 
@@ -2261,11 +2233,7 @@ export default function MonitoringPage() {
                       </div>
                     </div>
                   ) : (
-                    <div
-                      className={`sm-upload-box ${
-                        !hasGps ? "is-disabled" : ""
-                      }`}
-                    >
+                    <div className="sm-upload-box">
                       <FiCamera size={23} />
                       <strong>Monitoring Photo Evidence</strong>
                       <span>JPG, PNG, or WEBP up to 10 MB</span>
@@ -2282,7 +2250,6 @@ export default function MonitoringPage() {
                         <button
                           type="button"
                           className="sm-primary-button"
-                          disabled={!hasGps}
                           onClick={() => cameraInputRef.current?.click()}
                         >
                           <FiCamera size={14} />
@@ -2292,7 +2259,6 @@ export default function MonitoringPage() {
                         <button
                           type="button"
                           className="sm-secondary-button"
-                          disabled={!hasGps}
                           onClick={() => uploadInputRef.current?.click()}
                         >
                           <FiImage size={14} />
@@ -2363,7 +2329,7 @@ export default function MonitoringPage() {
                   >
                     {selectedRecord.condition}
                   </span>
-                  <span>{selectedRecord.id}</span>
+                  <span>{formatDisplayId("MON", selectedRecord.monitoringNumber, selectedRecord.monitoringId, selectedRecord.id)}</span>
                 </div>
               </div>
 
@@ -2381,66 +2347,62 @@ export default function MonitoringPage() {
                 <h3>Basic Information</h3>
                 <div className="sm-detail-grid">
                   <div>
+                    <span>Planting Report ID</span>
+                    <strong>{formatDisplayId("RPT", selectedRecord.plantingReportNumber, selectedRecord.plantingReportId)}</strong>
+                  </div>
+                  <div>
+                    <span>Planting Event</span>
+                    <strong>{selectedRecord.eventName || "—"}</strong>
+                  </div>
+                  <div>
                     <span>Planting Site</span>
                     <strong>{selectedRecord.siteName || "—"}</strong>
                   </div>
                   <div>
-                    <span>Date Monitored</span>
-                    <strong>{formatDate(selectedRecord.monitoredDate)}</strong>
+                    <span>Authoritative Planting Date</span>
+                    <strong>{formatDate(selectedRecord.authoritativePlantingDate)}</strong>
                   </div>
                   <div>
-                    <span>Planting Report ID</span>
-                    <strong>{selectedRecord.plantingReportId || "—"}</strong>
-                  </div>
-                  <div>
-                    <span>Total Trees Checked</span>
-                    <strong>{selectedRecord.totalChecked}</strong>
-                  </div>
-                  <div>
-                    <span>Tree Species</span>
-                    <strong>{selectedRecord.species || "—"}</strong>
+                    <span>Start Monitoring Date</span>
+                    <strong>{formatDate(selectedRecord.startMonitoringDate)}</strong>
                   </div>
                   <div>
                     <span>Next Monitoring Date</span>
-                    <strong>
-                      {formatDate(selectedRecord.nextMonitoringDate)}
-                    </strong>
+                    <strong>{selectedRecord.nextMonitoringDate ? formatDate(selectedRecord.nextMonitoringDate) : "No further monitoring required"}</strong>
+                  </div>
+                  <div>
+                    <span>Lifecycle Status</span>
+                    <strong>{selectedRecord.status || "—"}</strong>
+                  </div>
+                  <div>
+                    <span>Monitoring Entries</span>
+                    <strong>{selectedRecord.history?.length || 0}</strong>
                   </div>
                   <div>
                     <span>Submitted By</span>
                     <strong>{selectedRecord.participant || "—"}</strong>
                   </div>
                   <div>
-                    <span>Remarks</span>
-                    <strong>{selectedRecord.remarks || "—"}</strong>
+                    <span>Monitoring Ends</span>
+                    <strong>{formatDate(selectedRecord.monitoringEndDate)}</strong>
                   </div>
                 </div>
               </section>
 
-              <section className="sm-detail-section">
-                <h3>Monitoring Summary</h3>
+              {selectedRecord.history?.length > 0 && (
+                <section className="sm-detail-section">
+                  <h3>Latest Monitoring Summary</h3>
 
-                <div className="sm-detail-summary-grid">
-                  <div>
-                    <span>Healthy</span>
-                    <strong>{selectedRecord.healthy}</strong>
+                  <div className="sm-detail-summary-grid">
+                    <div><span>Healthy</span><strong>{selectedRecord.healthy}</strong></div>
+                    <div><span>Damaged</span><strong>{selectedRecord.damaged}</strong></div>
+                    <div><span>Dead</span><strong>{selectedRecord.dead}</strong></div>
+                    <div className="is-survival"><span>Survival Rate</span><strong>{selectedRecord.survivalRate}%</strong></div>
                   </div>
-                  <div>
-                    <span>Damaged</span>
-                    <strong>{selectedRecord.damaged}</strong>
-                  </div>
-                  <div>
-                    <span>Dead</span>
-                    <strong>{selectedRecord.dead}</strong>
-                  </div>
-                  <div className="is-survival">
-                    <span>Survival Rate</span>
-                    <strong>{selectedRecord.survivalRate}%</strong>
-                  </div>
-                </div>
-              </section>
+                </section>
+              )}
 
-              <section className="sm-detail-section">
+              {selectedRecord.history?.length > 0 && <section className="sm-detail-section">
                 <h3>Monitoring Photo</h3>
 
                 {selectedRecord.photoPreview || selectedRecord.photoUrl ? (
@@ -2470,9 +2432,9 @@ export default function MonitoringPage() {
                     </div>
                   </div>
                 )}
-              </section>
+              </section>}
 
-              <section className="sm-detail-section">
+              {selectedRecord.history?.length > 0 && <section className="sm-detail-section">
                 <h3>Location Information</h3>
                 <div className="sm-detail-grid">
                   <div>
@@ -2498,37 +2460,35 @@ export default function MonitoringPage() {
                     </strong>
                   </div>
                 </div>
-              </section>
+              </section>}
 
               <section className="sm-detail-section sm-detail-section-last">
                 <h3>Monitoring History</h3>
 
-                <div className="sm-history">
-                  <div className="sm-history-item">
-                    <span className="sm-history-dot">✓</span>
-                    <div>
-                      <strong>Submitted</strong>
-                      <p>
-                        {formatDateTime(selectedRecord.createdAt)} by{" "}
-                        {selectedRecord.participant || "Participant"}
-                      </p>
-                    </div>
-                  </div>
-
-                  {selectedRecord.reviewStatus === "Reviewed" &&
-                    selectedRecord.reviewedAt && (
-                      <div className="sm-history-item">
-                        <span className="sm-history-dot">✓</span>
-                        <div>
-                          <strong>Reviewed</strong>
-                          <p>
-                            {formatDateTime(selectedRecord.reviewedAt)} by{" "}
-                            {selectedRecord.reviewedBy || "MENRO Staff"}
-                          </p>
+                {selectedRecord.history?.length ? (
+                  <div className="sm-history-entry-list">
+                    {selectedRecord.history.map((entry, index) => (
+                      <article className="sm-history-entry" key={entry.id || `${entry.monitoredDate}-${index}`}>
+                        <div className="sm-history-entry-header">
+                          <strong>Monitoring Entry {index + 1}</strong>
+                          <span>{formatDateTime(entry.monitoredAt || entry.createdAt)}</span>
                         </div>
-                      </div>
-                    )}
-                </div>
+                        <div className="sm-detail-grid">
+                          <div><span>Condition</span><strong>{entry.condition || "—"}</strong></div>
+                          <div><span>Date Monitored</span><strong>{formatDate(entry.monitoredDate)}</strong></div>
+                          <div><span>Healthy / Damaged / Dead</span><strong>{entry.healthyCount || 0} / {entry.damagedCount || 0} / {entry.deadCount || 0}</strong></div>
+                          <div><span>Survival Rate</span><strong>{entry.survivalRate ?? 0}%</strong></div>
+                          <div><span>Photo Coordinates</span><strong>{entry.latitude ?? "—"}, {entry.longitude ?? "—"}</strong></div>
+                          <div><span>Site Verification</span><strong>{entry.automatedVerificationStatus || "—"}</strong></div>
+                          <div><span>Remarks</span><strong>{entry.remarks || "—"}</strong></div>
+                        </div>
+                        {entry.photoUrl && <img className="sm-detail-photo" src={buildMediaUrl(entry.photoUrl)} alt={`Monitoring evidence ${index + 1}`} />}
+                      </article>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="sm-helper">No monitoring entries have been submitted for this planting record.</p>
+                )}
 
                 {canReview &&
                   selectedRecord.reviewStatus !== "Reviewed" && (

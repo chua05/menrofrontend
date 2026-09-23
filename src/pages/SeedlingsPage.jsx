@@ -375,7 +375,7 @@ export default function SeedlingsPage() {
         );
 
         if (!cancelled) {
-          setLoadError("Unable to load seedling inventory. Please try again.");
+          setLoadError("Unable to load sapling inventory. Please try again.");
         }
       } finally {
         if (!cancelled) {
@@ -707,7 +707,7 @@ export default function SeedlingsPage() {
     ) {
       setFormErrors(errors);
       showError(
-        "Please correct the highlighted fields before adding the seedling record."
+        "Please correct the highlighted fields before adding the sapling record."
       );
       return;
     }
@@ -765,14 +765,14 @@ export default function SeedlingsPage() {
       closeAddModal();
 
       showSuccess(
-        `${newSeedling.treeName || "Seedling"} was added successfully.`
+        `${newSeedling.treeName || "Sapling"} was added successfully.`
       );
     } catch (error) {
       console.error(error);
 
       showError(
         error.message ||
-          "Unable to add the seedling record."
+          "Unable to add the sapling record."
       );
     } finally {
       setActionLoading(false);
@@ -843,7 +843,7 @@ export default function SeedlingsPage() {
       ));
       setSelectedSeedling(updated);
       setShowStockModal(false);
-      showSuccess(`${formatNumber(amount)} seedlings added to ${updated.treeName}.`);
+      showSuccess(`${formatNumber(amount)} saplings added to ${updated.treeName}.`);
     } catch (error) {
       setStockError(error.message || "Unable to add stock.");
     } finally {
@@ -921,7 +921,7 @@ export default function SeedlingsPage() {
           quantity < committed
         ) {
           errors.quantity =
-            `Total quantity cannot be lower than ${committed} because those seedlings are already reserved or distributed.`;
+            `Total quantity cannot be lower than ${committed} because those saplings are already reserved or distributed.`;
         }
       }
     }
@@ -989,14 +989,14 @@ export default function SeedlingsPage() {
       setEditErrors({});
 
       showSuccess(
-        `${updatedSeedling.treeName || "Seedling"} was updated successfully. Available stock is now ${updatedSeedling.available}.`
+        `${updatedSeedling.treeName || "Sapling"} was updated successfully. Available stock is now ${updatedSeedling.available}.`
       );
     } catch (error) {
       console.error(error);
 
       showError(
         error.message ||
-          "Unable to update the seedling record."
+          "Unable to update the sapling record."
       );
     } finally {
       setActionLoading(false);
@@ -1013,14 +1013,14 @@ export default function SeedlingsPage() {
   const handleExport = () => {
     if (seedlings.length === 0) {
       window.alert(
-        "There are no seedling records to export."
+        "There are no sapling records to export."
       );
 
       return;
     }
 
     const headers = [
-      "Seedling ID",
+      "Sapling ID",
       "Tree Name",
       "Scientific Name",
       "Category",
@@ -1100,7 +1100,7 @@ export default function SeedlingsPage() {
             fontWeight: 600,
           }}
         >
-          Loading seedling inventory...
+          Loading sapling inventory...
         </div>
       </div>
     );
@@ -1123,10 +1123,10 @@ export default function SeedlingsPage() {
           </div>
 
           <div>
-            <h1>Seedlings</h1>
+            <h1>Saplings</h1>
 
             <p>
-              Manage all seedlings and
+              Manage all saplings and
               distribution records.
             </p>
           </div>
@@ -1142,7 +1142,7 @@ export default function SeedlingsPage() {
               }
             >
               <Plus size={16} />
-              Add Seedling
+              Add Sapling
             </button>
           )}
 
@@ -1183,11 +1183,11 @@ export default function SeedlingsPage() {
       {/* KPI */}
       <section className="sd-kpi-grid">
         <KpiCard
-          label="Total Seedlings"
+          label="Total Saplings"
           value={formatNumber(
             counts.totalSeedlings
           )}
-          note="All seedling records"
+          note="All sapling records"
           icon={Sprout}
           variant="green"
         />
@@ -1207,7 +1207,7 @@ export default function SeedlingsPage() {
           value={formatNumber(
             counts.distributed
           )}
-          note="Released seedlings"
+          note="Released saplings"
           icon={Boxes}
           variant="orange"
         />
@@ -1259,7 +1259,7 @@ export default function SeedlingsPage() {
               setPage(1);
             }}
           >
-            Seedlings
+            Saplings
           </button>
 
           <button
@@ -1290,7 +1290,7 @@ export default function SeedlingsPage() {
 
                 <input
                   type="search"
-                  placeholder="Search seedlings..."
+                  placeholder="Search saplings..."
                   value={searchTerm}
                   onChange={(event) => {
                     setSearchTerm(
@@ -1563,7 +1563,7 @@ export default function SeedlingsPage() {
                                   <button
                                     type="button"
                                     className="sd-icon-action edit"
-                                    title="Edit seedling"
+                                    title="Edit sapling"
                                     onClick={() =>
                                       openEdit(
                                         seedling
@@ -1610,13 +1610,13 @@ export default function SeedlingsPage() {
 
                 <h2>
                   {seedlings.length === 0
-                    ? "No seedling records yet"
-                    : "No matching seedlings"}
+                    ? "No sapling records yet"
+                    : "No matching saplings"}
                 </h2>
 
                 <p>
                   {seedlings.length === 0
-                    ? "Seedling records added by MENRO will appear here."
+                    ? "Sapling records added by MENRO will appear here."
                     : "Try changing your search or filter settings."}
                 </p>
               </div>
@@ -1724,7 +1724,7 @@ export default function SeedlingsPage() {
             </h2>
 
             <p>
-              Seedling distribution
+              Sapling distribution
               transactions will appear here
               once records are created.
             </p>
@@ -1739,11 +1739,11 @@ export default function SeedlingsPage() {
             <div className="sd-modal-header">
               <div>
                 <h2>
-                  Add Seedling
+                  Add Sapling
                 </h2>
 
                 <p>
-                  Add a new tree seedling
+                  Add a new tree sapling
                   record to the inventory.
                 </p>
               </div>
@@ -1767,9 +1767,9 @@ export default function SeedlingsPage() {
     {/* SEEDLING INFORMATION */}
     <section className="sd-form-section">
       <div className="sd-form-section-heading">
-        <h3>Seedling Information</h3>
+        <h3>Sapling Information</h3>
         <p>
-          Basic identification of the seedling record.
+          Basic identification of the sapling record.
         </p>
       </div>
 
@@ -1971,7 +1971,7 @@ export default function SeedlingsPage() {
           <textarea
             value={form.description}
             maxLength={500}
-            placeholder="Enter optional notes about these seedlings"
+            placeholder="Enter optional notes about these saplings"
             onChange={(event) =>
               updateForm(
                 "description",
@@ -1998,7 +1998,7 @@ export default function SeedlingsPage() {
       className="sd-primary-btn"
     >
       <Plus size={15} />
-      Add Seedling
+      Add Sapling
     </button>
   </div>
 </form>
@@ -2020,7 +2020,7 @@ export default function SeedlingsPage() {
                   </span>
 
                   <h2>
-                    Update Seedling
+                    Update Sapling
                   </h2>
 
                   <p>
@@ -2198,7 +2198,7 @@ export default function SeedlingsPage() {
                   </span>
 
                   <h2>
-                    Seedling Details
+                    Sapling Details
                   </h2>
 
                   <p>

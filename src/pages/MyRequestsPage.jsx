@@ -1,6 +1,6 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 
@@ -30,6 +30,7 @@ import {
 } from "lucide-react";
 
 import { auth } from "../firebase/config";
+import { formatDisplayId } from "../utils/displayId";
 import "../styles/my-requests.css";
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
@@ -47,7 +48,11 @@ function normalizeMyRequest(request) {
   const proposal = request.eventProposal || {};
   return {
     ...request,
-    status: request.status === "Pending" ? "Pending Review" : request.status,
+    status: request.status === "Pending"
+      ? "Pending Review"
+      : request.status === "Returned"
+        ? "Request Returned"
+        : request.status,
     trees: Array.isArray(request.items) && request.items.length > 0
       ? request.items
       : Array.isArray(request.trees) ? request.trees
@@ -67,7 +72,17 @@ function normalizeMyRequest(request) {
     eventLocation: proposal.eventLocation || request.eventLocation,
     eventDescription: proposal.description || proposal.eventDescription || request.eventDescription,
     requestDate: requestTimestamp(request.createdAt || request.submittedAt || request.requestDate),
+    returnedAt: requestTimestamp(request.returnedAt),
   };
+}
+
+function getRequestDisplayId(request) {
+  return formatDisplayId(
+    "REQ",
+    request?.requestNumber,
+    request?.requestCode,
+    request?.id
+  );
 }
 
 function formatDate(value) {
@@ -103,6 +118,19 @@ function formatDateTime(value) {
     month: "short",
     day: "numeric",
     year: "numeric",
+  });
+}
+
+function formatFullDateTime(value) {
+  if (!value) return "—";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "—";
+  return date.toLocaleString("en-PH", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
   });
 }
 
@@ -240,6 +268,7 @@ function StatusBadge({ status }) {
     Approved: "myr-status myr-status-approved",
     Released: "myr-status myr-status-approved",
     Rejected: "myr-status myr-status-rejected",
+    "Request Returned": "myr-status myr-status-returned",
   };
 
   return (
@@ -742,6 +771,8 @@ function MyRequestLocationPreview({ request }) {
 
 export default function MyRequestsPage() {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const relatedRequestId = searchParams.get("request")?.trim() || "";
 
   const [requests, setRequests] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -775,7 +806,7 @@ export default function MyRequestsPage() {
       } catch (error) {
         console.error("Unable to load your seedling requests:", error);
         if (!cancelled) setLoadError(error.message === "Your session has expired. Please sign in again."
-          ? error.message : "Unable to load your seedling requests. Please try again.");
+          ? error.message : "Unable to load your sapling requests. Please try again.");
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -855,7 +886,23 @@ export default function MyRequestsPage() {
     setShowDetailsModal(false);
     setSelectedRequest(null);
     setInvitationFeedback("");
+    if (relatedRequestId) {
+      const nextParams = new URLSearchParams(searchParams);
+      nextParams.delete("request");
+      setSearchParams(nextParams, { replace: true });
+    }
   };
+
+  useEffect(() => {
+    if (!relatedRequestId || loading || showDetailsModal) return;
+    const request = requests.find((item) => item.id === relatedRequestId);
+    if (!request) return;
+
+    // Open the exact request associated with a backend notification.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setSelectedRequest(request);
+    setShowDetailsModal(true);
+  }, [loading, relatedRequestId, requests, showDetailsModal]);
 
   useEffect(() => {
     if (!showDetailsModal || !selectedRequest?.eventId) return;
@@ -946,9 +993,9 @@ export default function MyRequestsPage() {
           </div>
 
           <div>
-            <h1>My Seedling Requests</h1>
+            <h1>My Sapling Requests</h1>
             <p>
-              Track the status and details of your seedling requests submitted
+              Track the status and details of your sapling requests submitted
               to MENRO.
             </p>
           </div>
@@ -960,7 +1007,7 @@ export default function MyRequestsPage() {
           onClick={handleRequestSeedlings}
         >
           <Plus size={19} />
-          <span>Request Seedlings</span>
+          <span>Request Saplings</span>
         </button>
       </div>
 
@@ -1023,9 +1070,9 @@ export default function MyRequestsPage() {
               <tr>
                 <th className="myr-number-column">#</th>
                 <th>Request ID</th>
-                <th>Purpose / Activity</th>
+                <th>Purpose of Request</th>
                 <th>Barangay</th>
-                <th>Seedlings Requested</th>
+                <th>Saplings Requested</th>
                 <th>Date Submitted</th>
                 <th>Status</th>
                 <th className="myr-action-column">Action</th>
@@ -1041,7 +1088,7 @@ export default function MyRequestsPage() {
                     </td>
                     <td>
                       <span className="myr-request-id">
-                        {request.id || "—"}
+                        {getRequestDisplayId(request)}
                       </span>
                     </td>
                     <td>
@@ -1065,7 +1112,7 @@ export default function MyRequestsPage() {
                         className="myr-view-button"
                         onClick={() => handleViewRequest(request)}
                         title="View request details"
-                        aria-label={`View details of ${request.id || "request"}`}
+                        aria-label={`View details of ${getRequestDisplayId(request)}`}
                       >
                         <Eye size={18} />
                       </button>
@@ -1083,10 +1130,10 @@ export default function MyRequestsPage() {
                         </span>
                       </div>
 
-                      <h2>No seedling requests yet</h2>
+                      <h2>No sapling requests yet</h2>
                       <p>
-                        You haven't submitted any seedling requests. Click the
-                        "Request Seedlings" button above to create your first
+                        You haven't submitted any sapling requests. Click the
+                        "Request Saplings" button above to create your first
                         request.
                       </p>
                     </div>
@@ -1154,9 +1201,9 @@ export default function MyRequestsPage() {
           >
             <div className="myr-modal-header">
               <div>
-                <span className="myr-modal-label">Seedling Request</span>
+                <span className="myr-modal-label">Sapling Request</span>
                 <h2 id="myr-details-title">Request Details</h2>
-                <p>{selectedRequest.id || "Seedling Request"}</p>
+                <p>{getRequestDisplayId(selectedRequest)}</p>
               </div>
 
               <button
@@ -1232,7 +1279,7 @@ export default function MyRequestsPage() {
                 <div className="myr-section-title">
                   <Trees size={18} />
                   <div>
-                    <h3>Seedlings Requested</h3>
+                    <h3>Saplings Requested</h3>
                     <p>Requested tree species and quantity.</p>
                   </div>
                 </div>
@@ -1247,7 +1294,7 @@ export default function MyRequestsPage() {
                             seedling.treeName ||
                             seedling.name ||
                             seedling.species ||
-                            "seedling"
+                            "sapling"
                           }-${index}`}
                         >
                           <div>
@@ -1286,7 +1333,7 @@ export default function MyRequestsPage() {
                 </div>
 
                 <div className="myr-total-seedlings">
-                  <span>Total Seedlings</span>
+                  <span>Total Saplings</span>
                   <strong>{getTotalSeedlings(selectedRequest)}</strong>
                 </div>
               </section>
@@ -1480,12 +1527,12 @@ export default function MyRequestsPage() {
 
               {(["Approved", "Released"].includes(selectedRequest.status)) && (
                 <section className="myr-detail-section">
-                  <div className="myr-section-title"><Trees size={18} /><div><h3>Seedling Release</h3><p>Actual release details appear when MENRO records them.</p></div></div>
+                  <div className="myr-section-title"><Trees size={18} /><div><h3>Sapling Release</h3><p>Actual release details appear when MENRO records them.</p></div></div>
                   {Array.isArray(selectedRequest.releasedItems) && selectedRequest.releasedItems.length > 0 ? (
                     <div className="myr-seedling-list">
                       {selectedRequest.releasedItems.map((item, index) => (
                         <div className="myr-seedling-item" key={`${item.inventoryId || index}-release`}>
-                          <div><span>Seedling</span><strong>{item.species || item.treeName || "—"}</strong></div>
+                          <div><span>Sapling</span><strong>{item.species || item.treeName || "—"}</strong></div>
                           <div><span>Released / Requested</span><strong>{item.releasedQuantity} / {item.requestedQuantity}</strong></div>
                           {Number.isFinite(Number(item.requestedQuantity)) && Number.isFinite(Number(item.releasedQuantity)) && (
                             <div><span>Difference</span><strong>{Number(item.requestedQuantity) - Number(item.releasedQuantity)}</strong></div>
@@ -1494,7 +1541,7 @@ export default function MyRequestsPage() {
                         </div>
                       ))}
                     </div>
-                  ) : <p>Awaiting Seedling Release</p>}
+                  ) : <p>Awaiting Sapling Release</p>}
                   {(selectedRequest.releasedBy || selectedRequest.releasedAt) && (
                     <div className="myr-form-grid">
                       {selectedRequest.releasedBy && <div className="myr-readonly-field"><label>Released By</label><div><UserRound size={16} /><span>{selectedRequest.releasedBy}</span></div></div>}
@@ -1517,6 +1564,28 @@ export default function MyRequestsPage() {
               {invitationError && Number(selectedRequest.expectedParticipants) > 0 && (
                 <p role="status">{invitationError}</p>
               )}
+
+              {selectedRequest.status === "Request Returned" && (
+                <section className="myr-detail-section myr-return-information">
+                  <div className="myr-section-title">
+                    <CircleX size={18} />
+                    <div>
+                      <h3>Request Returned</h3>
+                      <p>This request was returned by MENRO Staff for correction.</p>
+                    </div>
+                  </div>
+                  <div className="myr-return-details">
+                    <div>
+                      <span>Reason for Return</span>
+                      <strong>{selectedRequest.returnReason || "—"}</strong>
+                    </div>
+                    <div>
+                      <span>Returned on</span>
+                      <p>{formatFullDateTime(selectedRequest.returnedAt)}</p>
+                    </div>
+                  </div>
+                </section>
+              )}
             </div>
 
             <div className="myr-modal-footer">
@@ -1527,6 +1596,19 @@ export default function MyRequestsPage() {
               >
                 Close
               </button>
+              {selectedRequest.status === "Request Returned" && (
+                <button
+                  type="button"
+                  className="myr-edit-button"
+                  onClick={() =>
+                    navigate(
+                      `/participant/request-seedlings?edit=${encodeURIComponent(selectedRequest.id)}`
+                    )
+                  }
+                >
+                  Edit Request
+                </button>
+              )}
             </div>
           </div>
         </div>

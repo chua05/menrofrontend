@@ -1,5 +1,6 @@
 import {  useCallback, useEffect, useMemo, useRef, useState, } from "react";
 import { createPortal } from "react-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import {
@@ -30,6 +31,7 @@ import {
 
 import { useAuth } from "../context/AuthContext";
 import { auth } from "../firebase/config";
+import { formatDisplayId } from "../utils/displayId";
 
 import "../styles/seedling-requests.css";
 
@@ -50,6 +52,11 @@ const TABS = [
     id: "reviewed",
     label: "Reviewed",
     status: "Reviewed",
+  },
+  {
+    id: "returned",
+    label: "Request Returned",
+    status: "Request Returned",
   },
   {
     id: "approved",
@@ -94,15 +101,6 @@ const BARANGAYS = [
 const BARANGAY_GEOJSON_URL = "/data/juban-barangays.geojson";
 
 const REQUEST_TYPES = ["New Planting", "Replacement"];
-
-const ADMIN_REJECTION_REASONS = [
-  "The proposed tree planting activity does not meet MENRO requirements.",
-  "The purpose of the seedling request is not aligned with the intended MENRO program or activity.",
-  "MENRO cannot accommodate the request at this time due to operational limitations.",
-  "Other reason.",
-];
-
-const OTHER_REJECTION_REASON = "Other reason.";
 
 const API_BASE_URL =
   import.meta.env.VITE_API_URL || "http://localhost:5000/api";
@@ -186,8 +184,11 @@ function normalizeRequestForUi(request = {}) {
           ]
         : [];
 
-  const uiStatus =
-    request.status === "Pending" ? "Pending Review" : request.status || "Pending Review";
+  const uiStatus = request.status === "Pending"
+    ? "Pending Review"
+    : request.status === "Returned"
+      ? "Request Returned"
+      : request.status || "Pending Review";
 
   return {
     ...request,
@@ -213,7 +214,7 @@ function normalizeRequestForUi(request = {}) {
     trees: items.map((item) => ({
       ...item,
       inventoryId: item.inventoryId || "",
-      treeName: item.species || item.treeName || "Seedling",
+      treeName: item.species || item.treeName || "Sapling",
       scientificName: item.scientificName || "",
       quantity: Number(item.quantity || 0),
     })),
@@ -257,6 +258,9 @@ function normalizeRequestForUi(request = {}) {
       request.adminReason ||
       request.rejectionReason ||
       "",
+    returnReason: request.returnReason || "",
+    returnedAt: toIsoString(request.returnedAt),
+    returnedBy: request.returnedByName || request.returnedBy || "",
     eventName: proposal.eventName || request.eventName || "",
     eventBarangay: proposal.barangay || request.eventBarangay || "",
     plantingSiteId:
@@ -290,6 +294,11 @@ function getPlantingSiteDisplayName(site) {
   return site?.siteName || site?.name || site?.id || "Planting Site";
 }
 
+function getPlantingSiteDisplayId(site) {
+  if (!site) return "";
+  return formatDisplayId("SITE", site?.siteId, site?.id);
+}
+
 function getSiteUtilization(site) {
   const capacity = Number(site?.maximumCapacity || 0);
   const planted = Number(site?.planted || 0);
@@ -311,12 +320,29 @@ function isPlantingSiteFull(site) {
   return getSiteUtilizationStatus(site) === "Full";
 }
 
+function getRequestDisplayId(request) {
+  return formatDisplayId(
+    "REQ",
+    request?.requestNumber,
+    request?.requestCode,
+    request?.id
+  );
+}
+
+function isPlantingSiteActive(site) {
+  return String(site?.status || "active").trim().toLowerCase() === "active";
+}
+
+function isPlantingSiteEligible(site) {
+  return isPlantingSiteActive(site) && !isPlantingSiteFull(site);
+}
+
 function getPlantingSiteOptionLabel(site) {
   const name = getPlantingSiteDisplayName(site);
   const utilization = getSiteUtilization(site);
   const status = getSiteUtilizationStatus(site);
 
-  return `${name} — ${status} (${utilization}%)`;
+  return `${getPlantingSiteDisplayId(site)} — ${name} — ${status} (${utilization}%)`;
 }
 
 function hasStaffReviewData(request) {
@@ -494,11 +520,12 @@ export default function SeedlingRequestsPage() {
   const [actionLoading, setActionLoading] = useState(false);
   const [decisionModal, setDecisionModal] = useState(null);
   const [rejectionChoice, setRejectionChoice] = useState("");
-  const [otherRejectionReason, setOtherRejectionReason] = useState("");
   const [decisionError, setDecisionError] = useState("");
   const [reviewModal, setReviewModal] = useState(null);
-  const [reviewFindings, setReviewFindings] = useState("");
   const [reviewError, setReviewError] = useState("");
+  const [returnModal, setReturnModal] = useState(null);
+  const [returnReason, setReturnReason] = useState("");
+  const [returnError, setReturnError] = useState("");
   const [releaseModal, setReleaseModal] = useState(null);
   const [releaseInventory, setReleaseInventory] = useState([]);
   const [releaseEntries, setReleaseEntries] = useState([]);
@@ -607,7 +634,7 @@ export default function SeedlingRequestsPage() {
   } catch (error) {
     console.error("Failed to load seedling requests:", error);
 
-    setLoadError("Unable to load seedling requests. Please try again.");
+    setLoadError("Unable to load sapling requests. Please try again.");
   } finally {
     setLoadingRequests(false);
   }
@@ -669,6 +696,10 @@ useEffect(() => {
       reviewed: requests.filter(
         (request) =>
           request.status === "Reviewed"
+      ).length,
+
+      returned: requests.filter(
+        (request) => request.status === "Request Returned"
       ).length,
 
       approved: requests.filter(
@@ -921,6 +952,8 @@ useEffect(() => {
 
     if (!form.preferredReleaseDate) {
       errors.preferredReleaseDate = "Preferred release date is required.";
+    } else if (form.preferredReleaseDate < getLocalDateString()) {
+      errors.preferredReleaseDate = "Preferred release date cannot be in the past. Please select today or a future date.";
     }
 
     if (!form.eventName.trim()) {
@@ -946,8 +979,8 @@ useEffect(() => {
 
     if (!form.proposedDate) {
       errors.proposedDate = "Proposed event date is required.";
-    } else if (form.proposedDate < getLocalDateString()) {
-      errors.proposedDate = "Proposed event date cannot be in the past.";
+    } else if (Number(form.proposedDate.slice(0, 4)) < new Date().getFullYear()) {
+      errors.proposedDate = "Proposed event date cannot be from a past year. Please select a date within the current year or a future year.";
     }
 
     if (!form.startTime) {
@@ -1065,30 +1098,16 @@ useEffect(() => {
 
   const openReviewModal = (request) => {
     setReviewModal({ request });
-    setReviewFindings("");
     setReviewError("");
   };
 
   const closeReviewModal = () => {
     if (actionLoading) return;
     setReviewModal(null);
-    setReviewFindings("");
     setReviewError("");
   };
 
   const submitReview = async () => {
-    const findings = reviewFindings.trim();
-
-    if (!findings) {
-      setReviewError("Review Findings / Remarks is required.");
-      return;
-    }
-
-    if (findings.length > 500) {
-      setReviewError("Review Findings / Remarks must be 500 characters or fewer.");
-      return;
-    }
-
     if (!reviewModal?.request?.id) return;
 
     const request = reviewModal.request;
@@ -1110,7 +1129,6 @@ useEffect(() => {
           request.eventLocation ||
           "",
         preferredReleaseDate: request.preferredReleaseDate || "",
-        reviewFindings: findings,
       };
 
       const updated = await apiRequest(
@@ -1122,12 +1140,71 @@ useEffect(() => {
       );
 
       refreshSelectedRequest(updated);
-      setSuccessMessage(`${request.id} was reviewed successfully.`);
+      setSuccessMessage(`${getRequestDisplayId(request)} was reviewed successfully.`);
       setReviewModal(null);
-      setReviewFindings("");
     } catch (error) {
       console.error(error);
       setReviewError(error.message || "Unable to review the request.");
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const openReturnModal = (request) => {
+    setReturnModal({ request });
+    setReturnReason("");
+    setReturnError("");
+  };
+
+  const closeReturnModal = () => {
+    if (actionLoading) return;
+    setReturnModal(null);
+    setReturnReason("");
+    setReturnError("");
+  };
+
+  const submitReturnForRevision = async () => {
+    const reason = returnReason.trim();
+
+    if (!reason) {
+      setReturnError(
+        "Please provide a reason so the participant knows what needs to be corrected."
+      );
+      return;
+    }
+
+    if (reason.length > 500) {
+      setReturnError("Reason for return must be 500 characters or fewer.");
+      return;
+    }
+
+    if (actionLoading || !returnModal?.request?.id) return;
+    const request = returnModal.request;
+
+    setActionLoading(true);
+    setReturnError("");
+    setRequestError("");
+
+    try {
+      const updated = await apiRequest(
+        `/seedling-requests/${request.id}/return`,
+        {
+          method: "PATCH",
+          body: JSON.stringify({ reason }),
+        }
+      );
+
+      refreshSelectedRequest(updated);
+      setSuccessMessage(
+        `${getRequestDisplayId(request)} was returned for revision.`
+      );
+      setReturnModal(null);
+      setReturnReason("");
+    } catch (error) {
+      console.error("Return for revision failed:", error);
+      setReturnError(
+        error.message || "Unable to return the request for revision."
+      );
     } finally {
       setActionLoading(false);
     }
@@ -1144,7 +1221,7 @@ useEffect(() => {
       );
 
       refreshSelectedRequest(updated);
-      setSuccessMessage(`${request.id} was released successfully.`);
+      setSuccessMessage(`${getRequestDisplayId(request)} was released successfully.`);
       return true;
     } catch (error) {
       console.error(error);
@@ -1224,7 +1301,6 @@ useEffect(() => {
   const openDecisionModal = (request, action) => {
     setDecisionModal({ request, action });
     setRejectionChoice("");
-    setOtherRejectionReason("");
     setDecisionError("");
   };
 
@@ -1232,7 +1308,6 @@ useEffect(() => {
     if (actionLoading) return;
     setDecisionModal(null);
     setRejectionChoice("");
-    setOtherRejectionReason("");
     setDecisionError("");
   };
 
@@ -1243,28 +1318,19 @@ useEffect(() => {
     let payload = {};
 
     if (action === "reject") {
-      if (!rejectionChoice) {
-        setDecisionError("Please select a reason for rejection.");
+      const reason = rejectionChoice.trim();
+
+      if (!reason) {
+        setDecisionError("Please provide a reason for rejecting this request.");
         return;
       }
 
-      if (rejectionChoice === OTHER_REJECTION_REASON) {
-        const customReason = otherRejectionReason.trim();
-
-        if (!customReason) {
-          setDecisionError("Please specify the reason for rejection.");
-          return;
-        }
-
-        if (customReason.length > 500) {
-          setDecisionError("Custom rejection reason must be 500 characters or fewer.");
-          return;
-        }
-
-        payload = { reason: customReason };
-      } else {
-        payload = { reason: rejectionChoice };
+      if (reason.length > 500) {
+        setDecisionError("Reason for rejection must be 500 characters or fewer.");
+        return;
       }
+
+      payload = { reason };
     }
 
     setActionLoading(true);
@@ -1282,11 +1348,10 @@ useEffect(() => {
 
       refreshSelectedRequest(updated);
       setSuccessMessage(
-        `${request.id} was ${action === "approve" ? "approved" : "rejected"} successfully.`
+        `${getRequestDisplayId(request)} was ${action === "approve" ? "approved" : "rejected"} successfully.`
       );
       setDecisionModal(null);
       setRejectionChoice("");
-      setOtherRejectionReason("");
       if (action === "approve") void loadRequests();
     } catch (error) {
       // Log full error for diagnostics but avoid exposing internal
@@ -1303,7 +1368,7 @@ useEffect(() => {
             "Unable to approve the request due to a server configuration error. Please contact the system administrator."
           );
         } else {
-          setDecisionError("Unable to approve the request. Please try again.");
+          setDecisionError(rawMessage || "Unable to approve the request. Please try again.");
         }
       } else {
         setDecisionError(rawMessage || "Unable to save the MENRO decision.");
@@ -1414,7 +1479,7 @@ useEffect(() => {
     }
 
     const confirmed = window.confirm(
-      `Archive ${request.id}? You can restore it later from Archived Records.`
+      `Archive ${getRequestDisplayId(request)}? You can restore it later from Archived Records.`
     );
 
     if (!confirmed) {
@@ -1441,7 +1506,7 @@ useEffect(() => {
     setSelectedRequest(null);
 
     setSuccessMessage(
-      `${request.id} was archived.`
+      `${getRequestDisplayId(request)} was archived.`
     );
 
     window.setTimeout(() => {
@@ -1474,7 +1539,7 @@ useEffect(() => {
   );
 
   setSuccessMessage(
-    `${request.id} was restored.`
+    `${getRequestDisplayId(request)} was restored.`
   );
 
   window.setTimeout(() => {
@@ -1494,6 +1559,9 @@ useEffect(() => {
 
     if (tab.id === "reviewed")
       return counts.reviewed;
+
+    if (tab.id === "returned")
+      return counts.returned;
 
     if (tab.id === "approved")
       return counts.approved;
@@ -1543,7 +1611,7 @@ useEffect(() => {
 }
 
   if (loadingRequests) {
-    return <div className="seedling-requests-page"><div style={{ minHeight: "420px", display: "grid", placeItems: "center", color: "#526159", fontSize: "13px", fontWeight: 600 }}>Loading seedling requests...</div></div>;
+    return <div className="seedling-requests-page"><div style={{ minHeight: "420px", display: "grid", placeItems: "center", color: "#526159", fontSize: "13px", fontWeight: 600 }}>Loading sapling requests...</div></div>;
   }
 
   if (loadError) {
@@ -1562,10 +1630,10 @@ useEffect(() => {
           </div>
 
           <div>
-            <h1>Seedling Requests</h1>
+            <h1>Sapling Requests</h1>
 
             <p>
-              Manage and review all seedling
+              Manage and review all sapling
               requests from barangays and
               organizations.
             </p>
@@ -1589,7 +1657,7 @@ useEffect(() => {
       )}
 
       {loadingRequests && (
-        <div className="sr-api-loading">Loading seedling requests...</div>
+        <div className="sr-api-loading">Loading sapling requests...</div>
       )}
 
       <section className="sr-kpi-grid">
@@ -2002,7 +2070,7 @@ useEffect(() => {
                               request.id
                             )
                           }
-                          aria-label={`Select ${request.id}`}
+                          aria-label={`Select ${getRequestDisplayId(request)}`}
                         />
                       </td>
                     )}
@@ -2012,7 +2080,7 @@ useEffect(() => {
                     </td>
 
                     <td className="sr-request-id">
-                      {request.id}
+                      {getRequestDisplayId(request)}
                     </td>
 
                     <td>
@@ -2138,36 +2206,13 @@ useEffect(() => {
       type="button"
       className="sr-view-btn"
       title="View details"
+      aria-label={`View details for ${getRequestDisplayId(request)}`}
       onClick={() =>
         setSelectedRequest(request)
       }
     >
       <Eye size={15} />
     </button>
-
-    {/* ADMIN - APPROVE OR REJECT REVIEWED REQUEST */}
-    {userRole === "admin" &&
-      request.status === "Reviewed" && (
-        <>
-          <button
-            type="button"
-            className="sr-approve-btn"
-            onClick={() => openDecisionModal(request, "approve")}
-            disabled={actionLoading}
-          >
-            Approve
-          </button>
-
-          <button
-            type="button"
-            className="sr-reject-btn"
-            onClick={() => openDecisionModal(request, "reject")}
-            disabled={actionLoading}
-          >
-            Reject
-          </button>
-        </>
-      )}
 
   </div>
 </td>
@@ -2194,13 +2239,13 @@ useEffect(() => {
 
             <h2>
               {requests.length === 0
-                ? "No seedling requests yet"
+                ? "No sapling requests yet"
                 : "No matching requests"}
             </h2>
 
             <p>
               {requests.length === 0
-                ? "There are no active seedling requests."
+                ? "There are no active sapling requests."
                 : "Try changing your search or filter settings."}
             </p>
           </div>
@@ -2284,21 +2329,32 @@ useEffect(() => {
 
       <ReviewRequestModal
         modal={reviewModal}
-        findings={reviewFindings}
-        setFindings={setReviewFindings}
         error={reviewError}
         loading={actionLoading}
         onClose={closeReviewModal}
         onSubmit={submitReview}
       />
 
+      <ReturnRequestModal
+        modal={returnModal}
+        reason={returnReason}
+        setReason={(value) => {
+          setReturnReason(value);
+          if (value.trim()) setReturnError("");
+        }}
+        error={returnError}
+        loading={actionLoading}
+        onClose={closeReturnModal}
+        onSubmit={submitReturnForRevision}
+      />
+
       {releaseModal && createPortal(
         <div className="sr-modal-backdrop sr-review-backdrop" onMouseDown={(event) => {
           if (event.target === event.currentTarget && !actionLoading) setReleaseModal(null);
         }}>
-          <div className="sr-modal sr-decision-modal" role="dialog" aria-modal="true" aria-label="Release seedlings">
+          <div className="sr-modal sr-decision-modal" role="dialog" aria-modal="true" aria-label="Release saplings">
             <div className="sr-modal-header">
-              <div><h2>Release Seedlings</h2><p>Confirm actual quantities against current inventory.</p></div>
+              <div><h2>Release Saplings</h2><p>Confirm actual quantities against current inventory.</p></div>
               <button type="button" className="sr-modal-close" onClick={() => setReleaseModal(null)} disabled={actionLoading} aria-label="Close"><X size={18} /></button>
             </div>
             <div className="sr-modal-body">
@@ -2353,8 +2409,6 @@ useEffect(() => {
         modal={decisionModal}
         rejectionChoice={rejectionChoice}
         setRejectionChoice={setRejectionChoice}
-        otherRejectionReason={otherRejectionReason}
-        setOtherRejectionReason={setOtherRejectionReason}
         error={decisionError}
         loading={actionLoading}
         onClose={closeDecisionModal}
@@ -2366,7 +2420,7 @@ useEffect(() => {
           <div className="sr-modal sr-new-modal">
             <div className="sr-modal-header">
               <div>
-                <h2>New Seedling Request</h2>
+                <h2>New Sapling Request</h2>
                 <p>Complete the requester and proposed planting event information.</p>
               </div>
 
@@ -2431,7 +2485,7 @@ useEffect(() => {
                 <div className="sr-tree-section">
                   <div className="sr-tree-heading">
                     <div>
-                      <h3>Seedlings Requested</h3>
+                      <h3>Saplings Requested</h3>
                       <p>Add one or more tree names and quantities.</p>
                     </div>
                   </div>
@@ -2668,7 +2722,7 @@ useEffect(() => {
             <div className="sr-modal-header">
               <div>
                 <span className="sr-detail-id">
-                  {selectedRequest.id}
+                  {getRequestDisplayId(selectedRequest)}
                 </span>
 
                 <h2>
@@ -2677,7 +2731,7 @@ useEffect(() => {
 
                 <p>
                   Complete information for
-                  this seedling request.
+                  this sapling request.
                 </p>
               </div>
 
@@ -2714,7 +2768,13 @@ useEffect(() => {
                 <DetailItem label="Barangay" value={selectedRequest.eventBarangay || selectedRequest.barangay} />
                 <DetailItem
                   label="Planting Site"
-                  value={selectedRequest.plantingSiteId || "—"}
+                  value={
+                    getPlantingSiteDisplayId(
+                      plantingSites.find(
+                        (site) => String(site.id) === String(selectedRequest.plantingSiteId)
+                      )
+                    ) || selectedRequest.plantingSiteId || "—"
+                  }
                   subvalue={selectedRequest.plantingSiteName || "—"}
                 />
                 <DetailItem label="Proposed Date" value={formatDate(selectedRequest.proposedDate)} />
@@ -2727,7 +2787,7 @@ useEffect(() => {
               
 
               <div className="sr-detail-seedlings">
-                <h3>Seedlings Requested</h3>
+                <h3>Saplings Requested</h3>
                 {(selectedRequest.trees || []).map((tree) => (
                   <div className="sr-detail-tree-row" key={`${selectedRequest.id}-${tree.treeName}`}>
                     <span>{tree.treeName}</span>
@@ -2735,14 +2795,14 @@ useEffect(() => {
                   </div>
                 ))}
                 <div className="sr-detail-tree-total">
-                  <span>Total Seedlings</span>
+                  <span>Total Saplings</span>
                   <strong>{getTotalSeedlings(selectedRequest.trees)}</strong>
                 </div>
               </div>
 
               {Array.isArray(selectedRequest.releasedItems) && selectedRequest.releasedItems.length > 0 && (
                 <div className="sr-detail-seedlings">
-                  <h3>Recorded Seedling Release</h3>
+                  <h3>Recorded Sapling Release</h3>
                   {selectedRequest.releasedItems.map((item, index) => (
                     <div className="sr-detail-tree-row" key={`${item.inventoryId}-${index}-released`}>
                       <span>{item.species} — {item.releasedQuantity} released of {item.requestedQuantity} requested; difference {item.difference}</span>
@@ -2758,6 +2818,17 @@ useEffect(() => {
                 <div className="sr-detail-remarks">
                   <span>Event Description</span>
                   <p>{selectedRequest.eventDescription}</p>
+                </div>
+              )}
+
+              {selectedRequest.status === "Request Returned" && (
+                <div className="sr-detail-remarks sr-return-information">
+                  <span>Return Information</span>
+                  <p className="sr-return-reason">{selectedRequest.returnReason}</p>
+                  <small>
+                    Returned {formatDate(selectedRequest.returnedAt)}
+                    {selectedRequest.returnedBy ? ` by ${selectedRequest.returnedBy}` : ""}
+                  </small>
                 </div>
               )}
 
@@ -2798,14 +2869,24 @@ useEffect(() => {
 
                 {userRole === "staff" &&
                   selectedRequest.status === "Pending Review" && (
-                    <button
-                      type="button"
-                      className="sr-approve-btn sr-large-action"
-                      onClick={() => openReviewModal(selectedRequest)}
-                      disabled={actionLoading}
-                    >
-                      Review
-                    </button>
+                    <>
+                      <button
+                        type="button"
+                        className="sr-reject-btn sr-large-action"
+                        onClick={() => openReturnModal(selectedRequest)}
+                        disabled={actionLoading}
+                      >
+                        Return Request
+                      </button>
+                      <button
+                        type="button"
+                        className="sr-approve-btn sr-large-action"
+                        onClick={() => openReviewModal(selectedRequest)}
+                        disabled={actionLoading}
+                      >
+                        Review
+                      </button>
+                    </>
                   )}
 
                 {userRole === "admin" &&
@@ -2838,7 +2919,7 @@ useEffect(() => {
                       onClick={() => openReleaseModal(selectedRequest)}
                       disabled={actionLoading}
                     >
-                      Release Seedlings
+                      Release Saplings
                     </button>
                   )}
               </div>
@@ -2857,7 +2938,7 @@ useEffect(() => {
                 </h2>
 
                 <p>
-                  Archived seedling requests
+                  Archived sapling requests
                   can be restored to the
                   active records.
                 </p>
@@ -2907,7 +2988,7 @@ useEffect(() => {
                         <div className="sr-archive-item-main">
                           <div className="sr-archive-item-top">
                             <strong>
-                              {request.id}
+                              {getRequestDisplayId(request)}
                             </strong>
 
                             <StatusBadge
@@ -3687,10 +3768,6 @@ function StaffReviewSection({ request }) {
           <span>Review Date</span>
           <strong>{formatDate(request.reviewedDate) || "—"}</strong>
         </div>
-        <div className="full-width">
-          <span>Review Findings / Remarks</span>
-          <strong>{request.reviewFindings || "—"}</strong>
-        </div>
         <div>
           <span>Review Status</span>
           <strong>Reviewed</strong>
@@ -3741,10 +3818,10 @@ function MenroDecisionSection({ request }) {
   );
 }
 
-function ReviewRequestModal({
+function ReturnRequestModal({
   modal,
-  findings,
-  setFindings,
+  reason,
+  setReason,
   error,
   loading,
   onClose,
@@ -3757,12 +3834,136 @@ function ReviewRequestModal({
       <div
         className="sr-modal sr-decision-modal"
         onMouseDown={(event) => event.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="sr-return-title"
       >
         <div className="sr-modal-header">
           <div>
-            <h2>Review Seedling Request</h2>
+            <h2 id="sr-return-title">Return Request</h2>
+            <p>Please explain what the participant needs to correct.</p>
+          </div>
+          <button
+            type="button"
+            className="sr-modal-close"
+            onClick={onClose}
+            disabled={loading}
+            aria-label="Close"
+          >
+            <X size={18} />
+          </button>
+        </div>
+
+        <div className="sr-modal-body">
+          <div className="sr-decision-request-summary">
+            <span>Request</span>
+            <strong>{getRequestDisplayId(modal.request)}</strong>
+          </div>
+
+          <label className="sr-form-field">
+            <span>Reason for Return *</span>
+            <textarea
+              value={reason}
+              onChange={(event) => setReason(event.target.value)}
+              maxLength={500}
+              placeholder="Enter the information that needs to be corrected..."
+              autoFocus
+            />
+            <small className="sr-decision-counter">
+              {reason.trim().length}/500 characters
+            </small>
+          </label>
+
+          {error && <small className="sr-field-error">{error}</small>}
+        </div>
+
+        <div className="sr-modal-footer">
+          <button
+            type="button"
+            className="sr-secondary-btn"
+            onClick={onClose}
+            disabled={loading}
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            className="sr-reject-btn sr-large-action"
+            onClick={onSubmit}
+            disabled={loading}
+          >
+            {loading ? "Returning..." : "Confirm Return"}
+          </button>
+        </div>
+      </div>
+    </div>,
+    document.body
+  );
+}
+
+function getParticipantRequestForm(profile = {}, request = null) {
+  const proposal = request?.eventProposal || {};
+  const requestItems = Array.isArray(request?.items) && request.items.length > 0
+    ? request.items
+    : [];
+
+  return {
+    requesterName:
+      profile?.displayName || profile?.fullName || profile?.name ||
+      request?.participantName || "",
+    requesterRole: "Participant",
+    organization: profile?.organization || request?.organization || "",
+    contactNumber:
+      profile?.contactNumber || profile?.phoneNumber || profile?.phone ||
+      request?.contactNumber || "",
+    trees: requestItems.length > 0
+      ? requestItems.map((item) => ({
+          id: crypto.randomUUID(),
+          inventoryId: item.inventoryId || "",
+          quantity: String(item.quantity ?? ""),
+        }))
+      : [{ id: crypto.randomUUID(), inventoryId: "", quantity: "" }],
+    purpose: request?.purpose || "",
+    preferredReleaseDate: request?.preferredReleaseDate || "",
+    eventName: proposal.eventName || request?.eventName || "",
+    eventBarangay: proposal.barangay || request?.barangay || profile?.barangay || "",
+    plantingSite: proposal.plantingSiteId || request?.plantingSiteId || "",
+    proposedDate: proposal.proposedDate || request?.proposedDate || "",
+    startTime: proposal.proposedStartTime || proposal.startTime || request?.startTime || "",
+    endTime: proposal.proposedEndTime || proposal.endTime || request?.endTime || "",
+    expectedParticipants: String(
+      proposal.expectedParticipants ?? request?.expectedParticipants ?? ""
+    ),
+    eventLocation: proposal.eventLocation || request?.plantingLocation || "",
+    eventDescription:
+      proposal.description || proposal.eventDescription || request?.eventDescription || "",
+    confirmedInformation: false,
+  };
+}
+
+function ReviewRequestModal({
+  modal,
+  error,
+  loading,
+  onClose,
+  onSubmit,
+}) {
+  if (!modal) return null;
+
+  return createPortal(
+    <div className="sr-modal-backdrop sr-review-backdrop" onMouseDown={onClose}>
+      <div
+        className="sr-modal sr-decision-modal"
+        onMouseDown={(event) => event.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="sr-admin-decision-title"
+      >
+        <div className="sr-modal-header">
+          <div>
+            <h2>Confirm Review</h2>
             <p>
-              Document your review findings before submitting this request for Admin decision.
+              Mark this request as reviewed and forward it to the MENRO Administrator for final decision?
             </p>
           </div>
           <button
@@ -3779,30 +3980,7 @@ function ReviewRequestModal({
         <div className="sr-modal-body">
           <div className="sr-decision-request-summary">
             <span>Request</span>
-            <strong>{modal.request.id}</strong>
-          </div>
-
-          <label className="sr-form-field">
-            <span>Review Findings / Remarks *</span>
-            <textarea
-              value={findings}
-              onChange={(event) => setFindings(event.target.value)}
-              maxLength={500}
-              placeholder="Enter what was checked or observed during the review..."
-              autoFocus
-            />
-            <small className="sr-decision-counter">
-              {findings.trim().length}/500 characters
-            </small>
-          </label>
-
-          <div className="sr-form-field">
-            <span>Review Date</span>
-            <input
-              type="text"
-              value={formatLocalDateLabel()}
-              readOnly
-            />
+            <strong>{getRequestDisplayId(modal.request)}</strong>
           </div>
 
           {error && <small className="sr-field-error">{error}</small>}
@@ -3821,9 +3999,9 @@ function ReviewRequestModal({
             type="button"
             className="sr-approve-btn sr-large-action"
             onClick={onSubmit}
-            disabled={loading || !findings.trim()}
+            disabled={loading}
           >
-            {loading ? "Submitting..." : "Submit Review"}
+            {loading ? "Reviewing..." : "Confirm Review"}
           </button>
         </div>
       </div>
@@ -3836,8 +4014,6 @@ function AdminDecisionModal({
   modal,
   rejectionChoice,
   setRejectionChoice,
-  otherRejectionReason,
-  setOtherRejectionReason,
   error,
   loading,
   onClose,
@@ -3846,25 +4022,23 @@ function AdminDecisionModal({
   if (!modal) return null;
 
   const isApprove = modal.action === "approve";
-  const needsOtherReason = rejectionChoice === OTHER_REJECTION_REASON;
-
-  return (
-    <div className="sr-modal-backdrop" onMouseDown={onClose}>
+  return createPortal(
+    <div className="sr-modal-backdrop sr-review-backdrop" onMouseDown={onClose}>
       <div
         className="sr-modal sr-decision-modal"
         onMouseDown={(event) => event.stopPropagation()}
       >
         <div className="sr-modal-header">
           <div>
-            <h2>
+            <h2 id="sr-admin-decision-title">
               {isApprove
-                ? "Approve Seedling Request"
-                : "Reject Seedling Request"}
+                ? "Approve Sapling Request"
+                : "Reject Sapling Request"}
             </h2>
             <p>
               {isApprove
-                ? "Confirm approval of this seedling request. No approval reason is required."
-                : "Select a standardized rejection reason for this seedling request."}
+                ? "Confirm approval of this sapling request. No approval reason is required."
+                : "Provide the reason that will be shown to the participant."}
             </p>
           </div>
           <button
@@ -3881,49 +4055,27 @@ function AdminDecisionModal({
         <div className="sr-modal-body">
           <div className="sr-decision-request-summary">
             <span>Request</span>
-            <strong>{modal.request.id}</strong>
+            <strong>{getRequestDisplayId(modal.request)}</strong>
           </div>
 
           {isApprove ? (
             <p className="sr-decision-confirm-text">
-              Are you sure you want to approve this seedling request?
+              Are you sure you want to approve this sapling request?
             </p>
           ) : (
-            <>
-              <label className="sr-form-field">
-                <span>Reason for Rejection *</span>
-                <select
-                  value={rejectionChoice}
-                  onChange={(event) => {
-                    setRejectionChoice(event.target.value);
-                  }}
-                >
-                  <option value="">Select rejection reason</option>
-                  {ADMIN_REJECTION_REASONS.map((reason) => (
-                    <option key={reason} value={reason}>
-                      {reason}
-                    </option>
-                  ))}
-                </select>
-              </label>
-
-              {needsOtherReason && (
-                <label className="sr-form-field">
-                  <span>Please specify the reason *</span>
-                  <textarea
-                    value={otherRejectionReason}
-                    onChange={(event) =>
-                      setOtherRejectionReason(event.target.value)
-                    }
-                    maxLength={500}
-                    placeholder="Enter the custom rejection reason..."
-                  />
-                  <small className="sr-decision-counter">
-                    {otherRejectionReason.trim().length}/500 characters
-                  </small>
-                </label>
-              )}
-            </>
+            <label className="sr-form-field">
+              <span>Reason for Rejection *</span>
+              <textarea
+                value={rejectionChoice}
+                onChange={(event) => setRejectionChoice(event.target.value)}
+                maxLength={500}
+                placeholder="Enter the reason for rejecting this request..."
+                autoFocus
+              />
+              <small className="sr-decision-counter">
+                {rejectionChoice.trim().length}/500 characters
+              </small>
+            </label>
           )}
 
           <div className="sr-form-field">
@@ -3953,9 +4105,7 @@ function AdminDecisionModal({
             onClick={onSubmit}
             disabled={
               loading ||
-              (!isApprove &&
-                (!rejectionChoice ||
-                  (needsOtherReason && !otherRejectionReason.trim())))
+              (!isApprove && !rejectionChoice.trim())
             }
           >
             {loading
@@ -3966,58 +4116,20 @@ function AdminDecisionModal({
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 
 function ParticipantSeedlingRequest({ currentUser }) {
-  const [form, setForm] = useState(() => ({
-    requesterName:
-      currentUser?.displayName ||
-      currentUser?.fullName ||
-      currentUser?.name ||
-      "",
-
-    requesterRole:
-      currentUser?.role === "participant"
-        ? "Participant"
-        : currentUser?.role || "Participant",
-
-    organization:
-      currentUser?.organization ||
-      currentUser?.barangay ||
-      "",
-
-    contactNumber:
-      currentUser?.contactNumber ||
-      currentUser?.phoneNumber ||
-      currentUser?.phone ||
-      "",
-
-    trees: [
-      {
-        id: crypto.randomUUID(),
-        inventoryId: "",
-        quantity: "",
-      },
-    ],
-
-    purpose: "",
-    preferredReleaseDate: "",
-
-    eventName: "",
-    eventBarangay:
-      currentUser?.barangay || "",
-    plantingSite: "",
-    proposedDate: "",
-    startTime: "",
-    endTime: "",
-    expectedParticipants: "",
-    eventLocation: "",
-    eventDescription: "",
-
-    confirmedInformation: false,
-  }));
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const editRequestId = searchParams.get("edit")?.trim() || "";
+  const [participantProfile, setParticipantProfile] = useState(currentUser || {});
+  const [form, setForm] = useState(() =>
+    getParticipantRequestForm(currentUser || {})
+  );
+  const [editingRequest, setEditingRequest] = useState(null);
 
   const [formErrors, setFormErrors] = useState({});
   const [successMessage, setSuccessMessage] = useState("");
@@ -4075,7 +4187,19 @@ function ParticipantSeedlingRequest({ currentUser }) {
   setParticipantLoadError("");
 
   try {
-    const inventoryData = await apiRequest("/inventory/available");
+    const [inventoryData, profileData, requestData] = await Promise.all([
+      apiRequest("/inventory/available"),
+      apiRequest("/auth/profile"),
+      editRequestId
+        ? apiRequest(`/seedling-requests/${encodeURIComponent(editRequestId)}`)
+        : Promise.resolve(null),
+    ]);
+
+    if (requestData && requestData.status !== "Returned") {
+      throw new Error(
+        "This request can no longer be edited because its status has changed."
+      );
+    }
 
     const inventoryList = (
       Array.isArray(inventoryData) ? inventoryData : []
@@ -4090,18 +4214,44 @@ function ParticipantSeedlingRequest({ currentUser }) {
         )
       );
 
-    setAvailableInventory(inventoryList);
+    const inventoryById = new Map(
+      inventoryList.map((item) => [item.id, item])
+    );
+    for (const item of requestData?.items || []) {
+      if (item.inventoryId && !inventoryById.has(item.inventoryId)) {
+        inventoryById.set(item.inventoryId, {
+          ...item,
+          id: item.inventoryId,
+          availableQuantity: 0,
+        });
+      }
+    }
+
+    setAvailableInventory(
+      [...inventoryById.values()].sort((a, b) =>
+        String(a.species || "").localeCompare(String(b.species || ""))
+      )
+    );
+    setParticipantProfile(profileData || {});
+    setEditingRequest(requestData || null);
+    setForm(getParticipantRequestForm(profileData || {}, requestData));
   } catch (error) {
     console.error(
       "Failed to load participant seedling request data:",
       error
     );
 
-    setParticipantLoadError("Unable to load available seedlings. Please try again.");
+    setParticipantLoadError(
+      error.message === "This request can no longer be edited because its status has changed."
+        ? error.message
+        : editRequestId
+          ? "Unable to load the returned request for editing. Please try again."
+          : "Unable to load available saplings. Please try again."
+    );
   } finally {
     setLoadingParticipantData(false);
   }
-}, []);
+}, [editRequestId]);
 
 useEffect(() => {
   // Initial participant data synchronization with the backend.
@@ -4112,8 +4262,16 @@ useEffect(() => {
 
   const plantingSitesForBarangay = plantingSites.filter(
     (site) =>
+      isPlantingSiteActive(site) &&
       String(site.barangay || "").trim().toLocaleLowerCase() ===
       String(form.eventBarangay || "").trim().toLocaleLowerCase()
+  );
+
+  const barangaysWithEligibleSites = new Set(
+    plantingSites
+      .filter(isPlantingSiteEligible)
+      .map((site) => String(site.barangay || "").trim().toLocaleLowerCase())
+      .filter(Boolean)
   );
 
   const selectedPlantingSite =
@@ -4207,12 +4365,12 @@ useEffect(() => {
 
     if (!form.organization.trim()) {
       errors.organization =
-        "Organization / Barangay is required.";
+        "Your organization information is missing from your profile. Please update your profile before submitting this request.";
     }
 
     if (!form.contactNumber.trim()) {
       errors.contactNumber =
-        "Contact number is required.";
+        "Your contact number is missing from your profile. Please update your profile before submitting this request.";
     } else if (
       !/^09\d{9}$/.test(
         form.contactNumber.replace(/\s/g, "")
@@ -4227,9 +4385,11 @@ useEffect(() => {
       .filter(Boolean);
 
     if (new Set(selectedInventoryIds).size !== selectedInventoryIds.length) {
-      errors.trees = "The same seedling cannot be selected more than once.";
+      errors.trees = "The same sapling cannot be selected more than once.";
     }
 
+    const missingSapling = form.trees.some((tree) => !tree.inventoryId);
+    const missingQuantity = form.trees.some((tree) => tree.quantity === "");
     const invalidTree = form.trees.some((tree) => {
       const inventory = availableInventory.find(
         (item) => item.id === tree.inventoryId
@@ -4244,19 +4404,25 @@ useEffect(() => {
       );
     });
 
-    if (invalidTree && !errors.trees) {
-      errors.trees =
-        "Select a seedling and enter a positive whole-number quantity of at least 1.";
+    if (missingSapling && !errors.trees) {
+      errors.trees = "Please select a sapling.";
+    } else if (missingQuantity && !errors.trees) {
+      errors.trees = "Please enter the requested quantity.";
+    } else if (invalidTree && !errors.trees) {
+      errors.trees = "Requested quantity must be greater than 0.";
     }
 
     if (!form.purpose.trim()) {
       errors.purpose =
-        "Purpose / Activity is required.";
+        "Please enter the purpose of your request.";
     }
 
     if (!form.preferredReleaseDate) {
       errors.preferredReleaseDate =
-        "Preferred release date is required.";
+        "Please select a preferred release date.";
+    } else if (form.preferredReleaseDate < getLocalDateString()) {
+      errors.preferredReleaseDate =
+        "Preferred release date cannot be in the past. Please select today or a future date.";
     }
 
     if (!form.eventName.trim()) {
@@ -4266,12 +4432,12 @@ useEffect(() => {
 
     if (!form.eventBarangay) {
       errors.eventBarangay =
-        "Barangay is required.";
+        "Please select a barangay with an available planting site.";
     }
 
     if (!form.plantingSite) {
       errors.plantingSite =
-        "A registered planting site is required.";
+        "Please select a planting site.";
     } else {
       const selectedSite = plantingSites.find(
         (site) => site.id === form.plantingSite
@@ -4280,6 +4446,8 @@ useEffect(() => {
       if (!selectedSite) {
         errors.plantingSite =
           "A registered planting site is required.";
+      } else if (!isPlantingSiteActive(selectedSite)) {
+        errors.plantingSite = "Please select a planting site.";
       } else if (isPlantingSiteFull(selectedSite)) {
         errors.plantingSite =
           "Sites marked as Full are not available for new planting requests.";
@@ -4289,9 +4457,9 @@ useEffect(() => {
     if (!form.proposedDate) {
       errors.proposedDate =
         "Proposed event date is required.";
-    } else if (form.proposedDate < getLocalDateString()) {
+    } else if (Number(form.proposedDate.slice(0, 4)) < new Date().getFullYear()) {
       errors.proposedDate =
-        "Proposed event date cannot be in the past.";
+        "Proposed event date cannot be from a past year. Please select a date within the current year or a future year.";
     }
 
     if (!form.startTime) {
@@ -4348,37 +4516,9 @@ useEffect(() => {
   };
 
   const resetParticipantForm = () => {
-    setForm({
-      requesterName:
-        currentUser?.displayName ||
-        currentUser?.fullName ||
-        currentUser?.name ||
-        "",
-      requesterRole: "Participant",
-      organization:
-        currentUser?.organization ||
-        currentUser?.barangay ||
-        "",
-      contactNumber:
-        currentUser?.contactNumber ||
-        currentUser?.phoneNumber ||
-        currentUser?.phone ||
-        "",
-      trees: [{ id: crypto.randomUUID(), inventoryId: "", quantity: "" }],
-      purpose: "",
-      preferredReleaseDate: "",
-      eventName: "",
-      eventBarangay: currentUser?.barangay || "",
-      plantingSite: "",
-      proposedDate: "",
-      startTime: "",
-      endTime: "",
-      expectedParticipants: "",
-      eventLocation: "",
-      eventDescription: "",
-      confirmedInformation: false,
-    });
+    setForm(getParticipantRequestForm(participantProfile, editingRequest));
     setFormErrors({});
+    setApiError("");
   };
 
   const handleSubmit = async (event) => {
@@ -4443,28 +4583,51 @@ useEffect(() => {
     setApiError("");
 
     try {
-      await apiRequest("/seedling-requests", {
-        method: "POST",
+      await apiRequest(
+        editingRequest
+          ? `/seedling-requests/${encodeURIComponent(editingRequest.id)}/resubmit`
+          : "/seedling-requests",
+        {
+        method: editingRequest ? "PATCH" : "POST",
         body: JSON.stringify(payload),
-      });
+        }
+      );
 
-      setSuccessMessage("You successfully submitted your seedling request.");
-      resetParticipantForm();
-      await loadParticipantData();
+      setSuccessMessage(
+        editingRequest
+          ? "Your corrected request was resubmitted for MENRO Staff review."
+          : "You successfully submitted your sapling request."
+      );
+
+      if (editingRequest) {
+        window.setTimeout(() => {
+          navigate("/participant/my-requests", { replace: true });
+        }, 900);
+      } else {
+        resetParticipantForm();
+        await loadParticipantData();
+      }
 
       window.setTimeout(() => {
         setSuccessMessage("");
       }, 3500);
     } catch (error) {
       console.error(error);
-      setApiError(error.message || "Unable to submit the seedling request.");
+      const message = error.message || "";
+      setApiError(
+        message === "This request can no longer be edited because its status has changed."
+          ? message
+          : editingRequest
+            ? message || "Unable to resubmit the request. Please try again."
+            : message || "Unable to submit the sapling request."
+      );
     } finally {
       setSubmitting(false);
     }
   };
 
   if (loadingParticipantData) {
-    return <div className="seedling-requests-page participant-seedling-page"><div style={{ minHeight: "420px", display: "grid", placeItems: "center", color: "#526159", fontSize: "13px", fontWeight: 600 }}>Loading available seedlings...</div></div>;
+    return <div className="seedling-requests-page participant-seedling-page"><div style={{ minHeight: "420px", display: "grid", placeItems: "center", color: "#526159", fontSize: "13px", fontWeight: 600 }}>Loading available saplings...</div></div>;
   }
 
   if (participantLoadError) {
@@ -4501,11 +4664,12 @@ useEffect(() => {
           </div>
 
           <div>
-            <h1>Request Seedlings</h1>
+            <h1>{editingRequest ? "Edit Sapling Request" : "Request Saplings"}</h1>
 
             <p>
-              Submit a seedling request for your
-              planting activity.
+              {editingRequest
+                ? `Correct and resubmit ${getRequestDisplayId(editingRequest)}.`
+                : "Submit a sapling request for your planting activity."}
             </p>
           </div>
         </div>
@@ -4539,10 +4703,12 @@ useEffect(() => {
       <section className="sr-record-card participant-request-card">
         <div className="participant-form-header">
           <div>
-            <h2>Seedling Request Form</h2>
+            <h2>{editingRequest ? "Edit Returned Request" : "Sapling Request Form"}</h2>
 
             <p>
-              Fill out the form below to submit your seedling request.
+              {editingRequest
+                ? "Update the information identified by MENRO Staff, then resubmit the same request."
+                : "Fill out the form below to submit your sapling request."}
             </p>
           </div>
         </div>
@@ -4573,28 +4739,14 @@ useEffect(() => {
               />
             </FormField>
 
-            <FormField label="Position / Role">
-              <input
-                type="text"
-                value={form.requesterRole}
-                readOnly
-              />
-            </FormField>
-
             <FormField
-              label="Organization / Barangay"
+              label="Organization Type"
               error={formErrors.organization}
             >
               <input
                 type="text"
                 value={form.organization}
-                onChange={(event) =>
-                  updateForm(
-                    "organization",
-                    event.target.value
-                  )
-                }
-                placeholder="Enter organization or barangay"
+                readOnly
               />
             </FormField>
 
@@ -4607,15 +4759,7 @@ useEffect(() => {
                 inputMode="numeric"
                 maxLength={11}
                 value={form.contactNumber}
-                onChange={(event) =>
-                  updateForm(
-                    "contactNumber",
-                    event.target.value.replace(
-                      /\D/g,
-                      ""
-                    )
-                  )
-                }
+                readOnly
                 placeholder="09XXXXXXXXX"
               />
             </FormField>
@@ -4623,7 +4767,7 @@ useEffect(() => {
 
           <div className="participant-section-title">
             <div>
-              <h3>Seedlings Requested</h3>
+              <h3>Saplings Requested</h3>
               <p>
                 Add the tree species and quantity you
                 are requesting.
@@ -4657,10 +4801,10 @@ useEffect(() => {
                 >
                   <option value="">
                     {loadingParticipantData
-                      ? "Loading available seedlings..."
+                      ? "Loading available saplings..."
                       : availableInventory.length > 0
                         ? "Select tree"
-                        : "No seedlings currently available"}
+                        : "No saplings currently available"}
                   </option>
 
                   {availableInventory.map((item) => {
@@ -4733,7 +4877,7 @@ useEffect(() => {
 
           <div className="sr-form-grid">
             <FormField
-              label="Purpose / Activity"
+              label="Purpose of Request"
               error={formErrors.purpose}
               fullWidth
             >
@@ -4757,6 +4901,7 @@ useEffect(() => {
             >
               <input
                 type="date"
+                min={getLocalDateString()}
                 value={
                   form.preferredReleaseDate
                 }
@@ -4821,6 +4966,7 @@ useEffect(() => {
                       <option
                         key={barangay}
                         value={barangay}
+                        disabled={!barangaysWithEligibleSites.has(barangay.toLocaleLowerCase())}
                       >
                         {barangay}
                       </option>
@@ -4883,7 +5029,7 @@ useEffect(() => {
               >
                 <input
                   type="date"
-                  min={getLocalDateString()}
+                  min={`${new Date().getFullYear()}-01-01`}
                   value={form.proposedDate}
                   onChange={(event) =>
                     updateForm(
@@ -4952,15 +5098,11 @@ useEffect(() => {
                 label="Event Location"
                 fullWidth
               >
-                <textarea
-                  value={
-                    selectedPlantingSite
-                      ? `${getPlantingSiteDisplayName(selectedPlantingSite)}\n${getPlantingSiteLocationText(selectedPlantingSite)}`
-                      : "Select a registered planting site to view its exact location."
-                  }
-                  readOnly
-                  rows={3}
-                />
+                <div className="participant-event-location" aria-live="polite">
+                  {selectedPlantingSite
+                    ? <><strong>{getPlantingSiteDisplayName(selectedPlantingSite)}</strong><span>{getPlantingSiteLocationText(selectedPlantingSite)}</span></>
+                    : <span>Select a registered planting site to view its exact location.</span>}
+                </div>
               </FormField>
 
               <div
@@ -5023,7 +5165,7 @@ useEffect(() => {
 
               <span>
                 I confirm that the information provided
-                in this seedling request is correct.
+                in this sapling request is correct.
               </span>
             </label>
 
@@ -5044,7 +5186,7 @@ useEffect(() => {
                 onClick={resetParticipantForm}
               >
                 <RotateCcw size={15} />
-                Clear
+                {editingRequest ? "Reset Changes" : "Clear"}
               </button>
               </div>
             <button
@@ -5053,7 +5195,9 @@ useEffect(() => {
               disabled={submitting || loadingParticipantData}
             >
               <Check size={15} />
-              {submitting ? "Submitting..." : "Submit Request"}
+              {submitting
+                ? editingRequest ? "Resubmitting..." : "Submitting..."
+                : editingRequest ? "Resubmit Request" : "Submit Request"}
             </button>
           </div>
         </form>

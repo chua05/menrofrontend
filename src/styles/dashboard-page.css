@@ -1505,3 +1505,24 @@
     animation-duration: 1.5s;
   }
 }
+.activity-chart {
+  position: relative;
+}
+
+.dashboard-chart-zero-message {
+  position: absolute;
+  left: 50%;
+  bottom: 6px;
+  transform: translateX(-50%);
+  width: min(90%, 420px);
+  color: #758178;
+  text-align: center;
+  font-size: 11px;
+  pointer-events: none;
+}
+
+.dashboard-chart-zero-copy {
+  color: #758178;
+  font-size: 12px;
+  line-height: 1.5;
+}

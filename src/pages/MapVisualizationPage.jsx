@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import L from "leaflet";
 import { auth } from "../firebase/config";
+import { formatDisplayId } from "../utils/displayId";
 
 import {
   FiActivity,
@@ -17,36 +18,6 @@ import "leaflet/dist/leaflet.css";
 import "../styles/map-visualization.css";
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
-const PLANTING_REPORTS_STORAGE_KEY = "menro_planting_reports";
-const MONITORING_STORAGE_KEY = "menro_survival_monitoring";
-
-const JUBAN_BARANGAYS = [
-  "Añog",
-  "Aroroy",
-  "Bacolod",
-  "Binanuahan",
-  "Biriran",
-  "Buraburan",
-  "Calateo",
-  "Calmayon",
-  "Caruhayon",
-  "Catanagan",
-  "Catanusan",
-  "Cogon",
-  "Embarcadero",
-  "Guruyan",
-  "Lajong",
-  "Maalo",
-  "North Poblacion",
-  "South Poblacion",
-  "Puting Sapa",
-  "Rangas",
-  "Sablayan",
-  "Sipaya",
-  "Taboc",
-  "Tinago",
-  "Tughan",
-];
 
 const CONDITION_OPTIONS = [
   "Healthy",
@@ -54,23 +25,6 @@ const CONDITION_OPTIONS = [
   "Dead",
   "Not Yet Monitored",
 ];
-
-function safeParse(value) {
-  try {
-    const parsed = JSON.parse(value);
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
-}
-
-function loadStorageArray(key) {
-  if (typeof window === "undefined") {
-    return [];
-  }
-
-  return safeParse(window.localStorage.getItem(key));
-}
 
 function normalizeText(value) {
   return String(value || "").trim();
@@ -146,11 +100,13 @@ function getMonitoringSiteName(record) {
 }
 
 function getMonitoringTotals(record) {
-  const healthy = Number(record?.healthy) || 0;
-  const damaged = Number(record?.damaged) || 0;
-  const dead = Number(record?.dead) || 0;
+  const history = Array.isArray(record?.history) ? record.history : [];
+  if (history.length > 0) return getMonitoringTotals(history[history.length - 1]);
+  const healthy = Number(record?.healthyCount ?? record?.healthy) || 0;
+  const damaged = Number(record?.damagedCount ?? record?.damaged) || 0;
+  const dead = Number(record?.deadCount ?? record?.dead) || 0;
 
-  let totalChecked = Number(record?.totalChecked) || 0;
+  let totalChecked = Number(record?.totalMonitored ?? record?.totalChecked) || 0;
 
   if (totalChecked <= 0) {
     totalChecked = healthy + damaged + dead;
@@ -322,13 +278,8 @@ export default function MapVisualizationPage() {
   const [sitesLoading, setSitesLoading] = useState(true);
   const [sitesError, setSitesError] = useState("");
 
-  const [plantingReports, setPlantingReports] = useState(() =>
-    loadStorageArray(PLANTING_REPORTS_STORAGE_KEY)
-  );
-
-  const [monitoringRecords, setMonitoringRecords] = useState(() =>
-    loadStorageArray(MONITORING_STORAGE_KEY)
-  );
+  const [plantingReports, setPlantingReports] = useState([]);
+  const [monitoringRecords, setMonitoringRecords] = useState([]);
 
   const [geoJsonData, setGeoJsonData] = useState(null);
 
@@ -346,33 +297,41 @@ export default function MapVisualizationPage() {
       if (typeof auth.authStateReady === "function") await auth.authStateReady();
       const token = await auth.currentUser?.getIdToken();
       if (!token) throw new Error("Your session has expired. Please sign in again.");
-      const response = await fetch(`${API_BASE_URL}/sites`, {
+      const paths = ["/sites", "/planting-reports", "/monitoring"];
+      const responses = await Promise.all(paths.map((path) => fetch(`${API_BASE_URL}${path}`, {
         headers: { Authorization: `Bearer ${token}` },
-      });
-      const payload = await response.json().catch(() => null);
-      if (!response.ok) throw new Error(payload?.message || "Unable to load planting sites.");
-      if (!Array.isArray(payload?.data)) throw new Error("Invalid planting site response.");
-      setPlantingSites(payload.data);
+      })));
+      const payloads = await Promise.all(responses.map((response) => response.json().catch(() => ({}))));
+      const failedIndex = responses.findIndex((response) => !response.ok);
+      if (failedIndex >= 0) throw new Error(payloads[failedIndex]?.message || "Unable to load current map records.");
+      if (payloads.some((payload) => !Array.isArray(payload.data))) throw new Error("Invalid map data response.");
+      setPlantingSites(payloads[0].data);
+      setPlantingReports(payloads[1].data);
+      setMonitoringRecords(payloads[2].data);
     } catch (error) {
       console.error("Unable to load map planting sites:", error);
-      setSitesError(error.message || "Unable to load planting sites.");
+      setSitesError("Unable to load current map records.");
     } finally {
       setSitesLoading(false);
     }
-
-    setPlantingReports(
-      loadStorageArray(PLANTING_REPORTS_STORAGE_KEY)
-    );
-
-    setMonitoringRecords(
-      loadStorageArray(MONITORING_STORAGE_KEY)
-    );
   };
 
   useEffect(() => {
     // Initial backend synchronization; the same action powers Refresh Map.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     void refreshData();
+  }, []);
+
+  useEffect(() => {
+    const interval = window.setInterval(() => {
+      if (document.visibilityState === "visible") void refreshData();
+    }, 60_000);
+    const handleFocus = () => void refreshData();
+    window.addEventListener("focus", handleFocus);
+    return () => {
+      window.clearInterval(interval);
+      window.removeEventListener("focus", handleFocus);
+    };
   }, []);
 
   useEffect(() => {
@@ -562,6 +521,7 @@ export default function MapVisualizationPage() {
 
       return {
         ...site,
+        displaySiteId: formatDisplayId("SITE", site?.siteId, siteId),
         siteId,
         siteName,
         barangay: getSiteBarangay(site),
@@ -603,6 +563,10 @@ export default function MapVisualizationPage() {
     );
   }, [siteAnalytics]);
 
+  const barangayOptions = useMemo(() =>
+    [...new Set(siteAnalytics.map((site) => site.barangay).filter(Boolean))]
+      .sort((a, b) => a.localeCompare(b)), [siteAnalytics]);
+
   const siteOptions = useMemo(() => {
     return siteAnalytics
       .map((site) => ({
@@ -611,7 +575,7 @@ export default function MapVisualizationPage() {
           site.siteName,
 
         label:
-          site.siteName ||
+          [site.displaySiteId, site.siteName].filter(Boolean).join(" — ") ||
           site.siteId,
       }))
       .filter(
@@ -1170,7 +1134,7 @@ export default function MapVisualizationPage() {
               All Barangays
             </option>
 
-            {JUBAN_BARANGAYS.map(
+            {barangayOptions.map(
               (barangay) => (
                 <option
                   key={barangay}
@@ -1510,7 +1474,7 @@ export default function MapVisualizationPage() {
 
                   <h3>
                     {selectedSite.siteName ||
-                      selectedSite.siteId}
+                      selectedSite.displaySiteId}
                   </h3>
                 </div>
 
@@ -1524,6 +1488,16 @@ export default function MapVisualizationPage() {
                 >
                   ×
                 </button>
+              </div>
+
+              <div className="mv-summary-row">
+                <span>
+                  Site ID
+                </span>
+
+                <strong>
+                  {selectedSite.displaySiteId || selectedSite.siteId || "—"}
+                </strong>
               </div>
 
               <div className="mv-summary-row">

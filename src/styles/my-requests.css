@@ -445,6 +445,11 @@
   color: #bd2e3b;
 }
 
+.myr-status-returned {
+  background: #fde9eb;
+  color: #b4232f;
+}
+
 /* =========================================================
    PAGINATION
 ========================================================= */
@@ -868,6 +873,55 @@
   background: #ffffff;
 }
 
+.myr-edit-button {
+  min-height: 40px;
+  padding: 0 18px;
+  border: 1px solid #087443;
+  border-radius: 8px;
+  background: #087443;
+  color: #ffffff;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.myr-edit-button:hover {
+  background: #066538;
+}
+
+.myr-return-information {
+  border-color: #f2b8bd;
+  background: #fffafa;
+}
+
+.myr-return-details {
+  display: grid;
+  gap: 14px;
+}
+
+.myr-return-details > div {
+  display: grid;
+  gap: 6px;
+}
+
+.myr-return-details span {
+  color: #65726a;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.myr-return-details strong {
+  color: #c62828;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.myr-return-details p {
+  margin: 0;
+  color: #26352d;
+}
+
 .myr-close-button {
   min-width: 96px;
   min-height: 44px;
@@ -991,6 +1045,10 @@
   }
 
   .myr-modal-footer .myr-close-button {
+    width: 100%;
+  }
+
+  .myr-modal-footer .myr-edit-button {
     width: 100%;
   }
 }

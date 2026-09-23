@@ -166,6 +166,37 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
+.form-alert {
+  width: 100%;
+  padding: 11px 13px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+.form-alert-error {
+  border-color: #fecaca;
+  background: #fff5f5;
+  color: #b42318;
+}
+
+.form-alert-success {
+  border-color: #bde5cc;
+  background: #f0faf4;
+  color: #087443;
+}
+
+.form-alert-info,
+.form-alert-warning {
+  border-color: #d8e4dc;
+  background: #f5f9f6;
+  color: #476153;
+}
+
 button,
 input,
 select,

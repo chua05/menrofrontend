@@ -38,12 +38,12 @@ const NAVIGATION = {
       section: "Management",
       items: [
         {
-          label: "Seedling Requests",
+          label: "Sapling Requests",
           icon: ClipboardList,
           to: "/admin/requests",
         },
         {
-          label: "Seedlings",
+          label: "Saplings",
           icon: Sprout,
           to: "/admin/seedlings",
         },
@@ -126,12 +126,12 @@ const NAVIGATION = {
       section: "Management",
       items: [
         {
-          label: "Seedling Requests",
+          label: "Sapling Requests",
           icon: ClipboardList,
           to: "/staff/requests",
         },
         {
-          label: "Seedlings",
+          label: "Saplings",
           icon: Sprout,
           to: "/staff/seedlings",
         },
@@ -211,10 +211,10 @@ const NAVIGATION = {
       ],
     },
     {
-      section: "Seedlings",
+      section: "Saplings",
       items: [
         {
-          label: "Request Seedlings",
+          label: "Request Saplings",
           icon: Sprout,
           to: "/participant/request-seedlings",
         },
@@ -318,7 +318,9 @@ export default function Sidebar({ isOpen, onClose }) {
   const displayName =
     currentUser?.fullName?.trim() || getFallbackName(resolvedRole);
 
-  const roleLabel = getRoleLabel(resolvedRole);
+  const roleLabel = resolvedRole === "participant" && currentUser?.userType
+    ? currentUser.userType
+    : getRoleLabel(resolvedRole);
 
   const initials = getInitials(displayName, resolvedRole);
 

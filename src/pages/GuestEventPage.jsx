@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import logo from "../assets/menro-logo.png";
+import { formatDisplayId } from "../utils/displayId";
 import "../styles/guest-event.css";
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
@@ -166,7 +167,7 @@ export default function GuestEventPage() {
             {contributionsError && <div className="guest-event-alert" role="alert">{contributionsError}</div>}
             {contributionsError && <button type="button" className="guest-event-button" onClick={() => setContributionsRetry((count) => count + 1)}>Retry</button>}
             {!contributionsLoading && !contributionsError && (contributions.length ? <ul className="guest-event-contributions">{contributions.map((item, index) =>
-              <li key={item.id || index}><span>{item.species || item.inventoryId}</span><strong>{item.quantity}</strong></li>
+              <li key={item.id || index}><span>{item.species || formatDisplayId("INV", item.inventoryNumber, item.inventoryId)}</span><strong>{item.quantity}</strong></li>
             )}</ul> : <p className="guest-event-muted">No planting contributions recorded yet.</p>)}
           </section>}
         </article>

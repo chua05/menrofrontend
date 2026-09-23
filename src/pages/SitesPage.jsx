@@ -22,6 +22,7 @@ import {
 
 import { useAuth } from "../context/AuthContext";
 import { auth } from "../firebase/config";
+import { formatDisplayId } from "../utils/displayId";
 import "../styles/planting-sites.css";
 
 const API_BASE_URL =
@@ -257,7 +258,10 @@ export default function SitesPage() {
     return sites.filter((site) => {
       const matchesSearch =
         !query ||
-        String(site.id || site.siteId || "")
+        String(site.id || "")
+          .toLowerCase()
+          .includes(query) ||
+        String(site.siteId || "")
           .toLowerCase()
           .includes(query) ||
         String(site.siteName || "")
@@ -1742,7 +1746,7 @@ export default function SitesPage() {
 
                   <span>
                     Site ID:{" "}
-                    {selectedSite.id || selectedSite.siteId}
+                    {formatDisplayId("SITE", selectedSite.siteId, selectedSite.id)}
                   </span>
                 </div>
               </div>
@@ -2399,7 +2403,7 @@ export default function SitesPage() {
                         </strong>
 
                         <span>
-                          {site.id || site.siteId} ·{" "}
+                          {formatDisplayId("SITE", site.siteId, site.id)} ·{" "}
                           {
                             site.barangay
                           }
@@ -2460,7 +2464,7 @@ function SiteInformation({
       >
         <InfoRow
           label="Site ID"
-          value={site.id || site.siteId}
+          value={formatDisplayId("SITE", site.siteId, site.id)}
         />
 
         <InfoRow

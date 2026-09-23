@@ -460,6 +460,17 @@
   padding: 22px;
 }
 
+.pr-submit-modal-body {
+  display: flex;
+  flex-direction: column;
+}
+
+.pr-report-information-section { order: 1; }
+.pr-report-details-section { order: 2; }
+.pr-photo-evidence-section { order: 3; }
+.pr-photo-location-section { order: 4; }
+.pr-report-additional-section { order: 5; }
+
 .pr-section {
   margin-bottom: 24px;
 }

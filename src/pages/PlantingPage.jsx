@@ -25,7 +25,9 @@ import {
 } from "react-icons/fi";
 
 import { useAuth } from "../context/AuthContext";
+import FormAlert from "../components/FormAlert";
 import { auth } from "../firebase/config";
+import { formatDisplayId } from "../utils/displayId";
 import "../styles/planting-reports.css";
 
 const API_BASE_URL =
@@ -88,12 +90,6 @@ const VERIFICATION_CLASSES = {
   Approved: "pr-status-approved",
   Rejected: "pr-status-rejected",
 };
-
-const TESTING_LOCATION_FLAGS = new Set([
-  "GPS_MISMATCH",
-  "GPS_METADATA_MISSING",
-  "OUTSIDE_REGISTERED_SITE",
-]);
 
 function displayReportStatus(status) {
   const normalized = String(status || "").trim().toLowerCase();
@@ -203,6 +199,29 @@ function calculateDistanceMeters(lat1, lng1, lat2, lng2) {
 
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   return earthRadiusMeters * c;
+}
+
+function isPointInPolygon(latitude, longitude, polygon) {
+  if (!Array.isArray(polygon) || polygon.length < 3) return false;
+
+  let inside = false;
+  for (let index = 0, previous = polygon.length - 1; index < polygon.length; previous = index++) {
+    const currentLatitude = Number(polygon[index]?.lat);
+    const currentLongitude = Number(polygon[index]?.lng);
+    const previousLatitude = Number(polygon[previous]?.lat);
+    const previousLongitude = Number(polygon[previous]?.lng);
+
+    if (![currentLatitude, currentLongitude, previousLatitude, previousLongitude].every(Number.isFinite)) {
+      return false;
+    }
+
+    const intersects = currentLatitude > latitude !== previousLatitude > latitude &&
+      longitude < ((previousLongitude - currentLongitude) * (latitude - currentLatitude)) /
+        (previousLatitude - currentLatitude) + currentLongitude;
+    if (intersects) inside = !inside;
+  }
+
+  return inside;
 }
 
 function getCurrentUserIdentity(currentUser) {
@@ -507,8 +526,7 @@ export default function PlantingPage() {
 
   const hasGps =
     form.latitude !== "" &&
-    form.longitude !== "" &&
-    form.locationCapturedAt !== "";
+    form.longitude !== "";
 
   useEffect(() => {
   const initializationTimer =
@@ -746,7 +764,7 @@ export default function PlantingPage() {
           fillColor: "#2563eb",
           fillOpacity: 1,
         })
-          .bindTooltip("Captured GPS Location", {
+          .bindTooltip("Photo GPS Location", {
             permanent: false,
             direction: "top",
             offset: [0, -8],
@@ -951,6 +969,15 @@ export default function PlantingPage() {
     );
   }, [hasGps, selectedSite, form.latitude, form.longitude]);
 
+  const capturedInsideSitePolygon = useMemo(() => {
+    if (!hasGps || !selectedSite?.polygon?.length) return null;
+    return isPointInPolygon(
+      Number(form.latitude),
+      Number(form.longitude),
+      selectedSite.polygon
+    );
+  }, [hasGps, selectedSite, form.latitude, form.longitude]);
+
   const locationPreviewStatus = useMemo(() => {
     if (!form.siteId) {
       return {
@@ -962,7 +989,9 @@ export default function PlantingPage() {
     if (!hasGps) {
       return {
         type: "waiting",
-        label: "GPS location is optional during testing.",
+        label: photoFiles.length === 0
+          ? "Upload or take a photo first."
+          : "Photo GPS metadata is unavailable.",
       };
     }
 
@@ -973,7 +1002,14 @@ export default function PlantingPage() {
       };
     }
 
-    if (capturedSiteDistance <= SITE_GPS_TOLERANCE_METERS) {
+    if (capturedInsideSitePolygon === true) {
+      return {
+        type: "valid",
+        label: "Photo location is inside the registered site boundary.",
+      };
+    }
+
+    if (capturedInsideSitePolygon === null && capturedSiteDistance <= SITE_GPS_TOLERANCE_METERS) {
       return {
         type: "valid",
         label: `Within registered site tolerance (${capturedSiteDistance.toFixed(1)} m away).`,
@@ -982,9 +1018,11 @@ export default function PlantingPage() {
 
     return {
       type: "warning",
-      label: `Captured location is ${capturedSiteDistance.toFixed(1)} m from the registered site. This does not block testing submission.`,
+      label: capturedInsideSitePolygon === false
+        ? "Photo location is outside the registered site boundary."
+        : `Photo location is ${capturedSiteDistance.toFixed(1)} m from the registered site.`,
     };
-  }, [form.siteId, hasGps, capturedSiteDistance]);
+  }, [form.siteId, hasGps, capturedSiteDistance, capturedInsideSitePolygon, photoFiles.length]);
 
   function resetForm() {
     stopCamera();
@@ -1023,6 +1061,7 @@ export default function PlantingPage() {
 
   async function openSubmitModal() {
     resetForm();
+    setPopup({ message: "", type: "success" });
     setShowSubmitModal(true);
     await refreshReferenceData();
   }
@@ -1031,6 +1070,7 @@ export default function PlantingPage() {
     if (submitting) return;
     setShowSubmitModal(false);
     resetForm();
+    setPopup({ message: "", type: "success" });
   }
 
   function stopCamera() {
@@ -1168,56 +1208,59 @@ export default function PlantingPage() {
     }));
   }
 
-  function captureLocation() {
-    if (!navigator.geolocation) {
-      showPopup(
-        "Location services are not supported by this browser or device.",
-        "error"
-      );
-      return;
+  async function processPhotoMetadata(file, announce = true) {
+    if (!file) {
+      showPopup("Please upload or take a photo first.", "error");
+      return false;
     }
-
     setLocationLoading(true);
-
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        setLocationPhotoSignature("");
+    try {
+      const metadata = await exifr.parse(file, { gps: true, tiff: true, exif: true });
+      const latitude = Number(metadata?.latitude);
+      const longitude = Number(metadata?.longitude);
+      if (!Number.isFinite(latitude) || latitude < -90 || latitude > 90 ||
+          !Number.isFinite(longitude) || longitude < -180 || longitude > 180) {
         setForm((previous) => ({
           ...previous,
-          latitude: position.coords.latitude.toFixed(6),
-          longitude: position.coords.longitude.toFixed(6),
-          accuracy: Number(position.coords.accuracy).toFixed(1),
-          locationCapturedAt: new Date(position.timestamp).toISOString(),
+          latitude: "", longitude: "", accuracy: "", locationCapturedAt: "",
         }));
-
-        setLocationLoading(false);
-        showPopup("Current location captured successfully.");
-      },
-      (error) => {
-        setLocationLoading(false);
-
-        let message =
-          "Unable to capture your current location. Please enable location services and try again.";
-
-        if (error.code === error.PERMISSION_DENIED) {
-          message =
-            "Location permission was denied. You can still attach photo evidence during testing.";
-        } else if (error.code === error.POSITION_UNAVAILABLE) {
-          message =
-            "Your GPS location is currently unavailable. Make sure location services are turned on.";
-        } else if (error.code === error.TIMEOUT) {
-          message =
-            "Location request timed out. Move to an area with a better GPS signal and try again.";
-        }
-
-        showPopup(message, "error");
-      },
-      {
-        enableHighAccuracy: true,
-        timeout: 15000,
-        maximumAge: 0,
+        showPopup(
+          "This photo does not contain GPS location metadata. Please upload an original geotagged photo with location information.",
+          "error"
+        );
+        return false;
       }
-    );
+
+      const capturedAt = metadata?.DateTimeOriginal ?? metadata?.CreateDate;
+      const capturedDate = capturedAt ? new Date(capturedAt) : null;
+      setForm((previous) => ({
+        ...previous,
+        latitude: String(latitude),
+        longitude: String(longitude),
+        accuracy: "",
+        locationCapturedAt: capturedDate && !Number.isNaN(capturedDate.getTime())
+          ? capturedDate.toISOString() : "",
+      }));
+      setLocationPhotoSignature(`${file.name}|${file.size}|${file.lastModified}`);
+      if (announce) showPopup("Photo location verified from image metadata.");
+      return true;
+    } catch {
+      setForm((previous) => ({
+        ...previous,
+        latitude: "", longitude: "", accuracy: "", locationCapturedAt: "",
+      }));
+      showPopup(
+        "This photo does not contain GPS location metadata. Please upload an original geotagged photo with location information.",
+        "error"
+      );
+      return false;
+    } finally {
+      setLocationLoading(false);
+    }
+  }
+
+  function verifyPhotoLocation() {
+    void processPhotoMetadata(photoFiles[0]);
   }
 
   function isAllowedImageFile(file) {
@@ -1297,26 +1340,9 @@ export default function PlantingPage() {
       newSignatures.add(signature);
     }
 
-    if (!hasGps) {
-      try {
-        const metadata = await exifr.parse(selectedFiles[0]);
-        const capturedAt = metadata?.DateTimeOriginal ?? metadata?.CreateDate;
-        const date = capturedAt instanceof Date ? capturedAt : new Date(capturedAt);
-        if (Number.isFinite(metadata?.latitude) && Number.isFinite(metadata?.longitude) &&
-            !Number.isNaN(date.getTime())) {
-          setForm((previous) => ({
-            ...previous,
-            latitude: String(metadata.latitude),
-            longitude: String(metadata.longitude),
-            accuracy: "",
-            locationCapturedAt: date.toISOString(),
-          }));
-          setLocationPhotoSignature(`${selectedFiles[0].name}|${selectedFiles[0].size}|${selectedFiles[0].lastModified}`);
-        }
-      } catch {
-        // Missing/unreadable EXIF must not prevent a valid image from being attached.
-      }
-    }
+    const metadataValid = photoFiles.length > 0
+      ? hasGps
+      : await processPhotoMetadata(selectedFiles[0], false);
 
     const newPreviews = selectedFiles.map((file) => ({
       id: `${file.name}-${file.size}-${file.lastModified}-${Math.random()}`,
@@ -1330,9 +1356,11 @@ export default function PlantingPage() {
 
     event.target.value = "";
 
-    showPopup(
-      `${selectedFiles.length} planting evidence photo${selectedFiles.length === 1 ? "" : "s"} added successfully.`
-    );
+    if (metadataValid) {
+      showPopup(
+        `${selectedFiles.length} planting evidence photo${selectedFiles.length === 1 ? "" : "s"} added successfully.`
+      );
+    }
   }
 
   function removeSelectedPhoto(index) {
@@ -1420,6 +1448,14 @@ export default function PlantingPage() {
       return;
     }
 
+    if (!hasGps) {
+      showPopup(
+        "This photo does not contain GPS location metadata. Please upload an original geotagged photo with location information.",
+        "error"
+      );
+      return;
+    }
+
     const payload = new FormData();
 
     payload.append("distributionId", form.distributionId);
@@ -1431,12 +1467,6 @@ export default function PlantingPage() {
     payload.append("quantityPlanted", String(quantity));
     payload.append("plantingDate", form.plantingDate);
     payload.append("plantingLocation", form.siteName);
-    if (hasGps) {
-      payload.append("latitude", form.latitude);
-      payload.append("longitude", form.longitude);
-      payload.append("accuracy", form.accuracy);
-      payload.append("locationCapturedAt", form.locationCapturedAt);
-    }
     payload.append("eventId", form.eventId || "");
     payload.append("eventName", form.eventName || "");
     payload.append("remarks", form.remarks.trim());
@@ -1448,14 +1478,13 @@ export default function PlantingPage() {
     setSubmitting(true);
 
     try {
-      const response = await apiRequest("/planting-reports", {
+      await apiRequest("/planting-reports", {
         method: "POST",
         body: payload,
       });
 
-      setShowSubmitModal(false);
       resetForm();
-      showPopup(response.message || "Planting report submitted successfully.");
+      showPopup("Your planting report was submitted successfully.");
 
       await loadReports();
       await loadMyDistributions();
@@ -1583,15 +1612,8 @@ export default function PlantingPage() {
     displayReportStatus(selectedRecord.verificationStatus) === "Pending Review";
 
   const visibleVerificationIssues = Array.isArray(selectedRecord?.suspiciousFlags)
-    ? selectedRecord.suspiciousFlags.filter((issue) =>
-        !isParticipant || !TESTING_LOCATION_FLAGS.has(issue)
-      )
+    ? selectedRecord.suspiciousFlags
     : [];
-  const participantLocationOnlyResult = isParticipant &&
-    selectedRecord?.automatedVerificationStatus === "Flagged" &&
-    Array.isArray(selectedRecord.suspiciousFlags) &&
-    selectedRecord.suspiciousFlags.length > 0 &&
-    visibleVerificationIssues.length === 0;
 
   if (loading) {
     return <div className="pr-page"><div style={{ minHeight: "420px", display: "grid", placeItems: "center", color: "#526159", fontSize: "13px", fontWeight: 600 }}>Loading planting reports...</div></div>;
@@ -1603,7 +1625,7 @@ export default function PlantingPage() {
 
   return (
     <div className="pr-page">
-      {popup.message && (
+      {popup.message && !showSubmitModal && (
         <div
           className={`pr-popup-message ${
             popup.type === "error" ? "pr-popup-error" : "pr-popup-success"
@@ -1774,7 +1796,7 @@ export default function PlantingPage() {
               <tbody>
                 {filteredRecords.map((record) => (
                   <tr key={record.id}>
-                    <td className="pr-td"><span className="pr-id-text">{record.id}</span></td>
+                    <td className="pr-td"><span className="pr-id-text">{formatDisplayId("RPT", record.reportNumber, record.reportId, record.id)}</span></td>
                     {!isParticipant && (
                       <td className="pr-td">{record.participantName || "—"}</td>
                     )}
@@ -1795,12 +1817,12 @@ export default function PlantingPage() {
                         title="View report"
                         className="pr-view-button"
                         onClick={() => openRecord(record)}
-                        aria-label={`View ${record.id}`}
+                        aria-label={`View ${formatDisplayId("RPT", record.reportNumber, record.reportId, record.id)}`}
                       >
                         <FiEye size={15} />
                       </button>
                       {isParticipant && displayReportStatus(record.verificationStatus) === "Pending" && (
-                        <button type="button" className="pr-view-button" title="Submit planting report" aria-label={`Submit planting report for ${record.id}`} onClick={openSubmitModal}>
+                        <button type="button" className="pr-view-button" title="Submit planting report" aria-label={`Submit planting report for ${formatDisplayId("RPT", record.reportNumber, record.reportId, record.id)}`} onClick={openSubmitModal}>
                           <FiPlus size={15} />
                         </button>
                       )}
@@ -1836,8 +1858,10 @@ export default function PlantingPage() {
             </div>
 
             <form onSubmit={handleSubmit}>
-              <div className="pr-modal-body">
-                <section className="pr-section">
+              <div className="pr-modal-body pr-submit-modal-body">
+                <FormAlert type={popup.type}>{popup.message}</FormAlert>
+
+                <section className="pr-section pr-report-information-section">
                   <div className="pr-section-header">
                     <FiFileText size={15} />
                     Participant Information
@@ -1903,7 +1927,7 @@ export default function PlantingPage() {
                   </div>
                 </section>
 
-                <section className="pr-section">
+                <section className="pr-section pr-report-details-section">
                   <div className="pr-section-header">
                     <FiGitBranch size={15} />
                     Planting Details
@@ -2052,7 +2076,7 @@ export default function PlantingPage() {
                           key={getEventId(event)}
                           value={getEventId(event)}
                         >
-                          {getEventId(event)} — {getEventName(event)}
+                          {formatDisplayId("EVT", event.eventNumber, event.eventId, getEventId(event))} — {getEventName(event)}
                         </option>
                       ))}
                     </select>
@@ -2087,17 +2111,17 @@ export default function PlantingPage() {
                   </div>
                 </section>
 
-                <section className="pr-section">
+                <section className="pr-section pr-photo-location-section">
                   <div className="pr-section-header">
                     <FiNavigation size={15} />
-                    Geo-Tagged Location
+                    Photo Location Verification
                   </div>
 
                   <div className="pr-gps-card">
                     <div className="pr-gps-top">
                       <div>
                         <div className="pr-gps-title">
-                          Captured GPS Location
+                          Photo EXIF GPS
                         </div>
                       </div>
 
@@ -2105,14 +2129,14 @@ export default function PlantingPage() {
                         type="button"
                         className="pr-secondary-button"
                         disabled={locationLoading}
-                        onClick={captureLocation}
+                        onClick={verifyPhotoLocation}
                       >
                         <FiMapPin size={14} />
                         {locationLoading
-                          ? "Capturing..."
+                          ? "Reading Photo..."
                           : hasGps
-                          ? "Refresh Location"
-                          : "Capture GPS"}
+                          ? "Verify Again"
+                          : "Verify Photo Location"}
                       </button>
                     </div>
 
@@ -2127,8 +2151,8 @@ export default function PlantingPage() {
                           <div className="pr-gps-value">{form.longitude}</div>
                         </div>
                         <div>
-                          <div className="pr-gps-value-label">Accuracy</div>
-                          <div className="pr-gps-value">± {form.accuracy} m</div>
+                          <div className="pr-gps-value-label">Source</div>
+                          <div className="pr-gps-value">Photo metadata</div>
                         </div>
                       </div>
                     )}
@@ -2166,27 +2190,27 @@ export default function PlantingPage() {
                               <div className="pr-location-map-legend">
                                 <span><i className="pr-map-legend-line" /> Barangay Boundary</span>
                                 <span><i className="pr-map-legend-site" /> Registered Site</span>
-                                <span><i className="pr-map-legend-captured" /> Captured GPS</span>
+                                <span><i className="pr-map-legend-captured" /> Photo GPS</span>
                               </div>
                             </div>
                           </div>
 
                           {hasGps && (
                             <div className="pr-helper-text">
-                              Location captured: {formatDateTime(form.locationCapturedAt)}
+                              Photo taken: {form.locationCapturedAt ? formatDateTime(form.locationCapturedAt) : "Timestamp unavailable"}
                             </div>
                           )}
                         </section>
 
-                        <section className="pr-section">
+                        <section className="pr-section pr-photo-evidence-section">
                           <div className="pr-section-header">
                             <FiCamera size={15} />
                             Planting Photo Evidence
                           </div>
 
-                          {!hasGps && (
+                          {photoFiles.length === 0 && (
                             <div className="pr-helper-text pr-helper-emphasis">
-                              Photo location is optional during testing. Original geotagged photos retain more information for verification.
+                              Upload or take an original geotagged photo before verifying its location.
                             </div>
                           )}
 
@@ -2305,7 +2329,7 @@ export default function PlantingPage() {
                   </div>
                 </section>
 
-                <section className="pr-section pr-section-last">
+                <section className="pr-section pr-section-last pr-report-additional-section">
                   <div className="pr-section-header">
                     <FiFileText size={15} />
                     Additional Information
@@ -2358,14 +2382,14 @@ export default function PlantingPage() {
             className="pr-report-drawer"
             role="dialog"
             aria-modal="true"
-            aria-label={`Planting report ${selectedRecord.id}`}
+            aria-label={`Planting report ${formatDisplayId("RPT", selectedRecord.reportNumber, selectedRecord.reportId, selectedRecord.id)}`}
           >
             <div className="pr-drawer-header">
               <div>
                 <h2 className="pr-drawer-title">Planting Report Details</h2>
                 <div className="pr-drawer-heading-meta">
                   {renderStatusBadge(selectedRecord.verificationStatus)}
-                  <span className="pr-drawer-report-id">{selectedRecord.id}</span>
+                  <span className="pr-drawer-report-id">{formatDisplayId("RPT", selectedRecord.reportNumber, selectedRecord.reportId, selectedRecord.id)}</span>
                 </div>
               </div>
 
@@ -2592,9 +2616,9 @@ export default function PlantingPage() {
 
                   <div className="pr-info-block">
                     <div className="pr-info-label">Automated Result</div>
-                    <div className="pr-info-value">{participantLocationOnlyResult
-                      ? "Location findings are non-blocking during testing"
-                      : selectedRecord.automatedVerificationStatus || "—"}</div>
+                    <div className="pr-info-value">
+                      {selectedRecord.automatedVerificationStatus || "—"}
+                    </div>
                   </div>
 
                   <div className="pr-info-block">

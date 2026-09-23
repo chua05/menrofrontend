@@ -23,6 +23,7 @@ import {
 
 import { useAuth } from "../context/AuthContext";
 import { auth } from "../firebase/config";
+import { formatDisplayId } from "../utils/displayId";
 
 import "../styles/event-calendar.css";
 import "../styles/dashboard-page.css";
@@ -110,7 +111,22 @@ function getInitialForm() {
 }
 
 function getSiteId(site) {
-  return site?.siteId || site?.id || "";
+  return site?.id || site?.siteId || "";
+}
+
+function getSiteDisplayId(site) {
+  if (!site) return "";
+  return formatDisplayId("SITE", site?.siteId, site?.id);
+}
+
+function getEventDisplayId(event) {
+  return formatDisplayId("EVT", event?.eventNumber, event?.eventId, event?.id);
+}
+
+function getSiteDisplayIdForEvent(sites, event) {
+  const internalId = event?.plantingSiteId || event?.siteId || "";
+  const site = sites.find((item) => String(getSiteId(item)) === String(internalId));
+  return getSiteDisplayId(site) || internalId;
 }
 
 function getSiteName(site) {
@@ -312,12 +328,6 @@ export default function EventSchedulePage() {
 
   const [events, setEvents] =
     useState([]);
-  const [contributions, setContributions] = useState([]);
-  const [contributionItem, setContributionItem] = useState("");
-  const [contributionQuantity, setContributionQuantity] = useState("");
-  const [contributionError, setContributionError] = useState("");
-  const [contributionLoading, setContributionLoading] = useState(false);
-
   const [
     archivedEvents,
     setArchivedEvents,
@@ -1144,50 +1154,7 @@ export default function EventSchedulePage() {
   ) => {
     setSelectedEvent(event);
     setShowEventMenu(false);
-    setContributionItem("");
-    setContributionQuantity("");
-    setContributionError("");
-    setContributions([]);
-    if (userRole === "participant" && event?.id) {
-      void apiRequest(`/events/${encodeURIComponent(event.id)}/contributions/my`)
-        .then((response) => setContributions(Array.isArray(response.data) ? response.data : []))
-        .catch((error) => setContributionError(error.message));
-    }
   };
-
-  async function recordContribution(eventSubmit) {
-    eventSubmit.preventDefault();
-    if (!selectedEvent?.id || !contributionItem) return;
-    const quantity = Number(contributionQuantity);
-    if (!Number.isInteger(quantity) || quantity <= 0) {
-      setContributionError("Enter a positive whole-number quantity.");
-      return;
-    }
-    setContributionLoading(true);
-    setContributionError("");
-    try {
-      const id = encodeURIComponent(selectedEvent.id);
-      await apiRequest(`/events/${id}/join`, { method: "POST" });
-      await apiRequest(`/events/${id}/contributions`, {
-        method: "POST",
-        body: JSON.stringify({ inventoryId: contributionItem, quantity }),
-      });
-      const [eventResponse, ownResponse] = await Promise.all([
-        apiRequest(`/events/${id}`),
-        apiRequest(`/events/${id}/contributions/my`),
-      ]);
-      if (eventResponse.data) {
-        setSelectedEvent(eventResponse.data);
-        setEvents((previous) => previous.map((item) => item.id === selectedEvent.id ? eventResponse.data : item));
-      }
-      setContributions(Array.isArray(ownResponse.data) ? ownResponse.data : []);
-      setContributionQuantity("");
-    } catch (error) {
-      setContributionError(error.message || "Unable to record planting.");
-    } finally {
-      setContributionLoading(false);
-    }
-  }
 
   const openEditEvent = () => {
     if (!selectedEvent) {
@@ -2320,8 +2287,7 @@ export default function EventSchedulePage() {
               <div className="ec-modal-header">
                 <div>
                   <span className="ec-detail-id">
-                    {selectedEvent.id ||
-                      selectedEvent.eventId}
+                    {getEventDisplayId(selectedEvent)}
                   </span>
 
                   <h2>
@@ -2480,7 +2446,7 @@ export default function EventSchedulePage() {
                     label="Planting Site"
                     value={
                       selectedEvent.plantingSiteId
-                        ? `${selectedEvent.plantingSiteId} - ${
+                        ? `${getSiteDisplayIdForEvent(sites, selectedEvent)} - ${
                             selectedEvent.plantingSiteName ||
                             ""
                           }`
@@ -2527,7 +2493,7 @@ export default function EventSchedulePage() {
                     <DetailItem
                       icon={Sprout}
                       label="Source Request"
-                      value={selectedEvent.sourceRequestId || selectedEvent.requestId}
+                      value={formatDisplayId("REQ", selectedEvent.sourceRequestNumber, selectedEvent.sourceRequestId, selectedEvent.requestId)}
                     />
                   )}
 
@@ -2555,40 +2521,6 @@ export default function EventSchedulePage() {
                     fullWidth
                   />
                 </div>
-
-                {userRole === "participant" && selectedEvent.allocationReleasedAt &&
-                  Array.isArray(selectedEvent.seedlingItems) && selectedEvent.seedlingItems.length > 0 && (
-                    <div className="ec-detail-description">
-                      <h3>Record My Planting</h3>
-                      <p>Joining registers you for this event; it does not confirm physical attendance.</p>
-                      <form onSubmit={recordContribution}>
-                        <label className="ec-form-field full-width">
-                          <span>Seedling *</span>
-                          <select required value={contributionItem} onChange={(event) => setContributionItem(event.target.value)}>
-                            <option value="">Select allocated seedling</option>
-                            {selectedEvent.seedlingItems.map((item) => (
-                              <option key={item.inventoryId} value={item.inventoryId}>
-                                {item.species} — {Math.max(0, Number(item.quantity) - Number(selectedEvent.recordedSeedlingsByInventory?.[item.inventoryId] || 0))} remaining
-                              </option>
-                            ))}
-                          </select>
-                        </label>
-                        <label className="ec-form-field full-width">
-                          <span>Quantity planted *</span>
-                          <input type="number" min="1" step="1" required value={contributionQuantity}
-                            onChange={(event) => setContributionQuantity(event.target.value)} />
-                        </label>
-                        {contributionError && <p role="alert">{contributionError}</p>}
-                        <button className="ec-primary-btn" type="submit" disabled={contributionLoading}>
-                          {contributionLoading ? "Recording..." : "Join and Record Planting"}
-                        </button>
-                      </form>
-                      <h3>My Contributions</h3>
-                      {contributions.length ? <ul>{contributions.map((item) => (
-                        <li key={item.id}>{item.species}: {item.quantity}</li>
-                      ))}</ul> : <p>No planting contributions recorded yet.</p>}
-                    </div>
-                  )}
 
                 {selectedEvent.description && (
                   <div className="ec-detail-description">
@@ -2720,8 +2652,7 @@ export default function EventSchedulePage() {
               <div className="ec-modal-header">
                 <div>
                   <span className="ec-detail-id">
-                    {selectedEvent.id ||
-                      selectedEvent.eventId}
+                    {getEventDisplayId(selectedEvent)}
                   </span>
 
                   <h2>
@@ -3246,7 +3177,7 @@ function EventForm({
                       site
                     )}
                   >
-                    {getSiteId(
+                    {getSiteDisplayId(
                       site
                     )}{" "}
                     -{" "}

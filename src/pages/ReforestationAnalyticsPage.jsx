@@ -1,1811 +1,206 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import {
-  FiBarChart2,
-  FiCalendar,
-  FiDownload,
-  FiGrid,
-  FiMapPin,
-  FiPackage,
-  FiRefreshCw,
-  FiShield,
-  FiTrendingUp,
+  FiAlertCircle, FiBarChart2, FiCalendar, FiDownload, FiGrid, FiMapPin,
+  FiPackage, FiRefreshCw, FiShield, FiTrendingUp,
 } from "react-icons/fi";
-
 import {
-  Bar,
-  BarChart,
-  CartesianGrid,
-  Cell,
-  Line,
-  LineChart,
-  Pie,
-  PieChart,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
+  Bar, BarChart, CartesianGrid, Cell, Line, LineChart, Pie, PieChart,
+  ResponsiveContainer, Tooltip, XAxis, YAxis,
 } from "recharts";
-
-import "../styles/reforestation-analytics.css";
 import { auth } from "../firebase/config";
+import { useAuth } from "../context/AuthContext";
+import "../styles/reforestation-analytics.css";
 
-const API_BASE_URL =
-  import.meta.env.VITE_API_URL || "http://localhost:5000/api";
-
-const JUBAN_BARANGAYS = [
-  "Añog",
-  "Aroroy",
-  "Bacolod",
-  "Binanuahan",
-  "Biriran",
-  "Buraburan",
-  "Calateo",
-  "Calmayon",
-  "Caruhayon",
-  "Catanagan",
-  "Catanusan",
-  "Cogon",
-  "Embarcadero",
-  "Guruyan",
-  "Lajong",
-  "Maalo",
-  "North Poblacion",
-  "South Poblacion",
-  "Puting Sapa",
-  "Rangas",
-  "Sablayan",
-  "Sipaya",
-  "Taboc",
-  "Tinago",
-  "Tughan",
-];
-
-const CONDITION_COLORS = {
-  Healthy: "#2f9e57",
-  Damaged: "#f3a62f",
-  Dead: "#e54848",
+const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
+const REFRESH_INTERVAL_MS = 60_000;
+const CONDITION_COLORS = { Healthy: "#2f9e57", Damaged: "#f3a62f", Dead: "#e54848" };
+const SPECIES_COLORS = ["#2f9e57", "#68b978", "#22856f", "#8fc8b2", "#efb34c", "#6d83d2", "#9a78d3", "#d88352"];
+const EMPTY_ANALYTICS = {
+  summary: {}, plantingTrend: [], survivalTrend: [], monitoringConditions: [],
+  speciesDistribution: [], barangaySurvival: [], decisionSupport: {},
+  options: { barangays: [], species: [], sites: [] }, meta: {},
 };
 
-const SPECIES_COLORS = [
-  "#2f9e57",
-  "#68b978",
-  "#22856f",
-  "#8fc8b2",
-  "#efb34c",
-  "#6d83d2",
-  "#9a78d3",
-  "#d88352",
-];
+const formatNumber = (value) => new Intl.NumberFormat("en-PH").format(Number(value) || 0);
+const escapeCsv = (value) => /[",\n]/.test(String(value ?? ""))
+  ? `"${String(value ?? "").replace(/"/g, '""')}"` : String(value ?? "");
 
-async function loadApiRecords(path, token) {
-  const response = await fetch(`${API_BASE_URL}${path}`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  const payload = await response.json().catch(() => ({}));
-  if (!response.ok) {
-    throw new Error(payload.message || `Unable to load ${path}.`);
-  }
-  if (!Array.isArray(payload.data)) {
-    throw new Error(`Unexpected response from ${path}.`);
-  }
-  return payload.data;
-}
-
-function normalizeVerificationStatus(status) {
-  if (status === "Approved") {
-    return "Verified";
-  }
-
-  if (status === "Pending Review") {
-    return "Pending";
-  }
-
-  if (["Pending", "Verified", "Rejected"].includes(status)) {
-    return status;
-  }
-
-  return "Pending";
-}
-
-function normalizeText(value) {
-  return String(value || "").trim();
-}
-
-function toDateOnly(value) {
-  if (!value) {
-    return "";
-  }
-
-  return String(value).slice(0, 10);
-}
-
-function getPlantingReportDate(report) {
+function EmptyRing({ label }) {
   return (
-    report?.datePlanted ||
-    report?.plantingDate ||
-    report?.submittedAt ||
-    report?.verifiedAt ||
-    report?.createdAt ||
-    ""
+    <div className="ra-donut-chart ra-zero-ring-wrap">
+      <ResponsiveContainer width="100%" height="100%">
+        <PieChart><Pie data={[{ value: 1 }]} dataKey="value" innerRadius={55} outerRadius={82} isAnimationActive={false}><Cell fill="#e5e9e7" /></Pie></PieChart>
+      </ResponsiveContainer>
+      <div className="ra-zero-ring-center"><strong>0</strong><span>{label}</span></div>
+    </div>
   );
 }
 
-function getMonitoringDate(record) {
+function ChartMessage({ children }) {
+  return <div className="ra-chart-message">{children}</div>;
+}
+
+function Kpi({ icon: Icon, iconClass, label, value, note, percent = false }) {
   return (
-    record?.monitoredDate ||
-    record?.date ||
-    record?.createdAt ||
-    ""
-  );
-}
-
-function getReportQuantity(report) {
-  return (
-    Number(report?.quantityPlanted) ||
-    Number(report?.quantity) ||
-    Number(report?.treesPlanted) ||
-    Number(report?.seedlingsPlanted) ||
-    0
-  );
-}
-
-function getReportSpecies(report) {
-  return normalizeText(
-    report?.species ||
-      report?.treeName ||
-      report?.seedlingName ||
-      report?.treeSpecies
-  );
-}
-
-function getReportBarangay(report) {
-  return normalizeText(report?.barangay);
-}
-
-function getReportSiteId(report) {
-  return normalizeText(
-    report?.siteId ||
-      report?.plantingSiteId
-  );
-}
-
-function getReportSiteName(report) {
-  return normalizeText(
-    report?.siteName ||
-      report?.plantingSiteName
-  );
-}
-
-function getMonitoringSpecies(record) {
-  return normalizeText(
-    record?.species ||
-      record?.treeSpecies
-  );
-}
-
-function getMonitoringBarangay(record) {
-  return normalizeText(record?.barangay);
-}
-
-function getMonitoringSiteId(record) {
-  return normalizeText(
-    record?.siteId ||
-      record?.plantingSiteId
-  );
-}
-
-function getMonitoringSiteName(record) {
-  return normalizeText(
-    record?.siteName ||
-      record?.plantingSiteName
-  );
-}
-
-function getMonitoringTotals(record) {
-  const healthy = Number(record?.healthy) || 0;
-  const damaged = Number(record?.damaged) || 0;
-  const dead = Number(record?.dead) || 0;
-
-  let totalChecked = Number(record?.totalChecked) || 0;
-
-  if (totalChecked <= 0) {
-    totalChecked = healthy + damaged + dead;
-  }
-
-  return {
-    healthy,
-    damaged,
-    dead,
-    totalChecked,
-    surviving: healthy + damaged,
-  };
-}
-
-function isWithinDateRange(value, dateFrom, dateTo) {
-  const date = toDateOnly(value);
-
-  if (!date) {
-    return !dateFrom && !dateTo;
-  }
-
-  if (dateFrom && date < dateFrom) {
-    return false;
-  }
-
-  if (dateTo && date > dateTo) {
-    return false;
-  }
-
-  return true;
-}
-
-function getMonthKey(value) {
-  const dateOnly = toDateOnly(value);
-
-  if (!dateOnly) {
-    return "";
-  }
-
-  const date = new Date(`${dateOnly}T00:00:00`);
-
-  if (Number.isNaN(date.getTime())) {
-    return "";
-  }
-
-  return `${date.getFullYear()}-${String(
-    date.getMonth() + 1
-  ).padStart(2, "0")}`;
-}
-
-function formatMonth(monthKey) {
-  if (!monthKey) {
-    return "";
-  }
-
-  const [year, month] = monthKey
-    .split("-")
-    .map(Number);
-
-  return new Intl.DateTimeFormat("en-PH", {
-    month: "short",
-    year: "numeric",
-  }).format(new Date(year, month - 1, 1));
-}
-
-function formatNumber(value) {
-  return new Intl.NumberFormat("en-PH").format(
-    Number(value) || 0
-  );
-}
-
-function escapeCsv(value) {
-  const text = String(value ?? "");
-
-  if (/[",\n]/.test(text)) {
-    return `"${text.replace(/"/g, '""')}"`;
-  }
-
-  return text;
-}
-
-function EmptyChart({ icon, title, message }) {
-  return (
-    <div className="ra-empty-chart">
-      <div className="ra-empty-icon">
-        {icon}
-      </div>
-
-      <strong>{title}</strong>
-      <span>{message}</span>
+    <div className="ra-kpi-card">
+      <div className={`ra-kpi-icon ${iconClass}`}><Icon size={20} /></div>
+      <div><span>{label}</span><strong>{formatNumber(value)}{percent ? "%" : ""}</strong><small>{note}</small></div>
     </div>
   );
 }
 
 export default function ReforestationAnalyticsPage() {
-  const [seedlings, setSeedlings] = useState([]);
-  const [plantingReports, setPlantingReports] = useState([]);
-  const [monitoringRecords, setMonitoringRecords] = useState([]);
-  const [plantingSites, setPlantingSites] = useState([]);
+  const { userRole } = useAuth();
+  const navigate = useNavigate();
+  const mounted = useRef(true);
+  const requestSequence = useRef(0);
+  const [analytics, setAnalytics] = useState(EMPTY_ANALYTICS);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [loadError, setLoadError] = useState("");
-  const [refreshKey, setRefreshKey] = useState(0);
+  const [hasLoaded, setHasLoaded] = useState(false);
+  const [filters, setFilters] = useState({ dateFrom: "", dateTo: "", barangay: "All", species: "All", site: "All" });
 
-  const [dateFrom, setDateFrom] = useState("");
-  const [dateTo, setDateTo] = useState("");
-
-  const [barangayFilter, setBarangayFilter] = useState("All");
-  const [speciesFilter, setSpeciesFilter] = useState("All");
-  const [siteFilter, setSiteFilter] = useState("All");
+  const loadAnalytics = useCallback(async ({ foreground = false } = {}) => {
+    const requestId = ++requestSequence.current;
+    if (foreground) setLoading(true); else setRefreshing(true);
+    try {
+      if (typeof auth.authStateReady === "function") await auth.authStateReady();
+      const token = await auth.currentUser?.getIdToken();
+      if (!token) throw new Error("Your session has expired. Please sign in again.");
+      const query = new URLSearchParams();
+      Object.entries(filters).forEach(([name, value]) => { if (value && value !== "All") query.set(name, value); });
+      const response = await fetch(`${API_BASE_URL}/analytics/dashboard?${query}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(payload.message || "Unable to load analytics.");
+      if (!payload.data?.summary) throw new Error("The analytics response was incomplete.");
+      if (mounted.current && requestId === requestSequence.current) {
+        setAnalytics(payload.data);
+        setLoadError("");
+        setHasLoaded(true);
+      }
+    } catch (error) {
+      console.error("Analytics refresh failed:", error);
+      if (mounted.current && requestId === requestSequence.current) setLoadError("Unable to load current analytics records. Please try again.");
+    } finally {
+      if (mounted.current && requestId === requestSequence.current) { setLoading(false); setRefreshing(false); }
+    }
+  }, [filters]);
 
   useEffect(() => {
-    let cancelled = false;
-    async function loadAnalyticsData() {
-      try {
-        // Wait for firebase auth to be ready when available.
-        if (auth && typeof auth.authStateReady === "function") {
-          await auth.authStateReady();
-        }
-
-        // Prefer current firebase ID token when available.
-        let token = "";
-        if (auth && auth.currentUser) {
-          token = await auth.currentUser.getIdToken();
-        }
-
-        // Fallback to stored token for compatibility with HMR/dev
-        // or if auth isn't ready yet.
-        if (!token) {
-          token = window.localStorage.getItem("token") || "";
-        }
-
-        if (!token) throw new Error("Your session has expired. Please sign in again.");
-
-        const [inventory, reports, monitoring, sites] = await Promise.all([
-          loadApiRecords("/distributions", token),
-          loadApiRecords("/planting-reports", token),
-          loadApiRecords("/monitoring", token),
-          loadApiRecords("/sites", token),
-        ]);
-        if (cancelled) return;
-        // The backend exposes released/distributed seedling records via
-        // the /distributions endpoint. Store them in `seedlings` state
-        // (keeps existing variable usage in the UI) so KPI cards and
-        // export use real released quantities.
-        setSeedlings(inventory);
-        setPlantingReports(reports);
-        setMonitoringRecords(monitoring);
-        setPlantingSites(sites);
-        setLoadError("");
-      } catch {
-        if (!cancelled) setLoadError("Unable to load analytics. Please try again.");
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    }
-    loadAnalyticsData();
-    return () => { cancelled = true; };
-  }, [refreshKey]);
-
-  const verifiedReports = useMemo(() => {
-    return plantingReports.filter(
-      (report) =>
-        report?.archived !== true &&
-        normalizeVerificationStatus(
-          report?.verificationStatus
-        ) === "Verified"
-    );
-  }, [plantingReports]);
-
-  const activeMonitoringRecords = useMemo(() => {
-    return monitoringRecords.filter(
-      (record) => record?.archived !== true
-    );
-  }, [monitoringRecords]);
-
-  const activeSites = useMemo(() => {
-    return plantingSites.filter((site) => {
-      if (site?.archived === true) {
-        return false;
-      }
-
-      const status = normalizeText(
-        site?.status
-      ).toLowerCase();
-
-      return ![
-        "inactive",
-        "archived",
-        "closed",
-      ].includes(status);
-    });
-  }, [plantingSites]);
-
-  const speciesOptions = useMemo(() => {
-    const values = new Set();
-
-    verifiedReports.forEach((report) => {
-      const species = getReportSpecies(report);
-
-      if (species) {
-        values.add(species);
-      }
-    });
-
-    activeMonitoringRecords.forEach((record) => {
-      const species = getMonitoringSpecies(record);
-
-      if (species) {
-        values.add(species);
-      }
-    });
-
-    return [...values].sort((a, b) =>
-      a.localeCompare(b)
-    );
-  }, [
-    verifiedReports,
-    activeMonitoringRecords,
-  ]);
-
-  const siteOptions = useMemo(() => {
-    const values = new Map();
-
-    activeSites.forEach((site) => {
-      const id = normalizeText(
-        site?.id ||
-          site?.siteId
-      );
-
-      const name = normalizeText(
-        site?.name ||
-          site?.siteName
-      );
-
-      if (!id && !name) {
-        return;
-      }
-
-      values.set(id || name, {
-        value: id || name,
-        label: name || id,
-      });
-    });
-
-    verifiedReports.forEach((report) => {
-      const id = getReportSiteId(report);
-      const name = getReportSiteName(report);
-
-      if (!id && !name) {
-        return;
-      }
-
-      values.set(id || name, {
-        value: id || name,
-        label: name || id,
-      });
-    });
-
-    return [...values.values()].sort(
-      (a, b) =>
-        a.label.localeCompare(b.label)
-    );
-  }, [
-    activeSites,
-    verifiedReports,
-  ]);
-
-  const filteredVerifiedReports = useMemo(() => {
-    return verifiedReports.filter((report) => {
-      const barangay = getReportBarangay(report);
-      const species = getReportSpecies(report);
-      const siteId = getReportSiteId(report);
-      const siteName = getReportSiteName(report);
-      const reportDate = getPlantingReportDate(report);
-
-      const barangayMatches =
-        barangayFilter === "All" ||
-        barangay === barangayFilter;
-
-      const speciesMatches =
-        speciesFilter === "All" ||
-        species === speciesFilter;
-
-      const siteMatches =
-        siteFilter === "All" ||
-        siteFilter === siteId ||
-        siteFilter === siteName;
-
-      const dateMatches = isWithinDateRange(
-        reportDate,
-        dateFrom,
-        dateTo
-      );
-
-      return (
-        barangayMatches &&
-        speciesMatches &&
-        siteMatches &&
-        dateMatches
-      );
-    });
-  }, [
-    verifiedReports,
-    barangayFilter,
-    speciesFilter,
-    siteFilter,
-    dateFrom,
-    dateTo,
-  ]);
-
-  const filteredMonitoringRecords = useMemo(() => {
-    return activeMonitoringRecords.filter((record) => {
-      const barangay = getMonitoringBarangay(record);
-      const species = getMonitoringSpecies(record);
-      const siteId = getMonitoringSiteId(record);
-      const siteName = getMonitoringSiteName(record);
-      const monitoringDate = getMonitoringDate(record);
-
-      const barangayMatches =
-        barangayFilter === "All" ||
-        barangay === barangayFilter;
-
-      const speciesMatches =
-        speciesFilter === "All" ||
-        species === speciesFilter;
-
-      const siteMatches =
-        siteFilter === "All" ||
-        siteFilter === siteId ||
-        siteFilter === siteName;
-
-      const dateMatches = isWithinDateRange(
-        monitoringDate,
-        dateFrom,
-        dateTo
-      );
-
-      return (
-        barangayMatches &&
-        speciesMatches &&
-        siteMatches &&
-        dateMatches
-      );
-    });
-  }, [
-    activeMonitoringRecords,
-    barangayFilter,
-    speciesFilter,
-    siteFilter,
-    dateFrom,
-    dateTo,
-  ]);
-
-  const filteredSites = useMemo(() => {
-    return activeSites.filter((site) => {
-      const barangay = normalizeText(
-        site?.barangay
-      );
-
-      const id = normalizeText(
-        site?.id ||
-          site?.siteId
-      );
-
-      const name = normalizeText(
-        site?.name ||
-          site?.siteName
-      );
-
-      const barangayMatches =
-        barangayFilter === "All" ||
-        barangay === barangayFilter;
-
-      const siteMatches =
-        siteFilter === "All" ||
-        siteFilter === id ||
-        siteFilter === name;
-
-      return (
-        barangayMatches &&
-        siteMatches
-      );
-    });
-  }, [
-    activeSites,
-    barangayFilter,
-    siteFilter,
-  ]);
-
-  const totalSeedlingsDistributed = useMemo(() => {
-    return seedlings
-      .filter((record) => record?.archived !== true)
-      .reduce((total, record) => {
-        // distributions may be single-species (quantityReleased/quantity)
-        // or itemized with an `items` array. Normalize common fields.
-        const single =
-          Number(record?.quantityReleased) ||
-          Number(record?.releasedQuantity) ||
-          Number(record?.distributedQuantity) ||
-          Number(record?.quantity) ||
-          0;
-
-        let itemsTotal = 0;
-        if (Array.isArray(record?.items)) {
-          itemsTotal = record.items.reduce((s, it) => {
-            return (
-              s +
-              (Number(it?.releasedQuantity) || Number(it?.quantity) || Number(it?.qty) || 0)
-            );
-          }, 0);
-        }
-
-        return total + Math.max(single, itemsTotal);
-      }, 0);
-  }, [seedlings]);
-
-  const totalTreesPlanted = useMemo(() => {
-    return filteredVerifiedReports.reduce(
-      (total, report) =>
-        total +
-        getReportQuantity(report),
-      0
-    );
-  }, [filteredVerifiedReports]);
-
-  const monitoringTotals = useMemo(() => {
-    return filteredMonitoringRecords.reduce(
-      (total, record) => {
-        const current =
-          getMonitoringTotals(record);
-
-        return {
-          healthy:
-            total.healthy +
-            current.healthy,
-
-          damaged:
-            total.damaged +
-            current.damaged,
-
-          dead:
-            total.dead +
-            current.dead,
-
-          surviving:
-            total.surviving +
-            current.surviving,
-
-          totalChecked:
-            total.totalChecked +
-            current.totalChecked,
-        };
-      },
-      {
-        healthy: 0,
-        damaged: 0,
-        dead: 0,
-        surviving: 0,
-        totalChecked: 0,
-      }
-    );
-  }, [filteredMonitoringRecords]);
-
-  const overallSurvivalRate =
-    monitoringTotals.totalChecked > 0
-      ? Math.round(
-          (
-            monitoringTotals.surviving /
-            monitoringTotals.totalChecked
-          ) * 100
-        )
-      : 0;
-
-  const barangaysCovered = useMemo(() => {
-    return new Set(
-      filteredVerifiedReports
-        .map((report) =>
-          getReportBarangay(report)
-        )
-        .filter(Boolean)
-    ).size;
-  }, [filteredVerifiedReports]);
-
-  const plantingTrendData = useMemo(() => {
-    const grouped = new Map();
-
-    filteredVerifiedReports.forEach((report) => {
-      const month = getMonthKey(
-        getPlantingReportDate(report)
-      );
-
-      if (!month) {
-        return;
-      }
-
-      grouped.set(
-        month,
-        (grouped.get(month) || 0) +
-          getReportQuantity(report)
-      );
-    });
-
-    return [...grouped.entries()]
-      .sort(([a], [b]) =>
-        a.localeCompare(b)
-      )
-      .map(([month, treesPlanted]) => ({
-        month: formatMonth(month),
-        treesPlanted,
-      }));
-  }, [filteredVerifiedReports]);
-
-  const survivalTrendData = useMemo(() => {
-    const grouped = new Map();
-
-    filteredMonitoringRecords.forEach((record) => {
-      const month = getMonthKey(
-        getMonitoringDate(record)
-      );
-
-      if (!month) {
-        return;
-      }
-
-      const totals =
-        getMonitoringTotals(record);
-
-      const current =
-        grouped.get(month) || {
-          surviving: 0,
-          totalChecked: 0,
-        };
-
-      current.surviving +=
-        totals.surviving;
-
-      current.totalChecked +=
-        totals.totalChecked;
-
-      grouped.set(month, current);
-    });
-
-    return [...grouped.entries()]
-      .sort(([a], [b]) =>
-        a.localeCompare(b)
-      )
-      .map(([month, totals]) => ({
-        month: formatMonth(month),
-
-        survivalRate:
-          totals.totalChecked > 0
-            ? Math.round(
-                (
-                  totals.surviving /
-                  totals.totalChecked
-                ) * 100
-              )
-            : 0,
-      }));
-  }, [filteredMonitoringRecords]);
-
-  const monitoringConditionData = useMemo(() => {
-    const total =
-      monitoringTotals.totalChecked;
-
-    return [
-      {
-        name: "Healthy",
-        value:
-          monitoringTotals.healthy,
-
-        percent:
-          total > 0
-            ? Math.round(
-                (
-                  monitoringTotals.healthy /
-                  total
-                ) * 100
-              )
-            : 0,
-      },
-      {
-        name: "Damaged",
-        value:
-          monitoringTotals.damaged,
-
-        percent:
-          total > 0
-            ? Math.round(
-                (
-                  monitoringTotals.damaged /
-                  total
-                ) * 100
-              )
-            : 0,
-      },
-      {
-        name: "Dead",
-        value:
-          monitoringTotals.dead,
-
-        percent:
-          total > 0
-            ? Math.round(
-                (
-                  monitoringTotals.dead /
-                  total
-                ) * 100
-              )
-            : 0,
-      },
-    ];
-  }, [monitoringTotals]);
-
-  const speciesDistributionData = useMemo(() => {
-    const grouped = new Map();
-
-    filteredVerifiedReports.forEach((report) => {
-      const species =
-        getReportSpecies(report);
-
-      if (!species) {
-        return;
-      }
-
-      grouped.set(
-        species,
-        (grouped.get(species) || 0) +
-          getReportQuantity(report)
-      );
-    });
-
-    return [...grouped.entries()]
-      .map(([name, value]) => ({
-        name,
-        value,
-      }))
-      .sort(
-        (a, b) =>
-          b.value - a.value
-      );
-  }, [filteredVerifiedReports]);
-
-  const survivalByBarangayData = useMemo(() => {
-    const grouped = new Map();
-
-    filteredMonitoringRecords.forEach((record) => {
-      const barangay =
-        getMonitoringBarangay(record);
-
-      if (!barangay) {
-        return;
-      }
-
-      const totals =
-        getMonitoringTotals(record);
-
-      const current =
-        grouped.get(barangay) || {
-          surviving: 0,
-          totalChecked: 0,
-        };
-
-      current.surviving +=
-        totals.surviving;
-
-      current.totalChecked +=
-        totals.totalChecked;
-
-      grouped.set(
-        barangay,
-        current
-      );
-    });
-
-    return [...grouped.entries()]
-      .map(([barangay, totals]) => ({
-        barangay,
-
-        survivalRate:
-          totals.totalChecked > 0
-            ? Math.round(
-                (
-                  totals.surviving /
-                  totals.totalChecked
-                ) * 100
-              )
-            : 0,
-      }))
-      .sort(
-        (a, b) =>
-          b.survivalRate -
-          a.survivalRate
-      );
-  }, [filteredMonitoringRecords]);
-
-  const conditionTotal =
-    monitoringConditionData.reduce(
-      (total, item) =>
-        total + item.value,
-      0
-    );
-
-  const speciesTotal =
-    speciesDistributionData.reduce(
-      (total, item) =>
-        total + item.value,
-      0
-    );
-
-  const clearFilters = () => {
-    setDateFrom("");
-    setDateTo("");
-    setBarangayFilter("All");
-    setSpeciesFilter("All");
-    setSiteFilter("All");
-  };
-
+    mounted.current = true;
+    const initialLoad = window.setTimeout(() => loadAnalytics({ foreground: !hasLoaded }), 0);
+    const interval = window.setInterval(() => {
+      if (document.visibilityState === "visible") loadAnalytics();
+    }, REFRESH_INTERVAL_MS);
+    const handleFocus = () => loadAnalytics();
+    window.addEventListener("focus", handleFocus);
+    return () => {
+      mounted.current = false;
+      requestSequence.current += 1;
+      window.clearTimeout(initialLoad);
+      window.clearInterval(interval);
+      window.removeEventListener("focus", handleFocus);
+    };
+  }, [loadAnalytics, hasLoaded]);
+
+  const summary = analytics.summary || {};
+  const decision = analytics.decisionSupport || {};
+  const options = analytics.options || EMPTY_ANALYTICS.options;
+  const conditions = analytics.monitoringConditions || [];
+  const conditionTotal = conditions.reduce((total, item) => total + Number(item.count || 0), 0);
+  const speciesTotal = (analytics.speciesDistribution || []).reduce((total, item) => total + Number(item.count || 0), 0);
+  const routeBase = `/${userRole || "staff"}`;
+
+  const decisionRows = [
+    { title: "Planting Verification", text: `${formatNumber(decision.pendingPlantingReports)} planting report(s) are pending MENRO Staff review.`, route: `${routeBase}/planting-reports` },
+    { title: "Monitoring Condition", text: `${formatNumber(decision.damagedTrees)} damaged and ${formatNumber(decision.deadTrees)} dead tree(s) are recorded in the latest monitoring entries.`, route: `${routeBase}/survival-monitoring` },
+    { title: "Monitoring Coverage", text: `${formatNumber(decision.eligibleWithoutSubmission)} eligible planting record(s) do not yet have a monitoring submission.`, route: `${routeBase}/survival-monitoring` },
+    { title: "Monitoring Schedule", text: `${formatNumber(decision.monitoringEligible)} eligible/due, ${formatNumber(decision.monitoringNotYetEligible)} not currently eligible, and ${formatNumber(decision.monitoringCompleted)} completed lifecycle(s).`, route: `${routeBase}/survival-monitoring` },
+    { title: "Distribution vs Recorded Planting", text: `Released: ${formatNumber(decision.releasedQuantity)} · Recorded planted: ${formatNumber(decision.recordedPlantedQuantity)} · Difference: ${formatNumber(decision.distributionPlantingDifference)}` },
+  ];
+
+  const clearFilters = () => setFilters({ dateFrom: "", dateTo: "", barangay: "All", species: "All", site: "All" });
+  const updateFilter = (name) => (event) => setFilters((current) => ({ ...current, [name]: event.target.value }));
   const exportAnalyticsCsv = () => {
     const rows = [
-      ["Reforestation Analytics"],
-      [],
-      ["Filters"],
-      ["Date From", dateFrom || "All"],
-      ["Date To", dateTo || "All"],
-      ["Barangay", barangayFilter],
-      ["Tree Species", speciesFilter],
-      ["Planting Site", siteFilter],
-      [],
-      ["Summary", "Value"],
-      [
-        "Total Seedlings Distributed",
-        totalSeedlingsDistributed,
-      ],
-      [
-        "Total Trees Planted",
-        totalTreesPlanted,
-      ],
-      [
-        "Overall Survival Rate",
-        `${overallSurvivalRate}%`,
-      ],
-      [
-        "Verified Planting Reports",
-        filteredVerifiedReports.length,
-      ],
-      [
-        "Barangays Covered",
-        barangaysCovered,
-      ],
-      [
-        "Active Planting Sites",
-        filteredSites.length,
-      ],
-      [],
-      [
-        "Monitoring Condition",
-        "Trees",
-        "Percentage",
-      ],
-      ...monitoringConditionData.map(
-        (item) => [
-          item.name,
-          item.value,
-          `${item.percent}%`,
-        ]
-      ),
-      [],
-      [
-        "Tree Species",
-        "Trees Planted",
-      ],
-      ...speciesDistributionData.map(
-        (item) => [
-          item.name,
-          item.value,
-        ]
-      ),
-      [],
-      [
-        "Barangay",
-        "Survival Rate",
-      ],
-      ...survivalByBarangayData.map(
-        (item) => [
-          item.barangay,
-          `${item.survivalRate}%`,
-        ]
-      ),
+      ["Analytics & Decision Support"], ["Generated", analytics.meta?.generatedAt || ""], [],
+      ["Filters", JSON.stringify(filters)], [], ["Summary", "Value"],
+      ["Total Saplings Distributed", summary.totalSaplingsDistributed], ["Total Trees Planted", summary.totalTreesPlanted],
+      ["Overall Survival Rate", `${summary.overallSurvivalRate || 0}%`], ["Verified Planting Reports", summary.verifiedPlantingReports],
+      ["Barangays Covered", summary.barangaysCovered], ["Active Planting Sites", summary.activePlantingSites], [],
+      ["Monitoring Condition", "Trees"], ...conditions.map((item) => [item.condition, item.count]), [],
+      ["Tree Species", "Trees Planted"], ...(analytics.speciesDistribution || []).map((item) => [item.species, item.count]), [],
+      ["Barangay", "Survival Rate"], ...(analytics.barangaySurvival || []).map((item) => [item.barangay, `${item.rate}%`]),
     ];
-
-    const csv = rows
-      .map((row) =>
-        row
-          .map(escapeCsv)
-          .join(",")
-      )
-      .join("\n");
-
-    const blob = new Blob(
-      [csv],
-      {
-        type: "text/csv;charset=utf-8;",
-      }
-    );
-
-    const url =
-      URL.createObjectURL(blob);
-
-    const link =
-      document.createElement("a");
-
-    link.href = url;
-
-    link.download =
-      "reforestation-analytics.csv";
-
-    document.body.appendChild(link);
-
-    link.click();
-
-    document.body.removeChild(link);
-
-    URL.revokeObjectURL(url);
+    const blob = new Blob([rows.map((row) => row.map(escapeCsv).join(",")).join("\n")], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url; link.download = "reforestation-analytics.csv"; document.body.appendChild(link); link.click(); link.remove(); URL.revokeObjectURL(url);
   };
 
-  if (loading) {
-    return <div className="ra-page"><div style={{ minHeight: "420px", display: "grid", placeItems: "center", color: "#526159", fontSize: "13px", fontWeight: 600 }}>Loading analytics...</div></div>;
-  }
-
-  if (loadError) {
-    return <div className="ra-page"><div role="alert" style={{ minHeight: "420px", display: "grid", placeContent: "center", justifyItems: "center", gap: "14px", color: "#526159", fontSize: "13px", fontWeight: 600 }}><span>{loadError}</span><button type="button" className="ra-secondary-button" onClick={() => { setLoading(true); setRefreshKey((key) => key + 1); }}>Retry</button></div></div>;
-  }
+  if (loading && !hasLoaded) return <div className="ra-page"><div className="ra-centered-state">Loading analytics…</div></div>;
+  if (loadError && !hasLoaded) return <div className="ra-page"><div className="ra-centered-state" role="alert"><span>{loadError}</span><button className="ra-secondary-button" onClick={() => loadAnalytics({ foreground: true })}>Retry</button></div></div>;
 
   return (
     <div className="ra-page">
-      {/* HEADER */}
       <div className="ra-header">
-        <div className="ra-heading">
-          <div className="ra-heading-icon">
-            <FiTrendingUp size={21} />
-          </div>
-
-          <div>
-            <h1>
-              Reforestation Analytics
-            </h1>
-
-            <p>
-              Analyze reforestation performance and tree
-              survival across Juban, Sorsogon.
-            </p>
-          </div>
-        </div>
-
+        <div className="ra-heading"><div className="ra-heading-icon"><FiTrendingUp size={21} /></div><div><h1>Reforestation Analytics</h1></div></div>
         <div className="ra-header-actions">
-          <button
-            type="button"
-            className="ra-secondary-button"
-            onClick={
-              exportAnalyticsCsv
-            }
-          >
-            <FiDownload size={14} />
-            Export Report
-          </button>
-
-          <button
-            type="button"
-            className="ra-icon-button"
-            onClick={() => {
-              setLoading(true);
-              setRefreshKey((current) => current + 1);
-            }}
-            disabled={loading}
-            title="Refresh analytics"
-          >
-            <FiRefreshCw size={16} />
-          </button>
+          <button type="button" className="ra-secondary-button" onClick={exportAnalyticsCsv}><FiDownload size={14} />Export Report</button>
+          <button type="button" className="ra-icon-button" onClick={() => loadAnalytics()} disabled={refreshing} title="Refresh analytics"><FiRefreshCw className={refreshing ? "ra-spin" : ""} size={16} /></button>
         </div>
       </div>
+      {loadError && <div className="ra-error-banner" role="alert"><FiAlertCircle />{loadError}</div>}
 
-
-      {/* KPI CARDS */}
       <div className="ra-kpi-grid">
-        <div className="ra-kpi-card">
-          <div className="ra-kpi-icon ra-kpi-green">
-            <FiPackage size={20} />
-          </div>
-
-          <div>
-            <span>
-              Total Seedlings Distributed
-            </span>
-
-            <strong>
-              {formatNumber(
-                totalSeedlingsDistributed
-              )}
-            </strong>
-
-            <small>
-              Recorded distributions
-            </small>
-          </div>
-        </div>
-
-        <div className="ra-kpi-card">
-          <div className="ra-kpi-icon ra-kpi-green">
-            <FiTrendingUp size={20} />
-          </div>
-
-          <div>
-            <span>
-              Total Trees Planted
-            </span>
-
-            <strong>
-              {formatNumber(
-                totalTreesPlanted
-              )}
-            </strong>
-
-            <small>
-              Verified planting reports
-            </small>
-          </div>
-        </div>
-
-        <div className="ra-kpi-card">
-          <div className="ra-kpi-icon ra-kpi-green">
-            <FiBarChart2 size={20} />
-          </div>
-
-          <div>
-            <span>
-              Overall Survival Rate
-            </span>
-
-            <strong>
-              {overallSurvivalRate}%
-            </strong>
-
-            <small>
-              Monitoring records
-            </small>
-          </div>
-        </div>
-
-        <div className="ra-kpi-card">
-          <div className="ra-kpi-icon ra-kpi-blue">
-            <FiShield size={20} />
-          </div>
-
-          <div>
-            <span>
-              Verified Planting Reports
-            </span>
-
-            <strong>
-              {formatNumber(
-                filteredVerifiedReports.length
-              )}
-            </strong>
-
-            <small>
-              Verified reports only
-            </small>
-          </div>
-        </div>
-
-        <div className="ra-kpi-card">
-          <div className="ra-kpi-icon ra-kpi-purple">
-            <FiGrid size={20} />
-          </div>
-
-          <div>
-            <span>
-              Barangays Covered
-            </span>
-
-            <strong>
-              {formatNumber(
-                barangaysCovered
-              )}
-            </strong>
-
-            <small>
-              With verified activity
-            </small>
-          </div>
-        </div>
-
-        <div className="ra-kpi-card">
-          <div className="ra-kpi-icon ra-kpi-orange">
-            <FiMapPin size={20} />
-          </div>
-
-          <div>
-            <span>
-              Active Planting Sites
-            </span>
-
-            <strong>
-              {formatNumber(
-                filteredSites.length
-              )}
-            </strong>
-
-            <small>
-              Registered active sites
-            </small>
-          </div>
-        </div>
+        <Kpi icon={FiPackage} iconClass="ra-kpi-green" label="Total Saplings Distributed" value={summary.totalSaplingsDistributed} note="Actual released quantity" />
+        <Kpi icon={FiTrendingUp} iconClass="ra-kpi-green" label="Total Trees Planted" value={summary.totalTreesPlanted} note="Actual planting contributions" />
+        <Kpi icon={FiBarChart2} iconClass="ra-kpi-green" label="Overall Survival Rate" value={summary.overallSurvivalRate} note="Latest entry per lifecycle" percent />
+        <Kpi icon={FiShield} iconClass="ra-kpi-blue" label="Verified Planting Reports" value={summary.verifiedPlantingReports} note="Final Staff-approved only" />
+        <Kpi icon={FiGrid} iconClass="ra-kpi-purple" label="Barangays Covered" value={summary.barangaysCovered} note="With verified activity" />
+        <Kpi icon={FiMapPin} iconClass="ra-kpi-orange" label="Active Planting Sites" value={summary.activePlantingSites} note="Registered active sites" />
       </div>
 
-      {/* FILTERS */}
       <div className="ra-filter-card">
-        <div className="ra-filter-field">
-          <label>Date Range</label>
-
-          <div className="ra-date-range">
-            <FiCalendar size={14} />
-
-            <input
-              type="date"
-              value={dateFrom}
-              onChange={(event) =>
-                setDateFrom(
-                  event.target.value
-                )
-              }
-            />
-
-            <span>to</span>
-
-            <input
-              type="date"
-              value={dateTo}
-              onChange={(event) =>
-                setDateTo(
-                  event.target.value
-                )
-              }
-            />
-          </div>
-        </div>
-
-        <div className="ra-filter-field">
-          <label>Barangay</label>
-
-          <select
-            value={barangayFilter}
-            onChange={(event) =>
-              setBarangayFilter(
-                event.target.value
-              )
-            }
-          >
-            <option value="All">
-              All Barangays
-            </option>
-
-            {JUBAN_BARANGAYS.map((barangay) => (
-              <option
-                key={barangay}
-                value={barangay}
-              >
-                {barangay}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <div className="ra-filter-field">
-          <label>
-            Tree Species
-          </label>
-
-          <select
-            value={speciesFilter}
-            onChange={(event) =>
-              setSpeciesFilter(
-                event.target.value
-              )
-            }
-          >
-            <option value="All">
-              All Species
-            </option>
-
-            {speciesOptions.map((species) => (
-              <option
-                key={species}
-                value={species}
-              >
-                {species}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <div className="ra-filter-field">
-          <label>
-            Planting Site
-          </label>
-
-          <select
-            value={siteFilter}
-            onChange={(event) =>
-              setSiteFilter(
-                event.target.value
-              )
-            }
-          >
-            <option value="All">
-              All Sites
-            </option>
-
-            {siteOptions.map((site) => (
-              <option
-                key={site.value}
-                value={site.value}
-              >
-                {site.label}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <div className="ra-clear-wrap">
-          <button
-            type="button"
-            className="ra-secondary-button"
-            onClick={clearFilters}
-          >
-            <FiRefreshCw size={14} />
-            Clear Filters
-          </button>
-        </div>
+        <div className="ra-filter-field"><label>Date Range</label><div className="ra-date-range"><FiCalendar size={14} /><input type="date" value={filters.dateFrom} onChange={updateFilter("dateFrom")} /><span>to</span><input type="date" value={filters.dateTo} onChange={updateFilter("dateTo")} /></div></div>
+        <div className="ra-filter-field"><label>Barangay</label><select value={filters.barangay} onChange={updateFilter("barangay")}><option value="All">All Barangays</option>{options.barangays.map((value) => <option key={value}>{value}</option>)}</select></div>
+        <div className="ra-filter-field"><label>Tree Species</label><select value={filters.species} onChange={updateFilter("species")}><option value="All">All Species</option>{options.species.map((value) => <option key={value}>{value}</option>)}</select></div>
+        <div className="ra-filter-field"><label>Planting Site</label><select value={filters.site} onChange={updateFilter("site")}><option value="All">All Sites</option>{options.sites.map((site) => <option key={site.value} value={site.value}>{site.label}</option>)}</select></div>
+        <div className="ra-clear-wrap"><button type="button" className="ra-secondary-button" onClick={clearFilters}><FiRefreshCw size={14} />Clear Filters</button></div>
       </div>
 
-      {/* TOP ANALYTICS */}
       <div className="ra-chart-grid ra-chart-grid-top">
-        {/* PLANTING TREND */}
-        <section className="ra-chart-card">
-          <div className="ra-card-heading">
-            <h2>
-              Planting Trend Over Time
-            </h2>
-
-            <p>
-              Number of trees planted over time
-            </p>
-          </div>
-
-          <div className="ra-chart-area">
-            {plantingTrendData.length === 0 ? (
-              <EmptyChart
-                icon={
-                  <FiTrendingUp
-                    size={25}
-                  />
-                }
-                title="No planting data yet"
-                message="Planting trend will appear once verified planting reports contain records."
-              />
-            ) : (
-              <ResponsiveContainer
-                width="100%"
-                height="100%"
-              >
-                <BarChart
-                  data={plantingTrendData}
-                >
-                  <CartesianGrid
-                    strokeDasharray="4 4"
-                    vertical={false}
-                  />
-
-                  <XAxis
-                    dataKey="month"
-                    tickLine={false}
-                    axisLine={false}
-                  />
-
-                  <YAxis
-                    tickLine={false}
-                    axisLine={false}
-                    allowDecimals={false}
-                  />
-
-                  <Tooltip
-                    formatter={(value) => [
-                      formatNumber(value),
-                      "Trees Planted",
-                    ]}
-                  />
-
-                  <Bar
-                    dataKey="treesPlanted"
-                    fill="#2f9e57"
-                    radius={[
-                      5,
-                      5,
-                      0,
-                      0,
-                    ]}
-                  />
-                </BarChart>
-              </ResponsiveContainer>
-            )}
-          </div>
-        </section>
-
-        {/* SURVIVAL TREND */}
-        <section className="ra-chart-card">
-          <div className="ra-card-heading">
-            <h2>
-              Survival Rate Trend
-            </h2>
-
-            <p>
-              Overall survival rate (%) over time
-            </p>
-          </div>
-
-          <div className="ra-chart-area">
-            {survivalTrendData.length === 0 ? (
-              <EmptyChart
-                icon={
-                  <FiBarChart2
-                    size={25}
-                  />
-                }
-                title="No survival data yet"
-                message="Survival trend will appear once monitoring records are submitted."
-              />
-            ) : (
-              <ResponsiveContainer
-                width="100%"
-                height="100%"
-              >
-                <LineChart
-                  data={survivalTrendData}
-                >
-                  <CartesianGrid
-                    strokeDasharray="4 4"
-                    vertical={false}
-                  />
-
-                  <XAxis
-                    dataKey="month"
-                    tickLine={false}
-                    axisLine={false}
-                  />
-
-                  <YAxis
-                    domain={[0, 100]}
-                    tickFormatter={(value) =>
-                      `${value}%`
-                    }
-                    tickLine={false}
-                    axisLine={false}
-                  />
-
-                  <Tooltip
-                    formatter={(value) => [
-                      `${value}%`,
-                      "Survival Rate",
-                    ]}
-                  />
-
-                  <Line
-                    type="monotone"
-                    dataKey="survivalRate"
-                    stroke="#238b45"
-                    strokeWidth={2.5}
-                    dot={{ r: 4 }}
-                    activeDot={{ r: 5 }}
-                  />
-                </LineChart>
-              </ResponsiveContainer>
-            )}
-          </div>
-        </section>
-
-        {/* MONITORING SUMMARY */}
-        <section className="ra-chart-card">
-          <div className="ra-card-heading">
-            <h2>
-              Monitoring Condition Summary
-            </h2>
-
-            <p>
-              Distribution of monitored tree conditions
-            </p>
-          </div>
-
-          <div className="ra-donut-layout">
-            {conditionTotal === 0 ? (
-              <EmptyChart
-                icon={
-                  <FiBarChart2
-                    size={25}
-                  />
-                }
-                title="No monitoring data yet"
-                message="Condition distribution will appear once monitoring records are added."
-              />
-            ) : (
-              <>
-                <div className="ra-donut-chart">
-                  <ResponsiveContainer
-                    width="100%"
-                    height="100%"
-                  >
-                    <PieChart>
-                      <Pie
-                        data={
-                          monitoringConditionData
-                        }
-                        dataKey="value"
-                        nameKey="name"
-                        innerRadius={55}
-                        outerRadius={82}
-                      >
-                        {monitoringConditionData.map(
-                          (item) => (
-                            <Cell
-                              key={item.name}
-                              fill={
-                                CONDITION_COLORS[
-                                  item.name
-                                ]
-                              }
-                            />
-                          )
-                        )}
-                      </Pie>
-
-                      <Tooltip />
-                    </PieChart>
-                  </ResponsiveContainer>
-                </div>
-
-                <div className="ra-legend">
-                  {monitoringConditionData.map(
-                    (item) => (
-                      <div
-                        className="ra-legend-row"
-                        key={item.name}
-                      >
-                        <span
-                          className="ra-legend-dot"
-                          style={{
-                            background:
-                              CONDITION_COLORS[
-                                item.name
-                              ],
-                          }}
-                        />
-
-                        <span>
-                          {item.name}
-                        </span>
-
-                        <strong>
-                          {formatNumber(
-                            item.value
-                          )}{" "}
-                          ({item.percent}%)
-                        </strong>
-                      </div>
-                    )
-                  )}
-
-                  <div className="ra-total-box">
-                    <span>
-                      Total Trees Checked
-                    </span>
-
-                    <strong>
-                      {formatNumber(
-                        monitoringTotals.totalChecked
-                      )}
-                    </strong>
-                  </div>
-                </div>
-              </>
-            )}
-          </div>
-        </section>
+        <section className="ra-chart-card"><div className="ra-card-heading"><h2>Planting Trend Over Time</h2><p>Actual trees planted in each valid period</p></div><div className="ra-chart-area">
+          <ResponsiveContainer width="100%" height="100%"><BarChart data={analytics.plantingTrend}><CartesianGrid strokeDasharray="4 4" vertical={false} /><XAxis dataKey="period" tickLine={false} axisLine={false} /><YAxis domain={[0, "auto"]} allowDecimals={false} /><Tooltip formatter={(value) => [formatNumber(value), "Trees Planted"]} /><Bar dataKey="count" fill="#2f9e57" radius={[5, 5, 0, 0]} /></BarChart></ResponsiveContainer>
+          {!analytics.meta?.plantingActivityCount && <ChartMessage>No recorded planting activity for this period.</ChartMessage>}
+        </div></section>
+        <section className="ra-chart-card"><div className="ra-card-heading"><h2>Survival Rate Trend</h2><p>Weighted survival rate from actual monitoring entries</p></div><div className="ra-chart-area">
+          <ResponsiveContainer width="100%" height="100%"><LineChart data={analytics.survivalTrend}><CartesianGrid strokeDasharray="4 4" vertical={false} /><XAxis dataKey="period" /><YAxis domain={[0, 100]} ticks={[0, 25, 50, 75, 100]} tickFormatter={(value) => `${value}%`} /><Tooltip formatter={(value) => [`${value}%`, "Survival Rate"]} /><Line type="monotone" dataKey="rate" stroke="#238b45" strokeWidth={2.5} dot={{ r: 4 }} /></LineChart></ResponsiveContainer>
+          {!analytics.meta?.monitoringEntryCount && <ChartMessage>No survival monitoring records for this period.</ChartMessage>}
+        </div></section>
+        <section className="ra-chart-card"><div className="ra-card-heading"><h2>Monitoring Condition Summary</h2><p>Latest actual entry per monitoring lifecycle</p></div><div className="ra-donut-layout">
+          {conditionTotal === 0 ? <EmptyRing label="Monitored" /> : <div className="ra-donut-chart"><ResponsiveContainer width="100%" height="100%"><PieChart><Pie data={conditions} dataKey="count" nameKey="condition" innerRadius={55} outerRadius={82}>{conditions.map((item) => <Cell key={item.condition} fill={CONDITION_COLORS[item.condition]} />)}</Pie><Tooltip /></PieChart></ResponsiveContainer></div>}
+          <div className="ra-legend">{conditions.map((item) => <div className="ra-legend-row" key={item.condition}><span className="ra-legend-dot" style={{ background: CONDITION_COLORS[item.condition] }} /><span>{item.condition}</span><strong>{formatNumber(item.count)}</strong></div>)}<div className="ra-total-box"><span>Total Trees Checked</span><strong>{formatNumber(conditionTotal)}</strong></div></div>
+        </div></section>
       </div>
 
-      {/* BOTTOM ANALYTICS */}
       <div className="ra-chart-grid ra-chart-grid-bottom">
-        {/* SPECIES DISTRIBUTION */}
-        <section className="ra-chart-card">
-          <div className="ra-card-heading">
-            <h2>
-              Tree Species Distribution
-            </h2>
-
-            <p>
-              Percentage distribution of planted trees
-              by species
-            </p>
-          </div>
-
-          <div className="ra-species-layout">
-            {speciesDistributionData.length === 0 ? (
-              <EmptyChart
-                icon={
-                  <FiGrid size={25} />
-                }
-                title="No species data yet"
-                message="Species distribution will appear once verified planting reports contain records."
-              />
-            ) : (
-              <>
-                <div className="ra-donut-chart">
-                  <ResponsiveContainer
-                    width="100%"
-                    height="100%"
-                  >
-                    <PieChart>
-                      <Pie
-                        data={
-                          speciesDistributionData
-                        }
-                        dataKey="value"
-                        nameKey="name"
-                        innerRadius={55}
-                        outerRadius={82}
-                      >
-                        {speciesDistributionData.map(
-                          (item, index) => (
-                            <Cell
-                              key={item.name}
-                              fill={
-                                SPECIES_COLORS[
-                                  index %
-                                    SPECIES_COLORS.length
-                                ]
-                              }
-                            />
-                          )
-                        )}
-                      </Pie>
-
-                      <Tooltip />
-                    </PieChart>
-                  </ResponsiveContainer>
-                </div>
-
-                <div className="ra-legend">
-                  {speciesDistributionData.map(
-                    (item, index) => {
-                      const percent =
-                        speciesTotal > 0
-                          ? Math.round(
-                              (
-                                item.value /
-                                speciesTotal
-                              ) * 100
-                            )
-                          : 0;
-
-                      return (
-                        <div
-                          className="ra-legend-row"
-                          key={item.name}
-                        >
-                          <span
-                            className="ra-legend-dot"
-                            style={{
-                              background:
-                                SPECIES_COLORS[
-                                  index %
-                                    SPECIES_COLORS.length
-                                ],
-                            }}
-                          />
-
-                          <span>
-                            {item.name}
-                          </span>
-
-                          <strong>
-                            {formatNumber(
-                              item.value
-                            )}{" "}
-                            ({percent}%)
-                          </strong>
-                        </div>
-                      );
-                    }
-                  )}
-
-                  <div className="ra-total-inline">
-                    <span>
-                      Total Trees Planted
-                    </span>
-
-                    <strong>
-                      {formatNumber(
-                        speciesTotal
-                      )}
-                    </strong>
-                  </div>
-                </div>
-              </>
-            )}
-          </div>
-        </section>
-
-        {/* SURVIVAL BY BARANGAY */}
-        <section className="ra-chart-card">
-          <div className="ra-card-heading">
-            <h2>
-              Survival Performance by Barangay
-            </h2>
-
-            <p>
-              Overall survival rate (%) by barangay
-            </p>
-          </div>
-
-          <div className="ra-chart-area ra-barangay-chart-area">
-            {survivalByBarangayData.length === 0 ? (
-              <EmptyChart
-                icon={
-                  <FiMapPin size={25} />
-                }
-                title="No barangay survival data yet"
-                message="Barangay survival performance will appear once monitoring records are available."
-              />
-            ) : (
-              <ResponsiveContainer
-                width="100%"
-                height="100%"
-              >
-                <BarChart
-                  data={
-                    survivalByBarangayData
-                  }
-                  layout="vertical"
-                  margin={{
-                    left: 25,
-                    right: 20,
-                  }}
-                >
-                  <CartesianGrid
-                    strokeDasharray="4 4"
-                    horizontal={false}
-                  />
-
-                  <XAxis
-                    type="number"
-                    domain={[0, 100]}
-                    tickFormatter={(value) =>
-                      `${value}%`
-                    }
-                    tickLine={false}
-                    axisLine={false}
-                  />
-
-                  <YAxis
-                    type="category"
-                    dataKey="barangay"
-                    width={115}
-                    tickLine={false}
-                    axisLine={false}
-                  />
-
-                  <Tooltip
-                    formatter={(value) => [
-                      `${value}%`,
-                      "Survival Rate",
-                    ]}
-                  />
-
-                  <Bar
-                    dataKey="survivalRate"
-                    fill="#2f9e57"
-                    radius={[
-                      0,
-                      5,
-                      5,
-                      0,
-                    ]}
-                  />
-                </BarChart>
-              </ResponsiveContainer>
-            )}
-          </div>
-        </section>
+        <section className="ra-chart-card"><div className="ra-card-heading"><h2>Tree Species Distribution</h2><p>Actual planted quantity by recorded species</p></div><div className="ra-species-layout">
+          {speciesTotal === 0 ? <EmptyRing label="Planted" /> : <div className="ra-donut-chart"><ResponsiveContainer width="100%" height="100%"><PieChart><Pie data={analytics.speciesDistribution} dataKey="count" nameKey="species" innerRadius={55} outerRadius={82}>{analytics.speciesDistribution.map((item, index) => <Cell key={item.species} fill={SPECIES_COLORS[index % SPECIES_COLORS.length]} />)}</Pie><Tooltip /></PieChart></ResponsiveContainer></div>}
+          <div className="ra-legend">{analytics.speciesDistribution.map((item, index) => <div className="ra-legend-row" key={item.species}><span className="ra-legend-dot" style={{ background: SPECIES_COLORS[index % SPECIES_COLORS.length] }} /><span>{item.species}</span><strong>{formatNumber(item.count)}</strong></div>)}{speciesTotal === 0 && <span className="ra-subtle-message">No planted species recorded for this selection.</span>}<div className="ra-total-inline"><span>Total Trees Planted</span><strong>{formatNumber(speciesTotal)}</strong></div></div>
+        </div></section>
+        <section className="ra-chart-card"><div className="ra-card-heading"><h2>Survival Performance by Barangay</h2><p>Weighted latest monitoring survival rate</p></div><div className="ra-chart-area ra-barangay-chart-area">
+          <ResponsiveContainer width="100%" height="100%"><BarChart data={analytics.barangaySurvival} layout="vertical" margin={{ left: 25, right: 20 }}><CartesianGrid strokeDasharray="4 4" horizontal={false} /><XAxis type="number" domain={[0, 100]} ticks={[0, 25, 50, 75, 100]} tickFormatter={(value) => `${value}%`} /><YAxis type="category" dataKey="barangay" width={115} /><Tooltip formatter={(value) => [`${value}%`, "Survival Rate"]} /><Bar dataKey="rate" fill="#2f9e57" radius={[0, 5, 5, 0]} /></BarChart></ResponsiveContainer>
+          {analytics.barangaySurvival.length === 0 && <ChartMessage>No barangay monitoring records for this selection.</ChartMessage>}
+        </div></section>
       </div>
+
+      <section className="ra-decision-card"><div className="ra-card-heading"><h2>Decision Support</h2><p>Descriptive operational observations from the same filtered records</p></div><div className="ra-decision-grid">{decisionRows.map((item) => <article className="ra-decision-item" key={item.title}><div><strong>{item.title}</strong><p>{item.text}</p></div>{item.route && <button type="button" className="ra-secondary-button" onClick={() => navigate(item.route)}>Open Module</button>}</article>)}</div></section>
+      <p className="ra-sync-note">Near-real-time backend refresh every 60 seconds and when this window regains focus. Last generated: {analytics.meta?.generatedAt ? new Date(analytics.meta.generatedAt).toLocaleString("en-PH") : "—"}</p>
     </div>
   );
 }

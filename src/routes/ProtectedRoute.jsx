@@ -10,6 +10,10 @@ export default function ProtectedRoute({ allowedRoles }) {
 
   if (!effectiveUser) return <Navigate to="/login" replace />;
 
+  if (effectiveRole === "participant" && effectiveUser.profileComplete === false) {
+    return <Navigate to="/complete-profile" replace />;
+  }
+
   if (allowedRoles && !allowedRoles.includes(effectiveRole)) {
     return <Navigate to="/login" replace />;
   }

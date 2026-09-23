@@ -15,34 +15,11 @@ import {
 } from "react-icons/fi";
 
 import { useAuth } from "../context/AuthContext";
+import { auth } from "../firebase/config";
+import { formatDisplayId } from "../utils/displayId";
+import { JUBAN_BARANGAYS, USER_TYPES, userTypeField } from "../utils/userTypes";
 
-const BARANGAYS = [
-  "Añog",
-  "Aroroy",
-  "Bacolod",
-  "Binanuahan",
-  "Biriran",
-  "Buraburan",
-  "Calateo",
-  "Calmayon",
-  "Caruhayon",
-  "Catanagan",
-  "Catanusan",
-  "Cogon",
-  "Embarcadero",
-  "Guruyan",
-  "Lajong",
-  "Maalo",
-  "North Poblacion",
-  "South Poblacion",
-  "Puting Sapa",
-  "Rangas",
-  "Sablayan",
-  "Sipaya",
-  "Taboc",
-  "Tinago",
-  "Tughan",
-];
+const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
 
 function getInitialForm(currentUser) {
   return {
@@ -59,6 +36,8 @@ function getInitialForm(currentUser) {
       currentUser?.phone ||
       "",
     barangay: currentUser?.barangay || "",
+    userType: currentUser?.userType || "",
+    userTypeDetail: currentUser?.userTypeDetail || "",
     address: currentUser?.address || "",
     bio: currentUser?.bio || "",
     photoURL:
@@ -241,7 +220,7 @@ function ForestBanner() {
 }
 
 export default function ProfilePage() {
-  const { currentUser, userRole } = useAuth();
+  const { currentUser, userRole, login } = useAuth();
 
   const photoInputRef = useRef(null);
 
@@ -275,11 +254,13 @@ export default function ProfilePage() {
       ? "Office Member"
       : "Participant";
 
-  const userId =
-    currentUser?.uid ||
-    currentUser?.id ||
-    currentUser?.userId ||
-    "—";
+  const userId = formatDisplayId(
+    "USR",
+    currentUser?.userNumber,
+    currentUser?.uid,
+    currentUser?.id,
+    currentUser?.userId
+  );
 
   const accountStatus =
     currentUser?.status || "active";
@@ -392,29 +373,29 @@ export default function ProfilePage() {
     }
   };
 
-  const handleSave = (event) => {
+  const handleSave = async (event) => {
     event.preventDefault();
-
-    const savedUser = {
-      ...(currentUser || {}),
-      fullName: form.fullName.trim(),
-      email: form.email.trim(),
-      contactNumber: form.contact.trim(),
-      barangay: form.barangay,
-      address: form.address.trim(),
-      bio: form.bio.trim(),
-      photoURL: form.photoURL || "",
-      role:
-        userRole ||
-        currentUser?.role ||
-        "participant",
-      updatedAt: new Date().toISOString(),
-    };
-
-    localStorage.setItem(
-      "user",
-      JSON.stringify(savedUser)
-    );
+    try {
+      const token = await auth.currentUser?.getIdToken();
+      const response = await fetch(`${API_BASE_URL}/auth/profile`, {
+        method: "PUT",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          fullName: form.fullName.trim(),
+          contactNumber: form.contact.trim(),
+          userType: form.userType,
+          userTypeDetail: form.userTypeDetail.trim(),
+          barangay: form.barangay,
+          photoURL: form.photoURL || "",
+        }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(payload.message || "Unable to update profile.");
+      login(payload.data, payload.data.role || userRole, token);
+    } catch (error) {
+      setPhotoError(error.message || "Unable to update profile.");
+      return;
+    }
 
     setIsEditing(false);
     setPhotoError("");
@@ -927,6 +908,16 @@ export default function ProfilePage() {
                 </ProfileField>
 
                 <ProfileField
+                  label="User Type"
+                  icon={<FiUser size={15} />}
+                >
+                  <select value={form.userType} onChange={update("userType")} disabled={!isEditing} style={fieldStyle(isEditing, "select")}>
+                    <option value="">Select user type</option>
+                    {USER_TYPES.map((type) => <option key={type}>{type}</option>)}
+                  </select>
+                </ProfileField>
+
+                {userTypeField(form.userType)?.kind === "barangay" && <ProfileField
                   label="Barangay"
                   icon={<FiMapPin size={15} />}
                 >
@@ -943,7 +934,7 @@ export default function ProfilePage() {
                       Select barangay
                     </option>
 
-                    {BARANGAYS.map((barangay) => (
+                    {JUBAN_BARANGAYS.map((barangay) => (
                       <option
                         key={barangay}
                         value={barangay}
@@ -952,7 +943,11 @@ export default function ProfilePage() {
                       </option>
                     ))}
                   </select>
-                </ProfileField>
+                </ProfileField>}
+
+                {userTypeField(form.userType)?.kind === "detail" && <ProfileField label={userTypeField(form.userType).label.replace(" *", "")} icon={<FiHome size={15} />}>
+                  <input type="text" value={form.userTypeDetail} onChange={update("userTypeDetail")} disabled={!isEditing} style={fieldStyle(isEditing)} />
+                </ProfileField>}
 
                 <ProfileField
                   label="Email Address"
