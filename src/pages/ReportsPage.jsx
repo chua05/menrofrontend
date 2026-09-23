@@ -1,5 +1,6 @@
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useAuth } from "../context/AuthContext";
+import { auth } from "../firebase/config";
 import { formatDisplayId } from "../utils/displayId";
 import {
   FiBarChart2,
@@ -19,6 +20,9 @@ import {
   FiMapPin,
 } from "react-icons/fi";
 import "../styles/reports.css";
+
+const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
+const NO_REPORT_DATA_MESSAGE = "Report data is unavailable for the selected report type or filters.";
 
 const REPORT_TYPES = [
   {
@@ -82,7 +86,11 @@ function getReportTypeLabel(typeId) {
 function formatDate(dateString) {
   if (!dateString) return "—";
 
-  const date = new Date(`${dateString}T00:00:00`);
+  const timestampSeconds = dateString?._seconds ?? dateString?.seconds;
+  const date = timestampSeconds !== undefined
+    ? new Date(Number(timestampSeconds) * 1000)
+    : new Date(/^\d{4}-\d{2}-\d{2}$/.test(String(dateString))
+      ? `${dateString}T00:00:00` : dateString);
 
   if (Number.isNaN(date.getTime())) {
     return dateString;
@@ -94,10 +102,6 @@ function formatDate(dateString) {
     day: "numeric",
   });
 }
-
-// The backend does not yet provide generated report history or files.
-// Browser-stored metadata is not evidence that a report was generated.
-const reports = [];
 
 function ReportTypeIcon({ type }) {
   const Icon = type.icon;
@@ -114,7 +118,12 @@ function ReportTypeIcon({ type }) {
 
 export default function ReportsPage() {
   const { userRole } = useAuth();
+  const isAdminOrStaff = userRole === "admin" || userRole === "staff";
 
+  const [reports, setReports] = useState([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyError, setHistoryError] = useState("");
+  const [generating, setGenerating] = useState(false);
   const [selectedType, setSelectedType] = useState("");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
@@ -129,14 +138,38 @@ export default function ReportsPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const [rowsPerPage, setRowsPerPage] = useState(10);
 
+  const loadReports = useCallback(async ({ silent = false } = {}) => {
+    if (!silent) setHistoryLoading(true);
+    setHistoryError("");
+    try {
+      const token = await auth.currentUser?.getIdToken();
+      if (!token) throw new Error("Your session has expired. Please sign in again.");
+      const response = await fetch(`${API_BASE_URL}/reports`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const payload = await response.json().catch(() => null);
+      if (!response.ok) throw new Error(payload?.message || "Unable to load generated reports.");
+      setReports(Array.isArray(payload?.data) ? payload.data : []);
+    } catch (loadError) {
+      setHistoryError(loadError.message || "Unable to load generated reports.");
+    } finally {
+      if (!silent) setHistoryLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!isAdminOrStaff) return undefined;
+    const timer = window.setTimeout(() => void loadReports(), 0);
+    return () => window.clearTimeout(timer);
+  }, [isAdminOrStaff, loadReports]);
+
   const filteredReports = useMemo(() => {
     const search = searchTerm.trim().toLowerCase();
 
     return reports.filter((report) => {
       const matchesType =
         !filterType ||
-        report.typeId === filterType ||
-        report.type === getReportTypeLabel(filterType);
+        report.type === filterType;
 
       const matchesStatus =
         !filterStatus ||
@@ -145,8 +178,8 @@ export default function ReportsPage() {
       const matchesSearch =
         !search ||
         String(report.id).toLowerCase().includes(search) ||
-        String(report.type).toLowerCase().includes(search) ||
-        String(report.generatedBy)
+        String(getReportTypeLabel(report.type)).toLowerCase().includes(search) ||
+        String(report.generatedByName || report.generatedBy || "")
           .toLowerCase()
           .includes(search);
 
@@ -157,6 +190,7 @@ export default function ReportsPage() {
       );
     });
   }, [
+    reports,
     filterType,
     filterStatus,
     searchTerm,
@@ -195,7 +229,35 @@ export default function ReportsPage() {
     setCurrentPage(1);
   };
 
-  const handleGenerate = () => {
+  const handleDownload = async (report) => {
+    setErrorMsg("");
+    try {
+      const token = await auth.currentUser?.getIdToken();
+      if (!token) throw new Error("Your session has expired. Please sign in again.");
+      const path = report.downloadPath || `/api/reports/${encodeURIComponent(report.id)}/download`;
+      const response = await fetch(
+        path.startsWith("http") ? path : `${API_BASE_URL.replace(/\/api\/?$/, "")}${path}`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      if (!response.ok) {
+        const payload = await response.json().catch(() => null);
+        throw new Error(payload?.message || "Failed to download report.");
+      }
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = report.fileName || `${report.reportNumber || report.id}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    } catch (downloadError) {
+      setErrorMsg(downloadError.message || "Failed to download report.");
+    }
+  };
+
+  const handleGenerate = async () => {
     setErrorMsg("");
 
     if (!selectedType) {
@@ -210,47 +272,30 @@ export default function ReportsPage() {
       return;
     }
 
-    setErrorMsg(
-      "Report generation is not available yet. The backend must provide a generated file and report history."
-    );
-  };
-
-  const handleDownload = (report) => {
-    /*
-     * No fake PDF is generated.
-     *
-     * Once the backend returns the actual PDF URL,
-     * this function will download the real report.
-     */
-
-    if (!report.fileUrl) {
-      setErrorMsg(
-        "The PDF file is not available yet. Connect the report generation service to enable downloading."
-      );
-
-      window.setTimeout(() => {
-        setErrorMsg("");
-      }, 4000);
-
-      return;
+    setGenerating(true);
+    try {
+      const token = await auth.currentUser?.getIdToken();
+      if (!token) throw new Error("Your session has expired. Please sign in again.");
+      const response = await fetch(`${API_BASE_URL}/reports`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ type: selectedType, dateFrom, dateTo }),
+      });
+      const payload = await response.json().catch(() => null);
+      if (!response.ok) throw new Error(payload?.message || "Failed to generate report.");
+      if (!payload?.data?.id || Number(payload.data.rowCount) < 1) {
+        throw new Error(NO_REPORT_DATA_MESSAGE);
+      }
+      await loadReports({ silent: true });
+      await handleDownload(payload.data);
+    } catch (generateError) {
+      setErrorMsg(generateError.message || "Failed to generate report.");
+    } finally {
+      setGenerating(false);
     }
-
-    const link = document.createElement("a");
-
-    link.href = report.fileUrl;
-
-    link.download =
-      report.fileName ||
-      `${report.id}-${report.type
-        .replace(/\s+/g, "-")
-        .toLowerCase()}.pdf`;
-
-    link.target = "_blank";
-    link.rel = "noopener noreferrer";
-
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
   };
 
   const showingFrom =
@@ -262,10 +307,6 @@ export default function ReportsPage() {
     safeCurrentPage * rowsPerPage,
     filteredReports.length
   );
-
-  const isAdminOrStaff =
-    userRole === "admin" ||
-    userRole === "staff";
 
   return (
     <div className="reports-page">
@@ -303,39 +344,6 @@ export default function ReportsPage() {
       </div>
 
       {/* =========================
-          ERROR MESSAGE
-      ========================= */}
-
-      {errorMsg && (
-        <div className="reports-alert reports-alert-error">
-          <div className="reports-alert-icon">
-            <FiAlertCircle size={14} />
-          </div>
-
-          <div className="reports-alert-content">
-            <strong>
-              Unable to continue
-            </strong>
-
-            <span>
-              {errorMsg}
-            </span>
-          </div>
-
-          <button
-            type="button"
-            className="reports-alert-close"
-            onClick={() =>
-              setErrorMsg("")
-            }
-            aria-label="Close error message"
-          >
-            <FiX size={15} />
-          </button>
-        </div>
-      )}
-
-      {/* =========================
           GENERATE REPORT
       ========================= */}
 
@@ -354,6 +362,20 @@ export default function ReportsPage() {
             </p>
           </div>
         </div>
+
+        {errorMsg && (
+          <div className="reports-alert reports-alert-error" role="alert">
+            <div className="reports-alert-icon"><FiAlertCircle size={14} /></div>
+            <div className="reports-alert-content">
+              <strong>Unable to continue</strong>
+              <span>{errorMsg}</span>
+            </div>
+            <button type="button" className="reports-alert-close"
+              onClick={() => setErrorMsg("")} aria-label="Close error message">
+              <FiX size={15} />
+            </button>
+          </div>
+        )}
 
         {/* Report Type */}
 
@@ -375,9 +397,10 @@ export default function ReportsPage() {
                     ? "selected"
                     : ""
                 }`}
-                onClick={() =>
-                  setSelectedType(type.id)
-                }
+                onClick={() => {
+                  setSelectedType(type.id);
+                  setErrorMsg("");
+                }}
               >
                 <ReportTypeIcon
                   type={type}
@@ -424,11 +447,10 @@ export default function ReportsPage() {
                 id="report-date-from"
                 type="date"
                 value={dateFrom}
-                onChange={(event) =>
-                  setDateFrom(
-                    event.target.value
-                  )
-                }
+                onChange={(event) => {
+                  setDateFrom(event.target.value);
+                  setErrorMsg("");
+                }}
               />
 
               <FiCalendar
@@ -447,11 +469,10 @@ export default function ReportsPage() {
                 id="report-date-to"
                 type="date"
                 value={dateTo}
-                onChange={(event) =>
-                  setDateTo(
-                    event.target.value
-                  )
-                }
+                onChange={(event) => {
+                  setDateTo(event.target.value);
+                  setErrorMsg("");
+                }}
               />
 
               <FiCalendar
@@ -464,10 +485,10 @@ export default function ReportsPage() {
             type="button"
             className="reports-primary-button generate-button"
             onClick={handleGenerate}
-            disabled={!selectedType || !isAdminOrStaff}
+            disabled={!selectedType || !isAdminOrStaff || generating}
           >
             <FiFileText size={15} />
-            Generate Report
+            {generating ? "Generating..." : "Generate Report"}
           </button>
         </div>
 
@@ -520,6 +541,20 @@ export default function ReportsPage() {
             Filter
           </button>
         </div>
+
+        {historyError && (
+          <div className="reports-alert reports-alert-error" role="alert">
+            <div className="reports-alert-icon"><FiAlertCircle size={14} /></div>
+            <div className="reports-alert-content">
+              <strong>Unable to load report history</strong>
+              <span>{historyError}</span>
+            </div>
+            <button type="button" className="reports-alert-close"
+              onClick={() => void loadReports()} aria-label="Retry loading reports">
+              <FiRefreshCw size={15} />
+            </button>
+          </div>
+        )}
 
         {/* Filter Panel */}
 
@@ -681,17 +716,17 @@ export default function ReportsPage() {
                     </td>
 
                     <td>
-                      {report.type}
+                      {getReportTypeLabel(report.type)}
                     </td>
 
                     <td>
                       {formatDate(
-                        report.date
+                        report.generatedAt
                       )}
                     </td>
 
                     <td>
-                      {report.generatedBy ||
+                      {report.generatedByName || report.generatedBy ||
                         "—"}
                     </td>
 
@@ -736,7 +771,7 @@ export default function ReportsPage() {
 
           {/* Empty State */}
 
-          {paginatedReports.length === 0 && (
+          {!historyLoading && paginatedReports.length === 0 && (
             <div className="reports-empty-state">
 
               <div className="reports-empty-icon">
@@ -754,7 +789,7 @@ export default function ReportsPage() {
 
               <p>
                 {reports.length === 0
-                  ? "Generated report history requires backend support."
+                  ? "No report has been generated from qualifying system records yet."
                   : "Try adjusting your filters or search term."}
               </p>
 
@@ -769,6 +804,12 @@ export default function ReportsPage() {
                   Clear Filters
                 </button>
               )}
+            </div>
+          )}
+          {historyLoading && (
+            <div className="reports-empty-state" role="status">
+              <div className="reports-empty-icon"><FiRefreshCw size={27} /></div>
+              <h3>Loading generated reports...</h3>
             </div>
           )}
         </div>
