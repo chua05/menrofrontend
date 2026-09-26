@@ -49,7 +49,7 @@ function getSearchPlaceholder(role) {
     return "Search reports, sites, events...";
   }
 
-  return "Search requests, reports, sites, users...";
+  return "Search requests, reports, sites, events...";
 }
 
 const SEARCH_ICONS = {
@@ -316,6 +316,7 @@ export default function Topbar({ onOpenSidebar }) {
             type="search"
             placeholder={getSearchPlaceholder(userRole)}
             aria-label="Search system"
+            maxLength={100}
             value={searchQuery}
             onChange={(event) => setSearchQuery(event.target.value)}
             onFocus={() => {

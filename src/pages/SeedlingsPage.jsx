@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import {
   Sprout,
   Plus,
@@ -260,6 +261,7 @@ function StatusBadge({ status }) {
 
 export default function SeedlingsPage() {
   const { userRole } = useAuth();
+  const [pageSearchParams] = useSearchParams();
 
   const canManage =
     userRole === "staff";
@@ -338,6 +340,7 @@ export default function SeedlingsPage() {
     useState(10);
 
   const moreMenuRef = useRef(null);
+  const openedInventoryFromSearchRef = useRef("");
 
   useEffect(() => {
     let cancelled = false;
@@ -390,6 +393,19 @@ export default function SeedlingsPage() {
       cancelled = true;
     };
   }, [retryKey]);
+
+  useEffect(() => {
+    const inventoryId = pageSearchParams.get("inventory") || "";
+    if (!inventoryId || loading || openedInventoryFromSearchRef.current === inventoryId) return;
+    const seedling = seedlings.find((item) => String(item.id || "") === inventoryId);
+    if (!seedling) return;
+    const openTimer = window.setTimeout(() => {
+      openedInventoryFromSearchRef.current = inventoryId;
+      setSelectedSeedling(seedling);
+      setShowDetailsModal(true);
+    }, 0);
+    return () => window.clearTimeout(openTimer);
+  }, [loading, pageSearchParams, seedlings]);
 
 
   useEffect(() => {
@@ -2210,11 +2226,10 @@ export default function SeedlingsPage() {
                 <button
                   type="button"
                   className="sd-modal-close"
-                  onClick={() =>
-                    setShowDetailsModal(
-                      false
-                    )
-                  }
+                  onClick={() => {
+                    openedInventoryFromSearchRef.current = "";
+                    setShowDetailsModal(false);
+                  }}
                 >
                   <X size={18} />
                 </button>
@@ -2301,11 +2316,10 @@ export default function SeedlingsPage() {
                 <button
                   type="button"
                   className="sd-secondary-btn"
-                  onClick={() =>
-                    setShowDetailsModal(
-                      false
-                    )
-                  }
+                  onClick={() => {
+                    openedInventoryFromSearchRef.current = "";
+                    setShowDetailsModal(false);
+                  }}
                 >
                   Close
                 </button>

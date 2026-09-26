@@ -50,7 +50,7 @@ const TABS = [
   },
   {
     id: "reviewed",
-    label: "Awaiting Admin",
+    label: "Awaiting Approval",
     status: "Reviewed",
   },
   {
@@ -511,7 +511,7 @@ function StatusBadge({ status }) {
     <span
       className={`sr-status sr-status-${className}`}
     >
-      {status === "Reviewed" ? "Awaiting Admin" : status}
+      {status === "Reviewed" ? "Awaiting Approval" : status}
     </span>
   );
 }
@@ -1710,7 +1710,7 @@ useEffect(() => {
         />
 
         <KpiCard
-          label="Awaiting Admin"
+          label="Awaiting Approval"
           value={counts.reviewed}
           note="Reviewed by staff; awaiting final decision"
           icon={UserRoundCheck}

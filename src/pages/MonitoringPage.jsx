@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import {
@@ -405,6 +406,7 @@ async function apiRequest(
 
 export default function MonitoringPage() {
   const { userRole, currentUser } = useAuth();
+  const [pageSearchParams] = useSearchParams();
 
   const isParticipant = userRole === "participant";
   const canReview = ["admin", "staff"].includes(userRole);
@@ -414,6 +416,7 @@ export default function MonitoringPage() {
   const previewUrlRef = useRef(null);
   const locationMapContainerRef = useRef(null);
   const hasLoadedMonitoringRef = useRef(false);
+  const openedMonitoringFromSearchRef = useRef("");
 
   const currentIdentity = useMemo(
     () => getCurrentUserIdentity(currentUser),
@@ -470,6 +473,20 @@ export default function MonitoringPage() {
     endOfMonitoring: false,
     remarks: "",
   });
+
+  useEffect(() => {
+    const monitoringId = pageSearchParams.get("monitoring") || "";
+    if (!monitoringId || loading || openedMonitoringFromSearchRef.current === monitoringId) return;
+    const record = records.find((item) => String(item.id || item.monitoringId || "") === monitoringId);
+    if (!record) return;
+    const openTimer = window.setTimeout(() => {
+      openedMonitoringFromSearchRef.current = monitoringId;
+      setOpenActionMenuId(null);
+      setSelectedRecord(record);
+      setShowDetails(true);
+    }, 0);
+    return () => window.clearTimeout(openTimer);
+  }, [loading, pageSearchParams, records]);
 
   useEffect(() => {
     let cancelled = false;
@@ -1259,6 +1276,7 @@ export default function MonitoringPage() {
   }
 
   function closeDetails() {
+    openedMonitoringFromSearchRef.current = "";
     setSelectedRecord(null);
     setShowDetails(false);
   }

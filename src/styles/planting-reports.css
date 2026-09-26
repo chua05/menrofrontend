@@ -465,11 +465,37 @@
   flex-direction: column;
 }
 
+.pr-submit-alert-slot {
+  order: 0;
+  height: 64px;
+  flex: 0 0 64px;
+  overflow-y: auto;
+  display: flex;
+  align-items: flex-start;
+  padding-top: 2px;
+  box-sizing: border-box;
+}
+
+.pr-submit-alert {
+  width: 100%;
+  background: transparent;
+  border: 0;
+  padding: 0;
+  font-size: 14px;
+  line-height: 1.55;
+  font-weight: 600;
+}
+
+.pr-submit-alert-success { color: #08783e; }
+.pr-submit-alert-warning { color: #9a6200; }
+.pr-submit-alert-error { color: #c62828; }
+.pr-submit-alert-info { color: #3f5c4c; }
+
 .pr-report-information-section { order: 1; }
 .pr-report-details-section { order: 2; }
-.pr-report-additional-section { order: 3; }
-.pr-photo-evidence-section { order: 4; }
-.pr-photo-location-section { order: 5; }
+.pr-photo-evidence-section { order: 3; }
+.pr-photo-location-section { order: 4; }
+.pr-report-additional-section { order: 5; }
 
 .pr-section {
   margin-bottom: 24px;
@@ -542,6 +568,18 @@
 .pr-input::placeholder,
 .pr-textarea::placeholder {
   font-size: 15px;
+}
+
+.pr-barangay-select option:not(:disabled) {
+  color: #26352d;
+  font-weight: 600;
+}
+
+.pr-barangay-select option:disabled {
+  color: #9aa39e;
+  opacity: 0.55;
+  cursor: not-allowed;
+  font-weight: 400;
 }
 
 .pr-helper-text {
@@ -810,10 +848,11 @@ button:disabled {
   display: inline-flex;
   align-items: center;
   max-width: 100%;
-  min-height: 30px;
-  padding: 5px 10px;
-  border-radius: 999px;
-  border: 1px solid;
+  min-height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
   font-size: 13px;
   line-height: 1.35;
   font-weight: 700;
@@ -821,26 +860,22 @@ button:disabled {
 
 .pr-location-status-waiting {
   color: #5f6b64;
-  background: #f7f9f8;
-  border-color: #dfe5e1;
+  background: transparent;
 }
 
 .pr-location-status-valid {
   color: #17643a;
-  background: #edf8f1;
-  border-color: #b9dfc7;
+  background: transparent;
 }
 
 .pr-location-status-warning {
   color: #854d0e;
-  background: #fffbeb;
-  border-color: #fde68a;
+  background: transparent;
 }
 
 .pr-location-status-flagged {
   color: #b42318;
-  background: #fff3f2;
-  border-color: #f7c7c3;
+  background: transparent;
 }
 
 .pr-location-map-wrap {
@@ -1088,6 +1123,11 @@ button:disabled {
 
   .pr-modal-body {
     padding: 18px 16px;
+  }
+
+  .pr-submit-alert-slot {
+    height: 92px;
+    flex-basis: 92px;
   }
 
   .pr-modal-footer {

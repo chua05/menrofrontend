@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import * as exifr from "exifr";
@@ -25,10 +26,9 @@ import {
 } from "react-icons/fi";
 
 import { useAuth } from "../context/AuthContext";
-import FormAlert from "../components/FormAlert";
 import { auth } from "../firebase/config";
 import { formatDisplayId } from "../utils/displayId";
-import { userTypeField } from "../utils/userTypes";
+import { JUBAN_BARANGAYS, userTypeField } from "../utils/userTypes";
 import "../styles/planting-reports.css";
 
 const API_BASE_URL =
@@ -38,9 +38,15 @@ const MAX_PHOTO_SIZE = 10 * 1024 * 1024;
 const MAX_EVIDENCE_PHOTOS = 10;
 const SITE_GPS_TOLERANCE_METERS = 20;
 const OUTSIDE_SITE_WARNING =
-  "Photo location is outside the assigned planting site. The report can still be submitted, but it will be flagged for MENRO Staff verification.";
+  "The verified photo location is outside the selected planting site. You may still submit the report for MENRO Staff verification.";
+const SITE_MATCH_MESSAGE =
+  "Photo location successfully verified and matches the selected planting site.";
+const OUTSIDE_JUBAN_MESSAGE =
+  "Your photo is outside the Municipality of Juban coverage area. Please use a photo taken within Juban and try again.";
+const MISSING_EXIF_MESSAGE =
+  "GPS location metadata was not found in this photo. Please upload the original geotagged photo and try again.";
 const NO_DISTRIBUTION_MESSAGE =
-  "No released sapling distribution is available for the selected planting event.";
+  "No released sapling distributions are available for this planting event.";
 const PHOTO_EXIF_LOCATION_SOURCE = "Photo Metadata (EXIF)";
 const DEVICE_CAPTURE_LOCATION_SOURCE = "Device Location at Capture";
 const BARANGAY_GEOJSON_URL = "/data/juban-barangays.geojson";
@@ -172,6 +178,52 @@ function getFeatureBarangayName(feature) {
   );
 }
 
+function normalizeBarangayName(value) {
+  return String(value || "")
+    .trim()
+    .replace(/Ã±/gi, "n")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/^barangay\s+/i, "")
+    .toLowerCase();
+}
+
+function isPointInGeoJsonRing(latitude, longitude, ring) {
+  return isPointInPolygon(
+    latitude,
+    longitude,
+    (ring || []).map((coordinate) => ({ lat: coordinate?.[1], lng: coordinate?.[0] }))
+  );
+}
+
+function isPointInGeoJsonPolygon(latitude, longitude, coordinates) {
+  if (!Array.isArray(coordinates) || coordinates.length === 0) return false;
+  if (!isPointInGeoJsonRing(latitude, longitude, coordinates[0])) return false;
+  return !coordinates.slice(1).some((hole) =>
+    isPointInGeoJsonRing(latitude, longitude, hole)
+  );
+}
+
+function isPointInJubanBoundary(latitude, longitude, geoJson) {
+  if (geoJson?.type !== "FeatureCollection" || !Array.isArray(geoJson.features)) return false;
+  return geoJson.features.some((feature) => {
+    const geometry = feature?.geometry;
+    if (geometry?.type === "Polygon") {
+      return isPointInGeoJsonPolygon(latitude, longitude, geometry.coordinates);
+    }
+    if (geometry?.type === "MultiPolygon") {
+      return geometry.coordinates.some((polygon) =>
+        isPointInGeoJsonPolygon(latitude, longitude, polygon)
+      );
+    }
+    return false;
+  });
+}
+
+function getDistributionReference(distribution) {
+  return distribution?.requestNumber || distribution?.distributionNumber || "Released distribution";
+}
+
 function calculateDistanceMeters(lat1, lng1, lat2, lng2) {
   const toRadians = (value) => (value * Math.PI) / 180;
   const earthRadiusMeters = 6371000;
@@ -228,6 +280,7 @@ function getCurrentUserIdentity(currentUser) {
 
 export default function PlantingPage() {
   const { userRole, currentUser } = useAuth();
+  const [pageSearchParams] = useSearchParams();
 
   const isParticipant = userRole === "participant";
   const canReview = userRole === "staff";
@@ -242,6 +295,9 @@ export default function PlantingPage() {
   const locationBarangayLayerRef = useRef(null);
   const locationSiteLayerRef = useRef(null);
   const locationCapturedLayerRef = useRef(null);
+  const openedReportFromSearchRef = useRef("");
+  const eventsRequestSequenceRef = useRef(0);
+  const noEventsAlertTimerRef = useRef(null);
 
   const currentIdentity = useMemo(
     () => getCurrentUserIdentity(currentUser),
@@ -253,9 +309,11 @@ export default function PlantingPage() {
   const [distributions, setDistributions] = useState([]);
   const [events, setEvents] = useState([]);
   const [participantProfile, setParticipantProfile] = useState(currentUser || null);
+  const [jubanGeoJson, setJubanGeoJson] = useState(null);
 
   const [loading, setLoading] = useState(true);
   const [referenceLoading, setReferenceLoading] = useState(false);
+  const [eventsLoadStatus, setEventsLoadStatus] = useState("idle");
   const [submitting, setSubmitting] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
 
@@ -268,10 +326,10 @@ export default function PlantingPage() {
 
   const [popup, setPopup] = useState({ message: "", type: "success" });
   const [locationLoading, setLocationLoading] = useState(false);
-  const [locationMapError, setLocationMapError] = useState("");
   const [verificationRemarks, setVerificationRemarks] = useState("");
   const [decision, setDecision] = useState("");
   const [reportError, setReportError] = useState("");
+  const [noEventsAlertSiteId, setNoEventsAlertSiteId] = useState("");
 
   const [photoFiles, setPhotoFiles] = useState([]);
   const [cameraOpen, setCameraOpen] = useState(false);
@@ -306,6 +364,14 @@ export default function PlantingPage() {
 
   function showPopup(message, type = "success") {
     setPopup({ message: String(message || "").trim(), type });
+  }
+
+  function clearNoEventsAlert() {
+    if (noEventsAlertTimerRef.current) {
+      window.clearTimeout(noEventsAlertTimerRef.current);
+      noEventsAlertTimerRef.current = null;
+    }
+    setNoEventsAlertSiteId("");
   }
 
   async function getAuthToken(forceRefresh = false) {
@@ -447,7 +513,6 @@ export default function PlantingPage() {
           ...previous,
           participantType: response.data.userType || "",
           organizationAffiliation: getProfileAffiliation(response.data),
-          barangay: response.data.barangay || "",
         }));
       }
     } catch (error) {
@@ -458,8 +523,12 @@ export default function PlantingPage() {
   }
 
   async function loadEvents() {
+    const requestSequence = ++eventsRequestSequenceRef.current;
+    setEventsLoadStatus("loading");
+
     try {
       const response = await apiRequest("/events");
+      if (requestSequence !== eventsRequestSequenceRef.current) return;
       const allEvents = Array.isArray(response.data) ? response.data : [];
 
       setEvents(
@@ -471,8 +540,11 @@ export default function PlantingPage() {
               .toLowerCase() !== "cancelled"
         )
       );
+      setEventsLoadStatus("success");
     } catch (error) {
+      if (requestSequence !== eventsRequestSequenceRef.current) return;
       setEvents([]);
+      setEventsLoadStatus("error");
 
       if (!isSessionError(error)) {
         showPopup(
@@ -512,7 +584,7 @@ export default function PlantingPage() {
 
       if (!isSessionError(error)) {
         showPopup(
-          "Unable to load your released distributions. Please try again.",
+          "Unable to load released sapling distributions. Please try again.",
           "error"
         );
       }
@@ -559,11 +631,25 @@ export default function PlantingPage() {
 }, [userRole]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
+    const reportId = pageSearchParams.get("report") || "";
+    if (!reportId || loading || openedReportFromSearchRef.current === reportId) return;
+    const record = records.find((item) => String(item.id || item.reportId || "") === reportId);
+    if (!record) return;
+    const openTimer = window.setTimeout(() => {
+      openedReportFromSearchRef.current = reportId;
+      setSelectedRecord(record);
+      setVerificationRemarks("");
+      setShowViewModal(true);
+    }, 0);
+    return () => window.clearTimeout(openTimer);
+  }, [loading, pageSearchParams, records]);
+
+  useEffect(() => {
     if (!popup.message) return undefined;
 
     const timeout = window.setTimeout(() => {
       setPopup({ message: "", type: "success" });
-    }, 3000);
+    }, 5000);
 
     return () => window.clearTimeout(timeout);
   }, [popup]);
@@ -625,6 +711,8 @@ export default function PlantingPage() {
           throw new Error("Invalid Juban barangay GeoJSON.");
         }
 
+        setJubanGeoJson(geoJson);
+
         const barangayLayer = L.geoJSON(geoJson, {
           style: (feature) => {
             const featureBarangay = getFeatureBarangayName(feature);
@@ -660,14 +748,11 @@ export default function PlantingPage() {
           map.fitBounds(bounds, { padding: [24, 24] });
         }
 
-        setLocationMapError("");
         window.setTimeout(() => map.invalidateSize(), 0);
       } catch (error) {
         console.error("Failed to load planting-report location preview:", error);
         if (!cancelled) {
-          setLocationMapError(
-            "Unable to load the Juban map preview. Check the GeoJSON file and map connection."
-          );
+          showPopup("Unable to load the Juban map preview. Check the boundary file and map connection.", "error");
         }
       }
     }
@@ -780,7 +865,7 @@ export default function PlantingPage() {
           fillColor: "#2563eb",
           fillOpacity: 1,
         })
-          .bindTooltip("Photo GPS Location", {
+          .bindTooltip("Verified Evidence Location", {
             permanent: false,
             direction: "top",
             offset: [0, -8],
@@ -832,17 +917,18 @@ export default function PlantingPage() {
     [distributions]
   );
 
+  const barangaysWithSites = useMemo(
+    () => new Set(sites.map((site) => normalizeBarangayName(getSiteBarangay(site))).filter(Boolean)),
+    [sites]
+  );
+
   const filteredSites = useMemo(() => {
-    const eligibleSiteIds = new Set(availableDistributions
-      .map((distribution) => {
-        const linkedEvent = events.find((event) =>
-          String(getEventId(event)) === String(distribution.eventId || "") ||
-          String(event.sourceRequestId || "") === String(distribution.requestId || ""));
-        return String(distribution.plantingSiteId || linkedEvent?.plantingSiteId || "");
-      })
-      .filter(Boolean));
-    return sites.filter((site) => eligibleSiteIds.has(String(getSiteId(site))));
-  }, [sites, events, availableDistributions]);
+    if (!form.barangay) return [];
+    const selectedBarangay = normalizeBarangayName(form.barangay);
+    return sites.filter((site) =>
+      normalizeBarangayName(getSiteBarangay(site)) === selectedBarangay
+    );
+  }, [sites, form.barangay]);
 
   const filteredEvents = useMemo(() => {
   if (!form.siteId) {
@@ -884,18 +970,46 @@ export default function PlantingPage() {
     return (
       eventSiteId === selectedSiteId &&
       validRecordStatus &&
-      !isCancelled &&
-      availableDistributions.some((distribution) =>
-        (String(distribution.eventId || "") === String(getEventId(event)) ||
-          String(distribution.requestId || "") === String(event.sourceRequestId || ""))
-      )
+      !isCancelled
     );
   });
 }, [
   events,
   form.siteId,
-  availableDistributions,
 ]);
+
+  useEffect(() => {
+    const selectedSiteId = String(form.siteId || "");
+    const shouldShow = showSubmitModal && selectedSiteId &&
+      !referenceLoading && eventsLoadStatus === "success" && filteredEvents.length === 0;
+
+    const synchronizeAlertTimer = window.setTimeout(() => {
+      if (noEventsAlertTimerRef.current) {
+        window.clearTimeout(noEventsAlertTimerRef.current);
+        noEventsAlertTimerRef.current = null;
+      }
+
+      setNoEventsAlertSiteId(shouldShow ? selectedSiteId : "");
+
+      if (shouldShow) {
+        noEventsAlertTimerRef.current = window.setTimeout(() => {
+          setNoEventsAlertSiteId((currentSiteId) =>
+            currentSiteId === selectedSiteId ? "" : currentSiteId
+          );
+          noEventsAlertTimerRef.current = null;
+        }, 10000);
+      }
+    }, 0);
+
+    return () => {
+      window.clearTimeout(synchronizeAlertTimer);
+      if (noEventsAlertTimerRef.current) {
+        window.clearTimeout(noEventsAlertTimerRef.current);
+        noEventsAlertTimerRef.current = null;
+      }
+    };
+  }, [showSubmitModal, form.siteId, referenceLoading, eventsLoadStatus,
+    filteredEvents.length]);
 
   const visibleRecords = useMemo(() => {
     // The participant endpoint already scopes records to the authenticated user.
@@ -1024,6 +1138,22 @@ export default function PlantingPage() {
     );
   }, [hasGps, selectedSite, form.latitude, form.longitude]);
 
+  const municipalityScopeStatus = useMemo(() => {
+    if (!hasGps) return "unverified";
+    if (!jubanGeoJson) return "checking";
+    return isPointInJubanBoundary(
+      Number(form.latitude),
+      Number(form.longitude),
+      jubanGeoJson
+    ) ? "inside" : "outside";
+  }, [hasGps, jubanGeoJson, form.latitude, form.longitude]);
+
+  const isInsideSelectedSite = hasGps && (
+    capturedInsideSitePolygon === true ||
+    (capturedInsideSitePolygon === null && capturedSiteDistance !== null &&
+      capturedSiteDistance <= SITE_GPS_TOLERANCE_METERS)
+  );
+
   const locationPreviewStatus = useMemo(() => {
     if (!form.siteId) {
       return {
@@ -1039,6 +1169,14 @@ export default function PlantingPage() {
           ? "Upload or take a photo first."
           : "Photo GPS metadata is unavailable.",
       };
+    }
+
+    if (municipalityScopeStatus === "checking") {
+      return { type: "waiting", label: "Checking Municipality of Juban boundary..." };
+    }
+
+    if (municipalityScopeStatus === "outside") {
+      return { type: "flagged", label: "Outside Municipality of Juban" };
     }
 
     if (capturedInsideSitePolygon === true) {
@@ -1069,7 +1207,8 @@ export default function PlantingPage() {
         ? "Photo location is outside the registered site boundary."
         : `Photo location is ${capturedSiteDistance.toFixed(1)} m from the registered site.`,
     };
-  }, [form.siteId, hasGps, capturedSiteDistance, capturedInsideSitePolygon, photoFiles.length]);
+  }, [form.siteId, hasGps, municipalityScopeStatus, capturedSiteDistance,
+    capturedInsideSitePolygon, photoFiles.length]);
 
   const isOutsideAssignedSite = hasGps && (
     capturedInsideSitePolygon === false ||
@@ -1077,12 +1216,30 @@ export default function PlantingPage() {
       capturedSiteDistance > SITE_GPS_TOLERANCE_METERS)
   );
 
+  const locationBlocksSubmission = hasGps && municipalityScopeStatus !== "inside";
+
+  useEffect(() => {
+    if (!showSubmitModal || !hasGps || municipalityScopeStatus === "checking" || !selectedSite) {
+      return undefined;
+    }
+    const nextPopup = municipalityScopeStatus === "outside"
+      ? { message: OUTSIDE_JUBAN_MESSAGE, type: "error" }
+      : {
+          message: isInsideSelectedSite ? SITE_MATCH_MESSAGE : OUTSIDE_SITE_WARNING,
+          type: isInsideSelectedSite ? "success" : "warning",
+        };
+    const announcementTimer = window.setTimeout(() => setPopup(nextPopup), 0);
+    return () => window.clearTimeout(announcementTimer);
+  }, [showSubmitModal, hasGps, municipalityScopeStatus, isInsideSelectedSite,
+    selectedSite, form.latitude, form.longitude]);
+
   function resetForm() {
+    clearNoEventsAlert();
     stopCamera();
     setForm({
       participantType: participantProfile?.userType || "",
       organizationAffiliation: getProfileAffiliation(participantProfile),
-      barangay: participantProfile?.barangay || "",
+      barangay: "",
       distributionId: "",
       distributionItemKey: "",
       inventoryId: "",
@@ -1230,6 +1387,8 @@ export default function PlantingPage() {
   }
 
   function updateFormField(field, value) {
+    if (field === "barangay") clearNoEventsAlert();
+
     setForm((previous) => {
       const next = { ...previous, [field]: value };
 
@@ -1241,6 +1400,12 @@ export default function PlantingPage() {
         next.plantingDate = "";
         next.distributionId = "";
         next.distributionItemKey = "";
+        next.inventoryId = "";
+        next.species = "";
+        next.requestedQuantity = "";
+        next.quantityReleased = "";
+        next.remainingQuantity = "";
+        next.quantity = "";
       }
 
       return next;
@@ -1316,6 +1481,7 @@ export default function PlantingPage() {
   }
 
   function handleSiteChange(event) {
+    clearNoEventsAlert();
     const selectedId = event.target.value;
     const site = filteredSites.find(
       (item) => String(getSiteId(item)) === String(selectedId)
@@ -1345,7 +1511,6 @@ export default function PlantingPage() {
       ...previous,
       siteId: getSiteId(site),
       siteName: getSiteName(site),
-      barangay: getSiteBarangay(site),
       eventId: "",
       eventName: "",
       plantingDate: "",
@@ -1423,7 +1588,7 @@ export default function PlantingPage() {
         showPopup(
           hasGpsValues
             ? "This photo contains invalid GPS coordinates. Please upload an original geotagged photo with valid location information."
-            : "This photo does not contain GPS location metadata. Please upload an original geotagged photo with location information.",
+            : MISSING_EXIF_MESSAGE,
           "error"
         );
         return false;
@@ -1443,7 +1608,7 @@ export default function PlantingPage() {
           ? capturedDate.toISOString() : "",
       }));
       setLocationPhotoSignature(`${file.name}|${file.size}|${file.lastModified}`);
-      if (announce) showPopup("Photo location verified from image metadata.");
+      if (announce) showPopup("Photo location successfully verified.");
       return true;
     } catch {
       setForm((previous) => ({
@@ -1452,7 +1617,7 @@ export default function PlantingPage() {
         photoCapturedAt: "", locationCapturedAt: "",
       }));
       showPopup(
-        "This photo does not contain GPS location metadata. Please upload an original geotagged photo with location information.",
+        MISSING_EXIF_MESSAGE,
         "error"
       );
       return false;
@@ -1562,8 +1727,34 @@ export default function PlantingPage() {
         locationSource: DEVICE_CAPTURE_LOCATION_SOURCE,
         photoCapturedAt: options.capturedAt || new Date().toISOString(),
       }));
-    } else if (photoFiles.length === 0) {
-      metadataValid = await processPhotoMetadata(selectedFiles[0], false);
+    } else {
+      for (const file of selectedFiles) {
+        try {
+          const metadata = await exifr.parse(file, { gps: true, tiff: true, exif: true });
+          const hasCoordinates = metadata?.latitude !== null && metadata?.latitude !== undefined &&
+            metadata?.longitude !== null && metadata?.longitude !== undefined;
+          const latitude = hasCoordinates ? Number(metadata.latitude) : NaN;
+          const longitude = hasCoordinates ? Number(metadata.longitude) : NaN;
+          if (!Number.isFinite(latitude) || latitude < -90 || latitude > 90 ||
+              !Number.isFinite(longitude) || longitude < -180 || longitude > 180) {
+            showPopup(MISSING_EXIF_MESSAGE, "error");
+            event.target.value = "";
+            return;
+          }
+        } catch {
+          showPopup(MISSING_EXIF_MESSAGE, "error");
+          event.target.value = "";
+          return;
+        }
+      }
+      if (photoFiles.length === 0) {
+        metadataValid = await processPhotoMetadata(selectedFiles[0], false);
+      }
+    }
+
+    if (!metadataValid) {
+      event.target.value = "";
+      return;
     }
 
     const newPreviews = selectedFiles.map((file) => ({
@@ -1635,6 +1826,11 @@ export default function PlantingPage() {
       return;
     }
 
+    if (!form.barangay) {
+      showPopup("Please select a barangay with an available planting site.", "error");
+      return;
+    }
+
     if (!form.inventoryId) {
       showPopup("Please select a sapling tree.", "error");
       return;
@@ -1678,9 +1874,19 @@ export default function PlantingPage() {
       showPopup(
         form.locationSource === DEVICE_CAPTURE_LOCATION_SOURCE
           ? "Unable to capture your device location. Please enable location services and try again, or upload an original geotagged photo instead."
-          : "This photo does not contain GPS location metadata. Please upload an original geotagged photo with location information.",
+          : MISSING_EXIF_MESSAGE,
         "error"
       );
+      return;
+    }
+
+    if (municipalityScopeStatus === "checking") {
+      showPopup("Please wait while the photo location is checked against the Municipality of Juban boundary.", "error");
+      return;
+    }
+
+    if (municipalityScopeStatus === "outside") {
+      showPopup(OUTSIDE_JUBAN_MESSAGE, "error");
       return;
     }
 
@@ -1689,6 +1895,7 @@ export default function PlantingPage() {
     payload.append("distributionId", form.distributionId);
     if (form.inventoryId) payload.append("inventoryId", form.inventoryId);
     payload.append("siteId", form.siteId);
+    payload.append("barangay", form.barangay);
     payload.append("quantityPlanted", String(quantity));
     payload.append("plantingDate", form.plantingDate);
     payload.append("plantingLocation", form.siteName);
@@ -1736,6 +1943,7 @@ export default function PlantingPage() {
 
   function closeRecordModal() {
     if (actionLoading) return;
+    openedReportFromSearchRef.current = "";
     setSelectedRecord(null);
     setVerificationRemarks("");
     setDecision("");
@@ -2092,13 +2300,19 @@ export default function PlantingPage() {
 
             <form onSubmit={handleSubmit}>
               <div className="pr-modal-body pr-submit-modal-body">
-                <FormAlert type={popup.type}>{popup.message}</FormAlert>
-                {!popup.message && form.eventId && eligibleDistributions.length === 0 && (
-                  <FormAlert type="error">{NO_DISTRIBUTION_MESSAGE}</FormAlert>
-                )}
-                {!popup.message && isOutsideAssignedSite && (
-                  <FormAlert type="warning">{OUTSIDE_SITE_WARNING}</FormAlert>
-                )}
+                <div
+                  className="pr-submit-alert-slot"
+                  aria-live={popup.type === "error" ? "assertive" : "polite"}
+                >
+                  {popup.message && (
+                    <div
+                      className={`pr-submit-alert pr-submit-alert-${popup.type}`}
+                      role={popup.type === "error" ? "alert" : "status"}
+                    >
+                      {popup.message}
+                    </div>
+                  )}
+                </div>
 
                 <section className="pr-section pr-report-information-section">
                   <div className="pr-section-header">
@@ -2138,23 +2352,51 @@ export default function PlantingPage() {
                   <div className="pr-grid2">
                     <div className="pr-full-width">
                       <label className="pr-label">
+                        Barangay <span className="pr-required">*</span>
+                      </label>
+                      <select
+                        className="pr-input pr-barangay-select"
+                        value={form.barangay}
+                        onChange={(event) => updateFormField("barangay", event.target.value)}
+                        disabled={referenceLoading}
+                      >
+                        <option value="">
+                          {referenceLoading ? "Loading barangays..." : "Select barangay"}
+                        </option>
+                        {JUBAN_BARANGAYS.map((barangay) => {
+                          const hasSite = barangaysWithSites.has(normalizeBarangayName(barangay));
+                          return (
+                            <option key={barangay} value={barangay} disabled={!hasSite}>
+                              {barangay}
+                            </option>
+                          );
+                        })}
+                      </select>
+                    </div>
+
+                    <div className="pr-full-width">
+                      <label className="pr-label">
                         Planting Site <span className="pr-required">*</span>
                       </label>
                       <select
                         className="pr-input"
                         value={form.siteId}
                         onChange={handleSiteChange}
+                        disabled={!form.barangay || referenceLoading}
                       >
-                        <option value="">Select eligible planting site</option>
+                        <option value="">
+                          {!form.barangay ? "Select barangay first" :
+                            referenceLoading ? "Loading planting sites..." : "Select planting site"}
+                        </option>
                         {filteredSites.map((site) => (
                           <option key={getSiteId(site)} value={getSiteId(site)}>
                             {formatDisplayId("SITE", site.siteNumber, site.siteId, getSiteId(site))} — {getSiteName(site)}
                           </option>
                         ))}
                       </select>
-                      {filteredSites.length === 0 && (
+                      {form.barangay && !referenceLoading && filteredSites.length === 0 && (
                         <div className="pr-helper-text">
-                          No eligible planting site is linked to a released sapling distribution.
+                          No planting sites are currently available for this barangay.
                         </div>
                       )}
                     </div>
@@ -2176,7 +2418,7 @@ export default function PlantingPage() {
                       </select>
                       {form.siteId && filteredEvents.length === 0 && (
                         <div className="pr-helper-text" role="status">
-                          No approved or scheduled planting event is linked to this planting site.
+                          No planting events are currently available for this planting site.
                         </div>
                       )}
                     </div>
@@ -2201,15 +2443,19 @@ export default function PlantingPage() {
                         </option>
                         {eligibleDistributions.map((distribution) => (
                           <option key={distribution.id} value={distribution.id}>
-                            {formatDisplayId("DIST", distribution.distributionNumber, distribution.id)}
-                            {distribution.requestNumber ? ` — ${distribution.requestNumber}` : ""}
+                            {getDistributionReference(distribution)} — {distribution.participantName || distribution.organization || "Requester"}
                           </option>
                         ))}
                       </select>
+                      {form.eventId && eligibleDistributions.length === 0 && (
+                        <div className="pr-helper-text" role="status">
+                          No released sapling distributions are available for this planting event.
+                        </div>
+                      )}
                     </div>
 
                     <div>
-                      <label className="pr-label">Sapling Tree</label>
+                      <label className="pr-label">Sapling Tree <span className="pr-required">*</span></label>
                       <select
                         className="pr-input"
                         value={form.distributionItemKey}
@@ -2228,7 +2474,7 @@ export default function PlantingPage() {
                     </div>
 
                     <div>
-                      <label className="pr-label">Released Quantity</label>
+                      <label className="pr-label">Quantity Released</label>
                       <input className="pr-input pr-readonly" value={form.quantityReleased} readOnly />
                     </div>
 
@@ -2309,7 +2555,8 @@ export default function PlantingPage() {
                         <div>
                           <div className="pr-gps-value-label">Location Status</div>
                           <div className="pr-gps-value">
-                            {isOutsideAssignedSite ? "Outside Assigned Site" :
+                            {municipalityScopeStatus === "outside" ? "Outside Municipality of Juban" :
+                              isOutsideAssignedSite ? "Outside Assigned Site" :
                               locationPreviewStatus.type === "valid" ? "Within Assigned Site" : "Unable to Compare"}
                           </div>
                         </div>
@@ -2339,11 +2586,6 @@ export default function PlantingPage() {
 
                                       
 
-                                      {locationMapError && (
-                                  <div className="pr-location-map-error">
-                                    {locationMapError}
-                                  </div>
-                                )}
                               </div>
 
                               <div className="pr-location-map-legend">
@@ -2521,7 +2763,8 @@ export default function PlantingPage() {
                 <button
                   type="submit"
                   className="pr-primary-button"
-                  disabled={submitting || Boolean(form.eventId && eligibleDistributions.length === 0)}
+                  disabled={submitting || locationBlocksSubmission ||
+                    Boolean(form.eventId && eligibleDistributions.length === 0)}
                 >
                   <FiSend size={14} />
                   {submitting ? "Submitting..." : "Submit Report"}
@@ -2792,12 +3035,25 @@ export default function PlantingPage() {
                   <div className="pr-info-block">
                     <div className="pr-info-label">Location Verification Status</div>
                     <div className="pr-info-value">
-                      {selectedRecord.siteLocationStatus ||
+                      {selectedRecord.locationVerificationStatus === "site_match"
+                        ? "Site Match"
+                        : selectedRecord.locationVerificationStatus === "site_mismatch"
+                        ? "Site Mismatch - MENRO Staff review required"
+                        : selectedRecord.siteLocationStatus ||
                         (selectedRecord.siteGpsValid === true
                         ? "Within Assigned Site"
                         : selectedRecord.siteGpsValid === false
                         ? "Outside Assigned Site"
                         : "Unable to Compare")}
+                    </div>
+                  </div>
+
+                  <div className="pr-info-block">
+                    <div className="pr-info-label">Municipality Scope</div>
+                    <div className="pr-info-value">
+                      {selectedRecord.municipalityScope === "inside"
+                        ? "Inside Municipality of Juban"
+                        : selectedRecord.municipalityScope || "—"}
                     </div>
                   </div>
                 </div>

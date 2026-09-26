@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { auth } from "../firebase/config";
 import { formatDisplayId } from "../utils/displayId";
@@ -118,6 +119,8 @@ function ReportTypeIcon({ type }) {
 
 export default function ReportsPage() {
   const { userRole } = useAuth();
+  const [pageSearchParams] = useSearchParams();
+  const appliedReportSearchRef = useRef("");
   const isAdminOrStaff = userRole === "admin" || userRole === "staff";
 
   const [reports, setReports] = useState([]);
@@ -162,6 +165,17 @@ export default function ReportsPage() {
     const timer = window.setTimeout(() => void loadReports(), 0);
     return () => window.clearTimeout(timer);
   }, [isAdminOrStaff, loadReports]);
+
+  useEffect(() => {
+    const reportId = pageSearchParams.get("report") || "";
+    if (!reportId || appliedReportSearchRef.current === reportId) return;
+    const filterTimer = window.setTimeout(() => {
+      appliedReportSearchRef.current = reportId;
+      setSearchTerm(reportId);
+      setCurrentPage(1);
+    }, 0);
+    return () => window.clearTimeout(filterTimer);
+  }, [pageSearchParams]);
 
   const filteredReports = useMemo(() => {
     const search = searchTerm.trim().toLowerCase();

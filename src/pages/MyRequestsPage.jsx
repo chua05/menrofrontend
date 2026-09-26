@@ -279,7 +279,7 @@ function StatusBadge({ status }) {
         classMap[normalizedStatus] || "myr-status myr-status-pending"
       }
     >
-      {normalizedStatus === "Reviewed" ? "Awaiting Admin" : normalizedStatus}
+      {normalizedStatus === "Reviewed" ? "Awaiting Approval" : normalizedStatus}
     </span>
   );
 }
@@ -1039,7 +1039,7 @@ export default function MyRequestsPage() {
             <SearchCheck size={25} />
           </div>
           <div>
-            <span>Awaiting Admin</span>
+            <span>Awaiting Approval</span>
             <strong>{counts.reviewed}</strong>
           </div>
         </div>

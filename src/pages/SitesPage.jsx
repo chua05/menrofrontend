@@ -1784,11 +1784,10 @@ export default function SitesPage() {
               <button
                 type="button"
                 className="ps-close-btn"
-                onClick={() =>
-                  setSelectedSite(
-                    null
-                  )
-                }
+                onClick={() => {
+                  openedSiteFromSearchRef.current = "";
+                  setSelectedSite(null);
+                }}
               >
                 <X size={19} />
               </button>
