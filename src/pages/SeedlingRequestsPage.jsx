@@ -50,7 +50,7 @@ const TABS = [
   },
   {
     id: "reviewed",
-    label: "Reviewed",
+    label: "Awaiting Admin",
     status: "Reviewed",
   },
   {
@@ -62,6 +62,11 @@ const TABS = [
     id: "approved",
     label: "Approved",
     status: "Approved",
+  },
+  {
+    id: "released",
+    label: "Saplings Released",
+    status: "Saplings Released",
   },
   {
     id: "rejected",
@@ -188,7 +193,9 @@ function normalizeRequestForUi(request = {}) {
     ? "Pending Review"
     : request.status === "Returned"
       ? "Request Returned"
-      : request.status || "Pending Review";
+      : request.status === "Released"
+        ? "Saplings Released"
+        : request.status || "Pending Review";
 
   return {
     ...request,
@@ -355,7 +362,7 @@ function hasStaffReviewData(request) {
       request.status === "Reviewed" ||
       request.status === "Approved" ||
       request.status === "Rejected" ||
-      request.status === "Released"
+      request.status === "Saplings Released"
   );
 }
 
@@ -504,13 +511,14 @@ function StatusBadge({ status }) {
     <span
       className={`sr-status sr-status-${className}`}
     >
-      {status}
+      {status === "Reviewed" ? "Awaiting Admin" : status}
     </span>
   );
 }
 
 export default function SeedlingRequestsPage() {
   const { userRole, currentUser } = useAuth();
+  const [pageSearchParams] = useSearchParams();
 
   const [requests, setRequests] = useState([]);
   const [archivedRequests, setArchivedRequests] = useState([]);
@@ -564,6 +572,15 @@ export default function SeedlingRequestsPage() {
 
   const [selectedRequest, setSelectedRequest] =
     useState(null);
+
+  useEffect(() => {
+    const requestId = pageSearchParams.get("request");
+    if (!requestId || requests.length === 0) return;
+    const request = requests.find((item) => String(item.id) === String(requestId));
+    if (!request) return;
+    const openTimer = window.setTimeout(() => setSelectedRequest(request), 0);
+    return () => window.clearTimeout(openTimer);
+  }, [pageSearchParams, requests]);
 
   const [form, setForm] = useState(() =>
     getInitialForm()
@@ -705,6 +722,10 @@ useEffect(() => {
       approved: requests.filter(
         (request) =>
           request.status === "Approved"
+      ).length,
+
+      released: requests.filter(
+        (request) => request.status === "Saplings Released"
       ).length,
 
       rejected: requests.filter(
@@ -1566,6 +1587,9 @@ useEffect(() => {
     if (tab.id === "approved")
       return counts.approved;
 
+    if (tab.id === "released")
+      return counts.released;
+
     if (tab.id === "rejected")
       return counts.rejected;
 
@@ -1686,9 +1710,9 @@ useEffect(() => {
         />
 
         <KpiCard
-          label="Reviewed"
+          label="Awaiting Admin"
           value={counts.reviewed}
-          note="Reviewed by staff"
+          note="Reviewed by staff; awaiting final decision"
           icon={UserRoundCheck}
           variant="orange"
         />
@@ -2359,7 +2383,7 @@ useEffect(() => {
             </div>
             <div className="sr-modal-body">
               <div className="sr-details-grid">
-                <DetailItem label="Request No." value={releaseModal.id} />
+                <DetailItem label="Request No." value={getRequestDisplayId(releaseModal)} />
                 <DetailItem label="Requester" value={releaseModal.requesterName} />
                 <DetailItem label="Organization / Barangay" value={releaseModal.organization || releaseModal.eventBarangay} />
                 <DetailItem label="Planting Site" value={releaseModal.plantingSiteName} />
@@ -3892,7 +3916,7 @@ function ReturnRequestModal({
             onClick={onSubmit}
             disabled={loading}
           >
-            {loading ? "Returning..." : "Confirm Return"}
+            {loading ? "Returning..." : "Return Request"}
           </button>
         </div>
       </div>

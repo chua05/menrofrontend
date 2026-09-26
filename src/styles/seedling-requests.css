@@ -646,7 +646,8 @@
   color: #178045;
 }
 
-.sr-status-approved {
+.sr-status-approved,
+.sr-status-saplings-released {
   background: #dff2e3;
   color: #14793c;
 }

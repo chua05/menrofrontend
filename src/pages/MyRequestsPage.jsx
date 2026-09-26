@@ -52,7 +52,9 @@ function normalizeMyRequest(request) {
       ? "Pending Review"
       : request.status === "Returned"
         ? "Request Returned"
-        : request.status,
+        : request.status === "Released"
+          ? "Saplings Released"
+          : request.status,
     trees: Array.isArray(request.items) && request.items.length > 0
       ? request.items
       : Array.isArray(request.trees) ? request.trees
@@ -266,7 +268,7 @@ function StatusBadge({ status }) {
     "Under Review": "myr-status myr-status-under-review",
     Reviewed: "myr-status myr-status-reviewed",
     Approved: "myr-status myr-status-approved",
-    Released: "myr-status myr-status-approved",
+    "Saplings Released": "myr-status myr-status-approved",
     Rejected: "myr-status myr-status-rejected",
     "Request Returned": "myr-status myr-status-returned",
   };
@@ -277,7 +279,7 @@ function StatusBadge({ status }) {
         classMap[normalizedStatus] || "myr-status myr-status-pending"
       }
     >
-      {normalizedStatus}
+      {normalizedStatus === "Reviewed" ? "Awaiting Admin" : normalizedStatus}
     </span>
   );
 }
@@ -926,7 +928,7 @@ export default function MyRequestsPage() {
 
   useEffect(() => {
     const eventId = selectedRequest?.eventId;
-    const eligible = showDetailsModal && ["Approved", "Released"].includes(selectedRequest?.status) &&
+    const eligible = showDetailsModal && ["Approved", "Saplings Released"].includes(selectedRequest?.status) &&
       Number(selectedRequest?.expectedParticipants) > 0 && eventId;
     if (!eligible) return;
     let cancelled = false;
@@ -949,7 +951,7 @@ export default function MyRequestsPage() {
   }, [showDetailsModal, selectedRequest?.eventId, selectedRequest?.status, selectedRequest?.expectedParticipants]);
 
   const invitationUrl = (() => {
-    if (!["Approved", "Released"].includes(selectedRequest?.status) ||
+    if (!["Approved", "Saplings Released"].includes(selectedRequest?.status) ||
         Number(selectedRequest.expectedParticipants) <= 0 ||
         !invitationToken) return "";
     return `${window.location.origin}/join-event/${encodeURIComponent(invitationToken)}`;
@@ -1037,7 +1039,7 @@ export default function MyRequestsPage() {
             <SearchCheck size={25} />
           </div>
           <div>
-            <span>Reviewed</span>
+            <span>Awaiting Admin</span>
             <strong>{counts.reviewed}</strong>
           </div>
         </div>
@@ -1501,7 +1503,7 @@ export default function MyRequestsPage() {
                 </section>
               )}
 
-              {(["Approved", "Released", "Rejected"].includes(selectedRequest.status)) && (
+              {(["Approved", "Saplings Released", "Rejected"].includes(selectedRequest.status)) && (
                 <section className="myr-detail-section">
                   <div className="myr-section-title"><FileText size={18} /><div><h3>MENRO Decision</h3><p>Decision information recorded by MENRO.</p></div></div>
                   <div className="myr-form-grid">
@@ -1513,7 +1515,7 @@ export default function MyRequestsPage() {
                 </section>
               )}
 
-              {(["Approved", "Released"].includes(selectedRequest.status)) && (
+              {(["Approved", "Saplings Released"].includes(selectedRequest.status)) && (
                 linkedEvent && <section className="myr-detail-section">
                   <div className="myr-section-title"><CalendarDays size={18} /><div><h3>Scheduled Event</h3><p>Details from the linked planting event.</p></div></div>
                   <div className="myr-form-grid">
@@ -1525,7 +1527,7 @@ export default function MyRequestsPage() {
                 </section>
               )}
 
-              {(["Approved", "Released"].includes(selectedRequest.status)) && (
+              {(["Approved", "Saplings Released"].includes(selectedRequest.status)) && (
                 <section className="myr-detail-section">
                   <div className="myr-section-title"><Trees size={18} /><div><h3>Sapling Release</h3><p>Actual release details appear when MENRO records them.</p></div></div>
                   {Array.isArray(selectedRequest.releasedItems) && selectedRequest.releasedItems.length > 0 ? (

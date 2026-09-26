@@ -465,6 +465,8 @@
   background: #168044;
 }
 
+.ec-calendar-legend i.my-event { background: #d9a514; }
+
 .ec-calendar-legend i.seedling-distribution {
   background: #2775df;
 }
@@ -641,6 +643,12 @@
 .ec-calendar-event.tree-planting {
   background: #e5f4e8;
   color: #13793b;
+}
+
+.ec-calendar-event.my-event {
+  background: #fff1b8;
+  color: #73520a;
+  box-shadow: inset 3px 0 0 #d9a514;
 }
 
 .ec-calendar-event.seedling-distribution {
@@ -924,6 +932,9 @@
 .ec-upcoming-event:hover {
   background: #fafcfb;
 }
+
+.ec-upcoming-event.my-event { box-shadow: inset 3px 0 0 #d9a514; }
+.ec-upcoming-event.my-event .ec-upcoming-date { background: #fff1b8; color: #73520a; }
 
 .ec-upcoming-date {
   width: 48px;

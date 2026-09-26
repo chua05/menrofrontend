@@ -1,5 +1,8 @@
 import { useEffect, useRef, useState } from "react";
-import { Bell, ChevronDown, Menu, Search, UserRound, X } from "lucide-react";
+import {
+  Activity, Bell, CalendarDays, ChevronDown, Copy, FileText,
+  MapPin, Menu, Package, Search, Sprout, UserRound, X,
+} from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { auth } from "../firebase/config";
@@ -49,6 +52,21 @@ function getSearchPlaceholder(role) {
   return "Search requests, reports, sites, users...";
 }
 
+const SEARCH_ICONS = {
+  Event: CalendarDays,
+  "Planting Site": MapPin,
+  "Sapling Request": FileText,
+  "Planting Report": Sprout,
+  "Monitoring Record": Activity,
+  "Generated Report": FileText,
+  "Inventory Sapling": Package,
+};
+
+function timestampText(value) {
+  const seconds = value?.seconds ?? value?._seconds;
+  return seconds != null ? new Date(seconds * 1000).toLocaleString("en-PH") : "—";
+}
+
 export default function Topbar({ onOpenSidebar }) {
   const { currentUser, userRole } = useAuth();
   const navigate = useNavigate();
@@ -61,9 +79,16 @@ export default function Topbar({ onOpenSidebar }) {
   const [guestLink, setGuestLink] = useState("");
   const [copyMessage, setCopyMessage] = useState("");
   const [showProfileMenu, setShowProfileMenu] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState([]);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const [searchError, setSearchError] = useState("");
+  const [activeSearchIndex, setActiveSearchIndex] = useState(-1);
 
   const notificationRef = useRef(null);
   const profileRef = useRef(null);
+  const searchRef = useRef(null);
   const notificationCloseRef = useRef(null);
 
   useEffect(() => {
@@ -81,6 +106,10 @@ export default function Topbar({ onOpenSidebar }) {
       ) {
         setShowProfileMenu(false);
       }
+
+      if (searchRef.current && !searchRef.current.contains(event.target)) {
+        setSearchOpen(false);
+      }
     };
 
     document.addEventListener("mousedown", handleOutsideClick);
@@ -92,6 +121,51 @@ export default function Topbar({ onOpenSidebar }) {
       );
     };
   }, []);
+
+  useEffect(() => {
+    const query = searchQuery.trim();
+    if (query.length < 2) {
+      const resetTimer = window.setTimeout(() => {
+        setSearchResults([]);
+        setSearchError("");
+        setSearchLoading(false);
+        setActiveSearchIndex(-1);
+      }, 0);
+      return () => window.clearTimeout(resetTimer);
+    }
+
+    const controller = new AbortController();
+    const timer = window.setTimeout(async () => {
+      setSearchLoading(true);
+      setSearchError("");
+      try {
+        const token = await auth.currentUser?.getIdToken();
+        if (!token) throw new Error("Please sign in again.");
+        const response = await fetch(
+          `${API_BASE_URL}/search?q=${encodeURIComponent(query)}&limit=10`,
+          { headers: { Authorization: `Bearer ${token}` }, signal: controller.signal }
+        );
+        const payload = await response.json().catch(() => null);
+        if (!response.ok) throw new Error(payload?.message || "Unable to search system records.");
+        setSearchResults(payload?.data?.results || []);
+        setSearchOpen(true);
+        setActiveSearchIndex(-1);
+      } catch (error) {
+        if (error.name !== "AbortError") {
+          setSearchResults([]);
+          setSearchError(error.message || "Unable to search system records.");
+          setSearchOpen(true);
+        }
+      } finally {
+        if (!controller.signal.aborted) setSearchLoading(false);
+      }
+    }, 300);
+
+    return () => {
+      window.clearTimeout(timer);
+      controller.abort();
+    };
+  }, [searchQuery]);
 
   useEffect(() => {
     if (!selectedNotification) return undefined;
@@ -107,7 +181,6 @@ export default function Topbar({ onOpenSidebar }) {
   }, [selectedNotification]);
 
   useEffect(() => {
-    if (!showNotifications) return;
     let cancelled = false;
     async function loadNotifications() {
       setNotificationLoading(true);
@@ -129,7 +202,38 @@ export default function Topbar({ onOpenSidebar }) {
     }
     void loadNotifications();
     return () => { cancelled = true; };
-  }, [showNotifications]);
+  }, [showNotifications, currentUser?.uid]);
+
+  function clearSearch() {
+    setSearchQuery("");
+    setSearchResults([]);
+    setSearchError("");
+    setSearchOpen(false);
+    setActiveSearchIndex(-1);
+  }
+
+  function openSearchResult(item) {
+    clearSearch();
+    navigate(item.path);
+  }
+
+  function handleSearchKeyDown(event) {
+    if (event.key === "Escape") {
+      setSearchOpen(false);
+      return;
+    }
+    if (!searchOpen || searchResults.length === 0) return;
+    if (event.key === "ArrowDown") {
+      event.preventDefault();
+      setActiveSearchIndex((index) => (index + 1) % searchResults.length);
+    } else if (event.key === "ArrowUp") {
+      event.preventDefault();
+      setActiveSearchIndex((index) => index <= 0 ? searchResults.length - 1 : index - 1);
+    } else if (event.key === "Enter" && activeSearchIndex >= 0) {
+      event.preventDefault();
+      openSearchResult(searchResults[activeSearchIndex]);
+    }
+  }
 
   async function openNotification(item) {
     if (!item.isRead) {
@@ -188,6 +292,7 @@ export default function Topbar({ onOpenSidebar }) {
     displayName,
     userRole
   );
+  const unreadCount = notifications.filter((item) => !item.isRead).length;
 
   return (
     <header className="topbar">
@@ -206,11 +311,19 @@ export default function Topbar({ onOpenSidebar }) {
           />
         </button>
 
-        <div className="topbar-search">
+        <div className="topbar-search" ref={searchRef}>
           <input
             type="search"
             placeholder={getSearchPlaceholder(userRole)}
             aria-label="Search system"
+            value={searchQuery}
+            onChange={(event) => setSearchQuery(event.target.value)}
+            onFocus={() => {
+              if (searchQuery.trim().length >= 2) setSearchOpen(true);
+            }}
+            onKeyDown={handleSearchKeyDown}
+            aria-expanded={searchOpen}
+            aria-controls="global-search-results"
           />
 
           <Search
@@ -219,6 +332,43 @@ export default function Topbar({ onOpenSidebar }) {
             strokeWidth={1.8}
             aria-hidden="true"
           />
+          {searchQuery && (
+            <button type="button" className="topbar-search-clear" onClick={clearSearch} aria-label="Clear search">
+              <X size={16} />
+            </button>
+          )}
+
+          {searchOpen && searchQuery.trim().length >= 2 && (
+            <div id="global-search-results" className="topbar-search-results" role="listbox">
+              {searchLoading && <div className="topbar-search-state">Searching...</div>}
+              {!searchLoading && searchError && (
+                <div className="topbar-search-state error" role="alert">{searchError}</div>
+              )}
+              {!searchLoading && !searchError && searchResults.length === 0 && (
+                <div className="topbar-search-state">No results found for “{searchQuery.trim()}”</div>
+              )}
+              {!searchLoading && !searchError && searchResults.map((item, index) => {
+                const ResultIcon = SEARCH_ICONS[item.type] || Search;
+                return (
+                  <button
+                    type="button"
+                    role="option"
+                    aria-selected={index === activeSearchIndex}
+                    className={`topbar-search-result${index === activeSearchIndex ? " active" : ""}`}
+                    key={`${item.type}-${item.id}`}
+                    onMouseEnter={() => setActiveSearchIndex(index)}
+                    onClick={() => openSearchResult(item)}
+                  >
+                    <span className="topbar-search-result-icon"><ResultIcon size={17} /></span>
+                    <span className="topbar-search-result-copy">
+                      <strong>{item.title}</strong>
+                      <span>{item.type}{item.subtitle ? ` · ${item.subtitle}` : ""}</span>
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
         </div>
       </div>
 
@@ -246,6 +396,12 @@ export default function Topbar({ onOpenSidebar }) {
               strokeWidth={1.8}
             />
 
+            {unreadCount > 0 && (
+              <span className="notification-badge" aria-label={`${unreadCount} unread notifications`}>
+                {unreadCount > 99 ? "99+" : unreadCount}
+              </span>
+            )}
+
           </button>
 
           {showNotifications && (
@@ -262,13 +418,12 @@ export default function Topbar({ onOpenSidebar }) {
                 {notificationError && <div className="notification-empty" role="alert">{notificationError}</div>}
                 {!notificationLoading && !notificationError && notifications.length === 0 && <div className="notification-empty">No notifications yet.</div>}
                 {!notificationLoading && notifications.map((item) => (
-                  <button type="button" key={item.id} className={`notification-item${item.isRead ? "" : " unread"}`} onClick={() => void openNotification(item)}>
+                  <button type="button" key={item.id} className={`notification-item notification-${item.type || "info"}${item.isRead ? "" : " unread"}`} onClick={() => void openNotification(item)}>
                     <span className={`notification-dot${item.isRead ? " read" : ""}`} />
                     <span className="notification-item-content">
                       <strong className="notification-message">{item.title}</strong>
                       <span className="notification-message">{item.message}</span>
-                      <span className="notification-time">{(item.createdAt?.seconds ?? item.createdAt?._seconds) != null
-                        ? new Date((item.createdAt.seconds ?? item.createdAt._seconds) * 1000).toLocaleString("en-PH") : ""}</span>
+                      <span className="notification-time">{timestampText(item.createdAt)}</span>
                     </span>
                   </button>
                 ))}
@@ -350,24 +505,63 @@ export default function Topbar({ onOpenSidebar }) {
         <div className="notification-detail-backdrop" onMouseDown={(event) => {
           if (event.target === event.currentTarget) setSelectedNotification(null);
         }}>
-          <section className="notification-detail-drawer" role="dialog" aria-modal="true" aria-labelledby="notification-detail-title">
+          <section className={`notification-detail-drawer notification-detail-${selectedNotification.type || "info"}`} role="dialog" aria-modal="true" aria-labelledby="notification-detail-title">
             <div className="notification-detail-head">
               <h2 id="notification-detail-title">Notification Details</h2>
               <button ref={notificationCloseRef} type="button" onClick={() => setSelectedNotification(null)} aria-label="Close notification details"><X size={20} /></button>
             </div>
             <div className="notification-detail-body">
-              <h3>{selectedNotification.title}</h3>
-              <p>{selectedNotification.message}</p>
-              <dl>
-                <div><dt>Timestamp</dt><dd>{(selectedNotification.createdAt?.seconds ?? selectedNotification.createdAt?._seconds) != null ? new Date((selectedNotification.createdAt.seconds ?? selectedNotification.createdAt._seconds) * 1000).toLocaleString("en-PH") : "—"}</dd></div>
-                {selectedNotification.requestNumber && <div><dt>Request Number</dt><dd>{selectedNotification.requestNumber}</dd></div>}
-                {selectedNotification.reportNumber && <div><dt>Report Number</dt><dd>{selectedNotification.reportNumber}</dd></div>}
-                {selectedNotification.relatedRecordId && !selectedNotification.requestNumber && !selectedNotification.reportNumber && <div><dt>Related Record</dt><dd>{selectedNotification.relatedRecordId}</dd></div>}
-                {selectedNotification.reason && <div><dt>Reason</dt><dd>{selectedNotification.reason}</dd></div>}
-                {selectedNotification.returnedAt && <div><dt>Returned</dt><dd>{(selectedNotification.returnedAt?.seconds ?? selectedNotification.returnedAt?._seconds) != null ? new Date((selectedNotification.returnedAt.seconds ?? selectedNotification.returnedAt._seconds) * 1000).toLocaleString("en-PH") : "—"}</dd></div>}
-                {selectedNotification.event && <div><dt>Event</dt><dd>{selectedNotification.event.name || selectedNotification.event.id}<br />{selectedNotification.event.date || ""}{selectedNotification.event.location ? ` · ${selectedNotification.event.location}` : ""}</dd></div>}
-              </dl>
-              {guestLink && <div className="notification-guest-link"><label htmlFor="notification-guest-url">Guest Link</label><input id="notification-guest-url" readOnly value={guestLink} /><button type="button" onClick={copyGuestLink}>Copy Link</button></div>}
+              <div className="notification-detail-summary">
+                <span className="notification-detail-icon"><Bell size={20} /></span>
+                <div>
+                  <h3>{selectedNotification.title}</h3>
+                  <span>{timestampText(selectedNotification.createdAt)}</span>
+                </div>
+              </div>
+
+              <div className="notification-detail-message">{selectedNotification.message}</div>
+
+              {(selectedNotification.requestNumber || selectedNotification.reportNumber || selectedNotification.relatedRecordId) && (
+                <section className="notification-detail-section">
+                  <h4>Related Record</h4>
+                  <div className="notification-record-field">
+                    <FileText size={16} />
+                    <strong>{selectedNotification.requestNumber || selectedNotification.reportNumber || selectedNotification.relatedRecordId}</strong>
+                  </div>
+                </section>
+              )}
+
+              {(selectedNotification.reason || selectedNotification.returnedAt || selectedNotification.details || selectedNotification.event) && (
+                <section className="notification-detail-section">
+                  <h4>Details</h4>
+                  <dl>
+                    {selectedNotification.reason && <div><dt>Reason</dt><dd>{selectedNotification.reason}</dd></div>}
+                    {selectedNotification.returnedAt && <div><dt>Returned</dt><dd>{timestampText(selectedNotification.returnedAt)}</dd></div>}
+                    {selectedNotification.details?.reviewedByName && <div><dt>Reviewed By</dt><dd>{selectedNotification.details.reviewedByName}</dd></div>}
+                    {selectedNotification.details?.requesterName && <div><dt>Requester</dt><dd>{selectedNotification.details.requesterName}</dd></div>}
+                    {selectedNotification.details?.approvedAt && <div><dt>Approved</dt><dd>{timestampText(selectedNotification.details.approvedAt)}</dd></div>}
+                    {selectedNotification.details?.rejectedAt && <div><dt>Decision Date</dt><dd>{timestampText(selectedNotification.details.rejectedAt)}</dd></div>}
+                    {selectedNotification.details?.releasedAt && <div><dt>Released</dt><dd>{timestampText(selectedNotification.details.releasedAt)}</dd></div>}
+                    {selectedNotification.details?.availableQuantity !== undefined && <div><dt>Available Stock</dt><dd>{selectedNotification.details.availableQuantity} saplings</dd></div>}
+                    {selectedNotification.details?.lowStockThreshold !== undefined && <div><dt>Low-stock Threshold</dt><dd>{selectedNotification.details.lowStockThreshold} saplings</dd></div>}
+                    {selectedNotification.event && <div><dt>Event</dt><dd>{selectedNotification.event.name || selectedNotification.event.id}<br />{selectedNotification.event.date || ""}{selectedNotification.event.location ? ` · ${selectedNotification.event.location}` : ""}</dd></div>}
+                  </dl>
+                  {selectedNotification.details?.releasedItems?.length > 0 && (
+                    <div className="notification-released-items">
+                      <strong>Saplings Released</strong>
+                      {selectedNotification.details.releasedItems.map((item) => (
+                        <div key={item.inventoryId || item.species}>
+                          <span>{item.species || "Sapling"}</span>
+                          <strong>{item.releasedQuantity} saplings</strong>
+                          {item.shortReleaseReason && <small>{item.shortReleaseReason}</small>}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </section>
+              )}
+
+              {guestLink && <div className="notification-guest-link"><label htmlFor="notification-guest-url">Guest Invitation Link</label><input id="notification-guest-url" readOnly value={guestLink} /><button type="button" onClick={copyGuestLink}><Copy size={15} /> Copy</button></div>}
               {copyMessage && <p className="notification-copy-message" role="status">{copyMessage}</p>}
             </div>
             <div className="notification-detail-actions">
@@ -376,6 +570,7 @@ export default function Topbar({ onOpenSidebar }) {
                 setSelectedNotification(null);
                 if (item.relatedRecordType === "seedlingRequest") navigate(userRole === "participant" ? `/participant/my-requests?request=${encodeURIComponent(item.relatedRecordId)}` : `/${userRole}/requests`);
                 else if (item.relatedRecordType === "plantingReport") navigate(userRole === "participant" ? "/participant/my-planting-reports" : `/${userRole}/planting-reports`);
+                else if (item.relatedRecordType === "inventory") navigate(`/${userRole}/seedlings?inventory=${encodeURIComponent(item.relatedRecordId)}`);
                 else if (item.relatedEventId) navigate(`/${userRole}/event-calendar`);
               }}>Open Related Record</button>}
               <button type="button" onClick={() => setSelectedNotification(null)}>Close</button>

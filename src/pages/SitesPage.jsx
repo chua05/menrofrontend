@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import {
@@ -195,6 +196,7 @@ function formatDate(value) {
 
 export default function SitesPage() {
   const { userRole } = useAuth();
+  const [pageSearchParams] = useSearchParams();
 
   const canManage =
     userRole === "admin" || userRole === "staff";
@@ -209,6 +211,7 @@ export default function SitesPage() {
   const panControlRef = useRef(null);
 
   const activeDrawingRef = useRef(null);
+  const openedSiteFromSearchRef = useRef("");
 
 
   const [sites, setSites] = useState([]);
@@ -442,6 +445,33 @@ export default function SitesPage() {
 
     return () => window.clearTimeout(timer);
   }, [userRole]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    const siteId = pageSearchParams.get("site") || "";
+    if (!siteId || loading || openedSiteFromSearchRef.current === siteId) return;
+
+    const matchedSite = sites.find(
+      (site) => String(site.id || site.siteId || "") === siteId || String(site.siteId || "") === siteId
+    );
+    if (!matchedSite) return;
+
+    const openTimer = window.setTimeout(() => {
+      openedSiteFromSearchRef.current = siteId;
+      setSelectedSite(matchedSite);
+      setActiveDetailTab("information");
+      setDetailsSite(matchedSite);
+      setDetailsError("");
+
+      apiRequest(`/sites/${encodeURIComponent(matchedSite.id || matchedSite.siteId)}`)
+        .then((response) => {
+          if (response.data) setDetailsSite(response.data);
+        })
+        .catch((error) => {
+          setDetailsError(error.message || "Unable to refresh site details.");
+        });
+    }, 0);
+    return () => window.clearTimeout(openTimer);
+  }, [loading, pageSearchParams, sites]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function removeActiveDrawingControl() {
     const active = activeDrawingRef.current;

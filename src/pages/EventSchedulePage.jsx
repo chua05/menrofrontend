@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import {
   Archive,
   CalendarDays,
@@ -321,6 +322,7 @@ function StatusBadge({ status }) {
 
 export default function EventSchedulePage() {
   const { userRole } = useAuth();
+  const [searchParams] = useSearchParams();
 
   const canManage =
     userRole === "admin" ||
@@ -1156,6 +1158,20 @@ export default function EventSchedulePage() {
     setShowEventMenu(false);
   };
 
+  useEffect(() => {
+    const requestedEventId = searchParams.get("event");
+    if (!requestedEventId || events.length === 0) return;
+    const event = events.find((item) =>
+      String(item.id || item.eventId) === String(requestedEventId));
+    if (!event) return;
+    const openTimer = window.setTimeout(() => {
+      setSelectedDate(event.date);
+      setCalendarDate(new Date(`${event.date}T00:00:00`));
+      openEventDetails(event);
+    }, 0);
+    return () => window.clearTimeout(openTimer);
+  }, [events, searchParams]);
+
   const openEditEvent = () => {
     if (!selectedEvent) {
       return;
@@ -1861,6 +1877,9 @@ export default function EventSchedulePage() {
               </div>
 
               <div className="ec-calendar-legend">
+                {userRole === "participant" && (
+                  <span><i className="my-event" />My Event</span>
+                )}
                 <span>
                   <i className="tree-planting" />
                   Tree Planting
@@ -1961,7 +1980,7 @@ export default function EventSchedulePage() {
                                   }
                                   className={`ec-calendar-event ${getEventTypeClass(
                                     event.type
-                                  )}`}
+                                  )}${userRole === "participant" && event.isMyEvent ? " my-event" : ""}`}
                                   onClick={(
                                     clickEvent
                                   ) => {
@@ -2133,7 +2152,7 @@ export default function EventSchedulePage() {
                     (event) => (
                       <button
                         type="button"
-                        className="ec-upcoming-event"
+                        className={`ec-upcoming-event${userRole === "participant" && event.isMyEvent ? " my-event" : ""}`}
                         key={
                           event.id ||
                           event.eventId
