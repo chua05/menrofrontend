@@ -706,13 +706,6 @@ export default function EventSchedulePage() {
             event.status ===
             "Completed"
         ).length,
-
-      cancelled:
-        normalizedEvents.filter(
-          (event) =>
-            event.status ===
-            "Cancelled"
-        ).length,
     }),
     [normalizedEvents]
   );
@@ -1813,15 +1806,6 @@ export default function EventSchedulePage() {
             }
             icon={CircleCheckBig}
             variant="green"
-          />
-
-          <KpiCard
-            label="Cancelled"
-            value={
-              counts.cancelled
-            }
-            icon={XCircle}
-            variant="red"
           />
         </section>
       )}

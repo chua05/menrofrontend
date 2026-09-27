@@ -811,6 +811,9 @@ export default function PlantingPage() {
     if (selectedSite) {
       const siteLatitude = Number(selectedSite.latitude);
       const siteLongitude = Number(selectedSite.longitude);
+      const coverageRadiusMeters = Number(selectedSite.coverageRadiusMeters);
+      const hasCoverageRadius =
+        Number.isFinite(coverageRadiusMeters) && coverageRadiusMeters > 0;
 
       const polygonPath = Array.isArray(selectedSite.polygon)
         ? selectedSite.polygon
@@ -822,7 +825,29 @@ export default function PlantingPage() {
             .map((point) => [Number(point.lat), Number(point.lng)])
         : [];
 
-      if (polygonPath.length >= 3) {
+      if (
+        hasCoverageRadius &&
+        Number.isFinite(siteLatitude) &&
+        Number.isFinite(siteLongitude)
+      ) {
+        const coverageCircle = L.circle([siteLatitude, siteLongitude], {
+          radius: coverageRadiusMeters,
+          color: "#17643a",
+          weight: 2,
+          opacity: 1,
+          fillColor: "#6fb98a",
+          fillOpacity: 0.18,
+        })
+          .bindTooltip(
+            `${getSiteName(selectedSite) || "Registered Planting Site"} â€¢ ${coverageRadiusMeters} m coverage`
+          )
+          .addTo(siteLayer);
+        const coverageBounds = coverageCircle.getBounds();
+        fitPoints.push(
+          [coverageBounds.getSouth(), coverageBounds.getWest()],
+          [coverageBounds.getNorth(), coverageBounds.getEast()]
+        );
+      } else if (polygonPath.length >= 3) {
         L.polygon(polygonPath, {
           color: "#17643a",
           weight: 2,
@@ -980,8 +1005,20 @@ export default function PlantingPage() {
 
   useEffect(() => {
     const selectedSiteId = String(form.siteId || "");
-    const shouldShow = showSubmitModal && selectedSiteId &&
-      !referenceLoading && eventsLoadStatus === "success" && filteredEvents.length === 0;
+    const selectedSiteMatchesBarangay = Boolean(
+      form.barangay &&
+      selectedSite &&
+      normalizeBarangayName(getSiteBarangay(selectedSite)) ===
+        normalizeBarangayName(form.barangay)
+    );
+    const shouldShow = Boolean(
+      showSubmitModal &&
+      selectedSiteId &&
+      selectedSiteMatchesBarangay &&
+      !referenceLoading &&
+      eventsLoadStatus === "success" &&
+      filteredEvents.length === 0
+    );
 
     const synchronizeAlertTimer = window.setTimeout(() => {
       if (noEventsAlertTimerRef.current) {
@@ -1008,8 +1045,8 @@ export default function PlantingPage() {
         noEventsAlertTimerRef.current = null;
       }
     };
-  }, [showSubmitModal, form.siteId, referenceLoading, eventsLoadStatus,
-    filteredEvents.length]);
+  }, [showSubmitModal, form.barangay, form.siteId, selectedSite,
+    referenceLoading, eventsLoadStatus, filteredEvents.length]);
 
   const visibleRecords = useMemo(() => {
     // The participant endpoint already scopes records to the authenticated user.
@@ -1129,14 +1166,24 @@ export default function PlantingPage() {
     );
   }, [hasGps, selectedSite, form.latitude, form.longitude]);
 
+  const siteCoverageRadiusMeters = useMemo(() => {
+    const radius = Number(selectedSite?.coverageRadiusMeters);
+    return Number.isFinite(radius) && radius > 0 ? radius : null;
+  }, [selectedSite]);
+
   const capturedInsideSitePolygon = useMemo(() => {
-    if (!hasGps || !Array.isArray(selectedSite?.polygon) || selectedSite.polygon.length < 3) return null;
+    if (
+      !hasGps ||
+      siteCoverageRadiusMeters !== null ||
+      !Array.isArray(selectedSite?.polygon) ||
+      selectedSite.polygon.length < 3
+    ) return null;
     return isPointInPolygon(
       Number(form.latitude),
       Number(form.longitude),
       selectedSite.polygon
     );
-  }, [hasGps, selectedSite, form.latitude, form.longitude]);
+  }, [hasGps, selectedSite, siteCoverageRadiusMeters, form.latitude, form.longitude]);
 
   const municipalityScopeStatus = useMemo(() => {
     if (!hasGps) return "unverified";
@@ -1148,10 +1195,16 @@ export default function PlantingPage() {
     ) ? "inside" : "outside";
   }, [hasGps, jubanGeoJson, form.latitude, form.longitude]);
 
+  const activeSiteRadiusMeters =
+    siteCoverageRadiusMeters ?? SITE_GPS_TOLERANCE_METERS;
+
   const isInsideSelectedSite = hasGps && (
-    capturedInsideSitePolygon === true ||
-    (capturedInsideSitePolygon === null && capturedSiteDistance !== null &&
-      capturedSiteDistance <= SITE_GPS_TOLERANCE_METERS)
+    siteCoverageRadiusMeters !== null
+      ? capturedSiteDistance !== null &&
+        capturedSiteDistance <= siteCoverageRadiusMeters
+      : capturedInsideSitePolygon === true ||
+        (capturedInsideSitePolygon === null && capturedSiteDistance !== null &&
+          capturedSiteDistance <= SITE_GPS_TOLERANCE_METERS)
   );
 
   const locationPreviewStatus = useMemo(() => {
@@ -1179,14 +1232,25 @@ export default function PlantingPage() {
       return { type: "flagged", label: "Outside Municipality of Juban" };
     }
 
-    if (capturedInsideSitePolygon === true) {
+    if (
+      siteCoverageRadiusMeters !== null &&
+      capturedSiteDistance !== null &&
+      capturedSiteDistance <= siteCoverageRadiusMeters
+    ) {
       return {
         type: "valid",
-        label: "Photo location is inside the registered site boundary.",
+        label: `Within registered site coverage (${capturedSiteDistance.toFixed(1)} m from center; ${siteCoverageRadiusMeters} m radius).`,
       };
     }
 
-    if (capturedInsideSitePolygon === null && capturedSiteDistance !== null &&
+    if (capturedInsideSitePolygon === true) {
+      return {
+        type: "valid",
+        label: "Photo location is inside the legacy registered site boundary.",
+      };
+    }
+
+    if (siteCoverageRadiusMeters === null && capturedInsideSitePolygon === null && capturedSiteDistance !== null &&
         capturedSiteDistance <= SITE_GPS_TOLERANCE_METERS) {
       return {
         type: "valid",
@@ -1203,17 +1267,22 @@ export default function PlantingPage() {
 
     return {
       type: "warning",
-      label: capturedInsideSitePolygon === false
-        ? "Photo location is outside the registered site boundary."
-        : `Photo location is ${capturedSiteDistance.toFixed(1)} m from the registered site.`,
+      label: siteCoverageRadiusMeters !== null
+        ? `Photo location is ${capturedSiteDistance.toFixed(1)} m from the site center and outside its ${siteCoverageRadiusMeters} m coverage.`
+        : capturedInsideSitePolygon === false
+          ? "Photo location is outside the legacy registered site boundary."
+          : `Photo location is ${capturedSiteDistance.toFixed(1)} m from the registered site.`,
     };
   }, [form.siteId, hasGps, municipalityScopeStatus, capturedSiteDistance,
-    capturedInsideSitePolygon, photoFiles.length]);
+    capturedInsideSitePolygon, siteCoverageRadiusMeters, photoFiles.length]);
 
   const isOutsideAssignedSite = hasGps && (
-    capturedInsideSitePolygon === false ||
-    (capturedInsideSitePolygon === null && capturedSiteDistance !== null &&
-      capturedSiteDistance > SITE_GPS_TOLERANCE_METERS)
+    siteCoverageRadiusMeters !== null
+      ? capturedSiteDistance !== null &&
+        capturedSiteDistance > activeSiteRadiusMeters
+      : capturedInsideSitePolygon === false ||
+        (capturedInsideSitePolygon === null && capturedSiteDistance !== null &&
+          capturedSiteDistance > activeSiteRadiusMeters)
   );
 
   const locationBlocksSubmission = hasGps && municipalityScopeStatus !== "inside";
@@ -2405,10 +2474,23 @@ export default function PlantingPage() {
                       <label className="pr-label">
                         Planting Event <span className="pr-required">*</span>
                       </label>
-                      <select className="pr-input" value={form.eventId} onChange={handleEventChange} disabled={!form.siteId}>
+                      <select
+                        className="pr-input"
+                        value={form.eventId}
+                        onChange={handleEventChange}
+                        disabled={
+                          !form.siteId ||
+                          eventsLoadStatus === "loading" ||
+                          eventsLoadStatus === "error" ||
+                          (eventsLoadStatus === "success" && filteredEvents.length === 0)
+                        }
+                      >
                         <option value="">
                           {!form.siteId ? "Select planting site first" :
-                            filteredEvents.length === 0 ? "No matching event available" : "Select planting event"}
+                            eventsLoadStatus === "loading" ? "Loading planting events..." :
+                            eventsLoadStatus === "error" ? "Planting events unavailable" :
+                            filteredEvents.length === 0 ? "No available planting events" :
+                            "Select planting event"}
                         </option>
                         {filteredEvents.map((event) => (
                           <option key={getEventId(event)} value={getEventId(event)}>
@@ -2416,9 +2498,11 @@ export default function PlantingPage() {
                           </option>
                         ))}
                       </select>
-                      {form.siteId && filteredEvents.length === 0 && (
-                        <div className="pr-helper-text" role="status">
-                          No planting events are currently available for this planting site.
+                      {noEventsAlertSiteId === String(form.siteId) && (
+                        <div className="pr-no-events-alert-slot">
+                          <div className="pr-no-events-alert" role="status">
+                            No planting events are currently available for this planting site.
+                          </div>
                         </div>
                       )}
                     </div>

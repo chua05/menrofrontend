@@ -1180,6 +1180,55 @@
   line-height: 1.4;
 }
 
+.ps-site-coverage-map-field {
+  grid-column: 1 / -1;
+  min-width: 0;
+}
+
+.ps-site-coverage-map-field > p {
+  margin: 8px 0 0;
+  color: #66736b;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.ps-site-coverage-map-field > p strong {
+  color: #087443;
+}
+
+.ps-site-coverage-map-wrap {
+  position: relative;
+  width: 100%;
+  min-width: 0;
+  margin-top: 14px;
+  overflow: hidden;
+  border: 1px solid #dbe4de;
+  border-radius: 8px;
+  background: #eef5f0;
+}
+
+.ps-site-coverage-map-field .ps-site-coverage-map-wrap {
+  margin-top: 0;
+}
+
+.ps-site-coverage-map {
+  width: 100%;
+  height: 300px;
+}
+
+.ps-site-coverage-map-error {
+  position: absolute;
+  inset: 0;
+  margin: 0;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: #f5f8f6;
+  color: #66736b;
+  text-align: center;
+  font-size: 13px;
+}
+
 .ps-boundary-field {
   grid-column: 1 / -1;
 
@@ -1545,8 +1594,13 @@
   }
 
   .ps-form-field.full,
-  .ps-boundary-field {
+  .ps-boundary-field,
+  .ps-site-coverage-map-field {
     grid-column: auto;
+  }
+
+  .ps-site-coverage-map {
+    height: 270px;
   }
 
   .ps-boundary-field {
@@ -1885,6 +1939,10 @@
   .ps-pan-control {
     transform: scale(0.9);
     transform-origin: top left;
+  }
+
+  .ps-site-coverage-map {
+    height: 240px;
   }
 }
 

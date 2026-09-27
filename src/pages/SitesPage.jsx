@@ -95,6 +95,8 @@ const JUBAN_FALLBACK_CENTER = {
   lng: 124.0,
 };
 
+const COVERAGE_RADIUS_PRESETS = [20, 50, 100, 200, 500];
+
 function getInitialSiteForm() {
   return {
     siteName: "",
@@ -106,14 +108,53 @@ function getInitialSiteForm() {
     latitude: "",
     longitude: "",
     locationDescription: "",
+    coverageRadiusOption: "50",
+    customCoverageRadius: "",
 
     ownershipType: "",
     coordinator: "",
     coordinatorContact: "",
     notes: "",
-
-    polygon: [],
   };
+}
+
+function getSiteForm(site) {
+  const savedRadius = Number(site?.coverageRadiusMeters);
+  const hasSavedRadius = Number.isFinite(savedRadius) && savedRadius > 0;
+  const usesPreset = hasSavedRadius && COVERAGE_RADIUS_PRESETS.includes(savedRadius);
+
+  return {
+    siteName: String(site?.siteName || ""),
+    barangay: String(site?.barangay || ""),
+    siteType: String(site?.siteType || ""),
+    areaHectares: String(site?.areaHectares ?? ""),
+    maximumCapacity: String(site?.maximumCapacity ?? ""),
+    latitude: String(site?.latitude ?? ""),
+    longitude: String(site?.longitude ?? ""),
+    locationDescription: String(site?.locationDescription || ""),
+    coverageRadiusOption: usesPreset ? String(savedRadius) : hasSavedRadius ? "other" : "",
+    customCoverageRadius: hasSavedRadius && !usesPreset ? String(savedRadius) : "",
+    ownershipType: String(site?.ownershipType || ""),
+    coordinator: String(site?.coordinator || ""),
+    coordinatorContact: String(site?.coordinatorContact || ""),
+    notes: String(site?.notes || ""),
+  };
+}
+
+function getCoverageRadiusMeters(siteForm) {
+  const value = siteForm.coverageRadiusOption === "other"
+    ? siteForm.customCoverageRadius
+    : siteForm.coverageRadiusOption;
+  const radius = Number(value);
+  return Number.isFinite(radius) && radius > 0 ? radius : null;
+}
+
+function sanitizePositiveDecimal(value) {
+  const cleaned = String(value || "").replace(/[^\d.]/g, "");
+  const [whole = "", ...decimalParts] = cleaned.split(".");
+  return decimalParts.length > 0
+    ? `${whole}.${decimalParts.join("")}`
+    : whole;
 }
 
 function getUtilization(site) {
@@ -210,7 +251,6 @@ export default function SitesPage() {
   const barangayLabelsRef = useRef([]);
   const panControlRef = useRef(null);
 
-  const activeDrawingRef = useRef(null);
   const openedSiteFromSearchRef = useRef("");
 
 
@@ -234,6 +274,8 @@ export default function SitesPage() {
 
   const [showAddModal, setShowAddModal] =
     useState(false);
+
+  const [editingSite, setEditingSite] = useState(null);
 
   const [showArchiveModal, setShowArchiveModal] =
     useState(false);
@@ -472,26 +514,6 @@ export default function SitesPage() {
     }, 0);
     return () => window.clearTimeout(openTimer);
   }, [loading, pageSearchParams, sites]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  function removeActiveDrawingControl() {
-    const active = activeDrawingRef.current;
-
-    if (!active) return;
-
-    if (active.clickHandler && mapRef.current) {
-      mapRef.current.off("click", active.clickHandler);
-    }
-
-    if (active.previewPolygon && mapRef.current) {
-      mapRef.current.removeLayer(active.previewPolygon);
-    }
-
-    if (active.control && mapRef.current) {
-      mapRef.current.removeControl(active.control);
-    }
-
-    activeDrawingRef.current = null;
-  }
 
   async function loadBarangayBoundaries(map, isCancelled) {
     try {
@@ -841,7 +863,6 @@ export default function SitesPage() {
 
     return () => {
       cancelled = true;
-      removeActiveDrawingControl();
 
       if (mapRef.current) {
         if (boundaryLayer) {
@@ -892,6 +913,12 @@ export default function SitesPage() {
     const utilizationColors =
       getUtilizationColor(status);
 
+    const latitude = Number(site.latitude);
+    const longitude = Number(site.longitude);
+    const coverageRadiusMeters = Number(site.coverageRadiusMeters);
+    const hasCoverageRadius =
+      Number.isFinite(coverageRadiusMeters) && coverageRadiusMeters > 0;
+
     const polygonPath = Array.isArray(site.polygon)
       ? site.polygon
           .filter(
@@ -905,8 +932,27 @@ export default function SitesPage() {
           ])
       : [];
 
-    if (polygonPath.length >= 3) {
-      const polygon = L.polygon(polygonPath, {
+    if (
+      hasCoverageRadius &&
+      Number.isFinite(latitude) &&
+      Number.isFinite(longitude)
+    ) {
+      const coverageCircle = L.circle([latitude, longitude], {
+        color: utilizationColors.stroke,
+        opacity: 0.95,
+        weight: 1.5,
+        fillColor: utilizationColors.fill,
+        fillOpacity: 0.24,
+        radius: coverageRadiusMeters,
+      }).addTo(map);
+
+      coverageCircle.on("click", () => {
+        handleSiteClick(site);
+      });
+
+      sitePolygonsRef.current.push(coverageCircle);
+    } else if (polygonPath.length >= 3) {
+      const legacyPolygon = L.polygon(polygonPath, {
         color: utilizationColors.stroke,
         opacity: 0.95,
         weight: 1.5,
@@ -914,15 +960,12 @@ export default function SitesPage() {
         fillOpacity: 0.24,
       }).addTo(map);
 
-      polygon.on("click", () => {
+      legacyPolygon.on("click", () => {
         handleSiteClick(site);
       });
 
-      sitePolygonsRef.current.push(polygon);
+      sitePolygonsRef.current.push(legacyPolygon);
     }
-
-    const latitude = Number(site.latitude);
-    const longitude = Number(site.longitude);
 
     if (
       !Number.isFinite(latitude) ||
@@ -1074,12 +1117,23 @@ export default function SitesPage() {
         "Longitude must be between -180 and 180.";
     }
 
-    if (
-      !Array.isArray(form.polygon) ||
-      form.polygon.length < 3
-    ) {
-      errors.polygon =
-        "Draw the planting-site boundary on the map.";
+    if (!form.locationDescription.trim()) {
+      errors.locationDescription = "Location / address is required.";
+    }
+
+    if (!form.coverageRadiusOption) {
+      errors.coverageRadiusOption =
+        "Select a site coverage radius.";
+    }
+
+    const coverageRadiusMeters = getCoverageRadiusMeters(form);
+
+    if (!coverageRadiusMeters) {
+      const field = form.coverageRadiusOption === "other"
+        ? "customCoverageRadius"
+        : "coverageRadiusOption";
+      errors[field] =
+        "Please enter a valid site coverage radius greater than 0 meters.";
     }
 
     return errors;
@@ -1099,70 +1153,80 @@ export default function SitesPage() {
     setPageError("");
 
     try {
-      const response = await apiRequest("/sites", {
-        method: "POST",
-        body: JSON.stringify({
-          siteName: form.siteName.trim(),
-          barangay: form.barangay,
-          siteType: form.siteType,
-          areaHectares: Number(form.areaHectares),
-          maximumCapacity: Number(form.maximumCapacity),
+      const siteRecordId = editingSite?.id || editingSite?.siteId;
+      const response = await apiRequest(
+        editingSite ? `/sites/${encodeURIComponent(siteRecordId)}` : "/sites",
+        {
+          method: editingSite ? "PATCH" : "POST",
+          body: JSON.stringify({
+            siteName: form.siteName.trim(),
+            barangay: form.barangay,
+            siteType: form.siteType,
+            areaHectares: Number(form.areaHectares),
+            maximumCapacity: Number(form.maximumCapacity),
 
-          latitude: Number(form.latitude),
-          longitude: Number(form.longitude),
-          locationDescription:
-            form.locationDescription.trim(),
+            latitude: Number(form.latitude),
+            longitude: Number(form.longitude),
+            locationDescription:
+              form.locationDescription.trim(),
+            coverageRadiusMeters: getCoverageRadiusMeters(form),
 
-          ownershipType: form.ownershipType,
-          coordinator: form.coordinator.trim(),
-          coordinatorContact:
-            form.coordinatorContact.trim(),
-          notes: form.notes.trim(),
-
-          polygon: form.polygon,
-        }),
-      });
+            ownershipType: form.ownershipType,
+            coordinator: form.coordinator.trim(),
+            coordinatorContact:
+              form.coordinatorContact.trim(),
+            notes: form.notes.trim(),
+          }),
+        }
+      );
 
       const site = response.data;
 
       if (!site) {
         throw new Error(
-          "Site was created but no site data was returned."
+          "Site was saved but no site data was returned."
         );
       }
 
       const createdSiteId =
         site.id || site.siteId;
 
-      setSites((previous) => [
-        site,
-        ...previous.filter(
-          (item) =>
-            String(item.id || item.siteId) !==
-            String(createdSiteId)
-        ),
-      ]);
+      setSites((previous) => editingSite
+        ? previous.map((item) =>
+            String(item.id || item.siteId) === String(createdSiteId)
+              ? site
+              : item
+          )
+        : [
+            site,
+            ...previous.filter(
+              (item) =>
+                String(item.id || item.siteId) !==
+                String(createdSiteId)
+            ),
+          ]);
 
       setSelectedSite(site);
       setActiveDetailTab("information");
 
       setShowAddModal(false);
+      setEditingSite(null);
 
       setForm(getInitialSiteForm());
       setFormErrors({});
 
       showSuccess(
-        `${createdSiteId} was added successfully.`
+        `${createdSiteId} was ${editingSite ? "updated" : "added"} successfully.`
       );
     } catch (error) {
       console.error(
-        "Failed to create planting site:",
+        "Failed to save planting site:",
         error
       );
 
       setPageError(
         error.message ||
-          "Failed to create planting site."
+          "Failed to save planting site."
       );
     } finally {
       setActionLoading(false);
@@ -1317,166 +1381,6 @@ export default function SitesPage() {
     }
   }
 
-  function beginBoundaryDrawing() {
-    if (!mapRef.current) {
-      setMapError(
-        "The map must be available before drawing a site boundary."
-      );
-      return;
-    }
-
-    // Validate latitude/longitude before opening the drawing UI
-    const latitude = Number(form.latitude);
-    const longitude = Number(form.longitude);
-
-    if (
-      form.latitude === "" ||
-      form.longitude === "" ||
-      !Number.isFinite(latitude) ||
-      !Number.isFinite(longitude) ||
-      latitude < -90 ||
-      latitude > 90 ||
-      longitude < -180 ||
-      longitude > 180
-    ) {
-      setFormErrors((previous) => ({
-        ...previous,
-        latitude:
-          previous.latitude || "Enter a valid latitude.",
-        longitude:
-          previous.longitude || "Enter a valid longitude.",
-      }));
-
-      setMapError(
-        "Provide valid latitude and longitude before drawing the site boundary."
-      );
-
-      return;
-    }
-
-    removeActiveDrawingControl();
-    setShowAddModal(false);
-
-    // Center the map on the provided coordinates to focus drawing
-    try {
-      const map = mapRef.current;
-      const targetZoom = Math.max(map.getZoom() || 13, 15);
-      map.flyTo([latitude, longitude], targetZoom, {
-        animate: true,
-      });
-    } catch (err) {
-      // Non-fatal: ensure drawing can still proceed
-      console.warn("Failed to center map before drawing:", err);
-    }
-
-    const map = mapRef.current;
-    const points = [];
-
-    const previewPolygon = L.polygon([], {
-      color: "#168044",
-      opacity: 1,
-      weight: 2,
-      fillColor: "#4caf63",
-      fillOpacity: 0.2,
-      interactive: false,
-    }).addTo(map);
-
-    const clickHandler = (mapEvent) => {
-      const point = {
-        lat: mapEvent.latlng.lat,
-        lng: mapEvent.latlng.lng,
-      };
-
-      points.push(point);
-      previewPolygon.setLatLngs(
-        points.map((item) => [item.lat, item.lng])
-      );
-    };
-
-    map.on("click", clickHandler);
-
-    const FinishControl = L.Control.extend({
-      options: {
-        position: "topright",
-      },
-
-      onAdd() {
-        const wrapper = L.DomUtil.create(
-          "div",
-          "leaflet-bar ps-leaflet-drawing-control"
-        );
-
-        const button = L.DomUtil.create(
-          "button",
-          "ps-finish-drawing-control",
-          wrapper
-        );
-
-        button.type = "button";
-        button.textContent = "Finish Site Boundary";
-
-        L.DomEvent.disableClickPropagation(wrapper);
-        L.DomEvent.disableScrollPropagation(wrapper);
-
-        L.DomEvent.on(button, "click", (event) => {
-          L.DomEvent.stop(event);
-          finishDrawing();
-        });
-
-        return wrapper;
-      },
-    });
-
-    const control = new FinishControl();
-    map.addControl(control);
-
-    function finishDrawing() {
-      map.off("click", clickHandler);
-
-      if (map.hasLayer(previewPolygon)) {
-        map.removeLayer(previewPolygon);
-      }
-
-      map.removeControl(control);
-      activeDrawingRef.current = null;
-
-      if (points.length >= 3) {
-        const bounds = L.latLngBounds(
-          points.map((point) => [point.lat, point.lng])
-        );
-        const center = bounds.getCenter();
-
-        setForm((previous) => ({
-          ...previous,
-          polygon: points,
-          latitude: center.lat.toFixed(6),
-          longitude: center.lng.toFixed(6),
-        }));
-
-        setFormErrors((previous) => ({
-          ...previous,
-          polygon: "",
-          latitude: "",
-          longitude: "",
-        }));
-      } else {
-        setFormErrors((previous) => ({
-          ...previous,
-          polygon:
-            "Select at least three points to create the site boundary.",
-        }));
-      }
-
-      setShowAddModal(true);
-    }
-
-    activeDrawingRef.current = {
-      clickHandler,
-      previewPolygon,
-      control,
-    };
-  }
-
   const selectedStatus =
     selectedSite
       ? getSiteStatus(
@@ -1576,6 +1480,7 @@ export default function SitesPage() {
                 type="button"
                 className="ps-primary-btn"
                 onClick={() => {
+                  setEditingSite(null);
                   setForm(
                     getInitialSiteForm()
                   );
@@ -1883,7 +1788,13 @@ export default function SitesPage() {
                   <button
                     type="button"
                     className="ps-primary-btn ps-drawer-action"
-                    onClick={() => setPageError("Editing planting sites requires a backend update endpoint. No changes were saved.")}
+                    onClick={() => {
+                      setEditingSite(selectedSite);
+                      setForm(getSiteForm(selectedSite));
+                      setFormErrors({});
+                      setPageError("");
+                      setShowAddModal(true);
+                    }}
                   >
                     <Edit3 size={14} />
 
@@ -1926,9 +1837,12 @@ export default function SitesPage() {
                 utilization={getUtilization(detailsSite)}
                 available={Math.max(0, Number(detailsSite.maximumCapacity || 0) - Number(detailsSite.planted || 0))}
               />
-              {Array.isArray(detailsSite.polygon) && detailsSite.polygon.length > 0 && (
-                <p>Saved boundary: {detailsSite.polygon.length} points</p>
-              )}
+              <SiteCoverageMap
+                latitude={detailsSite.latitude}
+                longitude={detailsSite.longitude}
+                radius={detailsSite.coverageRadiusMeters}
+                readOnly
+              />
             </div>
             <div className="ps-modal-footer">
               <button type="button" className="ps-secondary-btn" onClick={() => setDetailsSite(null)}>Close</button>
@@ -1945,7 +1859,9 @@ export default function SitesPage() {
                 <h2>
                   {actionLoading
                     ? "Saving..."
-                    : "Add Planting Site"}
+                    : editingSite
+                      ? "Edit Planting Site"
+                      : "Add Planting Site"}
                 </h2>
 
                 <p>
@@ -1958,11 +1874,10 @@ export default function SitesPage() {
               <button
                 type="button"
                 className="ps-close-btn"
-                onClick={() =>
-                  setShowAddModal(
-                    false
-                  )
-                }
+                onClick={() => {
+                  setShowAddModal(false);
+                  setEditingSite(null);
+                }}
               >
                 <X size={18} />
               </button>
@@ -2133,10 +2048,25 @@ export default function SitesPage() {
 
               <section className="ps-form-section">
                 <div className="ps-form-section-title">
-                  Location
+                  Planting Site Location
                 </div>
 
                 <div className="ps-form-grid">
+                  <FormField
+                    label="Location / Address *"
+                    error={formErrors.locationDescription}
+                    full
+                  >
+                    <input
+                      type="text"
+                      value={form.locationDescription}
+                      placeholder="Describe the exact location or landmark"
+                      onChange={(event) =>
+                        updateForm("locationDescription", event.target.value)
+                      }
+                    />
+                  </FormField>
+
                   <FormField
                     label="Latitude *"
                     error={
@@ -2182,69 +2112,77 @@ export default function SitesPage() {
                   </FormField>
 
                   <FormField
-                    label="Location Description"
+                    label="Site Coverage Radius (meters) *"
+                    error={formErrors.coverageRadiusOption}
                     full
                   >
-                    <input
-                      type="text"
-                      value={
-                        form.locationDescription
-                      }
-                      placeholder="Describe the exact location or landmark"
-                      onChange={(event) =>
-                        updateForm(
-                          "locationDescription",
-                          event.target.value
-                        )
-                      }
-                    />
+                    <select
+                      value={form.coverageRadiusOption}
+                      onChange={(event) => {
+                        updateForm("coverageRadiusOption", event.target.value);
+                        setFormErrors((previous) => ({
+                          ...previous,
+                          customCoverageRadius: "",
+                        }));
+                      }}
+                    >
+                      <option value="">Select coverage radius</option>
+                      {COVERAGE_RADIUS_PRESETS.map((radius) => (
+                        <option key={radius} value={String(radius)}>
+                          {radius} meters
+                        </option>
+                      ))}
+                      <option value="other">Other</option>
+                    </select>
                   </FormField>
 
-                  <div className="ps-boundary-field">
-                    <div>
-                      <span>
-                        Planting Site Boundary *
-                      </span>
-
-                      <small>
-                        Click points around the
-                        site on the map to
-                        create its polygon.
-                      </small>
-
-                      {form.polygon
-                        .length >= 3 && (
-                        <em>
-                          {
-                            form
-                              .polygon
-                              .length
-                          }{" "}
-                          boundary points
-                          saved
-                        </em>
-                      )}
-
-                      {formErrors.polygon && (
-                        <strong>
-                          {
-                            formErrors.polygon
-                          }
-                        </strong>
-                      )}
-                    </div>
-
-                    <button
-                      type="button"
-                      className="ps-secondary-btn"
-                      onClick={
-                        beginBoundaryDrawing
-                      }
+                  {form.coverageRadiusOption === "other" && (
+                    <FormField
+                      label="Custom Radius (meters) *"
+                      error={formErrors.customCoverageRadius}
+                      full
                     >
-                      <Layers3 size={14} />
+                      <input
+                        type="text"
+                        inputMode="decimal"
+                        value={form.customCoverageRadius}
+                        placeholder="Enter radius in meters"
+                        onChange={(event) =>
+                          updateForm(
+                            "customCoverageRadius",
+                            sanitizePositiveDecimal(event.target.value)
+                          )
+                        }
+                      />
+                    </FormField>
+                  )}
 
-                      Draw Site Boundary
-                    </button>
+                  <div className="ps-site-coverage-map-field">
+                    <SiteCoverageMap
+                      latitude={form.latitude}
+                      longitude={form.longitude}
+                      radius={getCoverageRadiusMeters(form)}
+                      onSelect={(latitude, longitude) => {
+                        setForm((previous) => ({
+                          ...previous,
+                          latitude,
+                          longitude,
+                        }));
+                        setFormErrors((previous) => ({
+                          ...previous,
+                          latitude: "",
+                          longitude: "",
+                        }));
+                      }}
+                    />
+                    <p>
+                      Click the map to set the site center. Selected Coverage:{" "}
+                      <strong>
+                        {getCoverageRadiusMeters(form)
+                          ? `${getCoverageRadiusMeters(form)} meters`
+                          : "Not set"}
+                      </strong>
+                    </p>
                   </div>
                 </div>
               </section>
@@ -2343,11 +2281,10 @@ export default function SitesPage() {
                 <button
                   type="button"
                   className="ps-secondary-btn"
-                  onClick={() =>
-                    setShowAddModal(
-                      false
-                    )
-                  }
+                  onClick={() => {
+                    setShowAddModal(false);
+                    setEditingSite(null);
+                  }}
                 >
                   Cancel
                 </button>
@@ -2359,9 +2296,9 @@ export default function SitesPage() {
                     actionLoading
                   }
                 >
-                  <Plus size={15} />
+                  {editingSite ? <Edit3 size={15} /> : <Plus size={15} />}
 
-                  Add Planting Site
+                  {editingSite ? "Save Changes" : "Add Planting Site"}
                 </button>
               </div>
             </form>
@@ -2479,6 +2416,153 @@ export default function SitesPage() {
   );
 }
 
+function SiteCoverageMap({
+  latitude,
+  longitude,
+  radius,
+  onSelect,
+  readOnly = false,
+}) {
+  const containerRef = useRef(null);
+  const mapRef = useRef(null);
+  const coverageLayerRef = useRef(null);
+  const onSelectRef = useRef(onSelect);
+  const mapTilerKey = import.meta.env.VITE_MAPTILER_API_KEY;
+
+  useEffect(() => {
+    onSelectRef.current = onSelect;
+  }, [onSelect]);
+
+  useEffect(() => {
+    if (!containerRef.current || mapRef.current) return undefined;
+
+    if (!mapTilerKey) {
+      return undefined;
+    }
+
+    const map = L.map(containerRef.current, {
+      center: [JUBAN_FALLBACK_CENTER.lat, JUBAN_FALLBACK_CENTER.lng],
+      zoom: 13,
+      minZoom: 11,
+      maxZoom: 20,
+      zoomControl: true,
+      attributionControl: true,
+    });
+
+    L.tileLayer(
+      `https://api.maptiler.com/maps/streets-v2/{z}/{x}/{y}.png?key=${mapTilerKey}`,
+      {
+        tileSize: 512,
+        zoomOffset: -1,
+        minZoom: 1,
+        maxZoom: 20,
+        crossOrigin: true,
+        attribution:
+          '&copy; <a href="https://www.maptiler.com/copyright/">MapTiler</a> &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+      }
+    ).addTo(map);
+
+    coverageLayerRef.current = L.layerGroup().addTo(map);
+
+    if (!readOnly) {
+      map.on("click", (mapEvent) => {
+        onSelectRef.current?.(
+          mapEvent.latlng.lat.toFixed(6),
+          mapEvent.latlng.lng.toFixed(6)
+        );
+      });
+    }
+
+    mapRef.current = map;
+    window.setTimeout(() => map.invalidateSize(), 0);
+
+    return () => {
+      map.remove();
+      mapRef.current = null;
+      coverageLayerRef.current = null;
+    };
+  }, [mapTilerKey, readOnly]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    const coverageLayer = coverageLayerRef.current;
+    if (!map || !coverageLayer) return;
+
+    coverageLayer.clearLayers();
+
+    const siteLatitude = Number(latitude);
+    const siteLongitude = Number(longitude);
+    if (
+      latitude === null ||
+      latitude === undefined ||
+      String(latitude).trim() === "" ||
+      !Number.isFinite(siteLatitude) ||
+      siteLatitude < -90 ||
+      siteLatitude > 90 ||
+      longitude === null ||
+      longitude === undefined ||
+      String(longitude).trim() === "" ||
+      !Number.isFinite(siteLongitude) ||
+      siteLongitude < -180 ||
+      siteLongitude > 180
+    ) {
+      map.setView(
+        [JUBAN_FALLBACK_CENTER.lat, JUBAN_FALLBACK_CENTER.lng],
+        13,
+        { animate: false }
+      );
+      return;
+    }
+
+    const coverageRadius = Number(radius);
+    if (Number.isFinite(coverageRadius) && coverageRadius > 0) {
+      const circle = L.circle([siteLatitude, siteLongitude], {
+        radius: coverageRadius,
+        color: "#087443",
+        weight: 2,
+        opacity: 0.95,
+        fillColor: "#6fb98a",
+        fillOpacity: 0.2,
+      }).addTo(coverageLayer);
+
+      map.fitBounds(circle.getBounds(), {
+        padding: [32, 32],
+        maxZoom: 18,
+        animate: false,
+      });
+    } else {
+      map.setView([siteLatitude, siteLongitude], 16, { animate: false });
+    }
+
+    L.circleMarker([siteLatitude, siteLongitude], {
+      radius: 8,
+      color: "#ffffff",
+      weight: 2,
+      fillColor: "#087443",
+      fillOpacity: 1,
+    })
+      .bindTooltip("Site Center", { direction: "top", offset: [0, -8] })
+      .addTo(coverageLayer);
+
+    window.setTimeout(() => map.invalidateSize(), 0);
+  }, [latitude, longitude, radius]);
+
+  return (
+    <div className="ps-site-coverage-map-wrap">
+      <div
+        ref={containerRef}
+        className="ps-site-coverage-map"
+        aria-label="Planting site center and coverage map"
+      />
+      {!mapTilerKey && (
+        <p className="ps-site-coverage-map-error">
+          MapTiler API key is not configured.
+        </p>
+      )}
+    </div>
+  );
+}
+
 function SiteInformation({
   site,
   status,
@@ -2552,6 +2636,20 @@ function SiteInformation({
           value={
             site.locationDescription ||
             "—"
+          }
+        />
+      </InfoSection>
+
+      <InfoSection
+        title="Site Coverage"
+        icon={MapPin}
+      >
+        <InfoRow
+          label="Site Coverage Radius"
+          value={
+            Number(site.coverageRadiusMeters) > 0
+              ? `${Number(site.coverageRadiusMeters)} meters`
+              : "Not set"
           }
         />
       </InfoSection>

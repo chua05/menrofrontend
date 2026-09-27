@@ -589,6 +589,22 @@
   line-height: 1.5;
 }
 
+.pr-no-events-alert-slot {
+  width: 100%;
+  margin-top: 6px;
+  box-sizing: border-box;
+}
+
+.pr-no-events-alert {
+  color: #08783e;
+  background: transparent;
+  border: 0;
+  padding: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  font-weight: 600;
+}
+
 .pr-info-box {
   border: 1px solid #dce9e0;
   background: #f5faf7;

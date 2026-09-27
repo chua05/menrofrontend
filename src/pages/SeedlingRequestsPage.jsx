@@ -173,6 +173,16 @@ function toIsoString(value) {
   return date ? date.toISOString() : "";
 }
 
+const READABLE_REQUEST_ID_PATTERN = /^REQ-\d{4}-\d{3,}$/i;
+const READABLE_REVIEW_ID_PATTERN = /^REV-\d{4}-\d{3,}$/i;
+
+function getRequestSortTimestamp(request) {
+  const date = toDateValue(
+    request?.createdAt || request?.submittedAt || request?.requestDate
+  );
+  return date ? date.getTime() : 0;
+}
+
 function normalizeRequestForUi(request = {}) {
   const proposal = request.eventProposal || {};
   const items =
@@ -196,6 +206,16 @@ function normalizeRequestForUi(request = {}) {
       : request.status === "Released"
         ? "Saplings Released"
         : request.status || "Pending Review";
+  const reviewedByName =
+    request.reviewedByName ||
+    request.staffReviewerName ||
+    request.reviewerName ||
+    (request.reviewedAt || request.reviewedByUid || request.reviewedBy
+      ? "MENRO Staff"
+      : "");
+  const reviewId = READABLE_REVIEW_ID_PATTERN.test(request.reviewId || "")
+    ? String(request.reviewId).toUpperCase()
+    : "";
 
   return {
     ...request,
@@ -232,12 +252,10 @@ function normalizeRequestForUi(request = {}) {
       "",
     reviewedDate:
       toIsoString(request.reviewedAt) || request.reviewedDate || "",
-    reviewedBy:
-      request.reviewedBy ||
-      request.reviewedByName ||
-      request.staffReviewerName ||
-      request.reviewerName ||
-      "",
+    reviewedBy: reviewedByName,
+    reviewedByName,
+    reviewId,
+    reviewStatus: request.reviewStatus || (reviewId ? "Reviewed" : ""),
     reviewFindings:
       request.reviewFindings ||
       request.reviewRemarks ||
@@ -328,12 +346,13 @@ function isPlantingSiteFull(site) {
 }
 
 function getRequestDisplayId(request) {
-  return formatDisplayId(
-    "REQ",
+  const readableId = [
     request?.requestNumber,
+    request?.requestId,
     request?.requestCode,
-    request?.id
-  );
+  ].find((candidate) => READABLE_REQUEST_ID_PATTERN.test(candidate || ""));
+
+  return readableId ? String(readableId).toUpperCase() : "—";
 }
 
 function isPlantingSiteActive(site) {
@@ -356,7 +375,9 @@ function hasStaffReviewData(request) {
   if (!request) return false;
 
   return Boolean(
-    request.reviewedBy ||
+    request.reviewedByName ||
+      request.reviewId ||
+      request.reviewedBy ||
       request.reviewFindings ||
       request.reviewedDate ||
       request.status === "Reviewed" ||
@@ -813,7 +834,9 @@ useEffect(() => {
           .toLowerCase();
 
         const searchable = [
-          request.id,
+          getRequestDisplayId(request),
+          request.requestNumber,
+          request.requestId,
           request.requesterName,
           request.requesterRole,
           request.barangay,
@@ -836,7 +859,10 @@ useEffect(() => {
       }
 
       return true;
-    });
+    }).sort(
+      (first, second) =>
+        getRequestSortTimestamp(second) - getRequestSortTimestamp(first)
+    );
   }, [
     requests,
     activeTab,
@@ -3786,7 +3812,11 @@ function StaffReviewSection({ request }) {
       <div className="sr-menro-decision-grid">
         <div>
           <span>Reviewed By</span>
-          <strong>{request.reviewedBy || "—"}</strong>
+          <strong>{request.reviewedByName || "MENRO Staff"}</strong>
+        </div>
+        <div>
+          <span>Review ID</span>
+          <strong>{request.reviewId || "—"}</strong>
         </div>
         <div>
           <span>Review Date</span>
@@ -3794,7 +3824,7 @@ function StaffReviewSection({ request }) {
         </div>
         <div>
           <span>Review Status</span>
-          <strong>Reviewed</strong>
+          <strong>{request.reviewStatus || "Reviewed"}</strong>
         </div>
       </div>
     </div>

@@ -30,12 +30,12 @@ import {
 } from "lucide-react";
 
 import { auth } from "../firebase/config";
-import { formatDisplayId } from "../utils/displayId";
 import "../styles/my-requests.css";
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
 const BARANGAY_GEOJSON_URL = "/data/juban-barangays.geojson";
 const PAGE_SIZE = 10;
+const READABLE_REQUEST_ID_PATTERN = /^REQ-\d{4}-\d{3,}$/i;
 
 function requestTimestamp(value) {
   if (!value) return "";
@@ -79,12 +79,13 @@ function normalizeMyRequest(request) {
 }
 
 function getRequestDisplayId(request) {
-  return formatDisplayId(
-    "REQ",
+  const readableId = [
     request?.requestNumber,
+    request?.requestId,
     request?.requestCode,
-    request?.id
-  );
+  ].find((candidate) => READABLE_REQUEST_ID_PATTERN.test(candidate || ""));
+
+  return readableId ? String(readableId).toUpperCase() : "—";
 }
 
 function formatDate(value) {
