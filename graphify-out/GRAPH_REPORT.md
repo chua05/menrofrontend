@@ -1,17 +1,17 @@
-# Graph Report - menrosystem  (2026-09-27)
+# Graph Report - menrosystem  (2026-09-29)
 
 ## Corpus Check
-- 59 files · ~134,442 words
+- 59 files · ~135,173 words
 - Verdict: corpus is large enough that graph structure adds value.
 - Unclassified: 24 file(s) not represented in the graph (top: .css 21, (none) 2, .geojson 1)
 
 ## Summary
-- 715 nodes · 1374 edges · 46 communities (38 shown, 8 thin omitted)
-- Extraction: 99% EXTRACTED · 1% INFERRED · 0% AMBIGUOUS · INFERRED: 13 edges (avg confidence: 0.85)
+- 723 nodes · 1402 edges · 45 communities (37 shown, 8 thin omitted)
+- Extraction: 99% EXTRACTED · 1% INFERRED · 0% AMBIGUOUS · INFERRED: 14 edges (avg confidence: 0.85)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `680168ba`
+- Built from commit: `168832fd`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -61,10 +61,9 @@
 - fill_test_cases.py
 - LandingPage.jsx
 - artifact.md
-- lucide-react
 
 ## God Nodes (most connected - your core abstractions)
-1. `PlantingPage()` - 60 edges
+1. `PlantingPage()` - 65 edges
 2. `useAuth()` - 39 edges
 3. `MonitoringPage()` - 31 edges
 4. `DashboardPage()` - 29 edges
@@ -90,11 +89,11 @@
 ## Import Cycles
 - None detected.
 
-## Communities (46 total, 8 thin omitted)
+## Communities (45 total, 8 thin omitted)
 
 ### Community 0 - "PlantingPage"
 Cohesion: 0.07
-Nodes (60): calculateDistanceMeters(), displayReportStatus(), formatDate(), formatDateTime(), formatFileSize(), getCurrentUserIdentity(), getDistributionReference(), getEventDateValue() (+52 more)
+Nodes (67): calculateDistanceMeters(), canRenderImage(), displayReportStatus(), formatDate(), formatDateTime(), formatFileSize(), getCurrentUserIdentity(), getDistributionReference() (+59 more)
 
 ### Community 1 - "SitesPage.jsx"
 Cohesion: 0.08
@@ -109,12 +108,12 @@ Cohesion: 0.10
 Nodes (33): FormAlert(), apiRequest(), buildMediaUrl(), CONDITION_META, deriveCondition(), formatDate(), formatDateTime(), formatFileSize() (+25 more)
 
 ### Community 4 - "DashboardPage.jsx"
-Cohesion: 0.10
-Nodes (40): ACTIVITY_CHART_INITIAL_SIZE, addRecordAliases(), apiGet(), belongsToParticipant(), buildMonthlyActivity(), buildSurvivalByBarangay(), createRecentActivities(), DashboardPage() (+32 more)
+Cohesion: 0.09
+Nodes (41): ACTIVITY_CHART_INITIAL_SIZE, addRecordAliases(), apiGet(), belongsToParticipant(), buildMonthlyActivity(), buildSurvivalByBarangay(), createRecentActivities(), DashboardPage() (+33 more)
 
 ### Community 5 - "EventSchedulePage.jsx"
 Cohesion: 0.10
-Nodes (32): BARANGAYS, EVENT_TYPES, EventForm(), EventSchedulePage(), apiRequest(), getAuthToken(), loadArchivedEvents(), loadEvents() (+24 more)
+Nodes (31): BARANGAYS, EVENT_TYPES, EventForm(), EventSchedulePage(), apiRequest(), getAuthToken(), loadArchivedEvents(), loadEvents() (+23 more)
 
 ### Community 6 - "dropdown-menu.jsx"
 Cohesion: 0.09
@@ -146,11 +145,11 @@ Nodes (21): aliases, components, hooks, lib, ui, utils, iconLibrary, menuAccent 
 
 ### Community 13 - "package.json"
 Cohesion: 0.09
-Nodes (21): name, private, type, version, @base-ui/react, crypto-js, dayjs, eslint (+13 more)
+Nodes (22): name, private, type, version, @base-ui/react, crypto-js, dayjs, eslint (+14 more)
 
 ### Community 14 - "RegisterPage.jsx"
-Cohesion: 0.16
-Nodes (13): ref_react_icons_fc, CompleteProfilePage(), fieldStyle(), formatAccountDate(), getInitialForm(), ProfilePage(), configuredApiUrl, localApiUrl (+5 more)
+Cohesion: 0.15
+Nodes (14): ref_react_icons_fc, CompleteProfilePage(), getProfileAffiliationLabel(), fieldStyle(), formatAccountDate(), getInitialForm(), ProfilePage(), configuredApiUrl (+6 more)
 
 ### Community 15 - "App.jsx"
 Cohesion: 0.24
@@ -201,8 +200,8 @@ Cohesion: 0.30
 Nodes (8): AuthContext, AuthProvider(), useAuth(), ProtectedRoute(), GuestOnlyRoute(), RootRedirect(), useEffectiveAuth(), dashboardPathForRole()
 
 ### Community 28 - "react"
-Cohesion: 0.27
-Nodes (9): react, react-dom, DashboardLayout(), getFallbackName(), getInitials(), getRoleLabel(), NAVIGATION, Sidebar() (+1 more)
+Cohesion: 0.18
+Nodes (14): ref_data_dashboardmockdata, lucide-react, react, getConditionColor(), getUtilizationColor(), PlantingSitesMap(), sitePositions, DashboardLayout() (+6 more)
 
 ### Community 31 - "What You Must Do When Invoked"
 Cohesion: 0.08
@@ -240,28 +239,24 @@ Nodes (9): copy, datetime, docx, docx_enum_table, docx_enum_text, docx_oxml, doc
 Cohesion: 0.29
 Nodes (7): src_assets_aboutsys, src_assets_headerimg, src_assets_menro_logo, LandingPage(), PROGRAM_ITEMS, scrollToSection(), src_styles_landing_page
 
-### Community 45 - "lucide-react"
-Cohesion: 0.38
-Nodes (6): ref_data_dashboardmockdata, lucide-react, getConditionColor(), getUtilizationColor(), PlantingSitesMap(), sitePositions
-
 ## Knowledge Gaps
-- **171 isolated node(s):** `$schema`, `style`, `rsc`, `tsx`, `config` (+166 more)
-  These have ≤1 connection - possible missing edges or undocumented components. (Counts symbols only; 294 node(s) total have ≤1 connection when file, concept and rationale nodes are included.)
+- **172 isolated node(s):** `$schema`, `style`, `rsc`, `tsx`, `config` (+167 more)
+  These have ≤1 connection - possible missing edges or undocumented components. (Counts symbols only; 293 node(s) total have ≤1 connection when file, concept and rationale nodes are included.)
 - **8 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `PlantingPage()` connect `PlantingPage` to `useAuth`, `EventSchedulePage.jsx`, `App.jsx`?**
-  _High betweenness centrality (0.091) - this node is a cross-community bridge._
+- **Why does `PlantingPage()` connect `PlantingPage` to `useAuth`, `EventSchedulePage.jsx`, `RegisterPage.jsx`, `App.jsx`?**
+  _High betweenness centrality (0.100) - this node is a cross-community bridge._
 - **Why does `useAuth()` connect `useAuth` to `PlantingPage`, `SitesPage.jsx`, `SeedlingRequestsPage.jsx`, `MonitoringPage.jsx`, `DashboardPage.jsx`, `EventSchedulePage.jsx`, `ReforestationAnalyticsPage.jsx`, `SeedlingsPage.jsx`, `RegisterPage.jsx`, `SettingsPage.jsx`, `UsersPage.jsx`, `auth`, `Topbar.jsx`, `config.js`, `react`?**
-  _High betweenness centrality (0.090) - this node is a cross-community bridge._
-- **Why does `react` connect `react` to `PlantingPage`, `SitesPage.jsx`, `SeedlingRequestsPage.jsx`, `MonitoringPage.jsx`, `DashboardPage.jsx`, `EventSchedulePage.jsx`, `ReforestationAnalyticsPage.jsx`, `MapVisualizationPage.jsx`, `MyRequestsPage.jsx`, `SeedlingsPage.jsx`, `package.json`, `RegisterPage.jsx`, `App.jsx`, `SettingsPage.jsx`, `UsersPage.jsx`, `GuestEventPage.jsx`, `auth`, `Topbar.jsx`, `config.js`, `useAuth`, `LandingPage.jsx`, `lucide-react`?**
-  _High betweenness centrality (0.084) - this node is a cross-community bridge._
+  _High betweenness centrality (0.091) - this node is a cross-community bridge._
+- **Why does `react` connect `react` to `PlantingPage`, `SitesPage.jsx`, `SeedlingRequestsPage.jsx`, `MonitoringPage.jsx`, `DashboardPage.jsx`, `EventSchedulePage.jsx`, `ReforestationAnalyticsPage.jsx`, `MapVisualizationPage.jsx`, `MyRequestsPage.jsx`, `SeedlingsPage.jsx`, `package.json`, `RegisterPage.jsx`, `App.jsx`, `SettingsPage.jsx`, `UsersPage.jsx`, `GuestEventPage.jsx`, `auth`, `Topbar.jsx`, `config.js`, `useAuth`, `LandingPage.jsx`?**
+  _High betweenness centrality (0.083) - this node is a cross-community bridge._
 - **What connects `$schema`, `style`, `rsc` to the rest of the system?**
-  _171 weakly-connected nodes found - possible documentation gaps or missing edges._
+  _172 weakly-connected nodes found - possible documentation gaps or missing edges._
 - **Should `PlantingPage` be split into smaller, more focused modules?**
-  _Cohesion score 0.07211538461538461 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.07042253521126761 - nodes in this community are weakly interconnected._
 - **Should `SitesPage.jsx` be split into smaller, more focused modules?**
   _Cohesion score 0.07610993657505286 - nodes in this community are weakly interconnected._
 - **Should `SeedlingRequestsPage.jsx` be split into smaller, more focused modules?**

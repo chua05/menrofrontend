@@ -724,6 +724,26 @@
   border: 1px solid #e2e7e4;
 }
 
+.pr-preview-verification {
+  margin-top: 9px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  text-align: left;
+  font-size: 12px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.pr-preview-verification strong {
+  font-size: 12.5px;
+}
+
+.pr-preview-verification-info { color: #526159; }
+.pr-preview-verification-success { color: #08783e; }
+.pr-preview-verification-warning { color: #9a6200; }
+.pr-preview-verification-error { color: #c62828; }
+
 .pr-file-input {
   display: none;
 }

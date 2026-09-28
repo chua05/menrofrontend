@@ -2612,19 +2612,19 @@ export default function EventSchedulePage() {
                   {canManage && (
                     <button
                       type="button"
-                      className="ec-secondary-btn"
+                      className="ec-secondary-btn ec-edit-icon-btn"
                       onClick={
                         openEditEvent
                       }
                       disabled={
                         actionLoading
                       }
+                      aria-label="Edit event"
+                      title="Edit event"
                     >
                       <Edit3
                         size={14}
                       />
-
-                      Edit Event
                     </button>
                   )}
 

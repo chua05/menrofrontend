@@ -38,13 +38,19 @@ const MAX_PHOTO_SIZE = 10 * 1024 * 1024;
 const MAX_EVIDENCE_PHOTOS = 10;
 const SITE_GPS_TOLERANCE_METERS = 20;
 const OUTSIDE_SITE_WARNING =
-  "The verified photo location is outside the selected planting site. You may still submit the report for MENRO Staff verification.";
+  "The photo location is outside the selected planting site's coverage area. This report may still be submitted for MENRO Staff verification.";
 const SITE_MATCH_MESSAGE =
-  "Photo location successfully verified and matches the selected planting site.";
+  "Photo location successfully verified within the selected planting site.";
 const OUTSIDE_JUBAN_MESSAGE =
-  "Your photo is outside the Municipality of Juban coverage area. Please use a photo taken within Juban and try again.";
+  "Your photo is outside the Municipality of Juban coverage area. Please upload or take a photo within the covered area.";
 const MISSING_EXIF_MESSAGE =
-  "GPS location metadata was not found in this photo. Please upload the original geotagged photo and try again.";
+  "This photo does not contain GPS location metadata. Please upload an original geotagged photo with location information.";
+const UNREADABLE_METADATA_MESSAGE =
+  "The photo's location metadata could not be read. Please use the original geotagged photo and try again.";
+const UNSUPPORTED_PHOTO_MESSAGE =
+  "This photo format is not supported. Please upload a JPG, PNG, or WEBP image.";
+const UNREADABLE_PHOTO_MESSAGE =
+  "This photo could not be processed. Please upload a valid JPG, PNG, or WEBP image.";
 const NO_DISTRIBUTION_MESSAGE =
   "No released sapling distributions are available for this planting event.";
 const PHOTO_EXIF_LOCATION_SOURCE = "Photo Metadata (EXIF)";
@@ -243,6 +249,19 @@ function calculateDistanceMeters(lat1, lng1, lat2, lng2) {
   return earthRadiusMeters * c;
 }
 
+function getPhotoSignature(file) {
+  return `${file?.name || "photo"}|${file?.size || 0}|${file?.lastModified || 0}`;
+}
+
+function canRenderImage(previewUrl) {
+  return new Promise((resolve) => {
+    const image = new Image();
+    image.onload = () => resolve(image.naturalWidth > 0 && image.naturalHeight > 0);
+    image.onerror = () => resolve(false);
+    image.src = previewUrl;
+  });
+}
+
 function isPointInPolygon(latitude, longitude, polygon) {
   if (!Array.isArray(polygon) || polygon.length < 3) return false;
 
@@ -290,6 +309,8 @@ export default function PlantingPage() {
   const cameraStreamRef = useRef(null);
   const uploadInputRef = useRef(null);
   const previewUrlsRef = useRef([]);
+  const activePhotoPreviewIdsRef = useRef(new Set());
+  const photoPreviewSequenceRef = useRef(0);
   const locationMapContainerRef = useRef(null);
   const locationMapRef = useRef(null);
   const locationBarangayLayerRef = useRef(null);
@@ -1335,6 +1356,7 @@ export default function PlantingPage() {
 
     previewUrlsRef.current.forEach((url) => URL.revokeObjectURL(url));
     previewUrlsRef.current = [];
+    activePhotoPreviewIdsRef.current.clear();
     setPhotoFiles([]);
     setPhotoPreviews([]);
     setLocationPhotoSignature("");
@@ -1438,6 +1460,7 @@ export default function PlantingPage() {
       return;
     }
     const capturedAt = new Date().toISOString();
+    const capturedTimestamp = Date.parse(capturedAt);
     setForm((previous) => ({
       ...previous,
       latitude: String(position.coords.latitude),
@@ -1447,10 +1470,23 @@ export default function PlantingPage() {
       locationCapturedAt: new Date(position.timestamp || Date.now()).toISOString(),
       photoCapturedAt: capturedAt,
     }));
-    const file = new File([blob], `planting-${Date.now()}.jpg`, { type: "image/jpeg", lastModified: Date.now() });
+    const file = new File(
+      [blob],
+      `planting-${capturedTimestamp}.jpg`,
+      { type: "image/jpeg", lastModified: capturedTimestamp }
+    );
     await handlePhotoChange(
       { target: { files: [file], value: "" } },
-      { source: DEVICE_CAPTURE_LOCATION_SOURCE, capturedAt }
+      {
+        source: DEVICE_CAPTURE_LOCATION_SOURCE,
+        capturedAt,
+        latitude: position.coords.latitude,
+        longitude: position.coords.longitude,
+        accuracy: position.coords.accuracy,
+        locationCapturedAt: position.timestamp
+          ? new Date(position.timestamp).toISOString()
+          : capturedAt,
+      }
     );
     stopCamera();
   }
@@ -1635,61 +1671,218 @@ export default function PlantingPage() {
     }));
   }
 
+  function updatePhotoPreview(previewId, changes) {
+    setPhotoPreviews((previous) => previous.map((preview) =>
+      preview.id === previewId ? { ...preview, ...changes } : preview
+    ));
+  }
+
+  function evaluatePhotoCoordinates(latitude, longitude) {
+    if (jubanGeoJson && !isPointInJubanBoundary(latitude, longitude, jubanGeoJson)) {
+      return {
+        verificationStatus: "failed",
+        verificationTone: "error",
+        verificationLabel: "Verification Failed — Outside Municipality of Juban",
+        verificationMessage: OUTSIDE_JUBAN_MESSAGE,
+        submissionBlocked: true,
+      };
+    }
+
+    const siteLatitude = Number(selectedSite?.latitude);
+    const siteLongitude = Number(selectedSite?.longitude);
+    if (!Number.isFinite(siteLatitude) || !Number.isFinite(siteLongitude)) {
+      return {
+        verificationStatus: "verified",
+        verificationTone: "success",
+        verificationLabel: "Verified — GPS metadata detected",
+        verificationMessage: "Photo GPS metadata was read successfully.",
+        submissionBlocked: false,
+      };
+    }
+
+    const distanceMeters = calculateDistanceMeters(
+      latitude,
+      longitude,
+      siteLatitude,
+      siteLongitude
+    );
+    const coverageRadius = Number(selectedSite?.coverageRadiusMeters);
+    const hasCoverageRadius = Number.isFinite(coverageRadius) && coverageRadius > 0;
+    const hasLegacyPolygon = Array.isArray(selectedSite?.polygon) &&
+      selectedSite.polygon.length >= 3;
+    const siteMatches = hasCoverageRadius
+      ? distanceMeters <= coverageRadius
+      : hasLegacyPolygon
+        ? isPointInPolygon(latitude, longitude, selectedSite.polygon)
+        : distanceMeters <= SITE_GPS_TOLERANCE_METERS;
+
+    return siteMatches
+      ? {
+          verificationStatus: "verified",
+          verificationTone: "success",
+          verificationLabel: "Verified — Site Match",
+          verificationMessage: SITE_MATCH_MESSAGE,
+          submissionBlocked: false,
+          distanceMeters,
+        }
+      : {
+          verificationStatus: "verified",
+          verificationTone: "warning",
+          verificationLabel: "Verified — Site Mismatch",
+          verificationMessage: OUTSIDE_SITE_WARNING,
+          submissionBlocked: false,
+          distanceMeters,
+        };
+  }
+
+  function applyPhotoLocation(file, location) {
+    setForm((previous) => ({
+      ...previous,
+      latitude: String(location.latitude),
+      longitude: String(location.longitude),
+      accuracy: location.accuracy || "",
+      locationSource: location.locationSource,
+      photoCapturedAt: location.photoCapturedAt || "",
+      locationCapturedAt: location.locationCapturedAt || "",
+    }));
+    setLocationPhotoSignature(getPhotoSignature(file));
+  }
+
+  function clearPhotoLocation() {
+    setForm((previous) => ({
+      ...previous,
+      latitude: "",
+      longitude: "",
+      accuracy: "",
+      locationSource: "",
+      photoCapturedAt: "",
+      locationCapturedAt: "",
+    }));
+    setLocationPhotoSignature("");
+  }
+
+  async function verifyUploadedPhoto(file, preview, options = {}) {
+    const applyToForm = options.applyToForm === true;
+    const announce = options.announce !== false;
+    updatePhotoPreview(preview.id, {
+      verificationStatus: "verifying",
+      verificationTone: "info",
+      verificationLabel: "Verifying photo metadata...",
+      verificationMessage: "",
+    });
+
+    const readable = await canRenderImage(preview.url);
+    if (!activePhotoPreviewIdsRef.current.has(preview.id)) return { cancelled: true };
+    if (!readable) {
+      updatePhotoPreview(preview.id, {
+        verificationStatus: "failed",
+        verificationTone: "error",
+        verificationLabel: "Verification Failed — Unreadable Image",
+        verificationMessage: UNREADABLE_PHOTO_MESSAGE,
+        submissionBlocked: true,
+      });
+      if (applyToForm) clearPhotoLocation();
+      if (announce) showPopup(UNREADABLE_PHOTO_MESSAGE, "error");
+      return { verified: false, message: UNREADABLE_PHOTO_MESSAGE, tone: "error" };
+    }
+
+    let metadata;
+    try {
+      metadata = await exifr.parse(file, { gps: true, tiff: true, exif: true });
+    } catch {
+      if (!activePhotoPreviewIdsRef.current.has(preview.id)) return { cancelled: true };
+      updatePhotoPreview(preview.id, {
+        verificationStatus: "failed",
+        verificationTone: "error",
+        verificationLabel: "Verification Failed — Metadata Unreadable",
+        verificationMessage: UNREADABLE_METADATA_MESSAGE,
+        submissionBlocked: true,
+      });
+      if (applyToForm) clearPhotoLocation();
+      if (announce) showPopup(UNREADABLE_METADATA_MESSAGE, "error");
+      return { verified: false, message: UNREADABLE_METADATA_MESSAGE, tone: "error" };
+    }
+
+    if (!activePhotoPreviewIdsRef.current.has(preview.id)) return { cancelled: true };
+    const hasGpsValues = metadata?.latitude !== null && metadata?.latitude !== undefined &&
+      metadata?.longitude !== null && metadata?.longitude !== undefined;
+    const latitude = hasGpsValues ? Number(metadata.latitude) : NaN;
+    const longitude = hasGpsValues ? Number(metadata.longitude) : NaN;
+
+    if (!Number.isFinite(latitude) || latitude < -90 || latitude > 90 ||
+        !Number.isFinite(longitude) || longitude < -180 || longitude > 180) {
+      const message = hasGpsValues
+        ? "This photo contains invalid GPS coordinates. Please upload an original geotagged photo with valid location information."
+        : MISSING_EXIF_MESSAGE;
+      updatePhotoPreview(preview.id, {
+        verificationStatus: "failed",
+        verificationTone: "error",
+        verificationLabel: hasGpsValues
+          ? "Verification Failed — Invalid GPS Coordinates"
+          : "Verification Failed — No GPS Metadata",
+        verificationMessage: message,
+        submissionBlocked: true,
+      });
+      if (applyToForm) clearPhotoLocation();
+      if (announce) showPopup(message, "error");
+      return { verified: false, message, tone: "error" };
+    }
+
+    const capturedAt = metadata?.DateTimeOriginal ?? metadata?.CreateDate;
+    const capturedDate = capturedAt ? new Date(capturedAt) : null;
+    const capturedAtIso = capturedDate && !Number.isNaN(capturedDate.getTime())
+      ? capturedDate.toISOString()
+      : "";
+    const locationResult = evaluatePhotoCoordinates(latitude, longitude);
+    const location = {
+      latitude,
+      longitude,
+      accuracy: "",
+      locationSource: PHOTO_EXIF_LOCATION_SOURCE,
+      photoCapturedAt: capturedAtIso,
+      locationCapturedAt: capturedAtIso,
+    };
+
+    updatePhotoPreview(preview.id, {
+      ...locationResult,
+      ...location,
+      metadata: {
+        capturedAt: capturedAtIso,
+        gpsAvailable: true,
+      },
+    });
+    if (applyToForm) applyPhotoLocation(file, location);
+    if (announce) {
+      showPopup(
+        locationResult.verificationMessage,
+        locationResult.verificationTone === "error"
+          ? "error"
+          : locationResult.verificationTone === "warning"
+            ? "warning"
+            : "success"
+      );
+    }
+    return {
+      verified: locationResult.verificationStatus === "verified",
+      message: locationResult.verificationMessage,
+      tone: locationResult.verificationTone,
+    };
+  }
+
   async function processPhotoMetadata(file, announce = true) {
-    if (!file) {
+    const preview = photoPreviews[0];
+    if (!file || !preview) {
       showPopup("Please upload or take a photo first.", "error");
       return false;
     }
+
     setLocationLoading(true);
     try {
-      const metadata = await exifr.parse(file, { gps: true, tiff: true, exif: true });
-      const hasGpsValues = metadata?.latitude !== null && metadata?.latitude !== undefined &&
-        metadata?.longitude !== null && metadata?.longitude !== undefined;
-      const latitude = hasGpsValues ? Number(metadata.latitude) : NaN;
-      const longitude = hasGpsValues ? Number(metadata.longitude) : NaN;
-      if (!Number.isFinite(latitude) || latitude < -90 || latitude > 90 ||
-          !Number.isFinite(longitude) || longitude < -180 || longitude > 180) {
-        setForm((previous) => ({
-          ...previous,
-          latitude: "", longitude: "", accuracy: "", locationSource: "",
-          photoCapturedAt: "", locationCapturedAt: "",
-        }));
-        showPopup(
-          hasGpsValues
-            ? "This photo contains invalid GPS coordinates. Please upload an original geotagged photo with valid location information."
-            : MISSING_EXIF_MESSAGE,
-          "error"
-        );
-        return false;
-      }
-
-      const capturedAt = metadata?.DateTimeOriginal ?? metadata?.CreateDate;
-      const capturedDate = capturedAt ? new Date(capturedAt) : null;
-      setForm((previous) => ({
-        ...previous,
-        latitude: String(latitude),
-        longitude: String(longitude),
-        accuracy: "",
-        locationSource: PHOTO_EXIF_LOCATION_SOURCE,
-        photoCapturedAt: capturedDate && !Number.isNaN(capturedDate.getTime())
-          ? capturedDate.toISOString() : "",
-        locationCapturedAt: capturedDate && !Number.isNaN(capturedDate.getTime())
-          ? capturedDate.toISOString() : "",
-      }));
-      setLocationPhotoSignature(`${file.name}|${file.size}|${file.lastModified}`);
-      if (announce) showPopup("Photo location successfully verified.");
-      return true;
-    } catch {
-      setForm((previous) => ({
-        ...previous,
-        latitude: "", longitude: "", accuracy: "", locationSource: "",
-        photoCapturedAt: "", locationCapturedAt: "",
-      }));
-      showPopup(
-        MISSING_EXIF_MESSAGE,
-        "error"
-      );
-      return false;
+      const result = await verifyUploadedPhoto(file, preview, {
+        applyToForm: true,
+        announce,
+      });
+      return result?.verified === true;
     } finally {
       setLocationLoading(false);
     }
@@ -1719,7 +1912,8 @@ export default function PlantingPage() {
     if (selectedFiles.length === 0) return;
 
     const source = options.source || PHOTO_EXIF_LOCATION_SOURCE;
-    if (photoFiles.length > 0 && form.locationSource && form.locationSource !== source) {
+    const existingSource = photoPreviews[0]?.locationSource || form.locationSource;
+    if (photoFiles.length > 0 && existingSource && existingSource !== source) {
       showPopup("Use either Take Photo or Upload Photo for one report. Remove the current photos before changing the location source.", "error");
       event.target.value = "";
       return;
@@ -1744,10 +1938,7 @@ export default function PlantingPage() {
 
     for (const file of selectedFiles) {
       if (!isAllowedImageFile(file)) {
-        showPopup(
-          "Invalid photo format. Please select JPG, PNG, or WEBP images only.",
-          "error"
-        );
+        showPopup(UNSUPPORTED_PHOTO_MESSAGE, "error");
         event.target.value = "";
         return;
       }
@@ -1763,13 +1954,13 @@ export default function PlantingPage() {
     }
 
     const existingSignatures = new Set(
-      photoFiles.map((file) => `${file.name}|${file.size}|${file.lastModified}`)
+      photoFiles.map(getPhotoSignature)
     );
 
     const newSignatures = new Set();
 
     for (const file of selectedFiles) {
-      const signature = `${file.name}|${file.size}|${file.lastModified}`;
+      const signature = getPhotoSignature(file);
 
       if (existingSignatures.has(signature) || newSignatures.has(signature)) {
         showPopup(
@@ -1783,64 +1974,108 @@ export default function PlantingPage() {
       newSignatures.add(signature);
     }
 
-    let metadataValid = hasGps;
-    if (source === DEVICE_CAPTURE_LOCATION_SOURCE) {
-      if (!metadataValid) {
-        showPopup("Unable to capture your device location. Please enable location services and try again, or upload an original geotagged photo instead.", "error");
-        event.target.value = "";
-        return;
-      }
-      setLocationPhotoSignature(`${selectedFiles[0].name}|${selectedFiles[0].size}|${selectedFiles[0].lastModified}`);
-      setForm((previous) => ({
-        ...previous,
-        locationSource: DEVICE_CAPTURE_LOCATION_SOURCE,
-        photoCapturedAt: options.capturedAt || new Date().toISOString(),
-      }));
-    } else {
-      for (const file of selectedFiles) {
-        try {
-          const metadata = await exifr.parse(file, { gps: true, tiff: true, exif: true });
-          const hasCoordinates = metadata?.latitude !== null && metadata?.latitude !== undefined &&
-            metadata?.longitude !== null && metadata?.longitude !== undefined;
-          const latitude = hasCoordinates ? Number(metadata.latitude) : NaN;
-          const longitude = hasCoordinates ? Number(metadata.longitude) : NaN;
-          if (!Number.isFinite(latitude) || latitude < -90 || latitude > 90 ||
-              !Number.isFinite(longitude) || longitude < -180 || longitude > 180) {
-            showPopup(MISSING_EXIF_MESSAGE, "error");
-            event.target.value = "";
-            return;
-          }
-        } catch {
-          showPopup(MISSING_EXIF_MESSAGE, "error");
-          event.target.value = "";
-          return;
-        }
-      }
-      if (photoFiles.length === 0) {
-        metadataValid = await processPhotoMetadata(selectedFiles[0], false);
-      }
-    }
-
-    if (!metadataValid) {
-      event.target.value = "";
-      return;
-    }
-
     const newPreviews = selectedFiles.map((file) => ({
-      id: `${file.name}-${file.size}-${file.lastModified}-${Math.random()}`,
+      id: `planting-photo-${photoPreviewSequenceRef.current += 1}`,
       url: URL.createObjectURL(file),
+      signature: getPhotoSignature(file),
+      locationSource: source,
+      verificationStatus: "not_verified",
+      verificationTone: "info",
+      verificationLabel: "Not Yet Verified",
+      verificationMessage: "",
+      submissionBlocked: false,
     }));
 
     previewUrlsRef.current.push(...newPreviews.map((item) => item.url));
+    newPreviews.forEach((preview) => activePhotoPreviewIdsRef.current.add(preview.id));
 
     setPhotoFiles((previous) => [...previous, ...selectedFiles]);
     setPhotoPreviews((previous) => [...previous, ...newPreviews]);
 
     event.target.value = "";
 
-    if (metadataValid) {
+    showPopup(
+      `${selectedFiles.length} planting evidence photo${selectedFiles.length === 1 ? "" : "s"} selected. Verification is in progress.`,
+      "info"
+    );
+
+    if (source === DEVICE_CAPTURE_LOCATION_SOURCE) {
+      const latitude = Number(options.latitude);
+      const longitude = Number(options.longitude);
+      const hasDeviceLocation = Number.isFinite(latitude) && latitude >= -90 && latitude <= 90 &&
+        Number.isFinite(longitude) && longitude >= -180 && longitude <= 180;
+      const preview = newPreviews[0];
+
+      if (!hasDeviceLocation) {
+        const message = "Unable to capture your device location. Please enable location services and try again, or upload an original geotagged photo instead.";
+        updatePhotoPreview(preview.id, {
+          verificationStatus: "failed",
+          verificationTone: "error",
+          verificationLabel: "Verification Failed — Device Location Unavailable",
+          verificationMessage: message,
+          submissionBlocked: true,
+        });
+        showPopup(message, "error");
+        return;
+      }
+
+      const readable = await canRenderImage(preview.url);
+      if (!activePhotoPreviewIdsRef.current.has(preview.id)) return;
+      if (!readable) {
+        updatePhotoPreview(preview.id, {
+          verificationStatus: "failed",
+          verificationTone: "error",
+          verificationLabel: "Verification Failed — Unreadable Image",
+          verificationMessage: UNREADABLE_PHOTO_MESSAGE,
+          submissionBlocked: true,
+        });
+        clearPhotoLocation();
+        showPopup(UNREADABLE_PHOTO_MESSAGE, "error");
+        return;
+      }
+
+      const locationResult = evaluatePhotoCoordinates(latitude, longitude);
+      const location = {
+        latitude,
+        longitude,
+        accuracy: Number.isFinite(Number(options.accuracy)) ? String(options.accuracy) : "",
+        locationSource: DEVICE_CAPTURE_LOCATION_SOURCE,
+        photoCapturedAt: options.capturedAt || "",
+        locationCapturedAt: options.locationCapturedAt || options.capturedAt || "",
+      };
+      updatePhotoPreview(preview.id, { ...locationResult, ...location });
+      if (photoFiles.length === 0) applyPhotoLocation(selectedFiles[0], location);
       showPopup(
-        `${selectedFiles.length} planting evidence photo${selectedFiles.length === 1 ? "" : "s"} added successfully.`
+        locationResult.verificationMessage,
+        locationResult.verificationTone === "error"
+          ? "error"
+          : locationResult.verificationTone === "warning"
+            ? "warning"
+            : "success"
+      );
+      return;
+    }
+
+    const verificationResults = [];
+    for (let index = 0; index < selectedFiles.length; index += 1) {
+      verificationResults.push(await verifyUploadedPhoto(selectedFiles[index], newPreviews[index], {
+        applyToForm: photoFiles.length === 0 && index === 0,
+        announce: false,
+      }));
+    }
+
+    const resultToAnnounce = verificationResults.find(
+      (result) => result && !result.cancelled && result.verified !== true
+    ) || verificationResults.find((result) => result?.tone === "warning") ||
+      verificationResults.find((result) => result && !result.cancelled);
+    if (resultToAnnounce) {
+      showPopup(
+        resultToAnnounce.message,
+        resultToAnnounce.tone === "error"
+          ? "error"
+          : resultToAnnounce.tone === "warning"
+            ? "warning"
+            : "success"
       );
     }
   }
@@ -1848,13 +2083,10 @@ export default function PlantingPage() {
   function removeSelectedPhoto(index) {
     const preview = photoPreviews[index];
     const file = photoFiles[index];
-    if (file && locationPhotoSignature === `${file.name}|${file.size}|${file.lastModified}`) {
-      setLocationPhotoSignature("");
-      setForm((previous) => ({
-        ...previous, latitude: "", longitude: "", accuracy: "", locationSource: "",
-        photoCapturedAt: "", locationCapturedAt: "",
-      }));
-    }
+    const remainingFiles = photoFiles.filter((_, itemIndex) => itemIndex !== index);
+    const remainingPreviews = photoPreviews.filter((_, itemIndex) => itemIndex !== index);
+    const removedLocationPhoto = index === 0 ||
+      (file && locationPhotoSignature === getPhotoSignature(file));
 
     if (preview?.url) {
       URL.revokeObjectURL(preview.url);
@@ -1862,11 +2094,24 @@ export default function PlantingPage() {
         (url) => url !== preview.url
       );
     }
+    if (preview?.id) activePhotoPreviewIdsRef.current.delete(preview.id);
 
-    setPhotoFiles((previous) => previous.filter((_, itemIndex) => itemIndex !== index));
-    setPhotoPreviews((previous) =>
-      previous.filter((_, itemIndex) => itemIndex !== index)
-    );
+    setPhotoFiles(remainingFiles);
+    setPhotoPreviews(remainingPreviews);
+
+    if (removedLocationPhoto) {
+      const nextPreview = remainingPreviews[0];
+      const nextFile = remainingFiles[0];
+      if (
+        nextPreview?.verificationStatus === "verified" &&
+        Number.isFinite(Number(nextPreview.latitude)) &&
+        Number.isFinite(Number(nextPreview.longitude))
+      ) {
+        applyPhotoLocation(nextFile, nextPreview);
+      } else {
+        clearPhotoLocation();
+      }
+    }
 
     if (cameraInputRef.current) cameraInputRef.current.value = "";
     if (uploadInputRef.current) uploadInputRef.current.value = "";
@@ -1936,6 +2181,28 @@ export default function PlantingPage() {
 
     if (photoFiles.length > MAX_EVIDENCE_PHOTOS) {
       showPopup("A maximum of 10 planting evidence photos is allowed.", "error");
+      return;
+    }
+
+    const incompleteVerification = photoPreviews.find(
+      (preview) => preview.verificationStatus !== "verified"
+    );
+    if (incompleteVerification) {
+      showPopup(
+        incompleteVerification.verificationMessage ||
+          "Please verify every selected planting evidence photo before submitting the report.",
+        "error"
+      );
+      return;
+    }
+
+    const blockedPhoto = photoPreviews.find((preview) => preview.submissionBlocked === true);
+    if (blockedPhoto) {
+      showPopup(
+        blockedPhoto.verificationMessage ||
+          "One or more planting evidence photos failed location verification.",
+        "error"
+      );
       return;
     }
 
@@ -2798,6 +3065,26 @@ export default function PlantingPage() {
                               <div className="pr-preview-size">
                                 {formatFileSize(photoFiles[index]?.size)}
                               </div>
+                            </div>
+
+                            <div
+                              className={`pr-preview-verification pr-preview-verification-${preview.verificationTone || "info"}`}
+                              role={preview.verificationTone === "error" ? "alert" : "status"}
+                            >
+                              <strong>{preview.verificationLabel || "Not Yet Verified"}</strong>
+                              {preview.verificationMessage && (
+                                <span>{preview.verificationMessage}</span>
+                              )}
+                              <span>Location Source: {preview.locationSource}</span>
+                              {Number.isFinite(Number(preview.latitude)) &&
+                                Number.isFinite(Number(preview.longitude)) && (
+                                  <span>
+                                    Actual Coordinates: {Number(preview.latitude).toFixed(6)}, {Number(preview.longitude).toFixed(6)}
+                                  </span>
+                                )}
+                              {Number.isFinite(Number(preview.distanceMeters)) && (
+                                <span>Distance from Site: {Number(preview.distanceMeters).toFixed(1)} meters</span>
+                              )}
                             </div>
 
                             <button

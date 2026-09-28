@@ -3,7 +3,6 @@ import { useSearchParams } from "react-router-dom";
 import {
   Sprout,
   Plus,
-  Download,
   Search,
   PackageCheck,
   PackageOpen,
@@ -1026,83 +1025,6 @@ export default function SeedlingsPage() {
     setPage(1);
   };
 
-  const handleExport = () => {
-    if (seedlings.length === 0) {
-      window.alert(
-        "There are no sapling records to export."
-      );
-
-      return;
-    }
-
-    const headers = [
-      "Sapling ID",
-      "Tree Name",
-      "Scientific Name",
-      "Category",
-      "Quantity",
-      "Available",
-      "Distributed",
-      "Planted",
-      "Status",
-      "Last Updated",
-    ];
-
-    const rows = seedlings.map(
-      (seedling) => [
-        seedling.id,
-        seedling.treeName,
-        seedling.scientificName,
-        seedling.category,
-        seedling.quantity,
-        seedling.available,
-        seedling.distributed,
-        seedling.planted,
-        seedling.status,
-        seedling.updatedAt,
-      ]
-    );
-
-    const csv = [
-      headers,
-      ...rows,
-    ]
-      .map((row) =>
-        row
-          .map((value) => {
-            const text =
-              String(value ?? "");
-
-            return `"${text.replaceAll(
-              '"',
-              '""'
-            )}"`;
-          })
-          .join(",")
-      )
-      .join("\n");
-
-    const blob =
-      new Blob([csv], {
-        type: "text/csv;charset=utf-8;",
-      });
-
-    const url =
-      URL.createObjectURL(blob);
-
-    const link =
-      document.createElement("a");
-
-    link.href = url;
-
-    link.download =
-      "menro-seedlings.csv";
-
-    link.click();
-
-    URL.revokeObjectURL(url);
-  };
-
   if (loading) {
     return (
       <div className="seedlings-page">
@@ -1162,14 +1084,6 @@ export default function SeedlingsPage() {
             </button>
           )}
 
-          <button
-            type="button"
-            className="sd-export-btn"
-            onClick={handleExport}
-          >
-            <Download size={15} />
-            Export
-          </button>
         </div>
       </section>
 

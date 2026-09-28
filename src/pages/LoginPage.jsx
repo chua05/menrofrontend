@@ -70,6 +70,7 @@ const getLoginErrorMessage = (error, provider = "email") => {
     "auth/too-many-requests": "Too many failed attempts. Please wait a while, then try again.",
     "auth/popup-closed-by-user": "Google sign-in was cancelled.",
     "auth/popup-blocked": "The Google sign-in window was blocked. Allow pop-ups, then try again.",
+    "auth/cancelled-popup-request": "Another Google sign-in request was cancelled. Please try again.",
     "auth/unauthorized-domain": "Google sign-in is not enabled for this website. Please contact the administrator.",
   };
 
@@ -236,7 +237,12 @@ export default function LoginPage() {
           );
         }
       } catch (err) {
-        console.error("Google sign in failed:", err?.code || err?.message);
+        const expectedPopupCancellation =
+          err?.code === "auth/popup-closed-by-user" ||
+          err?.code === "auth/cancelled-popup-request";
+        if (!expectedPopupCancellation) {
+          console.error("Google sign in failed:", err?.code || err?.message);
+        }
         setSuccess("");
         setError(getLoginErrorMessage(err, "google"));
       } finally {

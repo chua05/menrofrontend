@@ -1093,6 +1093,8 @@
 .sd-modal-header {
   min-height: 72px;
 
+  flex: 0 0 auto;
+
   padding: 15px 18px;
 
   border-bottom: 1px solid #e8ede9;
@@ -1102,6 +1104,11 @@
   justify-content: space-between;
 
   gap: 16px;
+}
+
+.sd-modal-header > div:first-child {
+  min-width: 0;
+  flex: 1 1 auto;
 }
 
 .sd-modal-header h2 {
@@ -1147,6 +1154,9 @@
 }
 
 .sd-modal-body {
+  min-height: 0;
+  flex: 1 1 auto;
+
   padding: 18px;
 
   overflow-y: auto;
@@ -1248,6 +1258,8 @@
 ===================================================== */
 
 .sd-modal-footer {
+  flex: 0 0 auto;
+
   min-height: 66px;
 
   padding: 11px 18px;
@@ -1593,6 +1605,11 @@
 
   .sd-modal {
     max-height: calc(100vh - 20px);
+  }
+
+  .sd-modal-header {
+    min-height: 0;
+    padding: 15px 16px;
   }
 
   .sd-modal-footer {
