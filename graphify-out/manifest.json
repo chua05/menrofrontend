@@ -156,9 +156,9 @@
     "semantic_hash": ""
   },
   "src/pages/ReforestationAnalyticsPage.jsx": {
-    "mtime": 1790181881.7408,
-    "seen": 1790182960.047554,
-    "ast_hash": "0f6db4ebd41550a7857be1ab8408bbb1",
+    "mtime": 1790683764.7354424,
+    "seen": 1790683851.0293798,
+    "ast_hash": "317ade90c141c0999ac817e474286b29",
     "semantic_hash": ""
   },
   "src/pages/RegisterPage.jsx": {
@@ -957,6 +957,12 @@
     "mtime": 1790664851.8422256,
     "seen": 1790668241.348121,
     "ast_hash": "6b04c21b562e9d06a453085d3022b674",
+    "semantic_hash": ""
+  },
+  "src/components/analytics/AnalyticsSitesMap.jsx": {
+    "mtime": 1790683655.0446503,
+    "seen": 1790683851.0293212,
+    "ast_hash": "fc50a7c3abb080d159c6e054a0c478e3",
     "semantic_hash": ""
   }
 }

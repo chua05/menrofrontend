@@ -15,6 +15,7 @@ import {
   FiFilter,
   FiGitBranch,
   FiImage,
+  FiInfo,
   FiMapPin,
   FiNavigation,
   FiPlus,
@@ -55,16 +56,15 @@ const UNREADABLE_PHOTO_MESSAGE =
   "This photo could not be processed. Please upload a valid JPG, PNG, or WEBP image.";
 const NO_DISTRIBUTION_MESSAGE =
   "No released sapling distributions are available for this planting event.";
-const PHOTO_EXIF_LOCATION_SOURCE = "Photo Metadata (EXIF)";
-const DEVICE_CAPTURE_LOCATION_SOURCE = "Device Location at Capture";
+const PHOTO_EXIF_LOCATION_SOURCE = "Photo Metadata";
 const BARANGAY_GEOJSON_URL = "/data/juban-barangays.geojson";
 const JUBAN_FALLBACK_CENTER = { lat: 12.82, lng: 124.0 };
 
 const STATUS_OPTIONS = [
-  "Pending",
-  "Pending Review",
-  "Approved",
-  "Rejected",
+  "Awaiting Submission",
+  "Partial",
+  "Fully Reported — Awaiting Review",
+  "Completed",
 ];
 
 const VERIFICATION_CLASSES = {
@@ -72,6 +72,13 @@ const VERIFICATION_CLASSES = {
   "Pending Review": "pr-status-reviewed",
   Approved: "pr-status-approved",
   Rejected: "pr-status-rejected",
+  "Awaiting Submission": "pr-status-reviewed",
+  Partial: "pr-status-reviewed",
+  "Fully Reported — Awaiting Review": "pr-status-reviewed",
+  Completed: "pr-status-approved",
+  Verified: "pr-status-approved",
+  "Needs Review": "pr-status-reviewed",
+  Accepted: "pr-status-approved",
 };
 
 function displayReportStatus(status) {
@@ -307,8 +314,6 @@ export default function PlantingPage() {
   const canReview = userRole === "staff";
 
   const cameraInputRef = useRef(null);
-  const cameraVideoRef = useRef(null);
-  const cameraStreamRef = useRef(null);
   const uploadInputRef = useRef(null);
   const previewUrlsRef = useRef([]);
   const activePhotoPreviewIdsRef = useRef(new Set());
@@ -343,6 +348,7 @@ export default function PlantingPage() {
   const [showSubmitModal, setShowSubmitModal] = useState(false);
   const [showViewModal, setShowViewModal] = useState(false);
   const [selectedRecord, setSelectedRecord] = useState(null);
+  const [selectedSubmission, setSelectedSubmission] = useState(null);
 
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("All");
@@ -355,7 +361,7 @@ export default function PlantingPage() {
   const [noEventsAlertSiteId, setNoEventsAlertSiteId] = useState("");
 
   const [photoFiles, setPhotoFiles] = useState([]);
-  const [cameraOpen, setCameraOpen] = useState(false);
+  const [showPhotoRequirements, setShowPhotoRequirements] = useState(false);
   const [photoPreviews, setPhotoPreviews] = useState([]);
   const [locationPhotoSignature, setLocationPhotoSignature] = useState("");
 
@@ -668,21 +674,10 @@ export default function PlantingPage() {
 
     const timeout = window.setTimeout(() => {
       setPopup({ message: "", type: "success" });
-    }, 5000);
+    }, popup.type === "success" ? 8000 : 5000);
 
     return () => window.clearTimeout(timeout);
   }, [popup]);
-
-  useEffect(() => {
-    if (cameraOpen && cameraVideoRef.current && cameraStreamRef.current) {
-      cameraVideoRef.current.srcObject = cameraStreamRef.current;
-      void cameraVideoRef.current.play().catch(() => {});
-    }
-  }, [cameraOpen]);
-
-  useEffect(() => () => {
-    cameraStreamRef.current?.getTracks().forEach((track) => track.stop());
-  }, []);
 
   useEffect(() => {
     if (!showSubmitModal || !locationMapContainerRef.current) return undefined;
@@ -1116,7 +1111,7 @@ export default function PlantingPage() {
 
     return visibleRecords.filter((record) => {
       const matchesStatus =
-        statusFilter === "All" || displayReportStatus(record.verificationStatus) === statusFilter;
+        statusFilter === "All" || (record.reportingProgress || "Awaiting Submission") === statusFilter;
 
       const searchableText = [
         record.id,
@@ -1126,6 +1121,7 @@ export default function PlantingPage() {
         record.species,
         record.eventName,
         record.verificationStatus,
+        record.reportingProgress,
       ]
         .filter(Boolean)
         .join(" ")
@@ -1378,115 +1374,12 @@ export default function PlantingPage() {
   }
 
   function stopCamera() {
-    cameraStreamRef.current?.getTracks().forEach((track) => track.stop());
-    cameraStreamRef.current = null;
-    setCameraOpen(false);
+    setShowPhotoRequirements(false);
   }
 
-  function getFreshDeviceLocation() {
-    return new Promise((resolve, reject) => {
-      if (!navigator.geolocation) {
-        reject(Object.assign(new Error("Geolocation unavailable"), { code: 2 }));
-        return;
-      }
-      navigator.geolocation.getCurrentPosition(resolve, reject, {
-        enableHighAccuracy: true,
-        maximumAge: 0,
-        timeout: 15000,
-      });
-    });
-  }
-
-  async function startCamera() {
-    if (cameraStreamRef.current) return;
-    if (!navigator.mediaDevices?.getUserMedia) {
-      showPopup("Camera access is required to take a photo within the system. Please allow camera access or upload a photo instead.", "error");
-      return;
-    }
-    let stream = null;
-    try {
-      stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" }, audio: false });
-      const position = await getFreshDeviceLocation();
-      cameraStreamRef.current = stream;
-      setForm((previous) => ({
-        ...previous,
-        latitude: String(position.coords.latitude),
-        longitude: String(position.coords.longitude),
-        accuracy: Number.isFinite(position.coords.accuracy) ? String(position.coords.accuracy) : "",
-        locationSource: DEVICE_CAPTURE_LOCATION_SOURCE,
-        locationCapturedAt: new Date(position.timestamp || Date.now()).toISOString(),
-        photoCapturedAt: "",
-      }));
-      setCameraOpen(true);
-    } catch (error) {
-      stream?.getTracks().forEach((track) => track.stop());
-      cameraStreamRef.current?.getTracks().forEach((track) => track.stop());
-      cameraStreamRef.current = null;
-      if (!stream) {
-        showPopup("Camera access is required to take a photo within the system. Please allow camera access or upload a photo instead.", "error");
-      } else if (error?.code === 1) {
-        showPopup("Location access is required when taking a photo within the system. Please allow location access or upload an original geotagged photo instead.", "error");
-      } else if (typeof error?.code === "number") {
-        showPopup("Unable to capture your device location. Please enable location services and try again, or upload an original geotagged photo instead.", "error");
-      } else {
-        showPopup("Unable to capture your device location. Please enable location services and try again, or upload an original geotagged photo instead.", "error");
-      }
-    }
-  }
-
-  async function captureCameraPhoto() {
-    const video = cameraVideoRef.current;
-    if (!video?.videoWidth || !video?.videoHeight) return;
-    let position;
-    try {
-      position = await getFreshDeviceLocation();
-    } catch (error) {
-      showPopup(error?.code === 1
-        ? "Location access is required when taking a photo within the system. Please allow location access or upload an original geotagged photo instead."
-        : "Unable to capture your device location. Please enable location services and try again, or upload an original geotagged photo instead.", "error");
-      return;
-    }
-    const canvas = document.createElement("canvas");
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
-    const context = canvas.getContext("2d");
-    if (!context) return;
-    context.drawImage(video, 0, 0);
-    const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.95));
-    if (!blob) {
-      showPopup("Unable to capture the photo. Please try again.", "error");
-      return;
-    }
-    const capturedAt = new Date().toISOString();
-    const capturedTimestamp = Date.parse(capturedAt);
-    setForm((previous) => ({
-      ...previous,
-      latitude: String(position.coords.latitude),
-      longitude: String(position.coords.longitude),
-      accuracy: Number.isFinite(position.coords.accuracy) ? String(position.coords.accuracy) : "",
-      locationSource: DEVICE_CAPTURE_LOCATION_SOURCE,
-      locationCapturedAt: new Date(position.timestamp || Date.now()).toISOString(),
-      photoCapturedAt: capturedAt,
-    }));
-    const file = new File(
-      [blob],
-      `planting-${capturedTimestamp}.jpg`,
-      { type: "image/jpeg", lastModified: capturedTimestamp }
-    );
-    await handlePhotoChange(
-      { target: { files: [file], value: "" } },
-      {
-        source: DEVICE_CAPTURE_LOCATION_SOURCE,
-        capturedAt,
-        latitude: position.coords.latitude,
-        longitude: position.coords.longitude,
-        accuracy: position.coords.accuracy,
-        locationCapturedAt: position.timestamp
-          ? new Date(position.timestamp).toISOString()
-          : capturedAt,
-      }
-    );
-    stopCamera();
+  function startCamera() {
+    setShowPhotoRequirements(false);
+    window.setTimeout(() => cameraInputRef.current?.click(), 0);
   }
 
   function updateFormField(field, value) {
@@ -2000,7 +1893,8 @@ export default function PlantingPage() {
       "info"
     );
 
-    if (source === DEVICE_CAPTURE_LOCATION_SOURCE) {
+    // Device/browser coordinates are never accepted as photo evidence.
+    if (source !== PHOTO_EXIF_LOCATION_SOURCE) {
       const latitude = Number(options.latitude);
       const longitude = Number(options.longitude);
       const hasDeviceLocation = Number.isFinite(latitude) && latitude >= -90 && latitude <= 90 &&
@@ -2040,7 +1934,7 @@ export default function PlantingPage() {
         latitude,
         longitude,
         accuracy: Number.isFinite(Number(options.accuracy)) ? String(options.accuracy) : "",
-        locationSource: DEVICE_CAPTURE_LOCATION_SOURCE,
+        locationSource: PHOTO_EXIF_LOCATION_SOURCE,
         photoCapturedAt: options.capturedAt || "",
         locationCapturedAt: options.locationCapturedAt || options.capturedAt || "",
       };
@@ -2208,12 +2102,7 @@ export default function PlantingPage() {
     }
 
     if (!hasGps) {
-      showPopup(
-        form.locationSource === DEVICE_CAPTURE_LOCATION_SOURCE
-          ? "Unable to capture your device location. Please enable location services and try again, or upload an original geotagged photo instead."
-          : MISSING_EXIF_MESSAGE,
-        "error"
-      );
+      showPopup(MISSING_EXIF_MESSAGE, "error");
       return;
     }
 
@@ -2239,13 +2128,6 @@ export default function PlantingPage() {
     payload.append("eventId", form.eventId || "");
     payload.append("eventName", form.eventName || "");
     payload.append("locationSource", form.locationSource || PHOTO_EXIF_LOCATION_SOURCE);
-    if (form.locationSource === DEVICE_CAPTURE_LOCATION_SOURCE) {
-      payload.append("latitude", form.latitude);
-      payload.append("longitude", form.longitude);
-      payload.append("accuracy", form.accuracy || "");
-      payload.append("photoCapturedAt", form.photoCapturedAt);
-      payload.append("locationCapturedAt", form.locationCapturedAt);
-    }
     payload.append("remarks", form.remarks.trim());
 
     photoFiles.forEach((file) => {
@@ -2255,13 +2137,13 @@ export default function PlantingPage() {
     setSubmitting(true);
 
     try {
-      await apiRequest("/planting-reports", {
+      const response = await apiRequest("/planting-reports", {
         method: "POST",
         body: payload,
       });
 
       resetForm();
-      showPopup("Your planting report was submitted successfully.");
+      showPopup(response.message || "Planting report submitted successfully.");
 
       await loadReports();
       await loadMyDistributions();
@@ -2274,6 +2156,7 @@ export default function PlantingPage() {
 
   function openRecord(record) {
     setSelectedRecord(record);
+    setSelectedSubmission(null);
     setVerificationRemarks("");
     setShowViewModal(true);
   }
@@ -2282,6 +2165,7 @@ export default function PlantingPage() {
     if (actionLoading) return;
     openedReportFromSearchRef.current = "";
     setSelectedRecord(null);
+    setSelectedSubmission(null);
     setVerificationRemarks("");
     setDecision("");
     setShowViewModal(false);
@@ -2290,8 +2174,9 @@ export default function PlantingPage() {
   async function approveRecord() {
     if (
       !selectedRecord ||
+      !selectedSubmission ||
       !canReview ||
-      displayReportStatus(selectedRecord.verificationStatus) !== "Pending Review"
+      selectedSubmission.staffReviewStatus !== "Pending Review"
     ) {
       return;
     }
@@ -2302,7 +2187,7 @@ export default function PlantingPage() {
       const remarksToSend = verificationRemarks.trim() || "Requirements met";
 
       const response = await apiRequest(
-        `/planting-reports/${selectedRecord.id}/approve`,
+        `/planting-reports/${selectedSubmission.id}/approve`,
         {
           method: "PATCH",
           body: JSON.stringify({ remarks: remarksToSend }),
@@ -2310,6 +2195,7 @@ export default function PlantingPage() {
       );
 
       setSelectedRecord(response.data);
+      setSelectedSubmission(null);
       setVerificationRemarks("");
       setDecision("");
       showPopup(response.message || "Planting report approved successfully.");
@@ -2324,8 +2210,9 @@ export default function PlantingPage() {
   async function rejectRecord() {
     if (
       !selectedRecord ||
+      !selectedSubmission ||
       !canReview ||
-      displayReportStatus(selectedRecord.verificationStatus) !== "Pending Review"
+      selectedSubmission.staffReviewStatus !== "Pending Review"
     ) {
       return;
     }
@@ -2344,7 +2231,7 @@ export default function PlantingPage() {
 
     try {
       const response = await apiRequest(
-        `/planting-reports/${selectedRecord.id}/reject`,
+        `/planting-reports/${selectedSubmission.id}/reject`,
         {
           method: "PATCH",
           body: JSON.stringify({ remarks: reason }),
@@ -2352,6 +2239,7 @@ export default function PlantingPage() {
       );
 
       setSelectedRecord(response.data);
+      setSelectedSubmission(null);
       setVerificationRemarks("");
       setDecision("");
       showPopup(response.message || "Planting report rejected successfully.");
@@ -2383,11 +2271,6 @@ export default function PlantingPage() {
       </span>
     );
   }
-
-  const staffCanReviewSelected =
-    canReview &&
-    selectedRecord &&
-    displayReportStatus(selectedRecord.verificationStatus) === "Pending Review";
 
   const visibleVerificationIssues = Array.isArray(selectedRecord?.suspiciousFlags)
     ? selectedRecord.suspiciousFlags
@@ -2958,9 +2841,15 @@ export default function PlantingPage() {
                         </section>
 
                         <section className="pr-section pr-photo-evidence-section">
-                          <div className="pr-section-header">
-                            <FiCamera size={15} />
-                            Planting Photo Evidence
+                          <div className="pr-section-header pr-photo-section-header">
+                            <span><FiCamera size={15} /> Planting Photo Evidence</span>
+                            <button
+                              type="button"
+                              className="pr-reminder-button"
+                              onClick={() => setShowPhotoRequirements(true)}
+                            >
+                              <FiInfo size={14} /> Reminder
+                            </button>
                           </div>
 
                           {photoFiles.length === 0 && (
@@ -3026,16 +2915,6 @@ export default function PlantingPage() {
                       </button>
                     </div>
 
-                    {cameraOpen && (
-                      <div className="pr-camera-preview">
-                        <video ref={cameraVideoRef} autoPlay playsInline muted style={{ width: "100%", maxHeight: 320, objectFit: "contain" }} />
-                        <div className="pr-upload-button">
-                          <button type="button" className="pr-primary-button" onClick={captureCameraPhoto}>Capture Photo</button>
-                          <button type="button" className="pr-secondary-button" onClick={stopCamera}>Cancel Camera</button>
-                        </div>
-                      </div>
-                    )}
-
                     <div className="pr-helper-text" style={{ marginTop: "10px" }}>
                       {photoFiles.length} / {MAX_EVIDENCE_PHOTOS} photos selected
                     </div>
@@ -3080,7 +2959,7 @@ export default function PlantingPage() {
                               {Number.isFinite(Number(preview.latitude)) &&
                                 Number.isFinite(Number(preview.longitude)) && (
                                   <span>
-                                    Actual Coordinates: {Number(preview.latitude).toFixed(6)}, {Number(preview.longitude).toFixed(6)}
+                                    Photo Coordinates: {Number(preview.latitude).toFixed(6)}, {Number(preview.longitude).toFixed(6)}
                                   </span>
                                 )}
                               {Number.isFinite(Number(preview.distanceMeters)) && (
@@ -3143,6 +3022,40 @@ export default function PlantingPage() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {showPhotoRequirements && (
+        <div className="pr-requirements-backdrop" role="presentation">
+          <div
+            className="pr-requirements-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="photo-requirements-title"
+          >
+            <button
+              type="button"
+              className="pr-requirements-close"
+              onClick={() => setShowPhotoRequirements(false)}
+              aria-label="Close photo verification requirements"
+            >
+              <FiX size={18} />
+            </button>
+            <h2 id="photo-requirements-title">Photo Verification Requirements</h2>
+            <ul>
+              <li><FiCheckCircle /> Turn ON your phone&apos;s Location/GPS.</li>
+              <li><FiCheckCircle /> Enable location tags in Camera settings.</li>
+              <li><FiCheckCircle /> Allow Camera to access your location.</li>
+              <li><FiCheckCircle /> Take the photo at the actual planting site.</li>
+              <li><FiCheckCircle /> Upload the original, unedited photo.</li>
+            </ul>
+            <div className="pr-requirements-note">
+              <strong>Important:</strong> Turning on GPS alone does not guarantee that location information will be saved in the photo.
+            </div>
+            <button type="button" className="pr-primary-button" onClick={startCamera} autoFocus>
+              <FiCamera size={15} /> I Understand — Take Photo
+            </button>
           </div>
         </div>
       )}
