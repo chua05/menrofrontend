@@ -3,7 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { FiUser, FiMail, FiLock, FiEye, FiEyeOff } from "react-icons/fi";
 import { FcGoogle } from "react-icons/fc";
 import axios from "axios";
-import { signInWithPopup } from "firebase/auth";
+import { sendEmailVerification, signInWithEmailAndPassword, signInWithPopup, signOut } from "firebase/auth";
 import { auth, googleProvider } from "../firebase/config";
 import { useAuth } from "../context/AuthContext";
 import { JUBAN_BARANGAYS, USER_TYPES, userTypeField } from "../utils/userTypes";
@@ -141,8 +141,16 @@ export default function RegisterPage() {
           barangay: form.barangay,
         }
       );
-
-      navigate("/login");
+      const credential = await signInWithEmailAndPassword(
+        auth,
+        form.email.trim().toLowerCase(),
+        form.password,
+      );
+      await sendEmailVerification(credential.user);
+      await signOut(auth);
+      navigate("/login", {
+        state: { message: "Account created. Please verify your email address before signing in." },
+      });
     } catch (err) {
       setErrors({
         general:
@@ -166,7 +174,7 @@ export default function RegisterPage() {
         headers: { Authorization: `Bearer ${token}` },
       });
       const userData = response.data.data;
-      login(userData, userData.role, token);
+      login(userData, userData.role);
       navigate(userData.profileComplete === false ? "/complete-profile" : "/participant/dashboard", { replace: true });
     } catch (error) {
       setErrors({ general: error.response?.data?.message || error.message || "Google registration failed." });

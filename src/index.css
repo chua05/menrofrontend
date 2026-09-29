@@ -393,3 +393,22 @@ textarea {
 #root small {
   font-size: max(13px, 0.875em);
 }
+
+.protected-evidence-state {
+  display: flex;
+  min-height: 84px;
+  align-items: center;
+  justify-content: center;
+  padding: 12px;
+  border-radius: 8px;
+  background: #f8fafc;
+  color: #475569;
+  font-size: 14px;
+  line-height: 1.4;
+  text-align: center;
+}
+
+.protected-evidence-state.is-error {
+  color: #9f1239;
+  background: #fff1f2;
+}

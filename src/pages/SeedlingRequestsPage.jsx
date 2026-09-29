@@ -111,9 +111,7 @@ const API_BASE_URL =
   import.meta.env.VITE_API_URL || "http://localhost:5000/api";
 
 async function getAuthToken() {
-  const token = await auth.currentUser?.getIdToken();
-  if (token) localStorage.setItem("token", token);
-  return token || localStorage.getItem("token") || "";
+  return auth.currentUser?.getIdToken() || "";
 }
 
 async function apiRequest(path, options = {}) {

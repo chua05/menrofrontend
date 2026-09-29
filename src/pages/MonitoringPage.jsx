@@ -33,6 +33,7 @@ import {
 
 import { useAuth } from "../context/AuthContext";
 import FormAlert from "../components/FormAlert";
+import ProtectedEvidenceImage from "../components/ProtectedEvidenceImage";
 import { auth } from "../firebase/config";
 import { formatDisplayId } from "../utils/displayId";
 import * as exifr from "exifr";
@@ -278,24 +279,6 @@ function normalizeMonitoringRecord(record) {
   };
 }
 
-function buildMediaUrl(value) {
-  if (!value) return "";
-
-  if (
-    value.startsWith("http://") ||
-    value.startsWith("https://") ||
-    value.startsWith("blob:")
-  ) {
-    return value;
-  }
-
-  const apiRoot = API_BASE_URL.replace(/\/api\/?$/, "");
-
-  return `${apiRoot}${
-    value.startsWith("/") ? "" : "/"
-  }${value}`;
-}
-
 async function getAuthToken(forceRefresh = false) {
   try {
     if (auth && typeof auth.authStateReady === "function") {
@@ -305,18 +288,12 @@ async function getAuthToken(forceRefresh = false) {
     const firebaseUser = auth ? auth.currentUser : null;
 
     if (firebaseUser) {
-      const token = await firebaseUser.getIdToken(forceRefresh);
-      window.localStorage.setItem("token", token);
-      return token;
+      return firebaseUser.getIdToken(forceRefresh);
     }
   } catch (err) {
-    // Fall through to try localStorage token
-    console.warn("getAuthToken: firebase auth unavailable, falling back to stored token", err);
+    console.warn("getAuthToken: Firebase authentication is unavailable", err);
   }
-
-  // Fallback: some pages store token in localStorage for compatibility.
-  const tokenFromStorage = window.localStorage.getItem("token") || "";
-  return tokenFromStorage;
+  return "";
 }
 
 async function apiRequest(
@@ -2424,14 +2401,19 @@ export default function MonitoringPage() {
                 <h3>Monitoring Photo</h3>
 
                 {selectedRecord.photoPreview || selectedRecord.photoUrl ? (
-                  <img
-                    className="sm-detail-photo"
-                    src={
-                      selectedRecord.photoPreview ||
-                      buildMediaUrl(selectedRecord.photoUrl)
-                    }
-                    alt="Monitoring evidence"
-                  />
+                  selectedRecord.photoPreview ? (
+                    <img
+                      className="sm-detail-photo"
+                      src={selectedRecord.photoPreview}
+                      alt="Monitoring evidence preview"
+                    />
+                  ) : (
+                    <ProtectedEvidenceImage
+                      className="sm-detail-photo"
+                      endpoint={`/evidence/monitoring/${encodeURIComponent(selectedRecord.id)}/photos/${selectedRecord.history.length - 1}`}
+                      alt="Monitoring evidence"
+                    />
+                  )
                 ) : (
                   <div className="sm-photo-unavailable">
                     <FiImage size={22} />
@@ -2500,7 +2482,13 @@ export default function MonitoringPage() {
                           <div><span>Site Verification</span><strong>{entry.automatedVerificationStatus || "—"}</strong></div>
                           <div><span>Remarks</span><strong>{entry.remarks || "—"}</strong></div>
                         </div>
-                        {entry.photoUrl && <img className="sm-detail-photo" src={buildMediaUrl(entry.photoUrl)} alt={`Monitoring evidence ${index + 1}`} />}
+                        {entry.photoUrl && (
+                          <ProtectedEvidenceImage
+                            className="sm-detail-photo"
+                            endpoint={`/evidence/monitoring/${encodeURIComponent(selectedRecord.id)}/photos/${index}`}
+                            alt={`Monitoring evidence ${index + 1}`}
+                          />
+                        )}
                       </article>
                     ))}
                   </div>

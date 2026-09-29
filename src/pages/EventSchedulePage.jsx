@@ -441,15 +441,6 @@ export default function EventSchedulePage() {
         forceRefresh
       );
 
-    /*
-     * Temporary compatibility for
-     * other older frontend modules.
-     */
-    window.localStorage.setItem(
-      "token",
-      token
-    );
-
     return token;
   }
 

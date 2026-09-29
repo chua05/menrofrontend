@@ -3,13 +3,8 @@ import { useAuth } from "../context/AuthContext";
 import { dashboardPathForRole } from "../utils/roleRoutes";
 
 function useEffectiveAuth() {
-  const { currentUser, userRole } = useAuth();
-  const storedUser = JSON.parse(localStorage.getItem("user") || "null");
-
-  return {
-    effectiveUser: currentUser || storedUser,
-    effectiveRole: userRole || storedUser?.role,
-  };
+  const { currentUser, userRole, authLoading } = useAuth();
+  return { effectiveUser: currentUser, effectiveRole: userRole, authLoading };
 }
 
 // Root route ("/"): send an already-signed-in visitor straight to their
@@ -17,7 +12,8 @@ function useEffectiveAuth() {
 // session behaves the same whether you refresh, reopen, or paste the
 // bare site URL into a new tab.
 export function RootRedirect() {
-  const { effectiveUser, effectiveRole } = useEffectiveAuth();
+  const { effectiveUser, effectiveRole, authLoading } = useEffectiveAuth();
+  if (authLoading) return null;
 
   if (effectiveUser) {
     if (effectiveRole === "participant" && effectiveUser.profileComplete === false) {
@@ -32,7 +28,8 @@ export function RootRedirect() {
 // Wraps public-only pages (login, register): if you're already signed
 // in, skip straight to your dashboard instead of showing the form again.
 export function GuestOnlyRoute({ children }) {
-  const { effectiveUser, effectiveRole } = useEffectiveAuth();
+  const { effectiveUser, effectiveRole, authLoading } = useEffectiveAuth();
+  if (authLoading) return null;
 
   if (effectiveUser) {
     if (effectiveRole === "participant" && effectiveUser.profileComplete === false) {

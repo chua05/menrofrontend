@@ -96,9 +96,7 @@ function unwrapArray(payload) {
 
 async function getFreshToken() {
   const getToken = async (firebaseUser) => {
-    const token = await firebaseUser.getIdToken();
-    localStorage.setItem("token", token);
-    return token;
+    return firebaseUser.getIdToken();
   };
 
   if (auth.currentUser) {

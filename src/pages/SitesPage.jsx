@@ -357,9 +357,6 @@ export default function SitesPage() {
 
     const token = await firebaseUser.getIdToken(forceRefresh);
 
-    // Temporary compatibility with older frontend modules.
-    window.localStorage.setItem("token", token);
-
     return token;
   }
 

@@ -7,6 +7,7 @@ import {
   signInWithEmailAndPassword,
   signInWithPopup,
   sendPasswordResetEmail,
+  sendEmailVerification,
 } from "firebase/auth";
 import {
   auth,
@@ -116,17 +117,19 @@ export default function LoginPage() {
     if (pendingLogin) successButtonRef.current?.focus();
   }, [pendingLogin]);
 
-  const queueSuccessfulLogin = (userData, token, destination) => {
+  const [verificationSending, setVerificationSending] = useState(false);
+
+  const queueSuccessfulLogin = (userData, destination) => {
     setError("");
     setSuccess("");
-    setPendingLogin({ userData, token, destination });
+    setPendingLogin({ userData, destination });
   };
 
   const acknowledgeSuccessfulLogin = () => {
     if (!pendingLogin || acknowledging) return;
     setAcknowledging(true);
-    const { userData, token, destination } = pendingLogin;
-    login(userData, userData.role, token);
+    const { userData, destination } = pendingLogin;
+    login(userData, userData.role);
     navigate(destination, { replace: true });
   };
 
@@ -180,7 +183,6 @@ export default function LoginPage() {
 
       queueSuccessfulLogin(
         userData,
-        token,
         dashboardPathForRole(userData.role)
       );
     } catch (err) {
@@ -190,6 +192,20 @@ export default function LoginPage() {
     } finally {
       signInInProgress.current = false;
       setLoading(false);
+    }
+  };
+
+  const handleResendVerification = async () => {
+    if (!auth.currentUser || verificationSending) return;
+    setVerificationSending(true);
+    try {
+      await sendEmailVerification(auth.currentUser);
+      setError("");
+      setSuccess("A new verification email was sent. Verify your address, then sign in again.");
+    } catch {
+      setError("Unable to resend the verification email right now. Please try again later.");
+    } finally {
+      setVerificationSending(false);
     }
   };
 
@@ -227,12 +243,11 @@ export default function LoginPage() {
           response.data.data;
 
         if (userData.role === "participant" && userData.profileComplete === false) {
-          login(userData, userData.role, token);
+          login(userData, userData.role);
           navigate("/complete-profile", { replace: true });
         } else {
           queueSuccessfulLogin(
             userData,
-            token,
             dashboardPathForRole(userData.role)
           );
         }
@@ -334,6 +349,12 @@ export default function LoginPage() {
               <FiLock size={13} />
               <span>{error}</span>
             </div>
+          )}
+
+          {error === "Please verify your email address before continuing." && auth.currentUser && (
+            <button type="button" className="login-forgot-button" onClick={handleResendVerification} disabled={verificationSending}>
+              {verificationSending ? "Sending verification email..." : "Resend verification email"}
+            </button>
           )}
 
           <form

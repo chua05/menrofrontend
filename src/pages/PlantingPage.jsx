@@ -3,6 +3,7 @@ import { useSearchParams } from "react-router-dom";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import * as exifr from "exifr";
+import { extractGpsCoordinates } from "../utils/exifGps";
 
 import {
   FiCamera,
@@ -26,6 +27,7 @@ import {
 } from "react-icons/fi";
 
 import { useAuth } from "../context/AuthContext";
+import ProtectedEvidenceImage from "../components/ProtectedEvidenceImage";
 import { auth } from "../firebase/config";
 import { formatDisplayId } from "../utils/displayId";
 import { JUBAN_BARANGAYS, userTypeField } from "../utils/userTypes";
@@ -411,10 +413,6 @@ export default function PlantingPage() {
     // Firebase refreshes the ID token when necessary.
     // forceRefresh=true is used once after a 401 response.
     const token = await firebaseUser.getIdToken(forceRefresh);
-
-    // Temporary compatibility for older frontend code
-    // that still reads the token from localStorage.
-    window.localStorage.setItem("token", token);
 
     return token;
   }
@@ -1804,22 +1802,24 @@ export default function PlantingPage() {
     }
 
     if (!activePhotoPreviewIdsRef.current.has(preview.id)) return { cancelled: true };
-    const hasGpsValues = metadata?.latitude !== null && metadata?.latitude !== undefined &&
-      metadata?.longitude !== null && metadata?.longitude !== undefined;
-    const latitude = hasGpsValues ? Number(metadata.latitude) : NaN;
-    const longitude = hasGpsValues ? Number(metadata.longitude) : NaN;
+    const gps = extractGpsCoordinates(metadata || {});
+    const latitude = gps.latitude;
+    const longitude = gps.longitude;
 
-    if (!Number.isFinite(latitude) || latitude < -90 || latitude > 90 ||
-        !Number.isFinite(longitude) || longitude < -180 || longitude > 180) {
-      const message = hasGpsValues
-        ? "This photo contains invalid GPS coordinates. Please upload an original geotagged photo with valid location information."
-        : MISSING_EXIF_MESSAGE;
+    if (gps.status !== "valid") {
+      const message = gps.status === "missing"
+        ? "Your photo does not contain GPS location metadata. Please upload an original geotagged photo."
+        : gps.status === "unparseable"
+          ? "Your photo contains GPS metadata, but the coordinates could not be read correctly."
+          : "Your photo contains invalid GPS coordinates. Please upload an original geotagged photo with valid location information.";
       updatePhotoPreview(preview.id, {
         verificationStatus: "failed",
         verificationTone: "error",
-        verificationLabel: hasGpsValues
-          ? "Verification Failed — Invalid GPS Coordinates"
-          : "Verification Failed — No GPS Metadata",
+        verificationLabel: gps.status === "missing"
+          ? "Verification Failed — No GPS Metadata"
+          : gps.status === "unparseable"
+            ? "Verification Failed — GPS Metadata Unreadable"
+            : "Verification Failed — Invalid GPS Coordinates",
         verificationMessage: message,
         submissionBlocked: true,
       });
@@ -1828,7 +1828,8 @@ export default function PlantingPage() {
       return { verified: false, message, tone: "error" };
     }
 
-    const capturedAt = metadata?.DateTimeOriginal ?? metadata?.CreateDate;
+    const capturedAt = metadata?.DateTimeOriginal ?? metadata?.DateTimeDigitized ??
+      metadata?.CreateDate ?? metadata?.DateTime;
     const capturedDate = capturedAt ? new Date(capturedAt) : null;
     const capturedAtIso = capturedDate && !Number.isNaN(capturedDate.getTime())
       ? capturedDate.toISOString()
@@ -3293,10 +3294,13 @@ export default function PlantingPage() {
                     ).map((photo, index) => (
                       <div key={`${photo.photoURL || "photo"}-${index}`}>
                         <div className="pr-drawer-photo-wrap">
-                          <img
-                            src={photo.photoURL}
+                          <ProtectedEvidenceImage
+                            endpoint={`/evidence/planting-reports/${encodeURIComponent(selectedRecord.id)}/photos/${index}`}
                             alt={`Geo-tagged planting evidence ${index + 1}`}
                             className="pr-drawer-photo"
+                            showOpenButton
+                            openButtonClassName="pr-photo-view-button"
+                            openButtonContent={<><FiEye size={14} />View Full Size</>}
                           />
                         </div>
 
@@ -3307,20 +3311,6 @@ export default function PlantingPage() {
                               : `Evidence photo ${index + 1}`}
                           </div>
 
-                          <button
-                            type="button"
-                            className="pr-photo-view-button"
-                            onClick={() =>
-                              window.open(
-                                photo.photoURL,
-                                "_blank",
-                                "noopener,noreferrer"
-                              )
-                            }
-                          >
-                            <FiEye size={14} />
-                            View Full Size
-                          </button>
                         </div>
                         {(photo.latitude !== undefined || photo.metadata?.latitude !== undefined || photo.siteLocationStatus) && (
                           <div className="pr-photo-verification-summary">
