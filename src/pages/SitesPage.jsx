@@ -6,6 +6,7 @@ import {
   Archive,
   Camera,
   ChevronDown,
+  ChevronLeft,
   ChevronRight,
   Circle,
   Edit3,
@@ -1446,48 +1447,26 @@ export default function SitesPage() {
           </button>
 
           {canManage && (
-            <>
-              <button
-                type="button"
-                className="ps-secondary-btn"
-                onClick={async () => {
-                  try {
-                    await loadArchivedSites();
-                    setShowArchiveModal(true);
-                  } catch (error) {
-                    setPageError(
-                      error.message ||
-                        "Failed to load archived planting sites."
-                    );
-                  }
-                }}
-              >
-                <Archive size={15} />
+            <button
+              type="button"
+              className="ps-primary-btn"
+              onClick={() => {
+                setEditingSite(null);
+                setForm(
+                  getInitialSiteForm()
+                );
 
-                Archived Sites
-              </button>
+                setFormErrors({});
 
-              <button
-                type="button"
-                className="ps-primary-btn"
-                onClick={() => {
-                  setEditingSite(null);
-                  setForm(
-                    getInitialSiteForm()
-                  );
+                setShowAddModal(
+                  true
+                );
+              }}
+            >
+              <Plus size={16} />
 
-                  setFormErrors({});
-
-                  setShowAddModal(
-                    true
-                  );
-                }}
-              >
-                <Plus size={16} />
-
-                Add Planting Site
-              </button>
-            </>
+              Add Planting Site
+            </button>
           )}
         </div>
       </section>
@@ -2945,7 +2924,7 @@ function MapLegend() {
               aria-label="Hide map status legend"
               title="Hide map status legend"
             >
-              <X size={16} />
+              <ChevronLeft size={18} />
             </button>
           </div>
 
