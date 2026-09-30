@@ -216,6 +216,10 @@ export default function GuestEventPage() {
       setPlantingMessage({ type: "error", text: `Enter a positive whole number not greater than the current remaining quantity (${selectedAllocation.remaining}).` });
       return;
     }
+    if (photos.length === 0) {
+      setPlantingMessage({ type: "error", text: "Upload or take an original geotagged photo before submitting this planting report." });
+      return;
+    }
     setPlantingSubmitting(true);
     try {
       const latestSession = await guestFetch("/guest-events/session");
@@ -231,19 +235,11 @@ export default function GuestEventPage() {
         method: "POST",
         body: JSON.stringify({ inventoryId: selectedAllocation.inventoryId, quantity, submissionKey: submissionKeyRef.current }),
       });
-      let optionalPhotoWarning = "";
-      if (photos.length > 0) {
-        const photoData = new FormData();
-        photos.forEach((photo) => photoData.append("photos", photo));
-        if (/^\d{4}-\d{2}-\d{2}$/.test(event.date || "")) photoData.append("plantingDate", event.date);
-        try {
-          await guestFetch(`/guest-events/session/contributions/${encodeURIComponent(contribution.id)}/evidence`, {
-            method: "POST", body: photoData,
-          });
-        } catch (photoError) {
-          optionalPhotoWarning = `Planting was recorded, but the optional photo was not uploaded: ${photoError.message}`;
-        }
-      }
+      const photoData = new FormData();
+      photos.forEach((photo) => photoData.append("photos", photo));
+      await guestFetch(`/guest-events/session/contributions/${encodeURIComponent(contribution.id)}/evidence`, {
+        method: "POST", body: photoData,
+      });
       await refreshGuestData();
       setPlantingForm({ inventoryId: "", quantity: "" });
       photoPreviews.forEach((url) => URL.revokeObjectURL(url));
@@ -252,8 +248,8 @@ export default function GuestEventPage() {
       setPhotoGps(null);
       submissionKeyRef.current = "";
       setPlantingMessage({
-        type: optionalPhotoWarning ? "warning" : "success",
-        text: optionalPhotoWarning || "Your planting record was submitted successfully.",
+        type: "success",
+        text: "Your planting report was submitted successfully.",
       });
     } catch (submitError) {
       setPlantingMessage({ type: "error", text: submitError.message || "Unable to submit planting record." });
@@ -317,13 +313,13 @@ export default function GuestEventPage() {
                 </div>
                 <label className="guest-event-field">Quantity of Planted Trees *<input required type="number" min="1" step="1" max={selectedAllocation?.remaining || undefined} value={plantingForm.quantity} disabled={!selectedAllocation || selectedAllocation.remaining <= 0} onChange={(change) => setPlantingForm((previous) => ({ ...previous, quantity: change.target.value }))} /></label>
                 <div className="guest-event-evidence">
-                  <div><strong>Photo Evidence — Optional</strong><span>You may submit without a photo or GPS location.</span></div>
+                  <div><strong>Photo Evidence — Required</strong><span>Submit the original photo with embedded GPS metadata.</span></div>
                   <div className="guest-event-photo-actions">
                     <label className="guest-event-secondary-button">Take Photo<input hidden type="file" accept="image/jpeg,image/png,image/webp" capture="environment" onChange={(change) => void selectPhotos(change.target.files)} /></label>
                     <label className="guest-event-secondary-button">Upload Photo<input hidden type="file" accept="image/jpeg,image/png,image/webp" multiple onChange={(change) => void selectPhotos(change.target.files)} /></label>
                   </div>
                   {photoPreviews.length > 0 && <div className="guest-event-photo-previews">{photoPreviews.map((url, index) => <img key={url} src={url} alt={`Selected planting evidence ${index + 1}`} />)}</div>}
-                  <div className="guest-event-location-copy"><strong>Location — Optional</strong><span>{photoGps ? `Photo GPS: ${photoGps.latitude.toFixed(6)}, ${photoGps.longitude.toFixed(6)}` : "No GPS coordinates found in the selected photo. No photo marker will be shown."}</span></div>
+                  <div className="guest-event-location-copy"><strong>Photo GPS</strong><span>{photoGps ? `${photoGps.latitude.toFixed(6)}, ${photoGps.longitude.toFixed(6)}` : "No GPS coordinates found. This image cannot be submitted as planting evidence."}</span></div>
                   {((event.latitude !== null && event.latitude !== undefined &&
                     event.longitude !== null && event.longitude !== undefined &&
                     Number.isFinite(Number(event.latitude)) && Number.isFinite(Number(event.longitude))) || photoGps) &&

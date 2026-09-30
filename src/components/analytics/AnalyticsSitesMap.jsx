@@ -30,11 +30,10 @@ export default function AnalyticsSitesMap({ sites = [], onViewFullMap }) {
   const mapRef = useRef(null);
   const siteLayerRef = useRef(null);
   const [selected, setSelected] = useState(null);
-  const [error, setError] = useState(MAPTILER_KEY ? "" : "MapTiler API key is not configured.");
+  const [error, setError] = useState("");
 
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return undefined;
-    if (!MAPTILER_KEY) return undefined;
     const map = L.map(containerRef.current, {
       center: FALLBACK_CENTER,
       zoom: 12,
@@ -43,12 +42,15 @@ export default function AnalyticsSitesMap({ sites = [], onViewFullMap }) {
       zoomControl: true,
       attributionControl: true,
     });
-    L.tileLayer(`https://api.maptiler.com/maps/streets-v2/{z}/{x}/{y}.png?key=${MAPTILER_KEY}`, {
-      tileSize: 512,
-      zoomOffset: -1,
-      maxZoom: 20,
-      crossOrigin: true,
+    const tileUrl = MAPTILER_KEY
+      ? `https://api.maptiler.com/maps/streets-v2/{z}/{x}/{y}.png?key=${MAPTILER_KEY}`
+      : "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png";
+    L.tileLayer(tileUrl, MAPTILER_KEY ? {
+      tileSize: 512, zoomOffset: -1, maxZoom: 20, crossOrigin: true,
       attribution: '&copy; <a href="https://www.maptiler.com/copyright/">MapTiler</a> &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+    } : {
+      maxZoom: 19,
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
     }).addTo(map);
     siteLayerRef.current = L.layerGroup().addTo(map);
     mapRef.current = map;
@@ -125,7 +127,7 @@ export default function AnalyticsSitesMap({ sites = [], onViewFullMap }) {
           <div><strong>Site Utilization</strong><span><i className="available" />Available (0–49%)</span><span><i className="partial" />Partially Occupied (50–89%)</span><span><i className="full" />Full (90–100%)</span></div>
           <div><strong>Tree Condition</strong><span><b className="healthy" />Healthy</span><span><b className="attention" />Needs Attention</span><span><b className="critical" />Critical</span><span><b className="unmonitored" />Not Yet Monitored</span></div>
         </div>
-        {selected && <div className="ra-map-popup"><button type="button" aria-label="Close site details" onClick={() => setSelected(null)}>×</button><strong>{selected.siteName}</strong><span>{selected.barangay}</span><span>Utilization: {selectedUtilization}% ({utilizationMeta(selectedUtilization).label})</span><span>Condition: {selected.treeCondition || "Not Yet Monitored"}</span></div>}
+        {selected && <div className="ra-map-popup"><button type="button" aria-label="Close site details" onClick={() => setSelected(null)}>×</button><strong>{selected.siteName}</strong><span>{selected.barangay}</span><span>Utilization: {selectedUtilization}% ({utilizationMeta(selectedUtilization).label})</span><span>Condition: {selected.treeCondition || "Not Yet Monitored"}</span>{selected.survivalRate != null && <span>Latest survival rate: {selected.survivalRate}%</span>}</div>}
       </div>
       <button type="button" className="ra-map-link" onClick={onViewFullMap}>View Full Map →</button>
     </section>

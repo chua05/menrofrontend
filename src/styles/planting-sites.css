@@ -78,6 +78,8 @@
 .ps-header-actions {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
 
   gap: 10px;
 }
@@ -1474,13 +1476,14 @@
   }
 
   .ps-page-header {
-    align-items: flex-start;
+    align-items: stretch;
 
     flex-direction: column;
+    gap: 12px;
   }
 
   .ps-title-wrap {
-    align-items: flex-start;
+    align-items: center;
   }
 
   .ps-title-wrap h1 {

@@ -83,10 +83,37 @@ const VERIFICATION_CLASSES = {
 
 function displayReportStatus(status) {
   const normalized = String(status || "").trim().toLowerCase();
-  if (normalized === "draft" || normalized === "pending") return "Pending";
-  if (normalized === "approved") return "Approved";
-  if (normalized === "rejected") return "Rejected";
-  if (normalized === "pending review") return "Pending Review";
+  const canonical = [
+    "awaiting submission",
+    "partial",
+    "fully reported — awaiting review",
+    "completed",
+    "verified",
+    "needs review",
+    "invalid",
+    "not required",
+    "pending review",
+    "accepted",
+    "rejected",
+  ];
+  if (canonical.includes(normalized)) {
+    return {
+      "awaiting submission": "Awaiting Submission",
+      "partial": "Partial",
+      "fully reported — awaiting review": "Fully Reported — Awaiting Review",
+      "completed": "Completed",
+      "verified": "Verified",
+      "needs review": "Needs Review",
+      "invalid": "Invalid",
+      "not required": "Not Required",
+      "pending review": "Pending Review",
+      "accepted": "Accepted",
+      "rejected": "Rejected",
+    }[normalized];
+  }
+  if (["draft", "pending"].includes(normalized)) return "Awaiting Submission";
+  if (["flagged", "reviewed", "passed automated check"].includes(normalized)) return "Needs Review";
+  if (normalized === "approved") return "Verified";
   return status || "Pending";
 }
 
@@ -311,7 +338,7 @@ export default function PlantingPage() {
   const [pageSearchParams] = useSearchParams();
 
   const isParticipant = userRole === "participant";
-  const canReview = userRole === "staff";
+  const canReview = ["staff", "admin"].includes(userRole);
 
   const cameraInputRef = useRef(null);
   const uploadInputRef = useRef(null);
@@ -853,7 +880,7 @@ export default function PlantingPage() {
           fillOpacity: 0.18,
         })
           .bindTooltip(
-            `${getSiteName(selectedSite) || "Registered Planting Site"} â€¢ ${coverageRadiusMeters} m coverage`
+            `${getSiteName(selectedSite) || "Registered Planting Site"} • ${coverageRadiusMeters} m coverage`
           )
           .addTo(siteLayer);
         const coverageBounds = coverageCircle.getBounds();
@@ -1009,12 +1036,14 @@ export default function PlantingPage() {
     return (
       eventSiteId === selectedSiteId &&
       validRecordStatus &&
-      !isCancelled
+      !isCancelled &&
+      (!isParticipant || event.isMyEvent === true)
     );
   });
 }, [
   events,
   form.siteId,
+  isParticipant,
 ]);
 
   useEffect(() => {
@@ -1134,26 +1163,19 @@ export default function PlantingPage() {
   const summary = useMemo(() => {
     const total = visibleRecords.length;
 
-    const pending = visibleRecords.filter((record) =>
-      displayReportStatus(record.verificationStatus) === "Pending Review"
+    const progressCount = (progress) => visibleRecords.filter((record) =>
+      (record.reportType === "parent"
+        ? record.reportingProgress
+        : displayReportStatus(record.verificationStatus)) === progress
     ).length;
 
-    const approved = visibleRecords.filter(
-      (record) => record.verificationStatus === "Approved"
-    ).length;
-
-    const rejected = visibleRecords.filter(
-      (record) => record.verificationStatus === "Rejected"
-    ).length;
-
-    const totalTrees = visibleRecords
-      .filter((record) => record.verificationStatus !== "Rejected")
-      .reduce((totalValue, record) => {
-        const quantity = Number(record.quantityPlanted);
-        return totalValue + (Number.isFinite(quantity) ? quantity : 0);
-      }, 0);
-
-    return { total, pending, approved, rejected, totalTrees };
+    return {
+      total,
+      awaiting: progressCount("Awaiting Submission"),
+      partial: progressCount("Partial"),
+      awaitingReview: progressCount("Fully Reported — Awaiting Review"),
+      completed: progressCount("Completed"),
+    };
   }, [visibleRecords]);
 
   const capturedSiteDistance = useMemo(() => {
@@ -1617,9 +1639,9 @@ export default function PlantingPage() {
           distanceMeters,
         }
       : {
-          verificationStatus: "verified",
+          verificationStatus: "needs_review",
           verificationTone: "warning",
-          verificationLabel: "Verified — Site Mismatch",
+          verificationLabel: "Needs Review — Site Mismatch",
           verificationMessage: OUTSIDE_SITE_WARNING,
           submissionBlocked: false,
           distanceMeters,
@@ -1727,7 +1749,22 @@ export default function PlantingPage() {
     const capturedAtIso = capturedDate && !Number.isNaN(capturedDate.getTime())
       ? capturedDate.toISOString()
       : "";
-    const locationResult = evaluatePhotoCoordinates(latitude, longitude);
+    let locationResult = evaluatePhotoCoordinates(latitude, longitude);
+    const declaredDate = form.plantingDate ? new Date(`${form.plantingDate}T00:00:00`) : null;
+    const captureTimeSuspicious = !capturedDate || !declaredDate ||
+      Number.isNaN(declaredDate.getTime()) || capturedDate > new Date() ||
+      Math.abs(capturedDate.getTime() - declaredDate.getTime()) > 24 * 60 * 60 * 1000;
+    if (!locationResult.submissionBlocked && captureTimeSuspicious) {
+      locationResult = {
+        ...locationResult,
+        verificationStatus: "needs_review",
+        verificationTone: "warning",
+        verificationLabel: "Needs Review — Timestamp",
+        verificationMessage: locationResult.verificationTone === "warning"
+          ? `${locationResult.verificationMessage} The photo timestamp also requires MENRO Staff review.`
+          : "The photo location is valid, but its capture timestamp requires MENRO Staff review.",
+      };
+    }
     const location = {
       latitude,
       longitude,
@@ -1757,7 +1794,7 @@ export default function PlantingPage() {
       );
     }
     return {
-      verified: locationResult.verificationStatus === "verified",
+      verified: ["verified", "needs_review"].includes(locationResult.verificationStatus),
       message: locationResult.verificationMessage,
       tone: locationResult.verificationTone,
     };
@@ -1801,17 +1838,9 @@ export default function PlantingPage() {
     );
   }
 
-  async function handlePhotoChange(event, options = {}) {
+  async function handlePhotoChange(event) {
     const selectedFiles = Array.from(event.target.files || []);
     if (selectedFiles.length === 0) return;
-
-    const source = options.source || PHOTO_EXIF_LOCATION_SOURCE;
-    const existingSource = photoPreviews[0]?.locationSource || form.locationSource;
-    if (photoFiles.length > 0 && existingSource && existingSource !== source) {
-      showPopup("Use either Take Photo or Upload Photo for one report. Remove the current photos before changing the location source.", "error");
-      event.target.value = "";
-      return;
-    }
 
     const remainingSlots = MAX_EVIDENCE_PHOTOS - photoFiles.length;
 
@@ -1872,7 +1901,7 @@ export default function PlantingPage() {
       id: `planting-photo-${photoPreviewSequenceRef.current += 1}`,
       url: URL.createObjectURL(file),
       signature: getPhotoSignature(file),
-      locationSource: source,
+      locationSource: PHOTO_EXIF_LOCATION_SOURCE,
       verificationStatus: "not_verified",
       verificationTone: "info",
       verificationLabel: "Not Yet Verified",
@@ -1892,64 +1921,6 @@ export default function PlantingPage() {
       `${selectedFiles.length} planting evidence photo${selectedFiles.length === 1 ? "" : "s"} selected. Verification is in progress.`,
       "info"
     );
-
-    // Device/browser coordinates are never accepted as photo evidence.
-    if (source !== PHOTO_EXIF_LOCATION_SOURCE) {
-      const latitude = Number(options.latitude);
-      const longitude = Number(options.longitude);
-      const hasDeviceLocation = Number.isFinite(latitude) && latitude >= -90 && latitude <= 90 &&
-        Number.isFinite(longitude) && longitude >= -180 && longitude <= 180;
-      const preview = newPreviews[0];
-
-      if (!hasDeviceLocation) {
-        const message = "Unable to capture your device location. Please enable location services and try again, or upload an original geotagged photo instead.";
-        updatePhotoPreview(preview.id, {
-          verificationStatus: "failed",
-          verificationTone: "error",
-          verificationLabel: "Verification Failed — Device Location Unavailable",
-          verificationMessage: message,
-          submissionBlocked: true,
-        });
-        showPopup(message, "error");
-        return;
-      }
-
-      const readable = await canRenderImage(preview.url);
-      if (!activePhotoPreviewIdsRef.current.has(preview.id)) return;
-      if (!readable) {
-        updatePhotoPreview(preview.id, {
-          verificationStatus: "failed",
-          verificationTone: "error",
-          verificationLabel: "Verification Failed — Unreadable Image",
-          verificationMessage: UNREADABLE_PHOTO_MESSAGE,
-          submissionBlocked: true,
-        });
-        clearPhotoLocation();
-        showPopup(UNREADABLE_PHOTO_MESSAGE, "error");
-        return;
-      }
-
-      const locationResult = evaluatePhotoCoordinates(latitude, longitude);
-      const location = {
-        latitude,
-        longitude,
-        accuracy: Number.isFinite(Number(options.accuracy)) ? String(options.accuracy) : "",
-        locationSource: PHOTO_EXIF_LOCATION_SOURCE,
-        photoCapturedAt: options.capturedAt || "",
-        locationCapturedAt: options.locationCapturedAt || options.capturedAt || "",
-      };
-      updatePhotoPreview(preview.id, { ...locationResult, ...location });
-      if (photoFiles.length === 0) applyPhotoLocation(selectedFiles[0], location);
-      showPopup(
-        locationResult.verificationMessage,
-        locationResult.verificationTone === "error"
-          ? "error"
-          : locationResult.verificationTone === "warning"
-            ? "warning"
-            : "success"
-      );
-      return;
-    }
 
     const verificationResults = [];
     for (let index = 0; index < selectedFiles.length; index += 1) {
@@ -1998,7 +1969,7 @@ export default function PlantingPage() {
       const nextPreview = remainingPreviews[0];
       const nextFile = remainingFiles[0];
       if (
-        nextPreview?.verificationStatus === "verified" &&
+        ["verified", "needs_review"].includes(nextPreview?.verificationStatus) &&
         Number.isFinite(Number(nextPreview.latitude)) &&
         Number.isFinite(Number(nextPreview.longitude))
       ) {
@@ -2065,7 +2036,7 @@ export default function PlantingPage() {
     }
 
     if (Number.isFinite(remainingQuantity) && quantity > remainingQuantity) {
-      showPopup("The quantity planted cannot exceed the remaining released sapling quantity.", "error");
+      showPopup(`Quantity exceeds the remaining reportable quantity. Only ${remainingQuantity} trees remain available for reporting.`, "error");
       return;
     }
 
@@ -2080,7 +2051,7 @@ export default function PlantingPage() {
     }
 
     const incompleteVerification = photoPreviews.find(
-      (preview) => preview.verificationStatus !== "verified"
+      (preview) => !["verified", "needs_review"].includes(preview.verificationStatus)
     );
     if (incompleteVerification) {
       showPopup(
@@ -2145,8 +2116,7 @@ export default function PlantingPage() {
       resetForm();
       showPopup(response.message || "Planting report submitted successfully.");
 
-      await loadReports();
-      await loadMyDistributions();
+      await Promise.all([loadReports(), loadMyDistributions(), loadEvents()]);
     } catch (error) {
       showPopup(error.message || "Unable to submit the planting report. Please try again.", "error");
     } finally {
@@ -2252,7 +2222,7 @@ export default function PlantingPage() {
   }
 
   function getStatusIcon(status) {
-    if (status === "Approved") {
+    if (["Approved", "Completed", "Verified", "Accepted", "Not Required"].includes(status)) {
       return <FiCheckCircle size={12} />;
     }
 
@@ -2275,6 +2245,20 @@ export default function PlantingPage() {
   const visibleVerificationIssues = Array.isArray(selectedRecord?.suspiciousFlags)
     ? selectedRecord.suspiciousFlags
     : [];
+  const recordSubmissions = Array.isArray(selectedRecord?.submissions)
+    ? selectedRecord.submissions
+    : [];
+  let nextSubmissionPhotoIndex = 0;
+  const submissionsWithPhotoIndexes = recordSubmissions.map((submission) => ({
+    ...submission,
+    indexedPhotos: (submission.photos || []).map((photo) => ({
+      ...photo,
+      reportPhotoIndex: nextSubmissionPhotoIndex++,
+    })),
+  }));
+  const staffCanReviewSelected = canReview &&
+    selectedSubmission?.verificationStatus === "Needs Review" &&
+    selectedSubmission?.staffReviewStatus === "Pending Review";
 
   if (loading) {
     return <div className="pr-page"><div style={{ minHeight: "420px", display: "grid", placeItems: "center", color: "#526159", fontSize: "13px", fontWeight: 600 }}>Loading planting reports...</div></div>;
@@ -2344,34 +2328,32 @@ export default function PlantingPage() {
         <div className="pr-card">
           <div className="pr-card-icon"><FiClock size={19} /></div>
           <div>
-            <div className="pr-card-value">{summary.pending}</div>
-            <div className="pr-card-label">Awaiting Staff Review</div>
+            <div className="pr-card-value">{summary.awaiting}</div>
+            <div className="pr-card-label">Awaiting Submission</div>
+          </div>
+        </div>
+
+        <div className="pr-card">
+          <div className="pr-card-icon"><FiGitBranch size={19} /></div>
+          <div>
+            <div className="pr-card-value">{summary.partial}</div>
+            <div className="pr-card-label">Partial</div>
+          </div>
+        </div>
+
+        <div className="pr-card">
+          <div className="pr-card-icon"><FiClock size={19} /></div>
+          <div>
+            <div className="pr-card-value">{summary.awaitingReview}</div>
+            <div className="pr-card-label">Fully Reported — Awaiting Review</div>
           </div>
         </div>
 
         <div className="pr-card">
           <div className="pr-card-icon"><FiCheckCircle size={19} /></div>
           <div>
-            <div className="pr-card-value">
-              {summary.approved}
-            </div>
-            <div className="pr-card-label">
-              Approved
-            </div>
-          </div>
-        </div>
-
-        <div className="pr-card">
-          <div className="pr-card-icon">
-            {isParticipant ? <FiXCircle size={19} /> : <FiGitBranch size={19} />}
-          </div>
-          <div>
-            <div className="pr-card-value">
-              {isParticipant ? summary.rejected : summary.totalTrees}
-            </div>
-            <div className="pr-card-label">
-              {isParticipant ? "Rejected" : "Trees Reported Planted"}
-            </div>
+            <div className="pr-card-value">{summary.completed}</div>
+            <div className="pr-card-label">Completed</div>
           </div>
         </div>
       </div>
@@ -2449,7 +2431,7 @@ export default function PlantingPage() {
                   <th className="pr-th">Sapling Tree</th>
                   <th className="pr-th">Quantity</th>
                   <th className="pr-th">Date Planted</th>
-                  <th className="pr-th">Status</th>
+                  <th className="pr-th">Reporting Progress</th>
                   <th className="pr-th pr-center">Action</th>
                 </tr>
               </thead>
@@ -2469,9 +2451,16 @@ export default function PlantingPage() {
                     </td>
                     {isParticipant && <td className="pr-td">{record.barangay || "—"}</td>}
                     <td className="pr-td">{record.species || "—"}</td>
-                    <td className="pr-td"><strong>{record.quantityPlanted ?? "—"}</strong></td>
+                    <td className="pr-td">
+                      <strong>{record.reportType === "parent"
+                        ? `${record.activeSubmittedQuantity ?? 0} / ${record.quantityReleased ?? 0}`
+                        : record.quantityPlanted ?? "—"}</strong>
+                      {record.reportType === "parent" && (
+                        <div className="pr-table-sub">{record.remainingAvailableQuantity ?? 0} remaining</div>
+                      )}
+                    </td>
                     <td className="pr-td">{formatDate(record.plantingDate)}</td>
-                    <td className="pr-td">{renderStatusBadge(record.verificationStatus)}</td>
+                    <td className="pr-td">{renderStatusBadge(record.reportType === "parent" ? record.reportingProgress : record.verificationStatus)}</td>
                     <td className="pr-td pr-center">
                       <button
                         type="button"
@@ -2482,7 +2471,7 @@ export default function PlantingPage() {
                       >
                         <FiEye size={15} />
                       </button>
-                      {isParticipant && displayReportStatus(record.verificationStatus) === "Pending" && (
+                      {isParticipant && Number(record.remainingAvailableQuantity ?? 0) > 0 && (
                         <button type="button" className="pr-view-button" title="Submit planting report" aria-label={`Submit planting report for ${formatDisplayId("RPT", record.reportNumber, record.reportId, record.id)}`} onClick={openSubmitModal}>
                           <FiPlus size={15} />
                         </button>
@@ -2759,16 +2748,14 @@ export default function PlantingPage() {
                       <button
                         type="button"
                         className="pr-secondary-button"
-                        disabled={locationLoading || form.locationSource === DEVICE_CAPTURE_LOCATION_SOURCE}
+                        disabled={locationLoading}
                         onClick={verifyPhotoLocation}
                       >
                         <FiMapPin size={14} />
                         {locationLoading
                           ? "Reading Photo..."
                           : hasGps
-                          ? form.locationSource === DEVICE_CAPTURE_LOCATION_SOURCE
-                            ? "Device Location Captured"
-                            : "Verify Again"
+                          ? "Verify Again"
                           : "Verify Photo Location"}
                       </button>
                     </div>
@@ -2834,8 +2821,6 @@ export default function PlantingPage() {
                           {hasGps && (
                             <div className="pr-helper-text">
                               Photo captured: {form.photoCapturedAt ? formatDateTime(form.photoCapturedAt) : "Timestamp unavailable"}
-                              {form.locationSource === DEVICE_CAPTURE_LOCATION_SOURCE && form.locationCapturedAt
-                                ? ` • Location captured: ${formatDateTime(form.locationCapturedAt)}` : ""}
                             </div>
                           )}
                         </section>
@@ -3077,7 +3062,7 @@ export default function PlantingPage() {
               <div>
                 <h2 className="pr-drawer-title">Planting Report Details</h2>
                 <div className="pr-drawer-heading-meta">
-                  {renderStatusBadge(selectedRecord.verificationStatus)}
+                  {renderStatusBadge(selectedRecord.reportType === "parent" ? selectedRecord.reportingProgress : selectedRecord.verificationStatus)}
                   <span className="pr-drawer-report-id">{formatDisplayId("RPT", selectedRecord.reportNumber, selectedRecord.reportId, selectedRecord.id)}</span>
                 </div>
               </div>
@@ -3341,16 +3326,20 @@ export default function PlantingPage() {
 
                 <div className="pr-info-grid">
                   <div className="pr-info-block">
-                    <div className="pr-info-label">Current Status</div>
-                    <div className="pr-info-value">{renderStatusBadge(selectedRecord.verificationStatus)}</div>
+                    <div className="pr-info-label">Reporting Progress</div>
+                    <div className="pr-info-value">{renderStatusBadge(selectedRecord.reportType === "parent" ? selectedRecord.reportingProgress : selectedRecord.verificationStatus)}</div>
                   </div>
 
                   <div className="pr-info-block">
-                    <div className="pr-info-label">Automated Result</div>
+                    <div className="pr-info-label">Active Submitted / Released</div>
                     <div className="pr-info-value">
-                      {selectedRecord.automatedVerificationStatus || "—"}
+                      {selectedRecord.activeSubmittedQuantity ?? selectedRecord.quantityPlanted ?? "—"} / {selectedRecord.quantityReleased ?? "—"}
                     </div>
                   </div>
+                  <div className="pr-info-block"><div className="pr-info-label">Accepted / Accounted</div><div className="pr-info-value">{selectedRecord.acceptedQuantity ?? "—"}</div></div>
+                  <div className="pr-info-block"><div className="pr-info-label">Pending Review</div><div className="pr-info-value">{selectedRecord.pendingReviewQuantity ?? "—"}</div></div>
+                  <div className="pr-info-block"><div className="pr-info-label">Rejected</div><div className="pr-info-value">{selectedRecord.rejectedQuantity ?? "—"}</div></div>
+                  <div className="pr-info-block"><div className="pr-info-label">Remaining Available</div><div className="pr-info-value">{selectedRecord.remainingAvailableQuantity ?? "—"}</div></div>
 
                   <div className="pr-info-block">
                     <div className="pr-info-label">Photo GPS Metadata</div>
@@ -3386,20 +3375,63 @@ export default function PlantingPage() {
                     </div>
                   )}
 
-                {staffCanReviewSelected && (
-                  <div className="pr-drawer-verification-box">
-                    <div className="pr-drawer-section-title">MENRO Staff Review</div>
-                    <div className="pr-info-value">Current Status: Pending Review</div>
-                    <div className="pr-drawer-verification-actions">
-                      <button type="button" className="pr-danger-button" onClick={() => setDecision("reject")} disabled={actionLoading}>
-                        <FiXCircle size={14} /> Reject
-                      </button>
-                      <button type="button" className="pr-primary-button" onClick={() => setDecision("approve")} disabled={actionLoading}>
-                        <FiCheck size={14} /> Approve
-                      </button>
-                    </div>
+                <section className="pr-drawer-section">
+                  <div className="pr-drawer-section-title">
+                    <FiGitBranch size={15} />
+                    Planting Report Submissions
                   </div>
-                )}
+                  {submissionsWithPhotoIndexes.length === 0 ? (
+                    <div className="pr-photo-unavailable-text">No individual submissions are available for this report.</div>
+                  ) : (
+                    <div className="pr-submission-list">
+                      {submissionsWithPhotoIndexes.map((submission) => (
+                        <article className="pr-submission-item" key={submission.id}>
+                          <div className="pr-submission-heading">
+                            <strong>{submission.id}</strong>
+                            <span>{formatDateTime(submission.recordedAt || submission.submittedAt)}</span>
+                          </div>
+                          <div className="pr-info-grid">
+                            <div className="pr-info-block"><div className="pr-info-label">Submitted By</div><div className="pr-info-value">{submission.contributorName || submission.participantName || "—"}</div></div>
+                            <div className="pr-info-block"><div className="pr-info-label">Participant Name</div><div className="pr-info-value">{submission.contributorName || submission.participantName || "—"}</div></div>
+                            <div className="pr-info-block"><div className="pr-info-label">User ID</div><div className="pr-info-value">{submission.contributorId || submission.participantId || "—"}</div></div>
+                            <div className="pr-info-block"><div className="pr-info-label">Quantity Planted</div><div className="pr-info-value">{submission.quantity ?? "—"}</div></div>
+                            <div className="pr-info-block"><div className="pr-info-label">Site / Event / Distribution</div><div className="pr-info-value">{selectedRecord.siteName || "—"} / {selectedRecord.eventName || submission.eventId || "—"} / {submission.requestId || selectedRecord.distributionId || "—"}</div></div>
+                            <div className="pr-info-block"><div className="pr-info-label">Photo Coordinates</div><div className="pr-info-value">{submission.latitude ?? "—"}, {submission.longitude ?? "—"}</div></div>
+                            <div className="pr-info-block"><div className="pr-info-label">Verification</div><div className="pr-info-value">{submission.verificationStatus || "Needs Review"}</div></div>
+                            <div className="pr-info-block"><div className="pr-info-label">Staff Review</div><div className="pr-info-value">{submission.staffReviewStatus || "Pending Review"}</div></div>
+                            <div className="pr-info-block"><div className="pr-info-label">Verification Details</div><div className="pr-info-value">{(submission.verificationDetails || submission.suspiciousFlags || []).join(", ") || "No concerns recorded"}</div></div>
+                            {submission.rejectionReason && <div className="pr-info-block"><div className="pr-info-label">Rejection Reason</div><div className="pr-info-value">{submission.rejectionReason}</div></div>}
+                            {submission.reviewedBy && <div className="pr-info-block"><div className="pr-info-label">Reviewed By / At</div><div className="pr-info-value">{submission.reviewedByName || submission.reviewedBy} / {formatDateTime(submission.reviewedAt)}</div></div>}
+                          </div>
+                          {submission.indexedPhotos.length > 0 && (
+                            <div className="pr-submission-photos">
+                              {submission.indexedPhotos.map((photo) => (
+                                <div key={`${submission.id}-${photo.reportPhotoIndex}`}>
+                                  <div className="pr-drawer-photo-wrap">
+                                    <ProtectedEvidenceImage
+                                      endpoint={`/evidence/planting-reports/${encodeURIComponent(selectedRecord.id)}/photos/${photo.reportPhotoIndex}`}
+                                      alt={`Submission ${submission.id} planting evidence`}
+                                      className="pr-drawer-photo"
+                                    />
+                                  </div>
+                                  <div className="pr-photo-caption">Photo GPS: {photo.latitude ?? photo.metadata?.latitude ?? "—"}, {photo.longitude ?? photo.metadata?.longitude ?? "—"}</div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                          {canReview && submission.verificationStatus === "Needs Review" && submission.staffReviewStatus === "Pending Review" && (
+                            <div className="pr-drawer-verification-actions">
+                              <button type="button" className="pr-secondary-button" onClick={() => { setSelectedSubmission(submission); setDecision("approve"); }}>Review</button>
+                              <button type="button" className="pr-danger-button" onClick={() => { setSelectedSubmission(submission); setDecision("reject"); }}>Reject</button>
+                            </div>
+                          )}
+                        </article>
+                      ))}
+                    </div>
+                  )}
+                </section>
+
+                {staffCanReviewSelected && <div className="pr-info-value">Selected submission is pending MENRO Staff review.</div>}
               </section>
 
               <section className="pr-drawer-section pr-drawer-section-last">
@@ -3473,8 +3505,8 @@ export default function PlantingPage() {
           <div className="pr-modal-small" role="dialog" aria-modal="true" aria-label={decision === "approve" ? "Approve planting report" : "Reject planting report"}>
             <div className="pr-modal-header">
               <div>
-                <h2 className="pr-modal-title">{decision === "approve" ? "Approve Planting Report?" : "Reject Planting Report"}</h2>
-                <p className="pr-modal-subtitle">{decision === "approve" ? "Confirm that the submitted planting evidence is acceptable." : "Provide the reason the submitted planting evidence is unacceptable."}</p>
+                <h2 className="pr-modal-title">{decision === "approve" ? "Accept Planting Report?" : "Reject Planting Report"}</h2>
+                <p className="pr-modal-subtitle">{decision === "approve" ? "This submission contains verification concern(s). Confirm that you have reviewed the submitted evidence and accept this planting report." : "Provide the reason the submitted planting evidence is unacceptable."}</p>
               </div>
               <button type="button" className="pr-close-button" onClick={() => setDecision("")} disabled={actionLoading} aria-label="Close decision"><FiX size={17} /></button>
             </div>
@@ -3487,7 +3519,7 @@ export default function PlantingPage() {
             <div className="pr-modal-footer">
               <button type="button" className="pr-secondary-button" onClick={() => setDecision("")} disabled={actionLoading}>Cancel</button>
               <button type="button" className={decision === "approve" ? "pr-primary-button" : "pr-danger-button"} onClick={decision === "approve" ? approveRecord : rejectRecord} disabled={actionLoading || (decision === "reject" && !verificationRemarks.trim())}>
-                {actionLoading ? "Saving..." : decision === "approve" ? "Approve" : "Confirm Rejection"}
+                {actionLoading ? "Saving..." : decision === "approve" ? "Confirm Review" : "Confirm Rejection"}
               </button>
             </div>
           </div>

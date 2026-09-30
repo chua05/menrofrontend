@@ -1,0 +1,155 @@
+{
+  "input": "C:\\Users\\chuak\\Downloads\\Test-Case-Template (1).docx",
+  "fonts_by_char_count": {
+    "Arial": 1022
+  },
+  "direct_run_formatting_runs": 82,
+  "direct_paragraph_formatting_paragraphs": 11,
+  "heading_like_paragraphs_not_heading_style": [
+    {
+      "para_index": 2,
+      "text": "CAPSTONE TESTING: TEST CASES",
+      "style": "Title"
+    },
+    {
+      "para_index": 14,
+      "text": "Test Case ID",
+      "style": "Normal"
+    },
+    {
+      "para_index": 15,
+      "text": "Title / Objective",
+      "style": "Normal"
+    },
+    {
+      "para_index": 16,
+      "text": "Requirement ID (trace to SRS/ Backlog/ WBS)",
+      "style": "Normal"
+    },
+    {
+      "para_index": 17,
+      "text": "Module / Feature",
+      "style": "Normal"
+    },
+    {
+      "para_index": 18,
+      "text": "Test Type (Unit/ Integration/ System/ UAT)",
+      "style": "Normal"
+    },
+    {
+      "para_index": 19,
+      "text": "Priority (H/ M/ L)",
+      "style": "Normal"
+    },
+    {
+      "para_index": 20,
+      "text": "Severity (Critical/ Major/ Minor)",
+      "style": "Normal"
+    },
+    {
+      "para_index": 21,
+      "text": "Preconditions / Setup",
+      "style": "Normal"
+    },
+    {
+      "para_index": 22,
+      "text": "Test Data",
+      "style": "Normal"
+    },
+    {
+      "para_index": 23,
+      "text": "Test Steps",
+      "style": "Normal"
+    },
+    {
+      "para_index": 24,
+      "text": "Expected Result",
+      "style": "Normal"
+    },
+    {
+      "para_index": 25,
+      "text": "Acceptance Criteria",
+      "style": "Normal"
+    },
+    {
+      "para_index": 26,
+      "text": "Tester\u2019s Signature",
+      "style": "Normal"
+    },
+    {
+      "para_index": 236,
+      "text": "Sorsogon State University ",
+      "style": "Normal"
+    },
+    {
+      "para_index": 237,
+      "text": "Office of the Vice President for Research, Extension and Training",
+      "style": "Normal"
+    },
+    {
+      "para_index": 238,
+      "text": "RESEARCH AND DEVELOPMENT",
+      "style": "Normal"
+    }
+  ],
+  "examples": {
+    "direct_paragraph_formatting": [
+      {
+        "para_index": 1,
+        "text": "",
+        "style": "Title"
+      },
+      {
+        "para_index": 2,
+        "text": "CAPSTONE TESTING: TEST CASES",
+        "style": "Title"
+      },
+      {
+        "para_index": 3,
+        "text": "",
+        "style": "Normal"
+      },
+      {
+        "para_index": 4,
+        "text": "Note: At least 15 test cases covering core modules for Prototype 1 (50%).",
+        "style": "Normal"
+      },
+      {
+        "para_index": 5,
+        "text": "",
+        "style": "Normal"
+      }
+    ],
+    "direct_run_formatting": [
+      {
+        "para_index": 2,
+        "run_text": "CAPSTONE TESTING",
+        "style": "Title"
+      },
+      {
+        "para_index": 2,
+        "run_text": ": TEST CASES",
+        "style": "Title"
+      },
+      {
+        "para_index": 4,
+        "run_text": "Note: At least 15 test cases covering core modules for Prototype 1",
+        "style": "Normal"
+      },
+      {
+        "para_index": 4,
+        "run_text": " (50%)",
+        "style": "Normal"
+      },
+      {
+        "para_index": 4,
+        "run_text": ".",
+        "style": "Normal"
+      }
+    ]
+  },
+  "notes": [
+    "Direct formatting is not always wrong, but it often causes inconsistent output when templates change.",
+    "Heading-like paragraphs not using Heading styles can break TOC and accessibility."
+  ]
+}

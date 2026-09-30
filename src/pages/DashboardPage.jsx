@@ -2666,14 +2666,15 @@ export default function DashboardPage() {
                     </LineChart>
                   </ResponsiveContainer>
                 </div>
-                {!hasActivityData && (
-                  <div className="dashboard-chart-zero-message">
-                    {isParticipant
-                      ? "No planting or monitoring activity has been recorded yet."
-                      : "No distribution, planting, or monitoring activity has been recorded in this period."}
-                  </div>
-                )}
               </div>
+
+              {!hasActivityData && (
+                <div className="dashboard-chart-zero-message" role="status">
+                  {isParticipant
+                    ? "No planting or monitoring activity has been recorded yet."
+                    : "No distribution, planting, or monitoring activity has been recorded in this period."}
+                </div>
+              )}
           </>
 
           <div className="activity-summary">

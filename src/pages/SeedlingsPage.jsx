@@ -108,6 +108,31 @@ function normalizeInventoryItem(item) {
   };
 }
 
+function normalizeDistribution(record) {
+  const items = Array.isArray(record.items)
+    ? record.items.map((item) => ({
+        ...item,
+        species: item.species || item.treeName || "Unnamed sapling",
+        quantity: Number(item.releasedQuantity ?? item.quantity ?? 0),
+      }))
+    : [];
+
+  return {
+    ...record,
+    id: record.id || "",
+    distributionNumber: record.distributionNumber || record.id || "",
+    requestNumber: record.requestNumber || record.requestId || "",
+    participantName: record.participantName || record.organization || "—",
+    items,
+    totalQuantityReleased: Number(
+      record.totalQuantityReleased ||
+        items.reduce((total, item) => total + item.quantity, 0)
+    ),
+    releasedAt: timestampToIso(record.releasedAt) || record.releasedAt || "",
+    status: record.status || "Released",
+  };
+}
+
 async function getAuthToken(forceRefresh = false) {
   if (
     typeof auth.authStateReady === "function"
@@ -268,6 +293,11 @@ export default function SeedlingsPage() {
   const [seedlings, setSeedlings] =
     useState([]);
 
+  const [distributions, setDistributions] = useState([]);
+  const [distributionLoading, setDistributionLoading] = useState(false);
+  const [distributionError, setDistributionError] = useState("");
+  const [distributionRetryKey, setDistributionRetryKey] = useState(0);
+
 
   const [activeTab, setActiveTab] =
     useState("seedlings");
@@ -394,6 +424,53 @@ export default function SeedlingsPage() {
   }, [retryKey]);
 
   useEffect(() => {
+    if (activeTab !== "distribution") return undefined;
+
+    let cancelled = false;
+
+    async function loadDistributions() {
+      setDistributionLoading(true);
+      setDistributionError("");
+
+      try {
+        const response = await apiRequest("/distributions");
+        if (cancelled) return;
+
+        const records = Array.isArray(response.data) ? response.data : [];
+        setDistributions(
+          records
+            .filter(
+              (record) =>
+                String(record.status || "Released").toLowerCase() === "released"
+            )
+            .map(normalizeDistribution)
+            .sort(
+              (first, second) =>
+                new Date(second.releasedAt || 0) -
+                new Date(first.releasedAt || 0)
+            )
+        );
+      } catch (error) {
+        console.error("Failed to load distribution records:", error);
+        if (!cancelled) {
+          setDistributionError(
+            error.message ||
+              "Unable to load distribution records. Please try again."
+          );
+        }
+      } finally {
+        if (!cancelled) setDistributionLoading(false);
+      }
+    }
+
+    loadDistributions();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeTab, distributionRetryKey]);
+
+  useEffect(() => {
     const inventoryId = pageSearchParams.get("inventory") || "";
     if (!inventoryId || loading || openedInventoryFromSearchRef.current === inventoryId) return;
     const seedling = seedlings.find((item) => String(item.id || "") === inventoryId);
@@ -429,6 +506,17 @@ export default function SeedlingsPage() {
       );
     };
   }, []);
+
+  useEffect(() => {
+    if (!showMoreMenu) return undefined;
+
+    const handleEscape = (event) => {
+      if (event.key === "Escape") setShowMoreMenu(false);
+    };
+
+    document.addEventListener("keydown", handleEscape);
+    return () => document.removeEventListener("keydown", handleEscape);
+  }, [showMoreMenu]);
 
   const counts = useMemo(() => {
     const totalSeedlings = seedlings.reduce(
@@ -1316,7 +1404,18 @@ export default function SeedlingsPage() {
                 </button>
 
                 {showMoreMenu && (
-                  <div className="sd-more-menu">
+                  <>
+                  <button
+                    type="button"
+                    className="sd-more-backdrop"
+                    aria-label="Close more options"
+                    onClick={() => setShowMoreMenu(false)}
+                  />
+                  <div
+                    className="sd-more-menu"
+                    role="dialog"
+                    aria-label="Sapling filter actions"
+                  >
                     <button
                       type="button"
                       onClick={() => {
@@ -1344,6 +1443,7 @@ export default function SeedlingsPage() {
                     </button>
 
                   </div>
+                  </>
                 )}
               </div>
             </div>
@@ -1640,6 +1740,98 @@ export default function SeedlingsPage() {
               </div>
             </div>
           </>
+        ) : distributionLoading ? (
+          <div className="sd-distribution-state" role="status">
+            Loading distribution records...
+          </div>
+        ) : distributionError ? (
+          <div className="sd-distribution-state" role="alert">
+            <span>{distributionError}</span>
+            <button
+              type="button"
+              className="sd-secondary-btn"
+              onClick={() => setDistributionRetryKey((key) => key + 1)}
+            >
+              Retry
+            </button>
+          </div>
+        ) : distributions.length > 0 ? (
+          <div className="sd-table-scroll sd-distribution-table-scroll">
+            <table className="sd-table sd-distribution-table">
+              <thead>
+                <tr>
+                  <th>DISTRIBUTION ID</th>
+                  <th>DATE RELEASED</th>
+                  <th>RECIPIENT</th>
+                  <th>SAPLINGS RELEASED</th>
+                  <th>TOTAL</th>
+                  <th>PLANTING SITE</th>
+                  <th>RELATED REQUEST</th>
+                  <th>RELEASED BY</th>
+                  <th>STATUS</th>
+                </tr>
+              </thead>
+              <tbody>
+                {distributions.map((distribution) => {
+                  const released = formatDateTime(distribution.releasedAt);
+
+                  return (
+                    <tr key={distribution.id}>
+                      <td className="sd-primary-text">
+                        {distribution.distributionNumber || "—"}
+                      </td>
+                      <td>
+                        <div className="sd-primary-text">{released.date}</div>
+                        <div className="sd-secondary-text">{released.time}</div>
+                      </td>
+                      <td>
+                        <div className="sd-primary-text">
+                          {distribution.participantName}
+                        </div>
+                        {distribution.organization &&
+                          distribution.organization !== distribution.participantName && (
+                            <div className="sd-secondary-text">
+                              {distribution.organization}
+                            </div>
+                          )}
+                      </td>
+                      <td>
+                        <div className="sd-distribution-items">
+                          {distribution.items.length > 0 ? (
+                            distribution.items.map((item, index) => (
+                              <span
+                                key={`${distribution.id}-${
+                                  item.inventoryId || item.species
+                                }-${index}`}
+                              >
+                                <strong>{item.species}</strong>{" "}
+                                {formatNumber(item.quantity)}
+                              </span>
+                            ))
+                          ) : (
+                            <span>Item details unavailable</span>
+                          )}
+                        </div>
+                      </td>
+                      <td className="sd-number sd-distributed-number">
+                        {formatNumber(distribution.totalQuantityReleased)}
+                      </td>
+                      <td>
+                        {distribution.plantingLocation ||
+                          distribution.plantingSiteId ||
+                          "—"}
+                      </td>
+                      <td>{distribution.requestNumber || "—"}</td>
+                      <td>{distribution.releasedBy || "—"}</td>
+                      <td>
+                        <StatusBadge status={distribution.status} />
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         ) : (
           <div className="sd-empty-state sd-distribution-empty">
             <div className="sd-empty-icon">

@@ -1428,13 +1428,6 @@ export default function SitesPage() {
             <h1>
               Planting Sites Map
             </h1>
-
-            <p>
-              View and manage all
-              registered planting and
-              reforestation sites within
-              Juban, Sorsogon.
-            </p>
           </div>
         </div>
 
