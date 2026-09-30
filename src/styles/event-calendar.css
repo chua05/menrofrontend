@@ -461,23 +461,11 @@
   border-radius: 50%;
 }
 
-.ec-calendar-legend i.tree-planting {
-  background: #168044;
-}
-
 .ec-calendar-legend i.my-event { background: #d9a514; }
 
-.ec-calendar-legend i.seedling-distribution {
-  background: #2775df;
-}
-
-.ec-calendar-legend i.monitoring {
-  background: #f09a18;
-}
-
-.ec-calendar-legend i.other {
-  background: #8248dc;
-}
+.ec-calendar-legend i.status-upcoming { background: #2472e7; }
+.ec-calendar-legend i.status-ongoing { background: #e23c3c; }
+.ec-calendar-legend i.status-completed { background: #14823d; }
 
 /* =====================================================
    WEEK HEADER
@@ -640,31 +628,13 @@
   text-overflow: ellipsis;
 }
 
-.ec-calendar-event.tree-planting {
-  background: #e5f4e8;
-  color: #13793b;
-}
-
 .ec-calendar-event.my-event {
-  background: #fff1b8;
-  color: #73520a;
   box-shadow: inset 3px 0 0 #d9a514;
 }
 
-.ec-calendar-event.seedling-distribution {
-  background: #e7f0fe;
-  color: #2869cb;
-}
-
-.ec-calendar-event.monitoring {
-  background: #fff0dd;
-  color: #cf7600;
-}
-
-.ec-calendar-event.other {
-  background: #f1eaff;
-  color: #7541bd;
-}
+.ec-calendar-event.status-upcoming { background: #e6effe; color: #246ddd; }
+.ec-calendar-event.status-ongoing { background: #fde8e8; color: #c62828; }
+.ec-calendar-event.status-completed { background: #dff2e3; color: #14793c; }
 
 .ec-more-events {
   padding-left: 4px;
@@ -801,21 +771,9 @@
   border-radius: 999px;
 }
 
-.ec-side-event-mark.tree-planting {
-  background: #168044;
-}
-
-.ec-side-event-mark.seedling-distribution {
-  background: #2775df;
-}
-
-.ec-side-event-mark.monitoring {
-  background: #f09a18;
-}
-
-.ec-side-event-mark.other {
-  background: #8248dc;
-}
+.ec-side-event-mark.status-upcoming { background: #2472e7; }
+.ec-side-event-mark.status-ongoing { background: #e23c3c; }
+.ec-side-event-mark.status-completed { background: #14823d; }
 
 .ec-side-event-copy {
   min-width: 0;
@@ -934,7 +892,6 @@
 }
 
 .ec-upcoming-event.my-event { box-shadow: inset 3px 0 0 #d9a514; }
-.ec-upcoming-event.my-event .ec-upcoming-date { background: #fff1b8; color: #73520a; }
 
 .ec-upcoming-date {
   width: 48px;
@@ -949,9 +906,9 @@
   align-items: center;
   justify-content: center;
 
-  background: #e7f5e9;
+  background: #e6effe;
 
-  color: #087443;
+  color: #246ddd;
 }
 
 .ec-upcoming-date strong {
@@ -1049,11 +1006,6 @@
 .ec-status-completed {
   background: #dff2e3;
   color: #14793c;
-}
-
-.ec-status-cancelled {
-  background: #fde8e8;
-  color: #d83b3b;
 }
 
 /* =====================================================

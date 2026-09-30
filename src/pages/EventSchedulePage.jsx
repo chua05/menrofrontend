@@ -23,6 +23,7 @@ import {
 import { useAuth } from "../context/AuthContext";
 import { auth } from "../firebase/config";
 import { formatDisplayId } from "../utils/displayId";
+import { getEventStatus, getEventStatusClass } from "../utils/eventStatus";
 
 import "../styles/event-calendar.css";
 import "../styles/dashboard-page.css";
@@ -217,61 +218,6 @@ function formatDateKey(
   ).padStart(2, "0")}`;
 }
 
-/*
- * Calendar/display status only.
- *
- * This is separate from recordStatus.
- *
- * recordStatus is supplied by the backend; an approved request's
- * Tree Planting event is already scheduled.
- *
- * calendar status:
- * Upcoming / Ongoing / Completed / Cancelled
- */
-function getEventStatus(event) {
-  if (
-    event.status === "Completed" ||
-    event.status === "Cancelled"
-  ) {
-    return event.status;
-  }
-
-  if (!event.date) {
-    return "Upcoming";
-  }
-
-  const now = new Date();
-
-  const start = new Date(
-    `${event.date}T${
-      event.startTime || "00:00"
-    }:00`
-  );
-
-  const end = new Date(
-    `${event.date}T${
-      event.endTime || "23:59"
-    }:00`
-  );
-
-  if (now < start) {
-    return "Upcoming";
-  }
-
-  if (
-    now >= start &&
-    now <= end
-  ) {
-    return "Ongoing";
-  }
-
-  /*
-   * Past events are not automatically completed.
-   * MENRO explicitly marks them Completed.
-   */
-  return event.status || "Upcoming";
-}
-
 function getEventTypeIcon(type) {
   if (type === "Tree Planting") {
     return Sprout;
@@ -289,11 +235,7 @@ function getEventTypeClass(type) {
 }
 
 function StatusBadge({ status }) {
-  const className = String(
-    status || ""
-  )
-    .toLowerCase()
-    .replaceAll(" ", "-");
+  const className = getEventStatusClass(status);
 
   return (
     <span
@@ -314,6 +256,7 @@ export default function EventSchedulePage() {
 
   const [events, setEvents] =
     useState([]);
+  const [statusClock, setStatusClock] = useState(() => Date.now());
   const [sites, setSites] =
     useState([]);
 
@@ -572,6 +515,14 @@ export default function EventSchedulePage() {
   }, [userRole]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
+    const timer = window.setInterval(() => {
+      setStatusClock(Date.now());
+    }, 30000);
+
+    return () => window.clearInterval(timer);
+  }, []);
+
+  useEffect(() => {
     const handleOutsideClick = (
       event
     ) => {
@@ -618,9 +569,9 @@ export default function EventSchedulePage() {
         events.map((event) => ({
           ...event,
           status:
-            getEventStatus(event),
+            getEventStatus(event, new Date(statusClock)),
         })),
-      [events]
+      [events, statusClock]
     );
 
   const counts = useMemo(
@@ -771,35 +722,8 @@ export default function EventSchedulePage() {
 
   const upcomingEvents =
     useMemo(() => {
-      const now = new Date();
-
       return normalizedEvents
-        .filter((event) => {
-          if (
-            event.status ===
-              "Completed" ||
-            event.status ===
-              "Cancelled"
-          ) {
-            return false;
-          }
-
-          if (!event.date) {
-            return false;
-          }
-
-          const eventDate =
-            new Date(
-              `${event.date}T${
-                event.startTime ||
-                "00:00"
-              }`
-            );
-
-          return (
-            eventDate >= now
-          );
-        })
+        .filter((event) => event.status === "Upcoming" && event.date)
         .sort((a, b) => {
           const first =
             new Date(
@@ -1302,74 +1226,6 @@ export default function EventSchedulePage() {
       }
     };
 
-  const cancelEvent =
-    async () => {
-      if (!selectedEvent) {
-        return;
-      }
-
-      const confirmed =
-        window.confirm(
-          `Cancel ${selectedEvent.name}?`
-        );
-
-      if (!confirmed) {
-        return;
-      }
-
-      setActionLoading(true);
-      setPageError("");
-
-      try {
-        const eventId =
-          selectedEvent.id ||
-          selectedEvent.eventId;
-
-        const response =
-          await apiRequest(
-            `/events/${eventId}/cancel`,
-            {
-              method: "PATCH",
-              body: JSON.stringify(
-                {}
-              ),
-            }
-          );
-
-        const updated =
-          response.data;
-
-        setEvents(
-          (previous) =>
-            previous.map(
-              (item) =>
-                (item.id ||
-                  item.eventId) ===
-                eventId
-                  ? updated
-                  : item
-            )
-        );
-
-        setSelectedEvent(
-          updated
-        );
-
-        setShowEventMenu(false);
-
-        showSuccess(
-          `${eventId} was cancelled.`
-        );
-      } catch (error) {
-        setPageError(
-          error.message ||
-            "Failed to cancel event."
-        );
-      } finally {
-        setActionLoading(false);
-      }
-    };
-
   const deleteEvent =
     async () => {
       if (!selectedEvent) {
@@ -1577,7 +1433,7 @@ export default function EventSchedulePage() {
               counts.ongoing
             }
             icon={Activity}
-            variant="orange"
+            variant="red"
           />
 
           <KpiCard
@@ -1646,13 +1502,18 @@ export default function EventSchedulePage() {
                   <span><i className="my-event" />My Event</span>
                 )}
                 <span>
-                  <i className="tree-planting" />
-                  Tree Planting
+                  <i className="status-upcoming" />
+                  Upcoming
                 </span>
 
                 <span>
-                  <i className="other" />
-                  Other
+                  <i className="status-ongoing" />
+                  Ongoing
+                </span>
+
+                <span>
+                  <i className="status-completed" />
+                  Completed
                 </span>
               </div>
             </div>
@@ -1743,8 +1604,8 @@ export default function EventSchedulePage() {
                                     event.id ||
                                     event.eventId
                                   }
-                                  className={`ec-calendar-event ${getEventTypeClass(
-                                    event.type
+                                  className={`ec-calendar-event status-${getEventStatusClass(
+                                    event.status
                                   )}${userRole === "participant" && event.isMyEvent ? " my-event" : ""}`}
                                   onClick={(
                                     clickEvent
@@ -1852,8 +1713,8 @@ export default function EventSchedulePage() {
                         }
                       >
                         <div
-                          className={`ec-side-event-mark ${getEventTypeClass(
-                            event.type
+                          className={`ec-side-event-mark status-${getEventStatusClass(
+                            event.status
                           )}`}
                         />
 
@@ -2119,24 +1980,6 @@ export default function EventSchedulePage() {
 
                       {showEventMenu && (
                         <div className="ec-event-menu">
-                          {selectedEvent.status !==
-                            "Cancelled" && (
-                            <button
-                              type="button"
-                              onClick={
-                                cancelEvent
-                              }
-                            >
-                              <XCircle
-                                size={
-                                  15
-                                }
-                              />
-                              Cancel
-                              Event
-                            </button>
-                          )}
-
                           <button
                             type="button"
                             onClick={
@@ -2344,11 +2187,7 @@ export default function EventSchedulePage() {
                     getEventStatus(
                       selectedEvent
                     ) !==
-                      "Completed" &&
-                    getEventStatus(
-                      selectedEvent
-                    ) !==
-                      "Cancelled" && (
+                      "Completed" && (
                       <button
                         type="button"
                         className="ec-complete-btn"
