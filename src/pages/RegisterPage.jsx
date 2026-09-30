@@ -1,24 +1,22 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { FiUser, FiMail, FiLock, FiEye, FiEyeOff } from "react-icons/fi";
 import { FcGoogle } from "react-icons/fc";
 import axios from "axios";
-import { sendEmailVerification, signInWithEmailAndPassword, signInWithPopup, signOut } from "firebase/auth";
-import { auth, googleProvider } from "../firebase/config";
+import { sendEmailVerification, signInWithEmailAndPassword, signOut } from "firebase/auth";
+import { auth } from "../firebase/config";
 import { useAuth } from "../context/AuthContext";
 import { JUBAN_BARANGAYS, USER_TYPES, userTypeField } from "../utils/userTypes";
+import { dashboardPathForRole } from "../utils/roleRoutes";
+import { API_BASE_URL } from "../services/authenticatedApi";
+import {
+  consumeGoogleRedirectResult,
+  hasPendingGoogleRedirect,
+  startGoogleRedirect,
+} from "../services/googleRedirectAuth";
 
 import menroLogo from "../assets/menro-logo.png";
 import "../styles/register.css";
-
-const configuredApiUrl = import.meta.env.VITE_API_URL?.trim().replace(/\/$/, "");
-const localApiUrl = /^https?:\/\/(localhost|127\.0\.0\.1)(?::|\/|$)/i.test(
-  configuredApiUrl || "",
-);
-const API_BASE_URL =
-  import.meta.env.PROD && (!configuredApiUrl || localApiUrl)
-    ? "https://menrobk-1.onrender.com/api"
-    : configuredApiUrl || "http://localhost:5000/api";
 
 const Field = ({ label, error, children }) => (
   <div className="register-field">
@@ -51,6 +49,55 @@ export default function RegisterPage() {
   const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(false);
   const [acceptedTerms, setAcceptedTerms] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+
+    const finishGoogleRedirect = async () => {
+      const redirectPending = hasPendingGoogleRedirect("register");
+      if (redirectPending) setLoading(true);
+
+      try {
+        const result = await consumeGoogleRedirectResult("register");
+        if (!active || !result) return;
+
+        const token = await result.user.getIdToken();
+        const response = await axios.post(`${API_BASE_URL}/auth/verify`, {}, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!active) return;
+
+        const userData = response.data.data;
+        login(userData, userData.role);
+        navigate(
+          userData.profileComplete === false
+            ? "/complete-profile"
+            : dashboardPathForRole(userData.role),
+          { replace: true }
+        );
+      } catch (error) {
+        if (!active) return;
+        console.error(
+          "Google redirect registration failed:",
+          error?.code || error?.message
+        );
+        setErrors({
+          general:
+            error.response?.data?.message ||
+            (error.code === "auth/unauthorized-domain"
+              ? "Google sign-in is not enabled for this website. Please contact the administrator."
+              : "Google registration failed. Please try again."),
+        });
+      } finally {
+        if (active && redirectPending) setLoading(false);
+      }
+    };
+
+    finishGoogleRedirect();
+    return () => {
+      active = false;
+    };
+  }, [login, navigate]);
 
   const update = (field) => (e) =>
     setForm((prev) => ({
@@ -168,16 +215,10 @@ export default function RegisterPage() {
     setErrors({});
     setLoading(true);
     try {
-      const result = await signInWithPopup(auth, googleProvider);
-      const token = await result.user.getIdToken();
-      const response = await axios.post(`${API_BASE_URL}/auth/verify`, {}, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const userData = response.data.data;
-      login(userData, userData.role);
-      navigate(userData.profileComplete === false ? "/complete-profile" : "/participant/dashboard", { replace: true });
+      await startGoogleRedirect("register");
     } catch (error) {
-      setErrors({ general: error.response?.data?.message || error.message || "Google registration failed." });
+      console.error("Google registration failed:", error?.code || error?.message);
+      setErrors({ general: "Google registration failed. Please try again." });
     } finally {
       setLoading(false);
     }

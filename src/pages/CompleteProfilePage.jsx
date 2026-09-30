@@ -3,10 +3,9 @@ import { Navigate, useNavigate } from "react-router-dom";
 import { auth } from "../firebase/config";
 import { useAuth } from "../context/AuthContext";
 import { JUBAN_BARANGAYS, USER_TYPES, userTypeField } from "../utils/userTypes";
+import { API_BASE_URL } from "../services/authenticatedApi";
 import menroLogo from "../assets/menro-logo.png";
 import "../styles/register.css";
-
-const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
 
 export default function CompleteProfilePage() {
   const { currentUser, login } = useAuth();

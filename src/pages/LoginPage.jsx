@@ -5,29 +5,22 @@ import { FiMail, FiLock, FiEye, FiEyeOff } from "react-icons/fi";
 import { FcGoogle } from "react-icons/fc";
 import {
   signInWithEmailAndPassword,
-  signInWithPopup,
   sendPasswordResetEmail,
   sendEmailVerification,
 } from "firebase/auth";
-import {
-  auth,
-  googleProvider,
-} from "../firebase/config";
+import { auth } from "../firebase/config";
 import { useAuth } from "../context/AuthContext";
 import { dashboardPathForRole } from "../utils/roleRoutes";
+import { API_BASE_URL } from "../services/authenticatedApi";
+import {
+  consumeGoogleRedirectResult,
+  hasPendingGoogleRedirect,
+  startGoogleRedirect,
+} from "../services/googleRedirectAuth";
 import axios from "axios";
 
 import menroLogo from "../assets/menro-logo.png";
 import "../styles/login.css";
-
-const configuredApiUrl = import.meta.env.VITE_API_URL?.trim().replace(/\/$/, "");
-const localApiUrl = /^https?:\/\/(localhost|127\.0\.0\.1)(?::|\/|$)/i.test(
-  configuredApiUrl || "",
-);
-const API_BASE_URL =
-  import.meta.env.PROD && (!configuredApiUrl || localApiUrl)
-    ? "https://menrobk-1.onrender.com/api"
-    : configuredApiUrl || "http://localhost:5000/api";
 
 const isFirebaseNetworkError = (error) =>
   error?.code === "auth/network-request-failed";
@@ -138,6 +131,53 @@ export default function LoginPage() {
     if (pendingLogin) successButtonRef.current?.focus();
   }, [pendingLogin]);
 
+  useEffect(() => {
+    let active = true;
+
+    const finishGoogleRedirect = async () => {
+      const redirectPending = hasPendingGoogleRedirect("login");
+      if (redirectPending) setLoading(true);
+
+      try {
+        const result = await consumeGoogleRedirectResult("login");
+        if (!active || !result) return;
+
+        const token = await result.user.getIdToken();
+        const response = await verifyBackendSession(token);
+        if (!active) return;
+
+        const userData = response.data.data;
+        if (userData.role === "participant" && userData.profileComplete === false) {
+          login(userData, userData.role);
+          navigate("/complete-profile", { replace: true });
+          return;
+        }
+
+        setError("");
+        setSuccess("");
+        setPendingLogin({
+          userData,
+          destination: dashboardPathForRole(userData.role),
+        });
+      } catch (redirectError) {
+        if (!active) return;
+        console.error(
+          "Google redirect sign in failed:",
+          redirectError?.code || redirectError?.message
+        );
+        setSuccess("");
+        setError(getLoginErrorMessage(redirectError, "google"));
+      } finally {
+        if (active && redirectPending) setLoading(false);
+      }
+    };
+
+    finishGoogleRedirect();
+    return () => {
+      active = false;
+    };
+  }, [login, navigate]);
+
   const [verificationSending, setVerificationSending] = useState(false);
 
   const queueSuccessfulLogin = (userData, destination) => {
@@ -229,36 +269,9 @@ export default function LoginPage() {
       setLoading(true);
 
       try {
-        const result =
-          await signInWithPopup(
-            auth,
-            googleProvider
-          );
-
-        const token =
-          await result.user.getIdToken();
-
-        const response = await verifyBackendSession(token);
-
-        const userData =
-          response.data.data;
-
-        if (userData.role === "participant" && userData.profileComplete === false) {
-          login(userData, userData.role);
-          navigate("/complete-profile", { replace: true });
-        } else {
-          queueSuccessfulLogin(
-            userData,
-            dashboardPathForRole(userData.role)
-          );
-        }
+        await startGoogleRedirect("login");
       } catch (err) {
-        const expectedPopupCancellation =
-          err?.code === "auth/popup-closed-by-user" ||
-          err?.code === "auth/cancelled-popup-request";
-        if (!expectedPopupCancellation) {
-          console.error("Google sign in failed:", err?.code || err?.message);
-        }
+        console.error("Google sign in failed:", err?.code || err?.message);
         setSuccess("");
         setError(getLoginErrorMessage(err, "google"));
       } finally {

@@ -18,8 +18,7 @@ import { useAuth } from "../context/AuthContext";
 import { auth } from "../firebase/config";
 import { formatDisplayId } from "../utils/displayId";
 import { JUBAN_BARANGAYS, USER_TYPES, userTypeField } from "../utils/userTypes";
-
-const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
+import { API_BASE_URL } from "../services/authenticatedApi";
 
 function getInitialForm(currentUser) {
   return {
