@@ -1444,90 +1444,6 @@
       "source_location": "L35"
     },
     {
-      "id": "src_layouts_dashboardlayout_dashboardlayout",
-      "label": "DashboardLayout()",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 116,
-      "community_name": "App.jsx",
-      "file_type": "code",
-      "norm_label": "dashboardlayout()",
-      "source_file": "src/layouts/DashboardLayout.jsx",
-      "source_location": "L9"
-    },
-    {
-      "id": "src_pages_privacypolicypage_privacypolicypage",
-      "label": "PrivacyPolicyPage()",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 116,
-      "community_name": "App.jsx",
-      "file_type": "code",
-      "norm_label": "privacypolicypage()",
-      "source_file": "src/pages/PrivacyPolicyPage.jsx",
-      "source_location": "L6"
-    },
-    {
-      "id": "src_pages_termsofservicepage_termsofservicepage",
-      "label": "TermsOfServicePage()",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 116,
-      "community_name": "App.jsx",
-      "file_type": "code",
-      "norm_label": "termsofservicepage()",
-      "source_file": "src/pages/TermsOfServicePage.jsx",
-      "source_location": "L6"
-    },
-    {
-      "id": "src_layouts_sidebar_getfallbackname",
-      "label": "getFallbackName()",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 117,
-      "community_name": "Sidebar.jsx",
-      "file_type": "code",
-      "norm_label": "getfallbackname()",
-      "source_file": "src/layouts/Sidebar.jsx",
-      "source_location": "L277"
-    },
-    {
-      "id": "src_layouts_sidebar_getinitials",
-      "label": "getInitials()",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 117,
-      "community_name": "Sidebar.jsx",
-      "file_type": "code",
-      "norm_label": "getinitials()",
-      "source_file": "src/layouts/Sidebar.jsx",
-      "source_location": "L283"
-    },
-    {
-      "id": "src_layouts_sidebar_getrolelabel",
-      "label": "getRoleLabel()",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 117,
-      "community_name": "Sidebar.jsx",
-      "file_type": "code",
-      "norm_label": "getrolelabel()",
-      "source_file": "src/layouts/Sidebar.jsx",
-      "source_location": "L271"
-    },
-    {
-      "id": "src_layouts_sidebar_sidebar",
-      "label": "Sidebar()",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 117,
-      "community_name": "Sidebar.jsx",
-      "file_type": "code",
-      "norm_label": "sidebar()",
-      "source_file": "src/layouts/Sidebar.jsx",
-      "source_location": "L299"
-    },
-    {
       "id": "src_services_authservice_getprofile",
       "label": "getProfile()",
       "_callable": true,
@@ -2449,7 +2365,7 @@
       "file_type": "code",
       "norm_label": "getloginerrormessage()",
       "source_file": "src/pages/LoginPage.jsx",
-      "source_location": "L53"
+      "source_location": "L74"
     },
     {
       "id": "src_pages_loginpage_isfirebasenetworkerror",
@@ -2473,7 +2389,7 @@
       "file_type": "code",
       "norm_label": "loginpage()",
       "source_file": "src/pages/LoginPage.jsx",
-      "source_location": "L95"
+      "source_location": "L116"
     },
     {
       "id": "src_pages_loginpage_signinwithnetworkretry",
@@ -2484,6 +2400,18 @@
       "community_name": "LoginPage.jsx",
       "file_type": "code",
       "norm_label": "signinwithnetworkretry()",
+      "source_file": "src/pages/LoginPage.jsx",
+      "source_location": "L59"
+    },
+    {
+      "id": "src_pages_loginpage_verifybackendsession",
+      "label": "verifyBackendSession()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 23,
+      "community_name": "LoginPage.jsx",
+      "file_type": "code",
+      "norm_label": "verifybackendsession()",
       "source_file": "src/pages/LoginPage.jsx",
       "source_location": "L38"
     },
@@ -2548,124 +2476,124 @@
       "source_location": "L1"
     },
     {
-      "id": "src_pages_guesteventpage_guesteventpage",
-      "label": "GuestEventPage()",
+      "id": "src_pages_userspage_detailitem",
+      "label": "DetailItem()",
       "_callable": true,
       "_origin": "ast",
       "community": 27,
-      "community_name": "GuestEventPage",
+      "community_name": "UsersPage.jsx",
       "file_type": "code",
-      "norm_label": "guesteventpage()",
-      "source_file": "src/pages/GuestEventPage.jsx",
-      "source_location": "L25"
+      "norm_label": "detailitem()",
+      "source_file": "src/pages/UsersPage.jsx",
+      "source_location": "L1249"
     },
     {
-      "id": "src_pages_guesteventpage_guesteventpage_guestfetch",
-      "label": "guestFetch()",
+      "id": "src_pages_userspage_filterselect",
+      "label": "FilterSelect()",
       "_callable": true,
       "_origin": "ast",
       "community": 27,
-      "community_name": "GuestEventPage",
+      "community_name": "UsersPage.jsx",
       "file_type": "code",
-      "norm_label": "guestfetch()",
-      "source_file": "src/pages/GuestEventPage.jsx",
-      "source_location": "L51"
+      "norm_label": "filterselect()",
+      "source_file": "src/pages/UsersPage.jsx",
+      "source_location": "L1209"
     },
     {
-      "id": "src_pages_guesteventpage_guesteventpage_join",
-      "label": "join()",
+      "id": "src_pages_userspage_formatdatetime",
+      "label": "formatDateTime()",
       "_callable": true,
       "_origin": "ast",
       "community": 27,
-      "community_name": "GuestEventPage",
+      "community_name": "UsersPage.jsx",
       "file_type": "code",
-      "norm_label": "join()",
-      "source_file": "src/pages/GuestEventPage.jsx",
-      "source_location": "L164"
+      "norm_label": "formatdatetime()",
+      "source_file": "src/pages/UsersPage.jsx",
+      "source_location": "L102"
     },
     {
-      "id": "src_pages_guesteventpage_guesteventpage_loadcontributions",
-      "label": "loadContributions()",
+      "id": "src_pages_userspage_getinitials",
+      "label": "getInitials()",
       "_callable": true,
       "_origin": "ast",
       "community": 27,
-      "community_name": "GuestEventPage",
+      "community_name": "UsersPage.jsx",
       "file_type": "code",
-      "norm_label": "loadcontributions()",
-      "source_file": "src/pages/GuestEventPage.jsx",
-      "source_location": "L106"
+      "norm_label": "getinitials()",
+      "source_file": "src/pages/UsersPage.jsx",
+      "source_location": "L126"
     },
     {
-      "id": "src_pages_guesteventpage_guesteventpage_loadevent",
-      "label": "loadEvent()",
+      "id": "src_pages_userspage_getrolelabel",
+      "label": "getRoleLabel()",
       "_callable": true,
       "_origin": "ast",
       "community": 27,
-      "community_name": "GuestEventPage",
+      "community_name": "UsersPage.jsx",
       "file_type": "code",
-      "norm_label": "loadevent()",
-      "source_file": "src/pages/GuestEventPage.jsx",
-      "source_location": "L67"
+      "norm_label": "getrolelabel()",
+      "source_file": "src/pages/UsersPage.jsx",
+      "source_location": "L136"
     },
     {
-      "id": "src_pages_guesteventpage_guesteventpage_refreshguestdata",
-      "label": "refreshGuestData()",
+      "id": "src_pages_userspage_kpicard",
+      "label": "KpiCard()",
       "_callable": true,
       "_origin": "ast",
       "community": 27,
-      "community_name": "GuestEventPage",
+      "community_name": "UsersPage.jsx",
       "file_type": "code",
-      "norm_label": "refreshguestdata()",
-      "source_file": "src/pages/GuestEventPage.jsx",
-      "source_location": "L157"
+      "norm_label": "kpicard()",
+      "source_file": "src/pages/UsersPage.jsx",
+      "source_location": "L1193"
     },
     {
-      "id": "src_pages_guesteventpage_guesteventpage_selectphotos",
-      "label": "selectPhotos()",
+      "id": "src_pages_userspage_normalizerole",
+      "label": "normalizeRole()",
       "_callable": true,
       "_origin": "ast",
       "community": 27,
-      "community_name": "GuestEventPage",
+      "community_name": "UsersPage.jsx",
       "file_type": "code",
-      "norm_label": "selectphotos()",
-      "source_file": "src/pages/GuestEventPage.jsx",
-      "source_location": "L187"
+      "norm_label": "normalizerole()",
+      "source_file": "src/pages/UsersPage.jsx",
+      "source_location": "L72"
     },
     {
-      "id": "src_pages_guesteventpage_guesteventpage_submitplanting",
-      "label": "submitPlanting()",
+      "id": "src_pages_userspage_normalizestatus",
+      "label": "normalizeStatus()",
       "_callable": true,
       "_origin": "ast",
       "community": 27,
-      "community_name": "GuestEventPage",
+      "community_name": "UsersPage.jsx",
       "file_type": "code",
-      "norm_label": "submitplanting()",
-      "source_file": "src/pages/GuestEventPage.jsx",
-      "source_location": "L207"
+      "norm_label": "normalizestatus()",
+      "source_file": "src/pages/UsersPage.jsx",
+      "source_location": "L66"
     },
     {
-      "id": "src_pages_guesteventpage_newsubmissionkey",
-      "label": "newSubmissionKey()",
+      "id": "src_pages_userspage_toregistryuser",
+      "label": "toRegistryUser()",
       "_callable": true,
       "_origin": "ast",
       "community": 27,
-      "community_name": "GuestEventPage",
+      "community_name": "UsersPage.jsx",
       "file_type": "code",
-      "norm_label": "newsubmissionkey()",
-      "source_file": "src/pages/GuestEventPage.jsx",
-      "source_location": "L20"
+      "norm_label": "toregistryuser()",
+      "source_file": "src/pages/UsersPage.jsx",
+      "source_location": "L82"
     },
     {
-      "id": "src_pages_guesteventpage_sitelabel",
-      "label": "siteLabel()",
+      "id": "src_pages_userspage_userspage",
+      "label": "UsersPage()",
       "_callable": true,
       "_origin": "ast",
       "community": 27,
-      "community_name": "GuestEventPage",
+      "community_name": "UsersPage.jsx",
       "file_type": "code",
-      "norm_label": "sitelabel()",
-      "source_file": "src/pages/GuestEventPage.jsx",
-      "source_location": "L14"
+      "norm_label": "userspage()",
+      "source_file": "src/pages/UsersPage.jsx",
+      "source_location": "L142"
     },
     {
       "id": "src_components_dashboard_plantingsitesmap_getconditioncolor",
@@ -2673,7 +2601,7 @@
       "_callable": true,
       "_origin": "ast",
       "community": 28,
-      "community_name": "react",
+      "community_name": "lucide-react",
       "file_type": "code",
       "norm_label": "getconditioncolor()",
       "source_file": "src/components/dashboard/PlantingSitesMap.jsx",
@@ -2685,7 +2613,7 @@
       "_callable": true,
       "_origin": "ast",
       "community": 28,
-      "community_name": "react",
+      "community_name": "lucide-react",
       "file_type": "code",
       "norm_label": "getutilizationcolor()",
       "source_file": "src/components/dashboard/PlantingSitesMap.jsx",
@@ -2697,7 +2625,7 @@
       "_callable": true,
       "_origin": "ast",
       "community": 28,
-      "community_name": "react",
+      "community_name": "lucide-react",
       "file_type": "code",
       "norm_label": "plantingsitesmap()",
       "source_file": "src/components/dashboard/PlantingSitesMap.jsx",
@@ -2709,7 +2637,7 @@
       "_callable": true,
       "_origin": "ast",
       "community": 28,
-      "community_name": "react",
+      "community_name": "lucide-react",
       "file_type": "code",
       "norm_label": "landingpage()",
       "source_file": "src/pages/LandingPage.jsx",
@@ -2721,7 +2649,7 @@
       "_callable": true,
       "_origin": "ast",
       "community": 28,
-      "community_name": "react",
+      "community_name": "lucide-react",
       "file_type": "code",
       "norm_label": "scrolltosection()",
       "source_file": "src/pages/LandingPage.jsx",
@@ -3170,6 +3098,54 @@
       "norm_label": "normalizetimestamp()",
       "source_file": "src/pages/MonitoringPage.jsx",
       "source_location": "L89"
+    },
+    {
+      "id": "src_components_analytics_analyticssitesmap_analyticssitesmap",
+      "label": "AnalyticsSitesMap()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 4,
+      "community_name": "DashboardPage.jsx",
+      "file_type": "code",
+      "norm_label": "analyticssitesmap()",
+      "source_file": "src/components/analytics/AnalyticsSitesMap.jsx",
+      "source_location": "L28"
+    },
+    {
+      "id": "src_components_analytics_analyticssitesmap_conditioncolor",
+      "label": "conditionColor()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 4,
+      "community_name": "DashboardPage.jsx",
+      "file_type": "code",
+      "norm_label": "conditioncolor()",
+      "source_file": "src/components/analytics/AnalyticsSitesMap.jsx",
+      "source_location": "L21"
+    },
+    {
+      "id": "src_components_analytics_analyticssitesmap_utilization",
+      "label": "utilization()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 4,
+      "community_name": "DashboardPage.jsx",
+      "file_type": "code",
+      "norm_label": "utilization()",
+      "source_file": "src/components/analytics/AnalyticsSitesMap.jsx",
+      "source_location": "L9"
+    },
+    {
+      "id": "src_components_analytics_analyticssitesmap_utilizationmeta",
+      "label": "utilizationMeta()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 4,
+      "community_name": "DashboardPage.jsx",
+      "file_type": "code",
+      "norm_label": "utilizationmeta()",
+      "source_file": "src/components/analytics/AnalyticsSitesMap.jsx",
+      "source_location": "L15"
     },
     {
       "id": "src_pages_dashboardpage_activityicon",
@@ -3628,6 +3604,150 @@
       "source_location": "L67"
     },
     {
+      "id": "src_pages_guesteventpage_guesteventpage",
+      "label": "GuestEventPage()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 4,
+      "community_name": "DashboardPage.jsx",
+      "file_type": "code",
+      "norm_label": "guesteventpage()",
+      "source_file": "src/pages/GuestEventPage.jsx",
+      "source_location": "L25"
+    },
+    {
+      "id": "src_pages_guesteventpage_guesteventpage_guestfetch",
+      "label": "guestFetch()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 4,
+      "community_name": "DashboardPage.jsx",
+      "file_type": "code",
+      "norm_label": "guestfetch()",
+      "source_file": "src/pages/GuestEventPage.jsx",
+      "source_location": "L51"
+    },
+    {
+      "id": "src_pages_guesteventpage_guesteventpage_join",
+      "label": "join()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 4,
+      "community_name": "DashboardPage.jsx",
+      "file_type": "code",
+      "norm_label": "join()",
+      "source_file": "src/pages/GuestEventPage.jsx",
+      "source_location": "L164"
+    },
+    {
+      "id": "src_pages_guesteventpage_guesteventpage_loadcontributions",
+      "label": "loadContributions()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 4,
+      "community_name": "DashboardPage.jsx",
+      "file_type": "code",
+      "norm_label": "loadcontributions()",
+      "source_file": "src/pages/GuestEventPage.jsx",
+      "source_location": "L106"
+    },
+    {
+      "id": "src_pages_guesteventpage_guesteventpage_loadevent",
+      "label": "loadEvent()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 4,
+      "community_name": "DashboardPage.jsx",
+      "file_type": "code",
+      "norm_label": "loadevent()",
+      "source_file": "src/pages/GuestEventPage.jsx",
+      "source_location": "L67"
+    },
+    {
+      "id": "src_pages_guesteventpage_guesteventpage_refreshguestdata",
+      "label": "refreshGuestData()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 4,
+      "community_name": "DashboardPage.jsx",
+      "file_type": "code",
+      "norm_label": "refreshguestdata()",
+      "source_file": "src/pages/GuestEventPage.jsx",
+      "source_location": "L157"
+    },
+    {
+      "id": "src_pages_guesteventpage_guesteventpage_selectphotos",
+      "label": "selectPhotos()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 4,
+      "community_name": "DashboardPage.jsx",
+      "file_type": "code",
+      "norm_label": "selectphotos()",
+      "source_file": "src/pages/GuestEventPage.jsx",
+      "source_location": "L187"
+    },
+    {
+      "id": "src_pages_guesteventpage_guesteventpage_submitplanting",
+      "label": "submitPlanting()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 4,
+      "community_name": "DashboardPage.jsx",
+      "file_type": "code",
+      "norm_label": "submitplanting()",
+      "source_file": "src/pages/GuestEventPage.jsx",
+      "source_location": "L207"
+    },
+    {
+      "id": "src_pages_guesteventpage_newsubmissionkey",
+      "label": "newSubmissionKey()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 4,
+      "community_name": "DashboardPage.jsx",
+      "file_type": "code",
+      "norm_label": "newsubmissionkey()",
+      "source_file": "src/pages/GuestEventPage.jsx",
+      "source_location": "L20"
+    },
+    {
+      "id": "src_pages_guesteventpage_sitelabel",
+      "label": "siteLabel()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 4,
+      "community_name": "DashboardPage.jsx",
+      "file_type": "code",
+      "norm_label": "sitelabel()",
+      "source_file": "src/pages/GuestEventPage.jsx",
+      "source_location": "L14"
+    },
+    {
+      "id": "src_utils_displayid_formatdisplayid",
+      "label": "formatDisplayId()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 4,
+      "community_name": "DashboardPage.jsx",
+      "file_type": "code",
+      "norm_label": "formatdisplayid()",
+      "source_file": "src/utils/displayId.js",
+      "source_location": "L14"
+    },
+    {
+      "id": "src_utils_displayid_stabletoken",
+      "label": "stableToken()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 4,
+      "community_name": "DashboardPage.jsx",
+      "file_type": "code",
+      "norm_label": "stabletoken()",
+      "source_file": "src/utils/displayId.js",
+      "source_location": "L3"
+    },
+    {
       "id": "docx_work_fill_test_cases_set_cell_text_preserving_format",
       "label": "set_cell_text_preserving_format()",
       "_callable": true,
@@ -3640,12 +3760,24 @@
       "source_location": "L36"
     },
     {
+      "id": "src_pages_privacypolicypage_privacypolicypage",
+      "label": "PrivacyPolicyPage()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 43,
+      "community_name": "App.jsx",
+      "file_type": "code",
+      "norm_label": "privacypolicypage()",
+      "source_file": "src/pages/PrivacyPolicyPage.jsx",
+      "source_location": "L6"
+    },
+    {
       "id": "src_pages_reportspage_formatdate",
       "label": "formatDate()",
       "_callable": true,
       "_origin": "ast",
       "community": 43,
-      "community_name": "ReportsPage.jsx",
+      "community_name": "App.jsx",
       "file_type": "code",
       "norm_label": "formatdate()",
       "source_file": "src/pages/ReportsPage.jsx",
@@ -3657,7 +3789,7 @@
       "_callable": true,
       "_origin": "ast",
       "community": 43,
-      "community_name": "ReportsPage.jsx",
+      "community_name": "App.jsx",
       "file_type": "code",
       "norm_label": "getreporttypelabel()",
       "source_file": "src/pages/ReportsPage.jsx",
@@ -3669,7 +3801,7 @@
       "_callable": true,
       "_origin": "ast",
       "community": 43,
-      "community_name": "ReportsPage.jsx",
+      "community_name": "App.jsx",
       "file_type": "code",
       "norm_label": "reportspage()",
       "source_file": "src/pages/ReportsPage.jsx",
@@ -3681,11 +3813,23 @@
       "_callable": true,
       "_origin": "ast",
       "community": 43,
-      "community_name": "ReportsPage.jsx",
+      "community_name": "App.jsx",
       "file_type": "code",
       "norm_label": "reporttypeicon()",
       "source_file": "src/pages/ReportsPage.jsx",
       "source_location": "L107"
+    },
+    {
+      "id": "src_pages_termsofservicepage_termsofservicepage",
+      "label": "TermsOfServicePage()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 43,
+      "community_name": "App.jsx",
+      "file_type": "code",
+      "norm_label": "termsofservicepage()",
+      "source_file": "src/pages/TermsOfServicePage.jsx",
+      "source_location": "L6"
     },
     {
       "id": "src_pages_eventschedulepage_detailitem",
@@ -3697,7 +3841,7 @@
       "file_type": "code",
       "norm_label": "detailitem()",
       "source_file": "src/pages/EventSchedulePage.jsx",
-      "source_location": "L3316"
+      "source_location": "L2955"
     },
     {
       "id": "src_pages_eventschedulepage_eventform",
@@ -3709,7 +3853,7 @@
       "file_type": "code",
       "norm_label": "eventform()",
       "source_file": "src/pages/EventSchedulePage.jsx",
-      "source_location": "L2892"
+      "source_location": "L2531"
     },
     {
       "id": "src_pages_eventschedulepage_eventschedulepage",
@@ -3721,7 +3865,7 @@
       "file_type": "code",
       "norm_label": "eventschedulepage()",
       "source_file": "src/pages/EventSchedulePage.jsx",
-      "source_location": "L323"
+      "source_location": "L307"
     },
     {
       "id": "src_pages_eventschedulepage_eventschedulepage_apirequest",
@@ -3733,7 +3877,7 @@
       "file_type": "code",
       "norm_label": "apirequest()",
       "source_file": "src/pages/EventSchedulePage.jsx",
-      "source_location": "L447"
+      "source_location": "L421"
     },
     {
       "id": "src_pages_eventschedulepage_eventschedulepage_getauthtoken",
@@ -3745,19 +3889,7 @@
       "file_type": "code",
       "norm_label": "getauthtoken()",
       "source_file": "src/pages/EventSchedulePage.jsx",
-      "source_location": "L422"
-    },
-    {
-      "id": "src_pages_eventschedulepage_eventschedulepage_loadarchivedevents",
-      "label": "loadArchivedEvents()",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 5,
-      "community_name": "EventSchedulePage.jsx",
-      "file_type": "code",
-      "norm_label": "loadarchivedevents()",
-      "source_file": "src/pages/EventSchedulePage.jsx",
-      "source_location": "L567"
+      "source_location": "L396"
     },
     {
       "id": "src_pages_eventschedulepage_eventschedulepage_loadevents",
@@ -3769,7 +3901,7 @@
       "file_type": "code",
       "norm_label": "loadevents()",
       "source_file": "src/pages/EventSchedulePage.jsx",
-      "source_location": "L554"
+      "source_location": "L528"
     },
     {
       "id": "src_pages_eventschedulepage_eventschedulepage_loadinitialdata",
@@ -3781,7 +3913,7 @@
       "file_type": "code",
       "norm_label": "loadinitialdata()",
       "source_file": "src/pages/EventSchedulePage.jsx",
-      "source_location": "L587"
+      "source_location": "L541"
     },
     {
       "id": "src_pages_eventschedulepage_eventschedulepage_loadsites",
@@ -3793,7 +3925,7 @@
       "file_type": "code",
       "norm_label": "loadsites()",
       "source_file": "src/pages/EventSchedulePage.jsx",
-      "source_location": "L532"
+      "source_location": "L506"
     },
     {
       "id": "src_pages_eventschedulepage_formatdate",
@@ -3805,7 +3937,7 @@
       "file_type": "code",
       "norm_label": "formatdate()",
       "source_file": "src/pages/EventSchedulePage.jsx",
-      "source_location": "L179"
+      "source_location": "L177"
     },
     {
       "id": "src_pages_eventschedulepage_formatdatekey",
@@ -3817,7 +3949,7 @@
       "file_type": "code",
       "norm_label": "formatdatekey()",
       "source_file": "src/pages/EventSchedulePage.jsx",
-      "source_location": "L224"
+      "source_location": "L208"
     },
     {
       "id": "src_pages_eventschedulepage_formatdatetime",
@@ -3829,19 +3961,7 @@
       "file_type": "code",
       "norm_label": "formatdatetime()",
       "source_file": "src/pages/EventSchedulePage.jsx",
-      "source_location": "L165"
-    },
-    {
-      "id": "src_pages_eventschedulepage_formatshortdate",
-      "label": "formatShortDate()",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 5,
-      "community_name": "EventSchedulePage.jsx",
-      "file_type": "code",
-      "norm_label": "formatshortdate()",
-      "source_file": "src/pages/EventSchedulePage.jsx",
-      "source_location": "L193"
+      "source_location": "L163"
     },
     {
       "id": "src_pages_eventschedulepage_formattime",
@@ -3853,7 +3973,7 @@
       "file_type": "code",
       "norm_label": "formattime()",
       "source_file": "src/pages/EventSchedulePage.jsx",
-      "source_location": "L207"
+      "source_location": "L191"
     },
     {
       "id": "src_pages_eventschedulepage_formfield",
@@ -3865,7 +3985,7 @@
       "file_type": "code",
       "norm_label": "formfield()",
       "source_file": "src/pages/EventSchedulePage.jsx",
-      "source_location": "L3291"
+      "source_location": "L2930"
     },
     {
       "id": "src_pages_eventschedulepage_geteventdisplayid",
@@ -3877,7 +3997,7 @@
       "file_type": "code",
       "norm_label": "geteventdisplayid()",
       "source_file": "src/pages/EventSchedulePage.jsx",
-      "source_location": "L123"
+      "source_location": "L121"
     },
     {
       "id": "src_pages_eventschedulepage_geteventstatus",
@@ -3889,7 +4009,7 @@
       "file_type": "code",
       "norm_label": "geteventstatus()",
       "source_file": "src/pages/EventSchedulePage.jsx",
-      "source_location": "L247"
+      "source_location": "L231"
     },
     {
       "id": "src_pages_eventschedulepage_geteventtypeclass",
@@ -3901,7 +4021,7 @@
       "file_type": "code",
       "norm_label": "geteventtypeclass()",
       "source_file": "src/pages/EventSchedulePage.jsx",
-      "source_location": "L299"
+      "source_location": "L283"
     },
     {
       "id": "src_pages_eventschedulepage_geteventtypeicon",
@@ -3913,7 +4033,7 @@
       "file_type": "code",
       "norm_label": "geteventtypeicon()",
       "source_file": "src/pages/EventSchedulePage.jsx",
-      "source_location": "L291"
+      "source_location": "L275"
     },
     {
       "id": "src_pages_eventschedulepage_getinitialform",
@@ -3925,7 +4045,7 @@
       "file_type": "code",
       "norm_label": "getinitialform()",
       "source_file": "src/pages/EventSchedulePage.jsx",
-      "source_location": "L93"
+      "source_location": "L91"
     },
     {
       "id": "src_pages_eventschedulepage_getsitebarangay",
@@ -3937,7 +4057,7 @@
       "file_type": "code",
       "norm_label": "getsitebarangay()",
       "source_file": "src/pages/EventSchedulePage.jsx",
-      "source_location": "L137"
+      "source_location": "L135"
     },
     {
       "id": "src_pages_eventschedulepage_getsitedisplayid",
@@ -3949,7 +4069,7 @@
       "file_type": "code",
       "norm_label": "getsitedisplayid()",
       "source_file": "src/pages/EventSchedulePage.jsx",
-      "source_location": "L118"
+      "source_location": "L116"
     },
     {
       "id": "src_pages_eventschedulepage_getsitedisplayidforevent",
@@ -3961,7 +4081,7 @@
       "file_type": "code",
       "norm_label": "getsitedisplayidforevent()",
       "source_file": "src/pages/EventSchedulePage.jsx",
-      "source_location": "L127"
+      "source_location": "L125"
     },
     {
       "id": "src_pages_eventschedulepage_getsiteid",
@@ -3973,7 +4093,7 @@
       "file_type": "code",
       "norm_label": "getsiteid()",
       "source_file": "src/pages/EventSchedulePage.jsx",
-      "source_location": "L114"
+      "source_location": "L112"
     },
     {
       "id": "src_pages_eventschedulepage_getsitename",
@@ -3985,7 +4105,7 @@
       "file_type": "code",
       "norm_label": "getsitename()",
       "source_file": "src/pages/EventSchedulePage.jsx",
-      "source_location": "L133"
+      "source_location": "L131"
     },
     {
       "id": "src_pages_eventschedulepage_kpicard",
@@ -3997,7 +4117,7 @@
       "file_type": "code",
       "norm_label": "kpicard()",
       "source_file": "src/pages/EventSchedulePage.jsx",
-      "source_location": "L2867"
+      "source_location": "L2506"
     },
     {
       "id": "src_pages_eventschedulepage_normalizetimestamp",
@@ -4009,7 +4129,7 @@
       "file_type": "code",
       "norm_label": "normalizetimestamp()",
       "source_file": "src/pages/EventSchedulePage.jsx",
-      "source_location": "L141"
+      "source_location": "L139"
     },
     {
       "id": "src_pages_eventschedulepage_statusbadge",
@@ -4021,151 +4141,7 @@
       "file_type": "code",
       "norm_label": "statusbadge()",
       "source_file": "src/pages/EventSchedulePage.jsx",
-      "source_location": "L307"
-    },
-    {
-      "id": "src_pages_userspage_detailitem",
-      "label": "DetailItem()",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 5,
-      "community_name": "EventSchedulePage.jsx",
-      "file_type": "code",
-      "norm_label": "detailitem()",
-      "source_file": "src/pages/UsersPage.jsx",
-      "source_location": "L1249"
-    },
-    {
-      "id": "src_pages_userspage_filterselect",
-      "label": "FilterSelect()",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 5,
-      "community_name": "EventSchedulePage.jsx",
-      "file_type": "code",
-      "norm_label": "filterselect()",
-      "source_file": "src/pages/UsersPage.jsx",
-      "source_location": "L1209"
-    },
-    {
-      "id": "src_pages_userspage_formatdatetime",
-      "label": "formatDateTime()",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 5,
-      "community_name": "EventSchedulePage.jsx",
-      "file_type": "code",
-      "norm_label": "formatdatetime()",
-      "source_file": "src/pages/UsersPage.jsx",
-      "source_location": "L102"
-    },
-    {
-      "id": "src_pages_userspage_getinitials",
-      "label": "getInitials()",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 5,
-      "community_name": "EventSchedulePage.jsx",
-      "file_type": "code",
-      "norm_label": "getinitials()",
-      "source_file": "src/pages/UsersPage.jsx",
-      "source_location": "L126"
-    },
-    {
-      "id": "src_pages_userspage_getrolelabel",
-      "label": "getRoleLabel()",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 5,
-      "community_name": "EventSchedulePage.jsx",
-      "file_type": "code",
-      "norm_label": "getrolelabel()",
-      "source_file": "src/pages/UsersPage.jsx",
-      "source_location": "L136"
-    },
-    {
-      "id": "src_pages_userspage_kpicard",
-      "label": "KpiCard()",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 5,
-      "community_name": "EventSchedulePage.jsx",
-      "file_type": "code",
-      "norm_label": "kpicard()",
-      "source_file": "src/pages/UsersPage.jsx",
-      "source_location": "L1193"
-    },
-    {
-      "id": "src_pages_userspage_normalizerole",
-      "label": "normalizeRole()",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 5,
-      "community_name": "EventSchedulePage.jsx",
-      "file_type": "code",
-      "norm_label": "normalizerole()",
-      "source_file": "src/pages/UsersPage.jsx",
-      "source_location": "L72"
-    },
-    {
-      "id": "src_pages_userspage_normalizestatus",
-      "label": "normalizeStatus()",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 5,
-      "community_name": "EventSchedulePage.jsx",
-      "file_type": "code",
-      "norm_label": "normalizestatus()",
-      "source_file": "src/pages/UsersPage.jsx",
-      "source_location": "L66"
-    },
-    {
-      "id": "src_pages_userspage_toregistryuser",
-      "label": "toRegistryUser()",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 5,
-      "community_name": "EventSchedulePage.jsx",
-      "file_type": "code",
-      "norm_label": "toregistryuser()",
-      "source_file": "src/pages/UsersPage.jsx",
-      "source_location": "L82"
-    },
-    {
-      "id": "src_pages_userspage_userspage",
-      "label": "UsersPage()",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 5,
-      "community_name": "EventSchedulePage.jsx",
-      "file_type": "code",
-      "norm_label": "userspage()",
-      "source_file": "src/pages/UsersPage.jsx",
-      "source_location": "L142"
-    },
-    {
-      "id": "src_utils_displayid_formatdisplayid",
-      "label": "formatDisplayId()",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 5,
-      "community_name": "EventSchedulePage.jsx",
-      "file_type": "code",
-      "norm_label": "formatdisplayid()",
-      "source_file": "src/utils/displayId.js",
-      "source_location": "L14"
-    },
-    {
-      "id": "src_utils_displayid_stabletoken",
-      "label": "stableToken()",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 5,
-      "community_name": "EventSchedulePage.jsx",
-      "file_type": "code",
-      "norm_label": "stabletoken()",
-      "source_file": "src/utils/displayId.js",
-      "source_location": "L3"
+      "source_location": "L291"
     },
     {
       "id": "src_app_app",
@@ -4358,54 +4334,6 @@
       "norm_label": "dropdownmenutrigger()",
       "source_file": "src/components/ui/dropdown-menu.jsx",
       "source_location": "L26"
-    },
-    {
-      "id": "src_components_analytics_analyticssitesmap_analyticssitesmap",
-      "label": "AnalyticsSitesMap()",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 7,
-      "community_name": "ReforestationAnalyticsPage.jsx",
-      "file_type": "code",
-      "norm_label": "analyticssitesmap()",
-      "source_file": "src/components/analytics/AnalyticsSitesMap.jsx",
-      "source_location": "L28"
-    },
-    {
-      "id": "src_components_analytics_analyticssitesmap_conditioncolor",
-      "label": "conditionColor()",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 7,
-      "community_name": "ReforestationAnalyticsPage.jsx",
-      "file_type": "code",
-      "norm_label": "conditioncolor()",
-      "source_file": "src/components/analytics/AnalyticsSitesMap.jsx",
-      "source_location": "L21"
-    },
-    {
-      "id": "src_components_analytics_analyticssitesmap_utilization",
-      "label": "utilization()",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 7,
-      "community_name": "ReforestationAnalyticsPage.jsx",
-      "file_type": "code",
-      "norm_label": "utilization()",
-      "source_file": "src/components/analytics/AnalyticsSitesMap.jsx",
-      "source_location": "L9"
-    },
-    {
-      "id": "src_components_analytics_analyticssitesmap_utilizationmeta",
-      "label": "utilizationMeta()",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 7,
-      "community_name": "ReforestationAnalyticsPage.jsx",
-      "file_type": "code",
-      "norm_label": "utilizationmeta()",
-      "source_file": "src/components/analytics/AnalyticsSitesMap.jsx",
-      "source_location": "L15"
     },
     {
       "id": "src_pages_reforestationanalyticspage_datatable",
@@ -5192,6 +5120,66 @@
       "norm_label": "statusbadge()",
       "source_file": "src/pages/MyRequestsPage.jsx",
       "source_location": "L264"
+    },
+    {
+      "id": "src_layouts_dashboardlayout_dashboardlayout",
+      "label": "DashboardLayout()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 95,
+      "community_name": "react",
+      "file_type": "code",
+      "norm_label": "dashboardlayout()",
+      "source_file": "src/layouts/DashboardLayout.jsx",
+      "source_location": "L9"
+    },
+    {
+      "id": "src_layouts_sidebar_getfallbackname",
+      "label": "getFallbackName()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 95,
+      "community_name": "react",
+      "file_type": "code",
+      "norm_label": "getfallbackname()",
+      "source_file": "src/layouts/Sidebar.jsx",
+      "source_location": "L277"
+    },
+    {
+      "id": "src_layouts_sidebar_getinitials",
+      "label": "getInitials()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 95,
+      "community_name": "react",
+      "file_type": "code",
+      "norm_label": "getinitials()",
+      "source_file": "src/layouts/Sidebar.jsx",
+      "source_location": "L283"
+    },
+    {
+      "id": "src_layouts_sidebar_getrolelabel",
+      "label": "getRoleLabel()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 95,
+      "community_name": "react",
+      "file_type": "code",
+      "norm_label": "getrolelabel()",
+      "source_file": "src/layouts/Sidebar.jsx",
+      "source_location": "L271"
+    },
+    {
+      "id": "src_layouts_sidebar_sidebar",
+      "label": "Sidebar()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 95,
+      "community_name": "react",
+      "file_type": "code",
+      "norm_label": "sidebar()",
+      "source_file": "src/layouts/Sidebar.jsx",
+      "source_location": "L299"
     },
     {
       "id": "src_pages_plantingpage",
@@ -6642,92 +6630,143 @@
       "type": "module"
     },
     {
-      "id": "src_app",
-      "label": "App.jsx",
+      "id": "agents_skills_firebase_data_connect_reference_schema_col",
+      "label": "@col",
       "_origin": "ast",
       "community": 116,
-      "community_name": "App.jsx",
+      "community_name": "Core Directives",
+      "file_type": "document",
+      "node_kind": "heading",
+      "norm_label": "@col",
+      "source_file": ".agents/skills/firebase-data-connect/reference/schema.md",
+      "source_location": "L64"
+    },
+    {
+      "id": "agents_skills_firebase_data_connect_reference_schema_core_directives",
+      "label": "Core Directives",
+      "_origin": "ast",
+      "community": 116,
+      "community_name": "Core Directives",
+      "file_type": "document",
+      "node_kind": "heading",
+      "norm_label": "core directives",
+      "source_file": ".agents/skills/firebase-data-connect/reference/schema.md",
+      "source_location": "L51"
+    },
+    {
+      "id": "agents_skills_firebase_data_connect_reference_schema_default",
+      "label": "@default",
+      "_origin": "ast",
+      "community": 116,
+      "community_name": "Core Directives",
+      "file_type": "document",
+      "node_kind": "heading",
+      "norm_label": "@default",
+      "source_file": ".agents/skills/firebase-data-connect/reference/schema.md",
+      "source_location": "L74"
+    },
+    {
+      "id": "agents_skills_firebase_data_connect_reference_schema_index",
+      "label": "@index",
+      "_origin": "ast",
+      "community": 116,
+      "community_name": "Core Directives",
+      "file_type": "document",
+      "node_kind": "heading",
+      "norm_label": "@index",
+      "source_file": ".agents/skills/firebase-data-connect/reference/schema.md",
+      "source_location": "L107"
+    },
+    {
+      "id": "agents_skills_firebase_data_connect_reference_schema_searchable",
+      "label": "@searchable",
+      "_origin": "ast",
+      "community": 116,
+      "community_name": "Core Directives",
+      "file_type": "document",
+      "node_kind": "heading",
+      "norm_label": "@searchable",
+      "source_file": ".agents/skills/firebase-data-connect/reference/schema.md",
+      "source_location": "L125"
+    },
+    {
+      "id": "agents_skills_firebase_data_connect_reference_schema_table",
+      "label": "@table",
+      "_origin": "ast",
+      "community": 116,
+      "community_name": "Core Directives",
+      "file_type": "document",
+      "node_kind": "heading",
+      "norm_label": "@table",
+      "source_file": ".agents/skills/firebase-data-connect/reference/schema.md",
+      "source_location": "L53"
+    },
+    {
+      "id": "agents_skills_firebase_data_connect_reference_schema_unique",
+      "label": "@unique",
+      "_origin": "ast",
+      "community": 116,
+      "community_name": "Core Directives",
+      "file_type": "document",
+      "node_kind": "heading",
+      "norm_label": "@unique",
+      "source_file": ".agents/skills/firebase-data-connect/reference/schema.md",
+      "source_location": "L90"
+    },
+    {
+      "id": "eslint_config",
+      "label": "eslint.config.js",
+      "_origin": "ast",
+      "community": 117,
+      "community_name": "eslint.config.js",
       "file_type": "code",
-      "norm_label": "app.jsx",
-      "source_file": "src/App.jsx",
+      "norm_label": "eslint.config.js",
+      "source_file": "eslint.config.js",
       "source_location": "L1"
     },
     {
-      "id": "src_layouts_dashboardlayout",
-      "label": "DashboardLayout.jsx",
+      "id": "ref_eslint_js",
+      "label": "@eslint/js",
       "_origin": "ast",
-      "community": 116,
-      "community_name": "App.jsx",
-      "file_type": "code",
-      "norm_label": "dashboardlayout.jsx",
-      "source_file": "src/layouts/DashboardLayout.jsx",
-      "source_location": "L1"
-    },
-    {
-      "id": "src_pages_privacypolicypage",
-      "label": "PrivacyPolicyPage.jsx",
-      "_origin": "ast",
-      "community": 116,
-      "community_name": "App.jsx",
-      "file_type": "code",
-      "norm_label": "privacypolicypage.jsx",
-      "source_file": "src/pages/PrivacyPolicyPage.jsx",
-      "source_location": "L1"
-    },
-    {
-      "id": "src_pages_termsofservicepage",
-      "label": "TermsOfServicePage.jsx",
-      "_origin": "ast",
-      "community": 116,
-      "community_name": "App.jsx",
-      "file_type": "code",
-      "norm_label": "termsofservicepage.jsx",
-      "source_file": "src/pages/TermsOfServicePage.jsx",
-      "source_location": "L1"
-    },
-    {
-      "id": "ref_react_router_dom",
-      "label": "react-router-dom",
-      "_origin": "ast",
-      "community": 116,
-      "community_name": "App.jsx",
+      "community": 117,
+      "community_name": "eslint.config.js",
       "file_type": "concept",
-      "norm_label": "react-router-dom",
+      "norm_label": "@eslint/js",
       "source_file": "package.json",
-      "source_location": "L31"
+      "source_location": "L39"
     },
     {
-      "id": "src_layouts_sidebar",
-      "label": "Sidebar.jsx",
+      "id": "ref_eslint_plugin_react_hooks",
+      "label": "eslint-plugin-react-hooks",
       "_origin": "ast",
       "community": 117,
-      "community_name": "Sidebar.jsx",
-      "file_type": "code",
-      "norm_label": "sidebar.jsx",
-      "source_file": "src/layouts/Sidebar.jsx",
-      "source_location": "L1"
-    },
-    {
-      "id": "src_layouts_sidebar_navigation",
-      "label": "NAVIGATION",
-      "_origin": "ast",
-      "community": 117,
-      "community_name": "Sidebar.jsx",
-      "file_type": "code",
-      "norm_label": "navigation",
-      "source_file": "src/layouts/Sidebar.jsx",
-      "source_location": "L25"
-    },
-    {
-      "id": "ref_react_dom",
-      "label": "react-dom",
-      "_origin": "ast",
-      "community": 117,
-      "community_name": "Sidebar.jsx",
+      "community_name": "eslint.config.js",
       "file_type": "concept",
-      "norm_label": "react-dom",
+      "norm_label": "eslint-plugin-react-hooks",
       "source_file": "package.json",
-      "source_location": "L26"
+      "source_location": "L45"
+    },
+    {
+      "id": "ref_eslint_plugin_react_refresh",
+      "label": "eslint-plugin-react-refresh",
+      "_origin": "ast",
+      "community": 117,
+      "community_name": "eslint.config.js",
+      "file_type": "concept",
+      "norm_label": "eslint-plugin-react-refresh",
+      "source_file": "package.json",
+      "source_location": "L46"
+    },
+    {
+      "id": "ref_globals",
+      "label": "globals",
+      "_origin": "ast",
+      "community": 117,
+      "community_name": "eslint.config.js",
+      "file_type": "concept",
+      "norm_label": "globals",
+      "source_file": "package.json",
+      "source_location": "L47"
     },
     {
       "id": "audit_temp_artifact",
@@ -7018,17 +7057,6 @@
       "source_location": "L5"
     },
     {
-      "id": "eslint_config",
-      "label": "eslint.config.js",
-      "_origin": "ast",
-      "community": 13,
-      "community_name": "package.json",
-      "file_type": "code",
-      "norm_label": "eslint.config.js",
-      "source_file": "eslint.config.js",
-      "source_location": "L1"
-    },
-    {
       "id": "package",
       "label": "package.json",
       "_origin": "ast",
@@ -7128,50 +7156,6 @@
       "source_location": "L44"
     },
     {
-      "id": "ref_eslint_js",
-      "label": "@eslint/js",
-      "_origin": "ast",
-      "community": 13,
-      "community_name": "package.json",
-      "file_type": "concept",
-      "norm_label": "@eslint/js",
-      "source_file": "package.json",
-      "source_location": "L39"
-    },
-    {
-      "id": "ref_eslint_plugin_react_hooks",
-      "label": "eslint-plugin-react-hooks",
-      "_origin": "ast",
-      "community": 13,
-      "community_name": "package.json",
-      "file_type": "concept",
-      "norm_label": "eslint-plugin-react-hooks",
-      "source_file": "package.json",
-      "source_location": "L45"
-    },
-    {
-      "id": "ref_eslint_plugin_react_refresh",
-      "label": "eslint-plugin-react-refresh",
-      "_origin": "ast",
-      "community": 13,
-      "community_name": "package.json",
-      "file_type": "concept",
-      "norm_label": "eslint-plugin-react-refresh",
-      "source_file": "package.json",
-      "source_location": "L46"
-    },
-    {
-      "id": "ref_exifr",
-      "label": "exifr",
-      "_origin": "ast",
-      "community": 13,
-      "community_name": "package.json",
-      "file_type": "concept",
-      "norm_label": "exifr",
-      "source_file": "package.json",
-      "source_location": "L21"
-    },
-    {
       "id": "ref_firebase",
       "label": "firebase",
       "_origin": "ast",
@@ -7192,17 +7176,6 @@
       "norm_label": "@fontsource-variable/geist",
       "source_file": "package.json",
       "source_location": "L14"
-    },
-    {
-      "id": "ref_globals",
-      "label": "globals",
-      "_origin": "ast",
-      "community": 13,
-      "community_name": "package.json",
-      "file_type": "concept",
-      "norm_label": "globals",
-      "source_file": "package.json",
-      "source_location": "L47"
     },
     {
       "id": "ref_react_hook_form",
@@ -7326,6 +7299,17 @@
       "source_location": "L42"
     },
     {
+      "id": "src_firebase_config_auth",
+      "label": "auth",
+      "_origin": "ast",
+      "community": 14,
+      "community_name": "RegisterPage.jsx",
+      "file_type": "code",
+      "norm_label": "auth",
+      "source_file": "src/firebase/config.js",
+      "source_location": "L38"
+    },
+    {
       "id": "src_pages_completeprofilepage",
       "label": "CompleteProfilePage.jsx",
       "_origin": "ast",
@@ -7447,17 +7431,6 @@
       "source_location": "L1"
     },
     {
-      "id": "src_firebase_config_auth",
-      "label": "auth",
-      "_origin": "ast",
-      "community": 15,
-      "community_name": "AuthContext.jsx",
-      "file_type": "code",
-      "norm_label": "auth",
-      "source_file": "src/firebase/config.js",
-      "source_location": "L38"
-    },
-    {
       "id": "src_firebase_config_firebaseconfig",
       "label": "firebaseConfig",
       "_origin": "ast",
@@ -7511,6 +7484,17 @@
       "norm_label": "authenticatedapi.js",
       "source_file": "src/services/authenticatedApi.js",
       "source_location": "L1"
+    },
+    {
+      "id": "src_services_authenticatedapi_api_base_url",
+      "label": "API_BASE_URL",
+      "_origin": "ast",
+      "community": 15,
+      "community_name": "AuthContext.jsx",
+      "file_type": "code",
+      "norm_label": "api_base_url",
+      "source_file": "src/services/authenticatedApi.js",
+      "source_location": "L8"
     },
     {
       "id": "src_services_authenticatedapi_configuredapiurl",
@@ -9620,11 +9604,55 @@
       "source_location": "L43"
     },
     {
+      "id": "src_pages_userspage",
+      "label": "UsersPage.jsx",
+      "_origin": "ast",
+      "community": 27,
+      "community_name": "UsersPage.jsx",
+      "file_type": "code",
+      "norm_label": "userspage.jsx",
+      "source_file": "src/pages/UsersPage.jsx",
+      "source_location": "L1"
+    },
+    {
+      "id": "src_pages_userspage_barangays",
+      "label": "BARANGAYS",
+      "_origin": "ast",
+      "community": 27,
+      "community_name": "UsersPage.jsx",
+      "file_type": "code",
+      "norm_label": "barangays",
+      "source_file": "src/pages/UsersPage.jsx",
+      "source_location": "L32"
+    },
+    {
+      "id": "src_pages_userspage_page_size_options",
+      "label": "PAGE_SIZE_OPTIONS",
+      "_origin": "ast",
+      "community": 27,
+      "community_name": "UsersPage.jsx",
+      "file_type": "code",
+      "norm_label": "page_size_options",
+      "source_file": "src/pages/UsersPage.jsx",
+      "source_location": "L30"
+    },
+    {
+      "id": "src_pages_userspage_role_options",
+      "label": "ROLE_OPTIONS",
+      "_origin": "ast",
+      "community": 27,
+      "community_name": "UsersPage.jsx",
+      "file_type": "code",
+      "norm_label": "role_options",
+      "source_file": "src/pages/UsersPage.jsx",
+      "source_location": "L60"
+    },
+    {
       "id": "src_components_dashboard_plantingsitesmap",
       "label": "PlantingSitesMap.jsx",
       "_origin": "ast",
       "community": 28,
-      "community_name": "react",
+      "community_name": "lucide-react",
       "file_type": "code",
       "norm_label": "plantingsitesmap.jsx",
       "source_file": "src/components/dashboard/PlantingSitesMap.jsx",
@@ -9635,29 +9663,18 @@
       "label": "sitePositions",
       "_origin": "ast",
       "community": 28,
-      "community_name": "react",
+      "community_name": "lucide-react",
       "file_type": "code",
       "norm_label": "sitepositions",
       "source_file": "src/components/dashboard/PlantingSitesMap.jsx",
       "source_location": "L6"
     },
     {
-      "id": "src_pages_guesteventpage",
-      "label": "GuestEventPage.jsx",
-      "_origin": "ast",
-      "community": 28,
-      "community_name": "react",
-      "file_type": "code",
-      "norm_label": "guesteventpage.jsx",
-      "source_file": "src/pages/GuestEventPage.jsx",
-      "source_location": "L1"
-    },
-    {
       "id": "src_pages_landingpage",
       "label": "LandingPage.jsx",
       "_origin": "ast",
       "community": 28,
-      "community_name": "react",
+      "community_name": "lucide-react",
       "file_type": "code",
       "norm_label": "landingpage.jsx",
       "source_file": "src/pages/LandingPage.jsx",
@@ -9668,7 +9685,7 @@
       "label": "PROGRAM_ITEMS",
       "_origin": "ast",
       "community": 28,
-      "community_name": "react",
+      "community_name": "lucide-react",
       "file_type": "code",
       "norm_label": "program_items",
       "source_file": "src/pages/LandingPage.jsx",
@@ -9679,22 +9696,11 @@
       "label": "lucide-react",
       "_origin": "ast",
       "community": 28,
-      "community_name": "react",
+      "community_name": "lucide-react",
       "file_type": "concept",
       "norm_label": "lucide-react",
       "source_file": "package.json",
       "source_location": "L24"
-    },
-    {
-      "id": "ref_react",
-      "label": "react",
-      "_origin": "ast",
-      "community": 28,
-      "community_name": "react",
-      "file_type": "concept",
-      "norm_label": "react",
-      "source_file": "package.json",
-      "source_location": "L25"
     },
     {
       "id": "jsconfig",
@@ -10566,6 +10572,28 @@
       "source_location": "L5"
     },
     {
+      "id": "src_components_analytics_analyticssitesmap",
+      "label": "AnalyticsSitesMap.jsx",
+      "_origin": "ast",
+      "community": 4,
+      "community_name": "DashboardPage.jsx",
+      "file_type": "code",
+      "norm_label": "analyticssitesmap.jsx",
+      "source_file": "src/components/analytics/AnalyticsSitesMap.jsx",
+      "source_location": "L1"
+    },
+    {
+      "id": "src_components_analytics_analyticssitesmap_fallback_center",
+      "label": "FALLBACK_CENTER",
+      "_origin": "ast",
+      "community": 4,
+      "community_name": "DashboardPage.jsx",
+      "file_type": "code",
+      "norm_label": "fallback_center",
+      "source_file": "src/components/analytics/AnalyticsSitesMap.jsx",
+      "source_location": "L6"
+    },
+    {
       "id": "src_pages_dashboardpage",
       "label": "DashboardPage.jsx",
       "_origin": "ast",
@@ -10630,6 +10658,50 @@
       "norm_label": "survival_colors",
       "source_file": "src/pages/DashboardPage.jsx",
       "source_location": "L51"
+    },
+    {
+      "id": "src_pages_guesteventpage",
+      "label": "GuestEventPage.jsx",
+      "_origin": "ast",
+      "community": 4,
+      "community_name": "DashboardPage.jsx",
+      "file_type": "code",
+      "norm_label": "guesteventpage.jsx",
+      "source_file": "src/pages/GuestEventPage.jsx",
+      "source_location": "L1"
+    },
+    {
+      "id": "src_utils_displayid",
+      "label": "displayId.js",
+      "_origin": "ast",
+      "community": 4,
+      "community_name": "DashboardPage.jsx",
+      "file_type": "code",
+      "norm_label": "displayid.js",
+      "source_file": "src/utils/displayId.js",
+      "source_location": "L1"
+    },
+    {
+      "id": "ref_exifr",
+      "label": "exifr",
+      "_origin": "ast",
+      "community": 4,
+      "community_name": "DashboardPage.jsx",
+      "file_type": "concept",
+      "norm_label": "exifr",
+      "source_file": "package.json",
+      "source_location": "L21"
+    },
+    {
+      "id": "ref_leaflet",
+      "label": "leaflet",
+      "_origin": "ast",
+      "community": 4,
+      "community_name": "DashboardPage.jsx",
+      "file_type": "concept",
+      "norm_label": "leaflet",
+      "source_file": "package.json",
+      "source_location": "L23"
     },
     {
       "id": "agents",
@@ -10702,11 +10774,33 @@
       "source_location": "L1"
     },
     {
+      "id": "src_app",
+      "label": "App.jsx",
+      "_origin": "ast",
+      "community": 43,
+      "community_name": "App.jsx",
+      "file_type": "code",
+      "norm_label": "app.jsx",
+      "source_file": "src/App.jsx",
+      "source_location": "L1"
+    },
+    {
+      "id": "src_pages_privacypolicypage",
+      "label": "PrivacyPolicyPage.jsx",
+      "_origin": "ast",
+      "community": 43,
+      "community_name": "App.jsx",
+      "file_type": "code",
+      "norm_label": "privacypolicypage.jsx",
+      "source_file": "src/pages/PrivacyPolicyPage.jsx",
+      "source_location": "L1"
+    },
+    {
       "id": "src_pages_reportspage",
       "label": "ReportsPage.jsx",
       "_origin": "ast",
       "community": 43,
-      "community_name": "ReportsPage.jsx",
+      "community_name": "App.jsx",
       "file_type": "code",
       "norm_label": "reportspage.jsx",
       "source_file": "src/pages/ReportsPage.jsx",
@@ -10717,22 +10811,33 @@
       "label": "REPORT_TYPES",
       "_origin": "ast",
       "community": 43,
-      "community_name": "ReportsPage.jsx",
+      "community_name": "App.jsx",
       "file_type": "code",
       "norm_label": "report_types",
       "source_file": "src/pages/ReportsPage.jsx",
       "source_location": "L28"
     },
     {
-      "id": "src_services_authenticatedapi_api_base_url",
-      "label": "API_BASE_URL",
+      "id": "src_pages_termsofservicepage",
+      "label": "TermsOfServicePage.jsx",
       "_origin": "ast",
       "community": 43,
-      "community_name": "ReportsPage.jsx",
+      "community_name": "App.jsx",
       "file_type": "code",
-      "norm_label": "api_base_url",
-      "source_file": "src/services/authenticatedApi.js",
-      "source_location": "L8"
+      "norm_label": "termsofservicepage.jsx",
+      "source_file": "src/pages/TermsOfServicePage.jsx",
+      "source_location": "L1"
+    },
+    {
+      "id": "ref_react_router_dom",
+      "label": "react-router-dom",
+      "_origin": "ast",
+      "community": 43,
+      "community_name": "App.jsx",
+      "file_type": "concept",
+      "norm_label": "react-router-dom",
+      "source_file": "package.json",
+      "source_location": "L31"
     },
     {
       "id": "docx_work_artifact",
@@ -12148,7 +12253,7 @@
       "file_type": "code",
       "norm_label": "barangays",
       "source_file": "src/pages/EventSchedulePage.jsx",
-      "source_location": "L40"
+      "source_location": "L38"
     },
     {
       "id": "src_pages_eventschedulepage_event_types",
@@ -12159,7 +12264,7 @@
       "file_type": "code",
       "norm_label": "event_types",
       "source_file": "src/pages/EventSchedulePage.jsx",
-      "source_location": "L35"
+      "source_location": "L33"
     },
     {
       "id": "src_pages_eventschedulepage_months",
@@ -12170,7 +12275,7 @@
       "file_type": "code",
       "norm_label": "months",
       "source_file": "src/pages/EventSchedulePage.jsx",
-      "source_location": "L78"
+      "source_location": "L76"
     },
     {
       "id": "src_pages_eventschedulepage_week_days",
@@ -12181,62 +12286,7 @@
       "file_type": "code",
       "norm_label": "week_days",
       "source_file": "src/pages/EventSchedulePage.jsx",
-      "source_location": "L68"
-    },
-    {
-      "id": "src_pages_userspage",
-      "label": "UsersPage.jsx",
-      "_origin": "ast",
-      "community": 5,
-      "community_name": "EventSchedulePage.jsx",
-      "file_type": "code",
-      "norm_label": "userspage.jsx",
-      "source_file": "src/pages/UsersPage.jsx",
-      "source_location": "L1"
-    },
-    {
-      "id": "src_pages_userspage_barangays",
-      "label": "BARANGAYS",
-      "_origin": "ast",
-      "community": 5,
-      "community_name": "EventSchedulePage.jsx",
-      "file_type": "code",
-      "norm_label": "barangays",
-      "source_file": "src/pages/UsersPage.jsx",
-      "source_location": "L32"
-    },
-    {
-      "id": "src_pages_userspage_page_size_options",
-      "label": "PAGE_SIZE_OPTIONS",
-      "_origin": "ast",
-      "community": 5,
-      "community_name": "EventSchedulePage.jsx",
-      "file_type": "code",
-      "norm_label": "page_size_options",
-      "source_file": "src/pages/UsersPage.jsx",
-      "source_location": "L30"
-    },
-    {
-      "id": "src_pages_userspage_role_options",
-      "label": "ROLE_OPTIONS",
-      "_origin": "ast",
-      "community": 5,
-      "community_name": "EventSchedulePage.jsx",
-      "file_type": "code",
-      "norm_label": "role_options",
-      "source_file": "src/pages/UsersPage.jsx",
-      "source_location": "L60"
-    },
-    {
-      "id": "src_utils_displayid",
-      "label": "displayId.js",
-      "_origin": "ast",
-      "community": 5,
-      "community_name": "EventSchedulePage.jsx",
-      "file_type": "code",
-      "norm_label": "displayid.js",
-      "source_file": "src/utils/displayId.js",
-      "source_location": "L1"
+      "source_location": "L66"
     },
     {
       "id": "agents_skills_firebase_data_connect_reference_search",
@@ -15634,28 +15684,6 @@
       "source_location": "L12"
     },
     {
-      "id": "src_components_analytics_analyticssitesmap",
-      "label": "AnalyticsSitesMap.jsx",
-      "_origin": "ast",
-      "community": 7,
-      "community_name": "ReforestationAnalyticsPage.jsx",
-      "file_type": "code",
-      "norm_label": "analyticssitesmap.jsx",
-      "source_file": "src/components/analytics/AnalyticsSitesMap.jsx",
-      "source_location": "L1"
-    },
-    {
-      "id": "src_components_analytics_analyticssitesmap_fallback_center",
-      "label": "FALLBACK_CENTER",
-      "_origin": "ast",
-      "community": 7,
-      "community_name": "ReforestationAnalyticsPage.jsx",
-      "file_type": "code",
-      "norm_label": "fallback_center",
-      "source_file": "src/components/analytics/AnalyticsSitesMap.jsx",
-      "source_location": "L6"
-    },
-    {
       "id": "src_pages_reforestationanalyticspage",
       "label": "ReforestationAnalyticsPage.jsx",
       "_origin": "ast",
@@ -15698,17 +15726,6 @@
       "norm_label": "empty_filters",
       "source_file": "src/pages/ReforestationAnalyticsPage.jsx",
       "source_location": "L13"
-    },
-    {
-      "id": "ref_leaflet",
-      "label": "leaflet",
-      "_origin": "ast",
-      "community": 7,
-      "community_name": "ReforestationAnalyticsPage.jsx",
-      "file_type": "concept",
-      "norm_label": "leaflet",
-      "source_file": "package.json",
-      "source_location": "L23"
     },
     {
       "id": "ref_recharts",
@@ -18505,88 +18522,59 @@
       "source_location": "L72"
     },
     {
-      "id": "agents_skills_firebase_data_connect_reference_schema_col",
-      "label": "@col",
+      "id": "src_layouts_dashboardlayout",
+      "label": "DashboardLayout.jsx",
       "_origin": "ast",
       "community": 95,
-      "community_name": "Core Directives",
-      "file_type": "document",
-      "node_kind": "heading",
-      "norm_label": "@col",
-      "source_file": ".agents/skills/firebase-data-connect/reference/schema.md",
-      "source_location": "L64"
+      "community_name": "react",
+      "file_type": "code",
+      "norm_label": "dashboardlayout.jsx",
+      "source_file": "src/layouts/DashboardLayout.jsx",
+      "source_location": "L1"
     },
     {
-      "id": "agents_skills_firebase_data_connect_reference_schema_core_directives",
-      "label": "Core Directives",
+      "id": "src_layouts_sidebar",
+      "label": "Sidebar.jsx",
       "_origin": "ast",
       "community": 95,
-      "community_name": "Core Directives",
-      "file_type": "document",
-      "node_kind": "heading",
-      "norm_label": "core directives",
-      "source_file": ".agents/skills/firebase-data-connect/reference/schema.md",
-      "source_location": "L51"
+      "community_name": "react",
+      "file_type": "code",
+      "norm_label": "sidebar.jsx",
+      "source_file": "src/layouts/Sidebar.jsx",
+      "source_location": "L1"
     },
     {
-      "id": "agents_skills_firebase_data_connect_reference_schema_default",
-      "label": "@default",
+      "id": "src_layouts_sidebar_navigation",
+      "label": "NAVIGATION",
       "_origin": "ast",
       "community": 95,
-      "community_name": "Core Directives",
-      "file_type": "document",
-      "node_kind": "heading",
-      "norm_label": "@default",
-      "source_file": ".agents/skills/firebase-data-connect/reference/schema.md",
-      "source_location": "L74"
+      "community_name": "react",
+      "file_type": "code",
+      "norm_label": "navigation",
+      "source_file": "src/layouts/Sidebar.jsx",
+      "source_location": "L25"
     },
     {
-      "id": "agents_skills_firebase_data_connect_reference_schema_index",
-      "label": "@index",
+      "id": "ref_react",
+      "label": "react",
       "_origin": "ast",
       "community": 95,
-      "community_name": "Core Directives",
-      "file_type": "document",
-      "node_kind": "heading",
-      "norm_label": "@index",
-      "source_file": ".agents/skills/firebase-data-connect/reference/schema.md",
-      "source_location": "L107"
+      "community_name": "react",
+      "file_type": "concept",
+      "norm_label": "react",
+      "source_file": "package.json",
+      "source_location": "L25"
     },
     {
-      "id": "agents_skills_firebase_data_connect_reference_schema_searchable",
-      "label": "@searchable",
+      "id": "ref_react_dom",
+      "label": "react-dom",
       "_origin": "ast",
       "community": 95,
-      "community_name": "Core Directives",
-      "file_type": "document",
-      "node_kind": "heading",
-      "norm_label": "@searchable",
-      "source_file": ".agents/skills/firebase-data-connect/reference/schema.md",
-      "source_location": "L125"
-    },
-    {
-      "id": "agents_skills_firebase_data_connect_reference_schema_table",
-      "label": "@table",
-      "_origin": "ast",
-      "community": 95,
-      "community_name": "Core Directives",
-      "file_type": "document",
-      "node_kind": "heading",
-      "norm_label": "@table",
-      "source_file": ".agents/skills/firebase-data-connect/reference/schema.md",
-      "source_location": "L53"
-    },
-    {
-      "id": "agents_skills_firebase_data_connect_reference_schema_unique",
-      "label": "@unique",
-      "_origin": "ast",
-      "community": 95,
-      "community_name": "Core Directives",
-      "file_type": "document",
-      "node_kind": "heading",
-      "norm_label": "@unique",
-      "source_file": ".agents/skills/firebase-data-connect/reference/schema.md",
-      "source_location": "L90"
+      "community_name": "react",
+      "file_type": "concept",
+      "norm_label": "react-dom",
+      "source_file": "package.json",
+      "source_location": "L26"
     },
     {
       "id": "agents_skills_firebase_firestore_references_enterprise_flutter_setup",
@@ -18973,47 +18961,11 @@
       "type": "external"
     },
     {
-      "id": "ref_react_icons_fi",
-      "label": "ref_react_icons_fi",
-      "_origin": "semantic",
-      "community": 116,
-      "community_name": "App.jsx",
-      "external": true,
-      "file_type": "concept",
-      "norm_label": "ref_react_icons_fi",
-      "source_file": "",
-      "type": "external"
-    },
-    {
-      "id": "src_styles_dashboard_shell",
-      "label": "src_styles_dashboard_shell",
-      "_origin": "semantic",
-      "community": 116,
-      "community_name": "App.jsx",
-      "external": true,
-      "file_type": "concept",
-      "norm_label": "src_styles_dashboard_shell",
-      "source_file": "",
-      "type": "external"
-    },
-    {
-      "id": "src_styles_legal",
-      "label": "src_styles_legal",
-      "_origin": "semantic",
-      "community": 116,
-      "community_name": "App.jsx",
-      "external": true,
-      "file_type": "concept",
-      "norm_label": "src_styles_legal",
-      "source_file": "",
-      "type": "external"
-    },
-    {
       "id": "ref_eslint_config",
       "label": "ref_eslint_config",
       "_origin": "semantic",
-      "community": 13,
-      "community_name": "package.json",
+      "community": 117,
+      "community_name": "eslint.config.js",
       "external": true,
       "file_type": "concept",
       "norm_label": "ref_eslint_config",
@@ -19021,14 +18973,14 @@
       "type": "external"
     },
     {
-      "id": "ref_react_icons_fc",
-      "label": "ref_react_icons_fc",
+      "id": "src_assets_menro_logo",
+      "label": "src_assets_menro_logo",
       "_origin": "semantic",
       "community": 14,
       "community_name": "RegisterPage.jsx",
       "external": true,
       "file_type": "concept",
-      "norm_label": "ref_react_icons_fc",
+      "norm_label": "src_assets_menro_logo",
       "source_file": "",
       "type": "external"
     },
@@ -19093,6 +19045,18 @@
       "type": "external"
     },
     {
+      "id": "ref_react_icons_fc",
+      "label": "ref_react_icons_fc",
+      "_origin": "semantic",
+      "community": 23,
+      "community_name": "LoginPage.jsx",
+      "external": true,
+      "file_type": "concept",
+      "norm_label": "ref_react_icons_fc",
+      "source_file": "",
+      "type": "external"
+    },
+    {
       "id": "src_styles_login",
       "label": "src_styles_login",
       "_origin": "semantic",
@@ -19117,11 +19081,23 @@
       "type": "external"
     },
     {
+      "id": "src_styles_registered_users",
+      "label": "src_styles_registered_users",
+      "_origin": "semantic",
+      "community": 27,
+      "community_name": "UsersPage.jsx",
+      "external": true,
+      "file_type": "concept",
+      "norm_label": "src_styles_registered_users",
+      "source_file": "",
+      "type": "external"
+    },
+    {
       "id": "ref_data_dashboardmockdata",
       "label": "ref_data_dashboardmockdata",
       "_origin": "semantic",
       "community": 28,
-      "community_name": "react",
+      "community_name": "lucide-react",
       "external": true,
       "file_type": "concept",
       "norm_label": "ref_data_dashboardmockdata",
@@ -19133,7 +19109,7 @@
       "label": "src_assets_aboutsys",
       "_origin": "semantic",
       "community": 28,
-      "community_name": "react",
+      "community_name": "lucide-react",
       "external": true,
       "file_type": "concept",
       "norm_label": "src_assets_aboutsys",
@@ -19145,34 +19121,10 @@
       "label": "src_assets_headerimg",
       "_origin": "semantic",
       "community": 28,
-      "community_name": "react",
+      "community_name": "lucide-react",
       "external": true,
       "file_type": "concept",
       "norm_label": "src_assets_headerimg",
-      "source_file": "",
-      "type": "external"
-    },
-    {
-      "id": "src_assets_menro_logo",
-      "label": "src_assets_menro_logo",
-      "_origin": "semantic",
-      "community": 28,
-      "community_name": "react",
-      "external": true,
-      "file_type": "concept",
-      "norm_label": "src_assets_menro_logo",
-      "source_file": "",
-      "type": "external"
-    },
-    {
-      "id": "src_styles_guest_event",
-      "label": "src_styles_guest_event",
-      "_origin": "semantic",
-      "community": 28,
-      "community_name": "react",
-      "external": true,
-      "file_type": "concept",
-      "norm_label": "src_styles_guest_event",
       "source_file": "",
       "type": "external"
     },
@@ -19181,7 +19133,7 @@
       "label": "src_styles_landing_page",
       "_origin": "semantic",
       "community": 28,
-      "community_name": "react",
+      "community_name": "lucide-react",
       "external": true,
       "file_type": "concept",
       "norm_label": "src_styles_landing_page",
@@ -19197,6 +19149,30 @@
       "external": true,
       "file_type": "concept",
       "norm_label": "src_styles_survival_monitoring",
+      "source_file": "",
+      "type": "external"
+    },
+    {
+      "id": "ref_leaflet_dist_leaflet_css",
+      "label": "ref_leaflet_dist_leaflet_css",
+      "_origin": "semantic",
+      "community": 4,
+      "community_name": "DashboardPage.jsx",
+      "external": true,
+      "file_type": "concept",
+      "norm_label": "ref_leaflet_dist_leaflet_css",
+      "source_file": "",
+      "type": "external"
+    },
+    {
+      "id": "src_styles_guest_event",
+      "label": "src_styles_guest_event",
+      "_origin": "semantic",
+      "community": 4,
+      "community_name": "DashboardPage.jsx",
+      "external": true,
+      "file_type": "concept",
+      "norm_label": "src_styles_guest_event",
       "source_file": "",
       "type": "external"
     },
@@ -19309,11 +19285,35 @@
       "type": "external"
     },
     {
+      "id": "ref_react_icons_fi",
+      "label": "ref_react_icons_fi",
+      "_origin": "semantic",
+      "community": 43,
+      "community_name": "App.jsx",
+      "external": true,
+      "file_type": "concept",
+      "norm_label": "ref_react_icons_fi",
+      "source_file": "",
+      "type": "external"
+    },
+    {
+      "id": "src_styles_legal",
+      "label": "src_styles_legal",
+      "_origin": "semantic",
+      "community": 43,
+      "community_name": "App.jsx",
+      "external": true,
+      "file_type": "concept",
+      "norm_label": "src_styles_legal",
+      "source_file": "",
+      "type": "external"
+    },
+    {
       "id": "src_styles_reports",
       "label": "src_styles_reports",
       "_origin": "semantic",
       "community": 43,
-      "community_name": "ReportsPage.jsx",
+      "community_name": "App.jsx",
       "external": true,
       "file_type": "concept",
       "norm_label": "src_styles_reports",
@@ -19341,18 +19341,6 @@
       "external": true,
       "file_type": "concept",
       "norm_label": "src_styles_event_calendar",
-      "source_file": "",
-      "type": "external"
-    },
-    {
-      "id": "src_styles_registered_users",
-      "label": "src_styles_registered_users",
-      "_origin": "semantic",
-      "community": 5,
-      "community_name": "EventSchedulePage.jsx",
-      "external": true,
-      "file_type": "concept",
-      "norm_label": "src_styles_registered_users",
       "source_file": "",
       "type": "external"
     },
@@ -19405,18 +19393,6 @@
       "type": "external"
     },
     {
-      "id": "ref_leaflet_dist_leaflet_css",
-      "label": "ref_leaflet_dist_leaflet_css",
-      "_origin": "semantic",
-      "community": 7,
-      "community_name": "ReforestationAnalyticsPage.jsx",
-      "external": true,
-      "file_type": "concept",
-      "norm_label": "ref_leaflet_dist_leaflet_css",
-      "source_file": "",
-      "type": "external"
-    },
-    {
       "id": "src_styles_reforestation_analytics",
       "label": "src_styles_reforestation_analytics",
       "_origin": "semantic",
@@ -19449,6 +19425,18 @@
       "external": true,
       "file_type": "concept",
       "norm_label": "src_styles_my_requests",
+      "source_file": "",
+      "type": "external"
+    },
+    {
+      "id": "src_styles_dashboard_shell",
+      "label": "src_styles_dashboard_shell",
+      "_origin": "semantic",
+      "community": 95,
+      "community_name": "react",
+      "external": true,
+      "file_type": "concept",
+      "norm_label": "src_styles_dashboard_shell",
       "source_file": "",
       "type": "external"
     }
@@ -20411,7 +20399,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "src/pages/EventSchedulePage.jsx",
-      "source_location": "L2907",
+      "source_location": "L2546",
       "weight": 1.0
     },
     {
@@ -20423,7 +20411,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "src/pages/EventSchedulePage.jsx",
-      "source_location": "L3139",
+      "source_location": "L2778",
       "weight": 1.0
     },
     {
@@ -20435,7 +20423,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "src/pages/EventSchedulePage.jsx",
-      "source_location": "L3174",
+      "source_location": "L2813",
       "weight": 1.0
     },
     {
@@ -20447,7 +20435,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "src/pages/EventSchedulePage.jsx",
-      "source_location": "L3178",
+      "source_location": "L2817",
       "weight": 1.0
     },
     {
@@ -20459,7 +20447,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "src/pages/EventSchedulePage.jsx",
-      "source_location": "L1946",
+      "source_location": "L1736",
       "weight": 1.0
     },
     {
@@ -20471,7 +20459,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "src/pages/EventSchedulePage.jsx",
-      "source_location": "L1956",
+      "source_location": "L1746",
       "weight": 1.0
     },
     {
@@ -20483,7 +20471,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "src/pages/EventSchedulePage.jsx",
-      "source_location": "L1977",
+      "source_location": "L1767",
       "weight": 1.0
     },
     {
@@ -20495,7 +20483,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "src/pages/EventSchedulePage.jsx",
-      "source_location": "L2016",
+      "source_location": "L1806",
       "weight": 1.0
     },
     {
@@ -20507,7 +20495,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "src/pages/EventSchedulePage.jsx",
-      "source_location": "L2284",
+      "source_location": "L2074",
       "weight": 1.0
     },
     {
@@ -20519,7 +20507,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "src/pages/EventSchedulePage.jsx",
-      "source_location": "L2443",
+      "source_location": "L2233",
       "weight": 1.0
     },
     {
@@ -20531,7 +20519,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "src/pages/EventSchedulePage.jsx",
-      "source_location": "L2490",
+      "source_location": "L2280",
       "weight": 1.0
     },
     {
@@ -20543,19 +20531,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "src/pages/EventSchedulePage.jsx",
-      "source_location": "L2537",
-      "weight": 1.0
-    },
-    {
-      "source": "src_pages_eventschedulepage_eventschedulepage",
-      "target": "src_pages_eventschedulepage_formatshortdate",
-      "relation": "calls",
-      "_origin": "ast",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "context": "call",
-      "source_file": "src/pages/EventSchedulePage.jsx",
-      "source_location": "L2812",
+      "source_location": "L2327",
       "weight": 1.0
     },
     {
@@ -20567,7 +20543,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "src/pages/EventSchedulePage.jsx",
-      "source_location": "L324",
+      "source_location": "L308",
       "weight": 1.0
     },
     {
@@ -20579,7 +20555,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "src/pages/EventSchedulePage.jsx",
-      "source_location": "L372",
+      "source_location": "L351",
       "weight": 1.0
     },
     {
@@ -20591,7 +20567,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "src/pages/EventSchedulePage.jsx",
-      "source_location": "L670",
+      "source_location": "L621",
       "weight": 1.0
     },
     {
@@ -20603,7 +20579,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "src/pages/EventSchedulePage.jsx",
-      "source_location": "L994",
+      "source_location": "L945",
       "weight": 1.0
     },
     {
@@ -20615,19 +20591,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "src/pages/EventSchedulePage.jsx",
-      "source_location": "L453",
-      "weight": 1.0
-    },
-    {
-      "source": "src_pages_eventschedulepage_eventschedulepage_loadarchivedevents",
-      "target": "src_pages_eventschedulepage_eventschedulepage_apirequest",
-      "relation": "calls",
-      "_origin": "ast",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "context": "call",
-      "source_file": "src/pages/EventSchedulePage.jsx",
-      "source_location": "L574",
+      "source_location": "L427",
       "weight": 1.0
     },
     {
@@ -20639,7 +20603,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "src/pages/EventSchedulePage.jsx",
-      "source_location": "L556",
+      "source_location": "L530",
       "weight": 1.0
     },
     {
@@ -20651,7 +20615,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "src/pages/EventSchedulePage.jsx",
-      "source_location": "L593",
+      "source_location": "L547",
       "weight": 1.0
     },
     {
@@ -20663,19 +20627,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "src/pages/EventSchedulePage.jsx",
-      "source_location": "L594",
-      "weight": 1.0
-    },
-    {
-      "source": "src_pages_eventschedulepage_eventschedulepage_loadinitialdata",
-      "target": "src_pages_eventschedulepage_eventschedulepage_loadarchivedevents",
-      "relation": "calls",
-      "_origin": "ast",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "context": "call",
-      "source_file": "src/pages/EventSchedulePage.jsx",
-      "source_location": "L596",
+      "source_location": "L548",
       "weight": 1.0
     },
     {
@@ -20687,7 +20639,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "src/pages/EventSchedulePage.jsx",
-      "source_location": "L534",
+      "source_location": "L508",
       "weight": 1.0
     },
     {
@@ -20699,7 +20651,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "src/pages/EventSchedulePage.jsx",
-      "source_location": "L166",
+      "source_location": "L164",
       "weight": 1.0
     },
     {
@@ -20711,7 +20663,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "src/pages/EventSchedulePage.jsx",
-      "source_location": "L124",
+      "source_location": "L122",
       "weight": 1.0
     },
     {
@@ -20723,7 +20675,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "src/pages/EventSchedulePage.jsx",
-      "source_location": "L120",
+      "source_location": "L118",
       "weight": 1.0
     },
     {
@@ -20735,7 +20687,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "src/pages/EventSchedulePage.jsx",
-      "source_location": "L129",
+      "source_location": "L127",
       "weight": 1.0
     },
     {
@@ -20747,7 +20699,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "src/pages/EventSchedulePage.jsx",
-      "source_location": "L130",
+      "source_location": "L128",
       "weight": 1.0
     },
     {
@@ -20855,7 +20807,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "src/pages/LoginPage.jsx",
-      "source_location": "L59",
+      "source_location": "L80",
       "weight": 1.0
     },
     {
@@ -20867,7 +20819,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "src/pages/LoginPage.jsx",
-      "source_location": "L114",
+      "source_location": "L135",
       "weight": 1.0
     },
     {
@@ -20879,7 +20831,19 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "src/pages/LoginPage.jsx",
-      "source_location": "L161",
+      "source_location": "L182",
+      "weight": 1.0
+    },
+    {
+      "source": "src_pages_loginpage_loginpage",
+      "target": "src_pages_loginpage_verifybackendsession",
+      "relation": "calls",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "context": "call",
+      "source_file": "src/pages/LoginPage.jsx",
+      "source_location": "L190",
       "weight": 1.0
     },
     {
@@ -20891,7 +20855,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "src/pages/LoginPage.jsx",
-      "source_location": "L186",
+      "source_location": "L197",
       "weight": 1.0
     },
     {
@@ -20903,7 +20867,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "src/pages/LoginPage.jsx",
-      "source_location": "L191",
+      "source_location": "L202",
       "weight": 1.0
     },
     {
@@ -20915,7 +20879,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "src/pages/LoginPage.jsx",
-      "source_location": "L44",
+      "source_location": "L65",
       "weight": 1.0
     },
     {
@@ -20927,7 +20891,19 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "src/pages/LoginPage.jsx",
-      "source_location": "L48",
+      "source_location": "L69",
+      "weight": 1.0
+    },
+    {
+      "source": "src_pages_loginpage_verifybackendsession",
+      "target": "src_pages_loginpage_wait",
+      "relation": "calls",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "context": "call",
+      "source_file": "src/pages/LoginPage.jsx",
+      "source_location": "L54",
       "weight": 1.0
     },
     {
@@ -24755,19 +24731,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "src/pages/EventSchedulePage.jsx",
-      "source_location": "L447",
-      "weight": 1.0
-    },
-    {
-      "source": "src_pages_eventschedulepage_eventschedulepage",
-      "target": "src_pages_eventschedulepage_eventschedulepage_loadarchivedevents",
-      "relation": "contains",
-      "_origin": "ast",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "context": "call",
-      "source_file": "src/pages/EventSchedulePage.jsx",
-      "source_location": "L567",
+      "source_location": "L421",
       "weight": 1.0
     },
     {
@@ -24779,7 +24743,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "src/pages/EventSchedulePage.jsx",
-      "source_location": "L587",
+      "source_location": "L541",
       "weight": 1.0
     },
     {
@@ -25187,7 +25151,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "src/pages/EventSchedulePage.jsx",
-      "source_location": "L2960",
+      "source_location": "L2599",
       "weight": 1.0
     },
     {
@@ -25199,19 +25163,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "src/pages/EventSchedulePage.jsx",
-      "source_location": "L1871",
-      "weight": 1.0
-    },
-    {
-      "source": "src_pages_eventschedulepage_eventschedulepage_loadarchivedevents",
-      "target": "src_pages_eventschedulepage_event_types",
-      "relation": "references",
-      "_origin": "ast",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "context": "call",
-      "source_file": "src/pages/EventSchedulePage.jsx",
-      "source_location": "L581",
+      "source_location": "L1661",
       "weight": 1.0
     },
     {
@@ -25223,7 +25175,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "src/pages/EventSchedulePage.jsx",
-      "source_location": "L561",
+      "source_location": "L535",
       "weight": 1.0
     },
     {
@@ -26471,7 +26423,7 @@
       "confidence_score": 1.0,
       "context": "import",
       "source_file": "src/pages/EventSchedulePage.jsx",
-      "source_location": "L25",
+      "source_location": "L23",
       "weight": 1.0
     },
     {
@@ -26483,7 +26435,7 @@
       "confidence_score": 1.0,
       "context": "import",
       "source_file": "src/pages/EventSchedulePage.jsx",
-      "source_location": "L26",
+      "source_location": "L24",
       "weight": 1.0
     },
     {
@@ -26495,7 +26447,7 @@
       "confidence_score": 1.0,
       "context": "import",
       "source_file": "src/pages/EventSchedulePage.jsx",
-      "source_location": "L27",
+      "source_location": "L25",
       "weight": 1.0
     },
     {
@@ -28415,7 +28367,7 @@
       "confidence_score": 1.0,
       "context": "import",
       "source_file": "src/pages/EventSchedulePage.jsx",
-      "source_location": "L25",
+      "source_location": "L23",
       "weight": 1.0
     },
     {
@@ -28427,7 +28379,7 @@
       "confidence_score": 1.0,
       "context": "import",
       "source_file": "src/pages/EventSchedulePage.jsx",
-      "source_location": "L26",
+      "source_location": "L24",
       "weight": 1.0
     },
     {
@@ -28439,7 +28391,7 @@
       "confidence_score": 1.0,
       "context": "import",
       "source_file": "src/pages/EventSchedulePage.jsx",
-      "source_location": "L27",
+      "source_location": "L25",
       "weight": 1.0
     },
     {
@@ -28451,7 +28403,19 @@
       "confidence_score": 1.0,
       "context": "import",
       "source_file": "src/pages/EventSchedulePage.jsx",
-      "source_location": "L29",
+      "source_location": "L27",
+      "weight": 1.0
+    },
+    {
+      "source": "src_pages_eventschedulepage",
+      "target": "src_styles_dashboard_page",
+      "relation": "imports_from",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "context": "import",
+      "source_file": "src/pages/EventSchedulePage.jsx",
+      "source_location": "L28",
       "weight": 1.0
     },
     {
@@ -28464,18 +28428,6 @@
       "context": "import",
       "source_file": "src/pages/EventSchedulePage.jsx",
       "source_location": "L3",
-      "weight": 1.0
-    },
-    {
-      "source": "src_pages_eventschedulepage",
-      "target": "src_styles_dashboard_page",
-      "relation": "imports_from",
-      "_origin": "ast",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "context": "import",
-      "source_file": "src/pages/EventSchedulePage.jsx",
-      "source_location": "L30",
       "weight": 1.0
     },
     {
@@ -41553,7 +41505,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "src/pages/EventSchedulePage.jsx",
-      "source_location": "L114",
+      "source_location": "L112",
       "weight": 1.0
     },
     {
@@ -41564,7 +41516,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "src/pages/EventSchedulePage.jsx",
-      "source_location": "L118",
+      "source_location": "L116",
       "weight": 1.0
     },
     {
@@ -41575,7 +41527,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "src/pages/EventSchedulePage.jsx",
-      "source_location": "L123",
+      "source_location": "L121",
       "weight": 1.0
     },
     {
@@ -41586,7 +41538,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "src/pages/EventSchedulePage.jsx",
-      "source_location": "L127",
+      "source_location": "L125",
       "weight": 1.0
     },
     {
@@ -41597,7 +41549,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "src/pages/EventSchedulePage.jsx",
-      "source_location": "L133",
+      "source_location": "L131",
       "weight": 1.0
     },
     {
@@ -41608,7 +41560,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "src/pages/EventSchedulePage.jsx",
-      "source_location": "L137",
+      "source_location": "L135",
       "weight": 1.0
     },
     {
@@ -41619,7 +41571,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "src/pages/EventSchedulePage.jsx",
-      "source_location": "L141",
+      "source_location": "L139",
       "weight": 1.0
     },
     {
@@ -41630,7 +41582,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "src/pages/EventSchedulePage.jsx",
-      "source_location": "L165",
+      "source_location": "L163",
       "weight": 1.0
     },
     {
@@ -41641,18 +41593,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "src/pages/EventSchedulePage.jsx",
-      "source_location": "L179",
-      "weight": 1.0
-    },
-    {
-      "source": "src_pages_eventschedulepage",
-      "target": "src_pages_eventschedulepage_formatshortdate",
-      "relation": "contains",
-      "_origin": "ast",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "source_file": "src/pages/EventSchedulePage.jsx",
-      "source_location": "L193",
+      "source_location": "L177",
       "weight": 1.0
     },
     {
@@ -41663,7 +41604,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "src/pages/EventSchedulePage.jsx",
-      "source_location": "L207",
+      "source_location": "L191",
       "weight": 1.0
     },
     {
@@ -41674,7 +41615,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "src/pages/EventSchedulePage.jsx",
-      "source_location": "L224",
+      "source_location": "L208",
       "weight": 1.0
     },
     {
@@ -41685,7 +41626,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "src/pages/EventSchedulePage.jsx",
-      "source_location": "L247",
+      "source_location": "L231",
       "weight": 1.0
     },
     {
@@ -41696,7 +41637,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "src/pages/EventSchedulePage.jsx",
-      "source_location": "L2867",
+      "source_location": "L2506",
       "weight": 1.0
     },
     {
@@ -41707,7 +41648,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "src/pages/EventSchedulePage.jsx",
-      "source_location": "L2892",
+      "source_location": "L2531",
       "weight": 1.0
     },
     {
@@ -41718,7 +41659,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "src/pages/EventSchedulePage.jsx",
-      "source_location": "L291",
+      "source_location": "L275",
       "weight": 1.0
     },
     {
@@ -41729,7 +41670,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "src/pages/EventSchedulePage.jsx",
-      "source_location": "L299",
+      "source_location": "L283",
       "weight": 1.0
     },
     {
@@ -41740,18 +41681,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "src/pages/EventSchedulePage.jsx",
-      "source_location": "L307",
-      "weight": 1.0
-    },
-    {
-      "source": "src_pages_eventschedulepage",
-      "target": "src_pages_eventschedulepage_eventschedulepage",
-      "relation": "contains",
-      "_origin": "ast",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "source_file": "src/pages/EventSchedulePage.jsx",
-      "source_location": "L323",
+      "source_location": "L291",
       "weight": 1.0
     },
     {
@@ -41762,7 +41692,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "src/pages/EventSchedulePage.jsx",
-      "source_location": "L3291",
+      "source_location": "L2930",
       "weight": 1.0
     },
     {
@@ -41773,7 +41703,18 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "src/pages/EventSchedulePage.jsx",
-      "source_location": "L3316",
+      "source_location": "L2955",
+      "weight": 1.0
+    },
+    {
+      "source": "src_pages_eventschedulepage",
+      "target": "src_pages_eventschedulepage_eventschedulepage",
+      "relation": "contains",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "src/pages/EventSchedulePage.jsx",
+      "source_location": "L307",
       "weight": 1.0
     },
     {
@@ -41784,7 +41725,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "src/pages/EventSchedulePage.jsx",
-      "source_location": "L35",
+      "source_location": "L33",
       "weight": 1.0
     },
     {
@@ -41795,7 +41736,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "src/pages/EventSchedulePage.jsx",
-      "source_location": "L40",
+      "source_location": "L38",
       "weight": 1.0
     },
     {
@@ -41806,7 +41747,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "src/pages/EventSchedulePage.jsx",
-      "source_location": "L68",
+      "source_location": "L66",
       "weight": 1.0
     },
     {
@@ -41817,7 +41758,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "src/pages/EventSchedulePage.jsx",
-      "source_location": "L78",
+      "source_location": "L76",
       "weight": 1.0
     },
     {
@@ -41828,7 +41769,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "src/pages/EventSchedulePage.jsx",
-      "source_location": "L93",
+      "source_location": "L91",
       "weight": 1.0
     },
     {
@@ -41839,7 +41780,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "src/pages/EventSchedulePage.jsx",
-      "source_location": "L422",
+      "source_location": "L396",
       "weight": 1.0
     },
     {
@@ -41850,7 +41791,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "src/pages/EventSchedulePage.jsx",
-      "source_location": "L532",
+      "source_location": "L506",
       "weight": 1.0
     },
     {
@@ -41861,7 +41802,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "src/pages/EventSchedulePage.jsx",
-      "source_location": "L554",
+      "source_location": "L528",
       "weight": 1.0
     },
     {
@@ -41976,6 +41917,17 @@
     },
     {
       "source": "src_pages_loginpage",
+      "target": "src_pages_loginpage_loginpage",
+      "relation": "contains",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "src/pages/LoginPage.jsx",
+      "source_location": "L116",
+      "weight": 1.0
+    },
+    {
+      "source": "src_pages_loginpage",
       "target": "src_pages_loginpage_configuredapiurl",
       "relation": "contains",
       "_origin": "ast",
@@ -42020,7 +41972,7 @@
     },
     {
       "source": "src_pages_loginpage",
-      "target": "src_pages_loginpage_signinwithnetworkretry",
+      "target": "src_pages_loginpage_verifybackendsession",
       "relation": "contains",
       "_origin": "ast",
       "confidence": "EXTRACTED",
@@ -42031,24 +41983,24 @@
     },
     {
       "source": "src_pages_loginpage",
+      "target": "src_pages_loginpage_signinwithnetworkretry",
+      "relation": "contains",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "src/pages/LoginPage.jsx",
+      "source_location": "L59",
+      "weight": 1.0
+    },
+    {
+      "source": "src_pages_loginpage",
       "target": "src_pages_loginpage_getloginerrormessage",
       "relation": "contains",
       "_origin": "ast",
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "src/pages/LoginPage.jsx",
-      "source_location": "L53",
-      "weight": 1.0
-    },
-    {
-      "source": "src_pages_loginpage",
-      "target": "src_pages_loginpage_loginpage",
-      "relation": "contains",
-      "_origin": "ast",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "source_file": "src/pages/LoginPage.jsx",
-      "source_location": "L95",
+      "source_location": "L74",
       "weight": 1.0
     },
     {
@@ -46130,7 +46082,7 @@
       "confidence_score": 0.85,
       "context": "argument",
       "source_file": "src/pages/EventSchedulePage.jsx",
-      "source_location": "L405",
+      "source_location": "L379",
       "weight": 1.0
     },
     {
@@ -46339,5 +46291,5 @@
     }
   ],
   "hyperedges": [],
-  "built_at_commit": "6c7fa5108f9fdf5678ea8d4b381213517ae8f310"
+  "built_at_commit": "a61ab71d75622cbe4a7c5aae11119cec87b7baad"
 }

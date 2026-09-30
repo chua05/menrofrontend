@@ -102,9 +102,9 @@
     "semantic_hash": ""
   },
   "src/pages/EventSchedulePage.jsx": {
-    "mtime": 1790664598.394707,
-    "seen": 1790668241.3480194,
-    "ast_hash": "e8c4a7c2a984a2fb34cc3d293176d56f",
+    "mtime": 1790776502.9039662,
+    "seen": 1790776541.1576588,
+    "ast_hash": "d31ad2bcd828b0b46e3ab2862d8760af",
     "semantic_hash": ""
   },
   "src/pages/GuestEventPage.jsx": {
@@ -114,9 +114,9 @@
     "semantic_hash": ""
   },
   "src/pages/LoginPage.jsx": {
-    "mtime": 1790664594.7312593,
-    "seen": 1790668241.348032,
-    "ast_hash": "d3bd2966a86784987740f77402427466",
+    "mtime": 1790778309.9757981,
+    "seen": 1790778363.9417715,
+    "ast_hash": "284e3c8a1760764c0da855757f77b34f",
     "semantic_hash": ""
   },
   "src/pages/MapVisualizationPage.jsx": {
@@ -234,9 +234,9 @@
     "semantic_hash": "e223efca71084bba4d89ae935e65f11d"
   },
   "vercel.json": {
-    "mtime": 1790619273.5680993,
-    "seen": 1790619473.778086,
-    "ast_hash": "1859814ae49fa78600cba121ea0c221f",
+    "mtime": 1790778096.6733801,
+    "seen": 1790778363.941946,
+    "ast_hash": "48f38499f70022f13c2537f9fd26f5d2",
     "semantic_hash": ""
   },
   "vite.config.js": {

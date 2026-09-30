@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import {
-  Archive,
   CalendarDays,
   Check,
   ChevronLeft,
@@ -12,7 +11,6 @@ import {
   EllipsisVertical,
   MapPin,
   Plus,
-  RotateCcw,
   Sprout,
   Trash2,
   Users,
@@ -190,20 +188,6 @@ function formatDate(dateString) {
   });
 }
 
-function formatShortDate(dateString) {
-  if (!dateString) return "—";
-
-  const date = new Date(
-    `${dateString}T00:00:00`
-  );
-
-  return date.toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
-}
-
 function formatTime(time) {
   if (!time) return "—";
 
@@ -330,11 +314,6 @@ export default function EventSchedulePage() {
 
   const [events, setEvents] =
     useState([]);
-  const [
-    archivedEvents,
-    setArchivedEvents,
-  ] = useState([]);
-
   const [sites, setSites] =
     useState([]);
 
@@ -389,11 +368,6 @@ export default function EventSchedulePage() {
   const [
     showEditModal,
     setShowEditModal,
-  ] = useState(false);
-
-  const [
-    showArchiveModal,
-    setShowArchiveModal,
   ] = useState(false);
 
   const [
@@ -564,26 +538,6 @@ export default function EventSchedulePage() {
     );
   }
 
-  async function loadArchivedEvents() {
-    if (!canManage) {
-      setArchivedEvents([]);
-      return;
-    }
-
-    const response =
-      await apiRequest(
-        "/events/archived"
-      );
-
-    setArchivedEvents(
-      Array.isArray(response.data)
-        ? response.data.filter((event) =>
-            EVENT_TYPES.includes(event?.type)
-          )
-        : []
-    );
-  }
-
   async function loadInitialData() {
     setLoading(true);
     setInitialError("");
@@ -592,9 +546,6 @@ export default function EventSchedulePage() {
       await Promise.all([
         loadSites(),
         loadEvents(),
-        canManage
-          ? loadArchivedEvents()
-          : Promise.resolve(),
       ]);
     } catch (error) {
       console.error(
@@ -1419,81 +1370,6 @@ export default function EventSchedulePage() {
       }
     };
 
-  const archiveEvent =
-    async () => {
-      if (!selectedEvent) {
-        return;
-      }
-
-      const confirmed =
-        window.confirm(
-          `Archive ${selectedEvent.name}?`
-        );
-
-      if (!confirmed) {
-        return;
-      }
-
-      setActionLoading(true);
-      setPageError("");
-
-      try {
-        const eventId =
-          selectedEvent.id ||
-          selectedEvent.eventId;
-
-        const response =
-          await apiRequest(
-            `/events/${eventId}/archive`,
-            {
-              method: "PATCH",
-              body: JSON.stringify(
-                {}
-              ),
-            }
-          );
-
-        const archived =
-          response.data;
-
-        setEvents(
-          (previous) =>
-            previous.filter(
-              (item) =>
-                (item.id ||
-                  item.eventId) !==
-                eventId
-            )
-        );
-
-        setArchivedEvents(
-          (previous) => [
-            archived,
-            ...previous.filter(
-              (item) =>
-                (item.id ||
-                  item.eventId) !==
-                eventId
-            ),
-          ]
-        );
-
-        setSelectedEvent(null);
-        setShowEventMenu(false);
-
-        showSuccess(
-          `${eventId} was archived.`
-        );
-      } catch (error) {
-        setPageError(
-          error.message ||
-            "Failed to archive event."
-        );
-      } finally {
-        setActionLoading(false);
-      }
-    };
-
   const deleteEvent =
     async () => {
       if (!selectedEvent) {
@@ -1534,16 +1410,6 @@ export default function EventSchedulePage() {
             )
         );
 
-        setArchivedEvents(
-          (previous) =>
-            previous.filter(
-              (item) =>
-                (item.id ||
-                  item.eventId) !==
-                eventId
-            )
-        );
-
         setSelectedEvent(null);
         setShowEventMenu(false);
 
@@ -1554,61 +1420,6 @@ export default function EventSchedulePage() {
         setPageError(
           error.message ||
             "Failed to delete event."
-        );
-      } finally {
-        setActionLoading(false);
-      }
-    };
-
-  const restoreArchivedEvent =
-    async (eventId) => {
-      setActionLoading(true);
-      setPageError("");
-
-      try {
-        const response =
-          await apiRequest(
-            `/events/${eventId}/restore`,
-            {
-              method: "PATCH",
-              body: JSON.stringify(
-                {}
-              ),
-            }
-          );
-
-        const restored =
-          response.data;
-
-        setArchivedEvents(
-          (previous) =>
-            previous.filter(
-              (event) =>
-                (event.id ||
-                  event.eventId) !==
-                eventId
-            )
-        );
-
-        setEvents(
-          (previous) => [
-            restored,
-            ...previous.filter(
-              (event) =>
-                (event.id ||
-                  event.eventId) !==
-                eventId
-            ),
-          ]
-        );
-
-        showSuccess(
-          `${eventId} was restored.`
-        );
-      } catch (error) {
-        setPageError(
-          error.message ||
-            "Failed to restore event."
         );
       } finally {
         setActionLoading(false);
@@ -1696,27 +1507,6 @@ export default function EventSchedulePage() {
 
         {canManage && (
           <div className="ec-header-actions">
-            <button
-              type="button"
-              className="ec-secondary-btn"
-              disabled={actionLoading}
-              onClick={async () => {
-                try {
-                  await loadArchivedEvents();
-                  setShowArchiveModal(
-                    true
-                  );
-                } catch (error) {
-                  setPageError(
-                    error.message
-                  );
-                }
-              }}
-            >
-              <Archive size={15} />
-              Archived Events
-            </button>
-
             <button
               type="button"
               className="ec-primary-btn"
@@ -2549,25 +2339,6 @@ export default function EventSchedulePage() {
               </div>
 
               <div className="ec-modal-footer ec-details-footer">
-                {canManage && (
-                  <button
-                    type="button"
-                    className="ec-archive-btn"
-                    onClick={
-                      archiveEvent
-                    }
-                    disabled={
-                      actionLoading
-                    }
-                  >
-                    <Archive
-                      size={15}
-                    />
-
-                    Archive
-                  </button>
-                )}
-
                 <div className="ec-detail-footer-actions">
                   {canManage &&
                     getEventStatus(
@@ -2728,138 +2499,6 @@ export default function EventSchedulePage() {
           </div>
         )}
 
-      {canManage &&
-        showArchiveModal && (
-          <div className="ec-modal-backdrop">
-            <div className="ec-modal ec-archive-modal">
-              <div className="ec-modal-header">
-                <div>
-                  <h2>
-                    Archived Events
-                  </h2>
-
-                  <p>
-                    View or restore
-                    archived event
-                    records.
-                  </p>
-                </div>
-
-                <button
-                  type="button"
-                  className="ec-modal-close"
-                  disabled={
-                    actionLoading
-                  }
-                  onClick={() =>
-                    setShowArchiveModal(
-                      false
-                    )
-                  }
-                >
-                  <X size={18} />
-                </button>
-              </div>
-
-              <div className="ec-archive-body">
-                {archivedEvents.length ===
-                0 ? (
-                  <div className="ec-archive-empty">
-                    <Archive
-                      size={31}
-                      strokeWidth={
-                        1.5
-                      }
-                    />
-
-                    <h3>
-                      No archived
-                      events
-                    </h3>
-
-                    <p>
-                      Archived event
-                      records will
-                      appear here.
-                    </p>
-                  </div>
-                ) : (
-                  archivedEvents.map(
-                    (event) => {
-                      const eventId =
-                        event.id ||
-                        event.eventId;
-
-                      return (
-                        <div
-                          className="ec-archive-row"
-                          key={
-                            eventId
-                          }
-                        >
-                          <div>
-                            <strong>
-                              {
-                                event.name
-                              }
-                            </strong>
-
-                            <span>
-                              {
-                                eventId
-                              }{" "}
-                              ·{" "}
-                              {formatShortDate(
-                                event.date
-                              )}
-                            </span>
-                          </div>
-
-                          <button
-                            type="button"
-                            disabled={
-                              actionLoading
-                            }
-                            onClick={() =>
-                              restoreArchivedEvent(
-                                eventId
-                              )
-                            }
-                          >
-                            <RotateCcw
-                              size={
-                                14
-                              }
-                            />
-
-                            Restore
-                          </button>
-                        </div>
-                      );
-                    }
-                  )
-                )}
-              </div>
-
-              <div className="ec-modal-footer">
-                <button
-                  type="button"
-                  className="ec-secondary-btn"
-                  disabled={
-                    actionLoading
-                  }
-                  onClick={() =>
-                    setShowArchiveModal(
-                      false
-                    )
-                  }
-                >
-                  Close
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
     </div>
   );
 }

@@ -35,6 +35,27 @@ const isFirebaseNetworkError = (error) =>
 const wait = (milliseconds) =>
   new Promise((resolve) => window.setTimeout(resolve, milliseconds));
 
+const verifyBackendSession = async (token) => {
+  const request = () =>
+    axios.post(
+      `${API_BASE_URL}/auth/verify`,
+      {},
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      }
+    );
+
+  try {
+    return await request();
+  } catch (error) {
+    if (error?.response || error?.code !== "ERR_NETWORK") throw error;
+    await wait(1000);
+    return request();
+  }
+};
+
 const signInWithNetworkRetry = async (email, password) => {
   try {
     return await signInWithEmailAndPassword(auth, email, password);
@@ -166,17 +187,7 @@ export default function LoginPage() {
       const token =
         await credential.user.getIdToken();
 
-      const response =
-        await axios.post(
-          `${API_BASE_URL}/auth/verify`,
-          {},
-          {
-            headers: {
-              Authorization:
-                `Bearer ${token}`,
-            },
-          }
-        );
+      const response = await verifyBackendSession(token);
 
       const userData =
         response.data.data;
@@ -227,17 +238,7 @@ export default function LoginPage() {
         const token =
           await result.user.getIdToken();
 
-        const response =
-          await axios.post(
-            `${API_BASE_URL}/auth/verify`,
-            {},
-            {
-              headers: {
-                Authorization:
-                  `Bearer ${token}`,
-              },
-            }
-          );
+        const response = await verifyBackendSession(token);
 
         const userData =
           response.data.data;
