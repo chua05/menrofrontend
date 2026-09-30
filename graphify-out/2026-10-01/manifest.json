@@ -102,9 +102,9 @@
     "semantic_hash": ""
   },
   "src/pages/EventSchedulePage.jsx": {
-    "mtime": 1790786269.540456,
-    "seen": 1790786384.068822,
-    "ast_hash": "9e07d2d57bc0a267cae5e6787817a862",
+    "mtime": 1790776502.9039662,
+    "seen": 1790776541.1576588,
+    "ast_hash": "d31ad2bcd828b0b46e3ab2862d8760af",
     "semantic_hash": ""
   },
   "src/pages/GuestEventPage.jsx": {
@@ -1017,18 +1017,6 @@
     "mtime": 1790784165.5747864,
     "seen": 1790784253.9309337,
     "ast_hash": "68333ac7ca196b37da88c1ce47e31296",
-    "semantic_hash": ""
-  },
-  "src/utils/eventStatus.js": {
-    "mtime": 1790786173.306574,
-    "seen": 1790786384.0688856,
-    "ast_hash": "52aa9cdc0b8d2b243a1e1cb759595eaf",
-    "semantic_hash": ""
-  },
-  "tests/eventStatus.test.js": {
-    "mtime": 1790786174.015107,
-    "seen": 1790786384.0689006,
-    "ast_hash": "a0e4d8cb61f23f9c4848ee2fd642be3e",
     "semantic_hash": ""
   }
 }

@@ -10,7 +10,6 @@ import {
   FiCheckCircle,
   FiEye,
   FiFileText,
-  FiFilter,
   FiHeart,
   FiImage,
   FiMapPin,
@@ -1363,16 +1362,6 @@ export default function MonitoringPage() {
     }
   }
 
-  function resetFilters() {
-    setSearchTerm("");
-    setSiteFilter("All");
-    setSpeciesFilter("All");
-    setConditionFilter("All");
-    setDateFrom("");
-    setDateTo("");
-    setShowDateFilter(false);
-  }
-
   if (loading) {
     return (
       <div className="sm-page">
@@ -1587,15 +1576,6 @@ export default function MonitoringPage() {
           )}
         </div>
 
-        <button
-          type="button"
-          className="sm-filter-button"
-          onClick={resetFilters}
-          title="Clear all filters"
-        >
-          <FiFilter size={14} />
-          Filters
-        </button>
       </div>
 
 

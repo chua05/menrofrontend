@@ -1,6 +1,9 @@
 .ra-page {
+  width: 100%;
+  max-width: 100%;
   min-height: 100%;
   padding: 28px 30px 40px;
+  overflow-x: clip;
   background: #f8faf9;
   color: #1f2937;
   font-size: 14px;
@@ -21,6 +24,7 @@
 }
 
 .ra-heading {
+  min-width: 0;
   display: flex;
   align-items: flex-start;
   gap: 13px;
@@ -111,6 +115,10 @@
   display: flex;
   align-items: flex-start;
   gap: 12px;
+}
+
+.ra-kpi-card > div:last-child {
+  min-width: 0;
 }
 
 .ra-kpi-icon {
@@ -275,6 +283,7 @@
 }
 
 .ra-chart-area {
+  min-width: 0;
   width: 100%;
   height: 280px;
   margin-top: 16px;
@@ -469,6 +478,15 @@
     font-size: 21px;
   }
 
+  .ra-heading-icon {
+    width: 44px;
+    height: 44px;
+  }
+
+  .ra-heading > div:last-child {
+    min-width: 0;
+  }
+
   .ra-heading p {
     font-size: 13px;
   }
@@ -508,7 +526,12 @@
   }
 
   .ra-chart-card {
-    padding: 16px;
+    min-height: 340px;
+    padding: 16px 14px;
+  }
+
+  .ra-chart-area {
+    height: 250px;
   }
 }
 .ra-centered-state {
@@ -628,6 +651,8 @@
   width: 100%;
   overflow-x: auto;
   scrollbar-width: thin;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-inline: contain;
 }
 
 .ra-table {
@@ -769,13 +794,15 @@
 }
 
 @media (max-width: 768px) {
-  .ra-page { width: 100%; overflow-x: clip; }
   .ra-filter-card { grid-template-columns: 1fr; }
   .ra-map-frame,
   .ra-map { height: 380px; min-height: 380px; }
   .ra-map-legend { max-height: 126px; overflow: auto; gap: 14px; }
   .ra-chart-area { min-width: 0; }
   .ra-chart-area .recharts-responsive-container { min-width: 0 !important; }
+  .ra-decision-item .ra-secondary-button { width: 100%; }
+  .ra-stat-list > div { align-items: flex-start; }
+  .ra-stat-list span { min-width: 0; overflow-wrap: anywhere; }
 }
 
 @media (max-width: 420px) {
@@ -791,4 +818,7 @@
   .ra-map { height: 350px; min-height: 350px; }
   .ra-map-legend { right: 8px; left: 8px; bottom: 8px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .ra-map-legend span { white-space: normal; }
+  .ra-map-popup { top: 8px; right: 8px; width: calc(100% - 16px); }
+  .ra-table { min-width: 520px; }
+  .ra-stat-list strong { min-width: 64px; font-size: 16px; }
 }

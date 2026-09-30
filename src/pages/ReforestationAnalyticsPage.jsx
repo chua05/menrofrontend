@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { FiAlertCircle, FiBarChart2, FiCalendar, FiDownload, FiGrid, FiMapPin, FiPackage, FiShield, FiTrendingUp } from "react-icons/fi";
+import { FiAlertCircle, FiBarChart2, FiCalendar, FiGrid, FiMapPin, FiPackage, FiShield, FiTrendingUp } from "react-icons/fi";
 import { Bar, BarChart, CartesianGrid, Cell, Line, LineChart, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { useAuth } from "../context/AuthContext";
 import { authenticatedFetch } from "../services/authenticatedApi";
@@ -13,7 +13,6 @@ const EMPTY_ANALYTICS = { summary: {}, plantingTrend: [], survivalTrend: [], mon
 const EMPTY_FILTERS = { dateFrom: "", dateTo: "", barangay: "All", species: "All", site: "All" };
 const formatNumber = (value) => new Intl.NumberFormat("en-PH").format(Number(value) || 0);
 const displayRate = (value) => value == null ? "" : `${formatNumber(value)}%`;
-const escapeCsv = (value) => /[",\n]/.test(String(value ?? "")) ? `"${String(value ?? "").replace(/"/g, '""')}"` : String(value ?? "");
 
 function EmptyRing({ label }) {
   return <div className="ra-donut-chart ra-zero-ring-wrap"><ResponsiveContainer width="100%" height="100%"><PieChart><Pie data={[{ value: 1 }]} dataKey="value" innerRadius={55} outerRadius={82} isAnimationActive={false}><Cell fill="#e5e9e7" /></Pie></PieChart></ResponsiveContainer><div className="ra-zero-ring-center"><strong>0</strong><span>{label}</span></div></div>;
@@ -89,17 +88,11 @@ export default function ReforestationAnalyticsPage() {
   }, [decision, routeBase]);
 
   const updateFilter = (name) => (event) => setFilters((current) => ({ ...current, [name]: event.target.value }));
-  const exportAnalyticsCsv = () => {
-    const rows = [["Analytics & Decision Support"], ["Generated", analytics.meta?.generatedAt || ""], [], ["Summary", "Value"], ["Total Saplings Distributed", summary.totalSaplingsDistributed], ["Total Trees Planted", summary.totalTreesPlanted], ["Overall Survival Rate", summary.overallSurvivalRate == null ? "" : `${summary.overallSurvivalRate}%`], ["Verified Planting Reports", summary.verifiedPlantingReports], ["Barangays Covered", summary.barangaysCovered], ["Active Planting Sites", summary.activePlantingSites], [], ["Sapling Tree", "Planted", "Monitored", "Survived", "Survival Rate"], ...speciesRows.map((item) => [item.species, item.planted, item.monitored, item.survived, item.survivalRate == null ? "" : `${item.survivalRate}%`])];
-    const blob = new Blob([rows.map((row) => row.map(escapeCsv).join(",")).join("\n")], { type: "text/csv;charset=utf-8" });
-    const url = URL.createObjectURL(blob); const link = document.createElement("a"); link.href = url; link.download = "reforestation-analytics.csv"; document.body.appendChild(link); link.click(); link.remove(); URL.revokeObjectURL(url);
-  };
-
   if (loading && !hasLoaded) return <div className="ra-page"><div className="ra-centered-state">Loading analytics…</div></div>;
   if (loadError && !hasLoaded) return <div className="ra-page"><div className="ra-centered-state" role="alert"><span>{loadError}</span><button className="ra-secondary-button" onClick={() => loadAnalytics({ foreground: true })}>Retry</button></div></div>;
 
   return <div className="ra-page">
-    <div className="ra-header"><div className="ra-heading"><div className="ra-heading-icon"><FiTrendingUp size={21} /></div><div><h1>Reforestation Analytics</h1><p>Monitor reforestation activities, evaluate progress, and identify areas that need attention.</p></div></div><div className="ra-header-actions"><button type="button" className="ra-secondary-button" onClick={exportAnalyticsCsv}><FiDownload size={14} />Export Report</button></div></div>
+    <div className="ra-header"><div className="ra-heading"><div className="ra-heading-icon"><FiTrendingUp size={21} /></div><div><h1>Reforestation Analytics</h1><p>Monitor reforestation activities, evaluate progress, and identify areas that need attention.</p></div></div></div>
     {loadError && <div className="ra-error-banner" role="alert"><FiAlertCircle />{loadError}</div>}
     <div className="ra-filter-card">
       <div className="ra-filter-field"><label>Date Range</label><div className="ra-date-range"><FiCalendar size={14} /><input type="date" value={filters.dateFrom} onChange={updateFilter("dateFrom")} /><span>to</span><input type="date" value={filters.dateTo} onChange={updateFilter("dateTo")} /></div></div>

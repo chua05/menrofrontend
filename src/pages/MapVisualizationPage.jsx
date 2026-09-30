@@ -6,7 +6,6 @@ import { formatDisplayId } from "../utils/displayId";
 import {
   FiActivity,
   FiBarChart2,
-  FiDownload,
   FiMap,
   FiMapPin,
   FiRefreshCw,
@@ -898,65 +897,6 @@ export default function MapVisualizationPage() {
     setConditionFilter("All");
   };
 
-  const exportMapSummary = () => {
-    const rows = [
-      [
-        "Site",
-        "Barangay",
-        "Trees Planted",
-        "Utilization",
-        "Condition",
-        "Survival Rate",
-      ],
-      ...filteredSites.map(
-        (site) => [
-          site.siteName ||
-            site.siteId,
-          site.barangay,
-          site.treesPlanted,
-          `${site.utilization}%`,
-          site.condition,
-          `${site.survivalRate}%`,
-        ]
-      ),
-    ];
-
-    const csv = rows
-      .map((row) =>
-        row
-          .map((value) =>
-            `"${String(
-              value ?? ""
-            ).replace(/"/g, '""')}"`
-          )
-          .join(",")
-      )
-      .join("\n");
-
-    const blob = new Blob(
-      [csv],
-      {
-        type: "text/csv;charset=utf-8;",
-      }
-    );
-
-    const url =
-      URL.createObjectURL(blob);
-
-    const link =
-      document.createElement("a");
-
-    link.href = url;
-    link.download =
-      "map-visualization-summary.csv";
-
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-
-    URL.revokeObjectURL(url);
-  };
-
   return (
     <div className="mv-page">
       <div className="mv-header">
@@ -990,16 +930,6 @@ export default function MapVisualizationPage() {
             Refresh Map
           </button>
 
-          <button
-            type="button"
-            className="mv-primary-button"
-            onClick={
-              exportMapSummary
-            }
-          >
-            <FiDownload size={14} />
-            Export Map Report
-          </button>
         </div>
       </div>
 

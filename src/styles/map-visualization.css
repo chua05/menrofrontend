@@ -55,7 +55,6 @@
   gap: 10px;
 }
 
-.mv-primary-button,
 .mv-secondary-button,
 .mv-clear-button {
   min-height: 44px;
@@ -69,16 +68,6 @@
   justify-content: center;
   gap: 8px;
   transition: 0.2s ease;
-}
-
-.mv-primary-button {
-  border: 1px solid #238b45;
-  background: #238b45;
-  color: #fff;
-}
-
-.mv-primary-button:hover {
-  background: #1c7539;
 }
 
 .mv-secondary-button,
@@ -518,7 +507,6 @@
     flex-wrap: wrap;
   }
 
-  .mv-primary-button,
   .mv-secondary-button {
     flex: 1;
     min-width: 140px;
@@ -573,7 +561,6 @@
     flex-direction: column;
   }
 
-  .mv-primary-button,
   .mv-secondary-button {
     width: 100%;
   }
