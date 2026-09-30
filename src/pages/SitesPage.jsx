@@ -6,6 +6,7 @@ import {
   Archive,
   Camera,
   ChevronDown,
+  ChevronRight,
   Circle,
   Edit3,
   Eye,
@@ -2913,59 +2914,88 @@ function FormField({
 }
 
 function MapLegend() {
+  const [isOpen, setIsOpen] = useState(true);
+
   return (
-    <div className="ps-map-legend">
-      <section>
-        <h3>
-          Site Utilization
-        </h3>
+    <div
+      className={`ps-map-legend-shell ${isOpen ? "is-open" : "is-closed"}`}
+    >
+      <button
+        type="button"
+        className="ps-map-legend-reopen"
+        onClick={() => setIsOpen(true)}
+        aria-label="Show map status legend"
+        aria-expanded={isOpen}
+        title="Show map status legend"
+      >
+        <ChevronRight size={20} />
+      </button>
 
-        <LegendSquare
-          color="#4caf63"
-          label="Available (0–49%)"
-        />
+      <div className="ps-map-legend" aria-hidden={!isOpen}>
+        <section>
+          <div className="ps-map-legend-header">
+            <h3>
+              Site Utilization
+            </h3>
 
-        <LegendSquare
-          color="#facc15"
-          label="Partially Occupied (50–89%)"
-        />
+            <button
+              type="button"
+              className="ps-map-legend-close"
+              onClick={() => setIsOpen(false)}
+              aria-label="Hide map status legend"
+              title="Hide map status legend"
+            >
+              <X size={16} />
+            </button>
+          </div>
 
-        <LegendSquare
-          color="#ef4444"
-          label="Full (90–100%)"
-        />
-      </section>
+          <LegendSquare
+            color="#4caf63"
+            label="Available (0–49%)"
+          />
 
-      <section>
-        <h3>
-          Tree Condition
-        </h3>
+          <LegendSquare
+            color="#facc15"
+            label="Partially Occupied (50–89%)"
+          />
 
-        <LegendDot
-          color="#1aa343"
-          label="Healthy"
-        />
+          <LegendSquare
+            color="#ef4444"
+            label="Full (90–100%)"
+          />
+        </section>
 
-        <LegendDot
-          color="#f4b400"
-          label="Needs Attention"
-        />
+        <section>
+          <h3>
+            Tree Condition
+          </h3>
 
-        <LegendDot
-          color="#e52d2d"
-          label="Critical"
-        />
+          <LegendDot
+            color="#1aa343"
+            label="Healthy"
+          />
 
-        <LegendDot
-          color="#3186d9"
-          label="Not Yet Monitored"
-        />
-      </section>
+          <LegendDot
+            color="#f4b400"
+            label="Needs Attention"
+          />
 
-      <div className="ps-boundary-legend">
-        <span />
+          <LegendDot
+            color="#e52d2d"
+            label="Critical"
+          />
 
-        Barangay Boundary
+          <LegendDot
+            color="#3186d9"
+            label="Not Yet Monitored"
+          />
+        </section>
+
+        <div className="ps-boundary-legend">
+          <span />
+
+          Barangay Boundary
+        </div>
       </div>
     </div>
   );
