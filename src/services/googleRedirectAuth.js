@@ -1,9 +1,11 @@
-import { getRedirectResult, signInWithRedirect } from "firebase/auth";
+import { getRedirectResult, signInWithPopup, signInWithRedirect } from "firebase/auth";
 import { auth, googleProvider } from "../firebase/config";
 
 const GOOGLE_REDIRECT_SOURCE_KEY = "menro.googleRedirectSource";
 
 let redirectResultPromise;
+
+export const startGooglePopup = () => signInWithPopup(auth, googleProvider);
 
 export const startGoogleRedirect = async (source) => {
   window.sessionStorage.setItem(GOOGLE_REDIRECT_SOURCE_KEY, source);

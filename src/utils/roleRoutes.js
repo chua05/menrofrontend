@@ -1,5 +1,13 @@
+export function normalizeRole(role) {
+  const normalizedRole = String(role || "participant").trim().toLowerCase();
+  return ["admin", "staff", "participant"].includes(normalizedRole)
+    ? normalizedRole
+    : "participant";
+}
+
 export function dashboardPathForRole(role) {
-  if (role === "admin") return "/admin/dashboard";
-  if (role === "staff") return "/staff/dashboard";
+  const normalizedRole = normalizeRole(role);
+  if (normalizedRole === "admin") return "/admin/dashboard";
+  if (normalizedRole === "staff") return "/staff/dashboard";
   return "/participant/dashboard";
 }

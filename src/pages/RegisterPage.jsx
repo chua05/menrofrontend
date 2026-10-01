@@ -12,7 +12,7 @@ import { API_BASE_URL } from "../services/authenticatedApi";
 import {
   consumeGoogleRedirectResult,
   hasPendingGoogleRedirect,
-  startGoogleRedirect,
+  startGooglePopup,
 } from "../services/googleRedirectAuth";
 
 import menroLogo from "../assets/menro-logo.png";
@@ -215,10 +215,33 @@ export default function RegisterPage() {
     setErrors({});
     setLoading(true);
     try {
-      await startGoogleRedirect("register");
+      const result = await startGooglePopup();
+      const token = await result.user.getIdToken();
+      const response = await axios.post(`${API_BASE_URL}/auth/verify`, {}, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const userData = response.data.data;
+
+      login(userData, userData.role);
+      navigate(
+        userData.profileComplete === false
+          ? "/complete-profile"
+          : dashboardPathForRole(userData.role),
+        { replace: true }
+      );
     } catch (error) {
       console.error("Google registration failed:", error?.code || error?.message);
-      setErrors({ general: "Google registration failed. Please try again." });
+      setErrors({
+        general:
+          error.response?.data?.message ||
+          (error.code === "auth/popup-blocked"
+            ? "The Google sign-in window was blocked. Allow pop-ups, then try again."
+            : error.code === "auth/popup-closed-by-user"
+              ? "Google sign-in was cancelled."
+              : error.code === "auth/unauthorized-domain"
+                ? "Google sign-in is not enabled for this website. Please contact the administrator."
+                : "Google registration failed. Please try again."),
+      });
     } finally {
       setLoading(false);
     }

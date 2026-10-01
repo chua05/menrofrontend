@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
-import { CheckCircle2 } from "lucide-react";
 import { FiMail, FiLock, FiEye, FiEyeOff } from "react-icons/fi";
 import { FcGoogle } from "react-icons/fc";
 import {
@@ -15,7 +14,7 @@ import { API_BASE_URL } from "../services/authenticatedApi";
 import {
   consumeGoogleRedirectResult,
   hasPendingGoogleRedirect,
-  startGoogleRedirect,
+  startGooglePopup,
 } from "../services/googleRedirectAuth";
 import axios from "axios";
 
@@ -120,16 +119,8 @@ export default function LoginPage() {
   const [loading, setLoading] =
     useState(false);
   const [resetLoading, setResetLoading] = useState(false);
-  const [pendingLogin, setPendingLogin] = useState(null);
-  const [acknowledging, setAcknowledging] = useState(false);
-  const successButtonRef = useRef(null);
-
   const navigate = useNavigate();
   const { login } = useAuth();
-
-  useEffect(() => {
-    if (pendingLogin) successButtonRef.current?.focus();
-  }, [pendingLogin]);
 
   useEffect(() => {
     let active = true;
@@ -153,12 +144,8 @@ export default function LoginPage() {
           return;
         }
 
-        setError("");
-        setSuccess("");
-        setPendingLogin({
-          userData,
-          destination: dashboardPathForRole(userData.role),
-        });
+        login(userData, userData.role);
+        navigate(dashboardPathForRole(userData.role), { replace: true });
       } catch (redirectError) {
         if (!active) return;
         console.error(
@@ -179,20 +166,6 @@ export default function LoginPage() {
   }, [login, navigate]);
 
   const [verificationSending, setVerificationSending] = useState(false);
-
-  const queueSuccessfulLogin = (userData, destination) => {
-    setError("");
-    setSuccess("");
-    setPendingLogin({ userData, destination });
-  };
-
-  const acknowledgeSuccessfulLogin = () => {
-    if (!pendingLogin || acknowledging) return;
-    setAcknowledging(true);
-    const { userData, destination } = pendingLogin;
-    login(userData, userData.role);
-    navigate(destination, { replace: true });
-  };
 
   const handleLogin = async (e) => {
     e.preventDefault();
@@ -232,10 +205,8 @@ export default function LoginPage() {
       const userData =
         response.data.data;
 
-      queueSuccessfulLogin(
-        userData,
-        dashboardPathForRole(userData.role)
-      );
+      login(userData, userData.role);
+      navigate(dashboardPathForRole(userData.role), { replace: true });
     } catch (err) {
       setSuccess("");
       console.error("Email sign in failed:", err?.code || err?.message);
@@ -269,7 +240,18 @@ export default function LoginPage() {
       setLoading(true);
 
       try {
-        await startGoogleRedirect("login");
+        const result = await startGooglePopup();
+        const token = await result.user.getIdToken();
+        const response = await verifyBackendSession(token);
+        const userData = response.data.data;
+
+        login(userData, userData.role);
+        navigate(
+          userData.role === "participant" && userData.profileComplete === false
+            ? "/complete-profile"
+            : dashboardPathForRole(userData.role),
+          { replace: true }
+        );
       } catch (err) {
         console.error("Google sign in failed:", err?.code || err?.message);
         setSuccess("");
@@ -509,28 +491,6 @@ export default function LoginPage() {
         </footer>
       </main>
 
-      {pendingLogin && (
-        <div className="login-success-backdrop">
-          <section
-            className="login-success-modal"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="login-success-title"
-          >
-            <CheckCircle2 className="login-success-icon" size={58} strokeWidth={1.7} aria-hidden="true" />
-            <h2 id="login-success-title">You have successfully logged in!</h2>
-            <button
-              ref={successButtonRef}
-              type="button"
-              className="login-success-button"
-              onClick={acknowledgeSuccessfulLogin}
-              disabled={acknowledging}
-            >
-              {acknowledging ? "Continuing..." : "OK, got it!"}
-            </button>
-          </section>
-        </div>
-      )}
     </div>
   );
 }
