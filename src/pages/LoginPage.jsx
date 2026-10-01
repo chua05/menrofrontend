@@ -136,7 +136,36 @@ export default function LoginPage() {
         );
       } catch (err) {
         if (isGoogleCancellation(err)) {
-          console.info("Google sign-in window was closed before completion.");
+          // Chrome/Firebase can report popup-closed after the OAuth credential
+          // has already been persisted. In that case Firebase is authoritative:
+          // finish MENRO verification instead of treating the normal close as a
+          // cancelled sign-in.
+          const firebaseUser = auth.currentUser;
+          if (firebaseUser) {
+            try {
+              const userData = await verifyMenroSession(firebaseUser);
+              login(userData, userData.role);
+              navigate(
+                userData.role === "participant" && userData.profileComplete === false
+                  ? "/complete-profile"
+                  : dashboardPathForRole(userData.role),
+                { replace: true }
+              );
+              return;
+            } catch (verificationError) {
+              console.error(
+                "MENRO verification after Google sign-in failed:",
+                verificationError?.code || verificationError?.message
+              );
+              setError(getAuthErrorMessage(verificationError, {
+                provider: "google",
+                online: navigator.onLine !== false,
+              }));
+              return;
+            }
+          }
+
+          console.info("Google sign-in was cancelled before authentication completed.");
           setError("");
           return;
         }

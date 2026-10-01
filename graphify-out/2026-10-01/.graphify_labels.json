@@ -26,7 +26,7 @@
   "24": "Configuration Reference",
   "25": "scripts",
   "26": "vite.config.js",
-  "27": "useAuth",
+  "27": "AuthContext.jsx",
   "28": "lucide-react",
   "29": "compilerOptions",
   "30": "vercel.json",
@@ -94,7 +94,7 @@
   "92": "Flutter Setup for Firebase AI Logic",
   "93": "Firebase AI Logic Basics",
   "94": "Core Capabilities",
-  "95": "SettingsPage.jsx",
+  "95": "Deployment",
   "96": "Cloud Firestore in Flutter",
   "97": "Cloud Firestore in Flutter",
   "98": "Manual Initialization",
@@ -115,6 +115,8 @@
   "113": "Android Studio Setup",
   "114": "firebase-ai-logic-basics/SKILL.md",
   "115": "Package.swift",
-  "116": "eslint.config.js",
-  "118": ".audit-temp/artifact.md"
+  "116": "Firebase CLI Commands",
+  "117": "Anti-Patterns",
+  "118": ".audit-temp/artifact.md",
+  "119": "Authorization Patterns"
 }

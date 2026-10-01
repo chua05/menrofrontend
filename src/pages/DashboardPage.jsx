@@ -35,13 +35,13 @@ import {
 
 import { useAuth } from "../context/AuthContext";
 import { auth } from "../firebase/config";
+import { API_BASE_URL } from "../services/authenticatedApi";
 import { formatDisplayId } from "../utils/displayId";
 import { JUBAN_BARANGAYS } from "../utils/userTypes";
 import "../styles/dashboard-page.css";
 
-const API_BASE_URL =
-  import.meta.env.VITE_API_URL || "http://localhost:5000/api";
 const BARANGAY_GEOJSON_URL = "/data/juban-barangays.geojson";
+const DASHBOARD_REQUEST_TIMEOUT_MS = 15_000;
 
 const JUBAN_FALLBACK_CENTER = {
   lat: 12.82,
@@ -134,12 +134,29 @@ async function getFreshToken() {
 }
 
 async function apiGet(path, token) {
-  const response = await fetch(`${API_BASE_URL}${path}`, {
-    method: "GET",
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
-  });
+  const controller = new AbortController();
+  const timeoutId = window.setTimeout(
+    () => controller.abort(),
+    DASHBOARD_REQUEST_TIMEOUT_MS
+  );
+  let response;
+
+  try {
+    response = await fetch(`${API_BASE_URL}${path}`, {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+      signal: controller.signal,
+    });
+  } catch (error) {
+    if (error?.name === "AbortError") {
+      throw new Error(`Dashboard request timed out: ${path}`, { cause: error });
+    }
+    throw error;
+  } finally {
+    window.clearTimeout(timeoutId);
+  }
 
   const payload = await response.json().catch(() => ({}));
 

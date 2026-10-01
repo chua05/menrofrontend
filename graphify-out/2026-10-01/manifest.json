@@ -60,10 +60,10 @@
     "semantic_hash": ""
   },
   "src/firebase/config.js": {
-    "mtime": 1789665168.430361,
-    "seen": 1789727150.0591724,
-    "ast_hash": "cb5011d5f33102edd009362527c8377d",
-    "semantic_hash": "cb5011d5f33102edd009362527c8377d"
+    "mtime": 1790830382.1010804,
+    "seen": 1790830408.6750135,
+    "ast_hash": "7e32dd5bd63b6280ec84a54bba4fa9ca",
+    "semantic_hash": ""
   },
   "src/layouts/DashboardLayout.jsx": {
     "mtime": 1789665168.430361,
@@ -114,9 +114,9 @@
     "semantic_hash": ""
   },
   "src/pages/LoginPage.jsx": {
-    "mtime": 1790830237.4881516,
-    "seen": 1790830271.330907,
-    "ast_hash": "e731bb24096138431624430d4c85a38b",
+    "mtime": 1790830382.712408,
+    "seen": 1790830408.6750336,
+    "ast_hash": "462935b63eaa964d9da7b61014935ca0",
     "semantic_hash": ""
   },
   "src/pages/MapVisualizationPage.jsx": {
@@ -162,9 +162,9 @@
     "semantic_hash": ""
   },
   "src/pages/RegisterPage.jsx": {
-    "mtime": 1790784209.7572696,
-    "seen": 1790784253.9309173,
-    "ast_hash": "6a56d2bd558fe5a4a4a170e5fb7ecc88",
+    "mtime": 1790830383.2694564,
+    "seen": 1790830408.6750467,
+    "ast_hash": "6778c361bcf16de9878111d4a9f8ec4a",
     "semantic_hash": ""
   },
   "src/pages/ReportsPage.jsx": {
@@ -1014,9 +1014,9 @@
     "semantic_hash": ""
   },
   "src/services/googleRedirectAuth.js": {
-    "mtime": 1790784165.5747864,
-    "seen": 1790784253.9309337,
-    "ast_hash": "68333ac7ca196b37da88c1ce47e31296",
+    "mtime": 1790830381.6009433,
+    "seen": 1790830408.6750674,
+    "ast_hash": "4d55c30176bfdab6560a4a4e863b9051",
     "semantic_hash": ""
   },
   "src/utils/eventStatus.js": {

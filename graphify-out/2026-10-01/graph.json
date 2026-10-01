@@ -1576,6 +1576,18 @@
       "source_location": "L31"
     },
     {
+      "id": "src_services_authenticatedapi_getauthtoken",
+      "label": "getAuthToken()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 14,
+      "community_name": "RegisterPage.jsx",
+      "file_type": "code",
+      "norm_label": "getauthtoken()",
+      "source_file": "src/services/authenticatedApi.js",
+      "source_location": "L13"
+    },
+    {
       "id": "src_services_authservice_getprofile",
       "label": "getProfile()",
       "_callable": true,
@@ -2557,7 +2569,7 @@
       "file_type": "code",
       "norm_label": "consumegoogleredirectresult()",
       "source_file": "src/services/googleRedirectAuth.js",
-      "source_location": "L22"
+      "source_location": "L24"
     },
     {
       "id": "src_services_googleredirectauth_haspendinggoogleredirect",
@@ -2569,7 +2581,19 @@
       "file_type": "code",
       "norm_label": "haspendinggoogleredirect()",
       "source_file": "src/services/googleRedirectAuth.js",
-      "source_location": "L19"
+      "source_location": "L21"
+    },
+    {
+      "id": "src_services_googleredirectauth_startgooglepopup",
+      "label": "startGooglePopup()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 23,
+      "community_name": "config.js",
+      "file_type": "code",
+      "norm_label": "startgooglepopup()",
+      "source_file": "src/services/googleRedirectAuth.js",
+      "source_location": "L8"
     },
     {
       "id": "src_services_googleredirectauth_startgoogleredirect",
@@ -2581,7 +2605,7 @@
       "file_type": "code",
       "norm_label": "startgoogleredirect()",
       "source_file": "src/services/googleRedirectAuth.js",
-      "source_location": "L8"
+      "source_location": "L10"
     },
     {
       "id": "src_context_authcontext_authprovider",
@@ -2589,35 +2613,11 @@
       "_callable": true,
       "_origin": "ast",
       "community": 27,
-      "community_name": "useAuth",
+      "community_name": "AuthContext.jsx",
       "file_type": "code",
       "norm_label": "authprovider()",
       "source_file": "src/context/AuthContext.jsx",
       "source_location": "L10"
-    },
-    {
-      "id": "src_context_authcontext_useauth",
-      "label": "useAuth()",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 27,
-      "community_name": "useAuth",
-      "file_type": "code",
-      "norm_label": "useauth()",
-      "source_file": "src/context/AuthContext.jsx",
-      "source_location": "L79"
-    },
-    {
-      "id": "src_routes_protectedroute_protectedroute",
-      "label": "ProtectedRoute()",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 27,
-      "community_name": "useAuth",
-      "file_type": "code",
-      "norm_label": "protectedroute()",
-      "source_file": "src/routes/ProtectedRoute.jsx",
-      "source_location": "L4"
     },
     {
       "id": "src_routes_rootredirect_guestonlyroute",
@@ -2625,7 +2625,7 @@
       "_callable": true,
       "_origin": "ast",
       "community": 27,
-      "community_name": "useAuth",
+      "community_name": "AuthContext.jsx",
       "file_type": "code",
       "norm_label": "guestonlyroute()",
       "source_file": "src/routes/RootRedirect.jsx",
@@ -2637,7 +2637,7 @@
       "_callable": true,
       "_origin": "ast",
       "community": 27,
-      "community_name": "useAuth",
+      "community_name": "AuthContext.jsx",
       "file_type": "code",
       "norm_label": "rootredirect()",
       "source_file": "src/routes/RootRedirect.jsx",
@@ -2649,11 +2649,23 @@
       "_callable": true,
       "_origin": "ast",
       "community": 27,
-      "community_name": "useAuth",
+      "community_name": "AuthContext.jsx",
       "file_type": "code",
       "norm_label": "useeffectiveauth()",
       "source_file": "src/routes/RootRedirect.jsx",
       "source_location": "L5"
+    },
+    {
+      "id": "src_services_authenticatedapi_authenticatedfetch",
+      "label": "authenticatedFetch()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 27,
+      "community_name": "AuthContext.jsx",
+      "file_type": "code",
+      "norm_label": "authenticatedfetch()",
+      "source_file": "src/services/authenticatedApi.js",
+      "source_location": "L22"
     },
     {
       "id": "src_utils_roleroutes_dashboardpathforrole",
@@ -2661,7 +2673,7 @@
       "_callable": true,
       "_origin": "ast",
       "community": 27,
-      "community_name": "useAuth",
+      "community_name": "AuthContext.jsx",
       "file_type": "code",
       "norm_label": "dashboardpathforrole()",
       "source_file": "src/utils/roleRoutes.js",
@@ -2673,7 +2685,7 @@
       "_callable": true,
       "_origin": "ast",
       "community": 27,
-      "community_name": "useAuth",
+      "community_name": "AuthContext.jsx",
       "file_type": "code",
       "norm_label": "normalizerole()",
       "source_file": "src/utils/roleRoutes.js",
@@ -3640,6 +3652,18 @@
       "source_location": "L36"
     },
     {
+      "id": "src_context_authcontext_useauth",
+      "label": "useAuth()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 43,
+      "community_name": "App.jsx",
+      "file_type": "code",
+      "norm_label": "useauth()",
+      "source_file": "src/context/AuthContext.jsx",
+      "source_location": "L79"
+    },
+    {
       "id": "src_pages_privacypolicypage_privacypolicypage",
       "label": "PrivacyPolicyPage()",
       "_callable": true,
@@ -3700,6 +3724,54 @@
       "source_location": "L107"
     },
     {
+      "id": "src_pages_settingspage_loadstoredsettings",
+      "label": "loadStoredSettings()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 43,
+      "community_name": "App.jsx",
+      "file_type": "code",
+      "norm_label": "loadstoredsettings()",
+      "source_file": "src/pages/SettingsPage.jsx",
+      "source_location": "L52"
+    },
+    {
+      "id": "src_pages_settingspage_settingspage",
+      "label": "SettingsPage()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 43,
+      "community_name": "App.jsx",
+      "file_type": "code",
+      "norm_label": "settingspage()",
+      "source_file": "src/pages/SettingsPage.jsx",
+      "source_location": "L115"
+    },
+    {
+      "id": "src_pages_settingspage_settingssection",
+      "label": "SettingsSection()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 43,
+      "community_name": "App.jsx",
+      "file_type": "code",
+      "norm_label": "settingssection()",
+      "source_file": "src/pages/SettingsPage.jsx",
+      "source_location": "L90"
+    },
+    {
+      "id": "src_pages_settingspage_toggleswitch",
+      "label": "ToggleSwitch()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 43,
+      "community_name": "App.jsx",
+      "file_type": "code",
+      "norm_label": "toggleswitch()",
+      "source_file": "src/pages/SettingsPage.jsx",
+      "source_location": "L71"
+    },
+    {
       "id": "src_pages_termsofservicepage_termsofservicepage",
       "label": "TermsOfServicePage()",
       "_callable": true,
@@ -3710,6 +3782,18 @@
       "norm_label": "termsofservicepage()",
       "source_file": "src/pages/TermsOfServicePage.jsx",
       "source_location": "L6"
+    },
+    {
+      "id": "src_routes_protectedroute_protectedroute",
+      "label": "ProtectedRoute()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 43,
+      "community_name": "App.jsx",
+      "file_type": "code",
+      "norm_label": "protectedroute()",
+      "source_file": "src/routes/ProtectedRoute.jsx",
+      "source_location": "L4"
     },
     {
       "id": "src_pages_eventschedulepage_detailitem",
@@ -4492,30 +4576,6 @@
       "source_location": "L24"
     },
     {
-      "id": "src_services_authenticatedapi_authenticatedfetch",
-      "label": "authenticatedFetch()",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 7,
-      "community_name": "ReforestationAnalyticsPage.jsx",
-      "file_type": "code",
-      "norm_label": "authenticatedfetch()",
-      "source_file": "src/services/authenticatedApi.js",
-      "source_location": "L22"
-    },
-    {
-      "id": "src_services_authenticatedapi_getauthtoken",
-      "label": "getAuthToken()",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 7,
-      "community_name": "ReforestationAnalyticsPage.jsx",
-      "file_type": "code",
-      "norm_label": "getauthtoken()",
-      "source_file": "src/services/authenticatedApi.js",
-      "source_location": "L13"
-    },
-    {
       "id": "agents_skills_xcode_project_setup_scripts_xcode_spm_setup_sources_main_addcrashlyticsrunscriptbuildphase",
       "label": "addCrashlyticsRunScriptBuildPhase()",
       "_callable": true,
@@ -5192,54 +5252,6 @@
       "norm_label": "statusbadge()",
       "source_file": "src/pages/MyRequestsPage.jsx",
       "source_location": "L264"
-    },
-    {
-      "id": "src_pages_settingspage_loadstoredsettings",
-      "label": "loadStoredSettings()",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 95,
-      "community_name": "SettingsPage.jsx",
-      "file_type": "code",
-      "norm_label": "loadstoredsettings()",
-      "source_file": "src/pages/SettingsPage.jsx",
-      "source_location": "L52"
-    },
-    {
-      "id": "src_pages_settingspage_settingspage",
-      "label": "SettingsPage()",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 95,
-      "community_name": "SettingsPage.jsx",
-      "file_type": "code",
-      "norm_label": "settingspage()",
-      "source_file": "src/pages/SettingsPage.jsx",
-      "source_location": "L115"
-    },
-    {
-      "id": "src_pages_settingspage_settingssection",
-      "label": "SettingsSection()",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 95,
-      "community_name": "SettingsPage.jsx",
-      "file_type": "code",
-      "norm_label": "settingssection()",
-      "source_file": "src/pages/SettingsPage.jsx",
-      "source_location": "L90"
-    },
-    {
-      "id": "src_pages_settingspage_toggleswitch",
-      "label": "ToggleSwitch()",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 95,
-      "community_name": "SettingsPage.jsx",
-      "file_type": "code",
-      "norm_label": "toggleswitch()",
-      "source_file": "src/pages/SettingsPage.jsx",
-      "source_location": "L71"
     },
     {
       "id": "src_pages_plantingpage",
@@ -6690,59 +6702,124 @@
       "type": "module"
     },
     {
-      "id": "eslint_config",
-      "label": "eslint.config.js",
+      "id": "agents_skills_firebase_data_connect_reference_config_deployment",
+      "label": "Deployment",
       "_origin": "ast",
       "community": 116,
-      "community_name": "eslint.config.js",
-      "file_type": "code",
-      "norm_label": "eslint.config.js",
-      "source_file": "eslint.config.js",
-      "source_location": "L1"
+      "community_name": "Firebase CLI Commands",
+      "file_type": "document",
+      "node_kind": "heading",
+      "norm_label": "deployment",
+      "source_file": ".agents/skills/firebase-data-connect/reference/config.md",
+      "source_location": "L141"
     },
     {
-      "id": "ref_eslint_js",
-      "label": "@eslint/js",
+      "id": "agents_skills_firebase_data_connect_reference_config_firebase_cli_commands",
+      "label": "Firebase CLI Commands",
       "_origin": "ast",
       "community": 116,
-      "community_name": "eslint.config.js",
-      "file_type": "concept",
-      "norm_label": "@eslint/js",
-      "source_file": "package.json",
-      "source_location": "L39"
+      "community_name": "Firebase CLI Commands",
+      "file_type": "document",
+      "node_kind": "heading",
+      "norm_label": "firebase cli commands",
+      "source_file": ".agents/skills/firebase-data-connect/reference/config.md",
+      "source_location": "L102"
     },
     {
-      "id": "ref_eslint_plugin_react_hooks",
-      "label": "eslint-plugin-react-hooks",
+      "id": "agents_skills_firebase_data_connect_reference_config_initialize_sql_connect",
+      "label": "Initialize SQL Connect",
       "_origin": "ast",
       "community": 116,
-      "community_name": "eslint.config.js",
-      "file_type": "concept",
-      "norm_label": "eslint-plugin-react-hooks",
-      "source_file": "package.json",
-      "source_location": "L45"
+      "community_name": "Firebase CLI Commands",
+      "file_type": "document",
+      "node_kind": "heading",
+      "norm_label": "initialize sql connect",
+      "source_file": ".agents/skills/firebase-data-connect/reference/config.md",
+      "source_location": "L104"
     },
     {
-      "id": "ref_eslint_plugin_react_refresh",
-      "label": "eslint-plugin-react-refresh",
+      "id": "agents_skills_firebase_data_connect_reference_config_local_development",
+      "label": "Local Development",
       "_origin": "ast",
       "community": 116,
-      "community_name": "eslint.config.js",
-      "file_type": "concept",
-      "norm_label": "eslint-plugin-react-refresh",
-      "source_file": "package.json",
-      "source_location": "L46"
+      "community_name": "Firebase CLI Commands",
+      "file_type": "document",
+      "node_kind": "heading",
+      "norm_label": "local development",
+      "source_file": ".agents/skills/firebase-data-connect/reference/config.md",
+      "source_location": "L114"
     },
     {
-      "id": "ref_globals",
-      "label": "globals",
+      "id": "agents_skills_firebase_data_connect_reference_config_schema_management",
+      "label": "Schema Management",
       "_origin": "ast",
       "community": 116,
-      "community_name": "eslint.config.js",
-      "file_type": "concept",
-      "norm_label": "globals",
-      "source_file": "package.json",
-      "source_location": "L47"
+      "community_name": "Firebase CLI Commands",
+      "file_type": "document",
+      "node_kind": "heading",
+      "norm_label": "schema management",
+      "source_file": ".agents/skills/firebase-data-connect/reference/config.md",
+      "source_location": "L130"
+    },
+    {
+      "id": "agents_skills_firebase_data_connect_reference_security_anti_patterns",
+      "label": "Anti-Patterns",
+      "_origin": "ast",
+      "community": 117,
+      "community_name": "Anti-Patterns",
+      "file_type": "document",
+      "node_kind": "heading",
+      "norm_label": "anti-patterns",
+      "source_file": ".agents/skills/firebase-data-connect/reference/security.md",
+      "source_location": "L252"
+    },
+    {
+      "id": "agents_skills_firebase_data_connect_reference_security_don_t_pass_user_id_as_variable",
+      "label": "\u274c Don't Pass User ID as Variable",
+      "_origin": "ast",
+      "community": 117,
+      "community_name": "Anti-Patterns",
+      "file_type": "document",
+      "node_kind": "heading",
+      "norm_label": "\u274c don't pass user id as variable",
+      "source_file": ".agents/skills/firebase-data-connect/reference/security.md",
+      "source_location": "L254"
+    },
+    {
+      "id": "agents_skills_firebase_data_connect_reference_security_don_t_trust_unverified_email",
+      "label": "\u274c Don't Trust Unverified Email",
+      "_origin": "ast",
+      "community": 117,
+      "community_name": "Anti-Patterns",
+      "file_type": "document",
+      "node_kind": "heading",
+      "norm_label": "\u274c don't trust unverified email",
+      "source_file": ".agents/skills/firebase-data-connect/reference/security.md",
+      "source_location": "L282"
+    },
+    {
+      "id": "agents_skills_firebase_data_connect_reference_security_don_t_use_public_user_for_prototyping",
+      "label": "\u274c Don't Use PUBLIC/USER for Prototyping",
+      "_origin": "ast",
+      "community": 117,
+      "community_name": "Anti-Patterns",
+      "file_type": "document",
+      "node_kind": "heading",
+      "norm_label": "\u274c don't use public/user for prototyping",
+      "source_file": ".agents/skills/firebase-data-connect/reference/security.md",
+      "source_location": "L292"
+    },
+    {
+      "id": "agents_skills_firebase_data_connect_reference_security_don_t_use_user_without_filters",
+      "label": "\u274c Don't Use USER Without Filters",
+      "_origin": "ast",
+      "community": 117,
+      "community_name": "Anti-Patterns",
+      "file_type": "document",
+      "node_kind": "heading",
+      "norm_label": "\u274c don't use user without filters",
+      "source_file": ".agents/skills/firebase-data-connect/reference/security.md",
+      "source_location": "L268"
     },
     {
       "id": "audit_temp_artifact",
@@ -6767,6 +6844,66 @@
       "norm_label": "test case template contract",
       "source_file": ".audit-temp/artifact.md",
       "source_location": "L1"
+    },
+    {
+      "id": "agents_skills_firebase_data_connect_reference_security_authorization_patterns",
+      "label": "Authorization Patterns",
+      "_origin": "ast",
+      "community": 119,
+      "community_name": "Authorization Patterns",
+      "file_type": "document",
+      "node_kind": "heading",
+      "norm_label": "authorization patterns",
+      "source_file": ".agents/skills/firebase-data-connect/reference/security.md",
+      "source_location": "L172"
+    },
+    {
+      "id": "agents_skills_firebase_data_connect_reference_security_public_data_with_filters",
+      "label": "Public Data with Filters",
+      "_origin": "ast",
+      "community": 119,
+      "community_name": "Authorization Patterns",
+      "file_type": "document",
+      "node_kind": "heading",
+      "norm_label": "public data with filters",
+      "source_file": ".agents/skills/firebase-data-connect/reference/security.md",
+      "source_location": "L227"
+    },
+    {
+      "id": "agents_skills_firebase_data_connect_reference_security_role_based_access",
+      "label": "Role-Based Access",
+      "_origin": "ast",
+      "community": 119,
+      "community_name": "Authorization Patterns",
+      "file_type": "document",
+      "node_kind": "heading",
+      "norm_label": "role-based access",
+      "source_file": ".agents/skills/firebase-data-connect/reference/security.md",
+      "source_location": "L208"
+    },
+    {
+      "id": "agents_skills_firebase_data_connect_reference_security_tiered_access_pro_content",
+      "label": "Tiered Access (Pro Content)",
+      "_origin": "ast",
+      "community": 119,
+      "community_name": "Authorization Patterns",
+      "file_type": "document",
+      "node_kind": "heading",
+      "norm_label": "tiered access (pro content)",
+      "source_file": ".agents/skills/firebase-data-connect/reference/security.md",
+      "source_location": "L240"
+    },
+    {
+      "id": "agents_skills_firebase_data_connect_reference_security_user_owned_resources",
+      "label": "User-Owned Resources",
+      "_origin": "ast",
+      "community": 119,
+      "community_name": "Authorization Patterns",
+      "file_type": "document",
+      "node_kind": "heading",
+      "norm_label": "user-owned resources",
+      "source_file": ".agents/skills/firebase-data-connect/reference/security.md",
+      "source_location": "L174"
     },
     {
       "id": "components",
@@ -7011,6 +7148,17 @@
       "source_location": "L5"
     },
     {
+      "id": "eslint_config",
+      "label": "eslint.config.js",
+      "_origin": "ast",
+      "community": 13,
+      "community_name": "package.json",
+      "file_type": "code",
+      "norm_label": "eslint.config.js",
+      "source_file": "eslint.config.js",
+      "source_location": "L1"
+    },
+    {
       "id": "package",
       "label": "package.json",
       "_origin": "ast",
@@ -7110,6 +7258,39 @@
       "source_location": "L44"
     },
     {
+      "id": "ref_eslint_js",
+      "label": "@eslint/js",
+      "_origin": "ast",
+      "community": 13,
+      "community_name": "package.json",
+      "file_type": "concept",
+      "norm_label": "@eslint/js",
+      "source_file": "package.json",
+      "source_location": "L39"
+    },
+    {
+      "id": "ref_eslint_plugin_react_hooks",
+      "label": "eslint-plugin-react-hooks",
+      "_origin": "ast",
+      "community": 13,
+      "community_name": "package.json",
+      "file_type": "concept",
+      "norm_label": "eslint-plugin-react-hooks",
+      "source_file": "package.json",
+      "source_location": "L45"
+    },
+    {
+      "id": "ref_eslint_plugin_react_refresh",
+      "label": "eslint-plugin-react-refresh",
+      "_origin": "ast",
+      "community": 13,
+      "community_name": "package.json",
+      "file_type": "concept",
+      "norm_label": "eslint-plugin-react-refresh",
+      "source_file": "package.json",
+      "source_location": "L46"
+    },
+    {
       "id": "ref_firebase",
       "label": "firebase",
       "_origin": "ast",
@@ -7130,6 +7311,17 @@
       "norm_label": "@fontsource-variable/geist",
       "source_file": "package.json",
       "source_location": "L14"
+    },
+    {
+      "id": "ref_globals",
+      "label": "globals",
+      "_origin": "ast",
+      "community": 13,
+      "community_name": "package.json",
+      "file_type": "concept",
+      "norm_label": "globals",
+      "source_file": "package.json",
+      "source_location": "L47"
     },
     {
       "id": "ref_react_hook_form",
@@ -7253,6 +7445,17 @@
       "source_location": "L42"
     },
     {
+      "id": "src_firebase_config_auth",
+      "label": "auth",
+      "_origin": "ast",
+      "community": 14,
+      "community_name": "RegisterPage.jsx",
+      "file_type": "code",
+      "norm_label": "auth",
+      "source_file": "src/firebase/config.js",
+      "source_location": "L38"
+    },
+    {
       "id": "src_pages_completeprofilepage",
       "label": "CompleteProfilePage.jsx",
       "_origin": "ast",
@@ -7286,6 +7489,17 @@
       "source_location": "L1"
     },
     {
+      "id": "src_services_authenticatedapi",
+      "label": "authenticatedApi.js",
+      "_origin": "ast",
+      "community": 14,
+      "community_name": "RegisterPage.jsx",
+      "file_type": "code",
+      "norm_label": "authenticatedapi.js",
+      "source_file": "src/services/authenticatedApi.js",
+      "source_location": "L1"
+    },
+    {
       "id": "src_services_authenticatedapi_api_base_url",
       "label": "API_BASE_URL",
       "_origin": "ast",
@@ -7295,6 +7509,28 @@
       "norm_label": "api_base_url",
       "source_file": "src/services/authenticatedApi.js",
       "source_location": "L8"
+    },
+    {
+      "id": "src_services_authenticatedapi_configuredapiurl",
+      "label": "configuredApiUrl",
+      "_origin": "ast",
+      "community": 14,
+      "community_name": "RegisterPage.jsx",
+      "file_type": "code",
+      "norm_label": "configuredapiurl",
+      "source_file": "src/services/authenticatedApi.js",
+      "source_location": "L3"
+    },
+    {
+      "id": "src_services_authenticatedapi_localapiurl",
+      "label": "localApiUrl",
+      "_origin": "ast",
+      "community": 14,
+      "community_name": "RegisterPage.jsx",
+      "file_type": "code",
+      "norm_label": "localapiurl",
+      "source_file": "src/services/authenticatedApi.js",
+      "source_location": "L4"
     },
     {
       "id": "src_services_authservice",
@@ -9060,17 +9296,6 @@
       "source_location": "L1"
     },
     {
-      "id": "src_firebase_config_auth",
-      "label": "auth",
-      "_origin": "ast",
-      "community": 23,
-      "community_name": "config.js",
-      "file_type": "code",
-      "norm_label": "auth",
-      "source_file": "src/firebase/config.js",
-      "source_location": "L38"
-    },
-    {
       "id": "src_firebase_config_firebaseconfig",
       "label": "firebaseConfig",
       "_origin": "ast",
@@ -9149,30 +9374,6 @@
       "source_location": "L1"
     },
     {
-      "id": "agents_skills_firebase_data_connect_reference_config_breaking_changes",
-      "label": "Breaking Changes",
-      "_origin": "ast",
-      "community": 24,
-      "community_name": "Configuration Reference",
-      "file_type": "document",
-      "node_kind": "heading",
-      "norm_label": "breaking changes",
-      "source_file": ".agents/skills/firebase-data-connect/reference/config.md",
-      "source_location": "L235"
-    },
-    {
-      "id": "agents_skills_firebase_data_connect_reference_config_ci_cd_integration",
-      "label": "CI/CD Integration",
-      "_origin": "ast",
-      "community": 24,
-      "community_name": "Configuration Reference",
-      "file_type": "document",
-      "node_kind": "heading",
-      "norm_label": "ci/cd integration",
-      "source_file": ".agents/skills/firebase-data-connect/reference/config.md",
-      "source_location": "L245"
-    },
-    {
       "id": "agents_skills_firebase_data_connect_reference_config_cloud_sql_configuration",
       "label": "Cloud SQL Configuration",
       "_origin": "ast",
@@ -9245,42 +9446,6 @@
       "source_location": "L31"
     },
     {
-      "id": "agents_skills_firebase_data_connect_reference_config_deploy_workflow",
-      "label": "Deploy Workflow",
-      "_origin": "ast",
-      "community": 24,
-      "community_name": "Configuration Reference",
-      "file_type": "document",
-      "node_kind": "heading",
-      "norm_label": "deploy workflow",
-      "source_file": ".agents/skills/firebase-data-connect/reference/config.md",
-      "source_location": "L213"
-    },
-    {
-      "id": "agents_skills_firebase_data_connect_reference_config_deployment",
-      "label": "Deployment",
-      "_origin": "ast",
-      "community": 24,
-      "community_name": "Configuration Reference",
-      "file_type": "document",
-      "node_kind": "heading",
-      "norm_label": "deployment",
-      "source_file": ".agents/skills/firebase-data-connect/reference/config.md",
-      "source_location": "L141"
-    },
-    {
-      "id": "agents_skills_firebase_data_connect_reference_config_deployment_211",
-      "label": "Deployment",
-      "_origin": "ast",
-      "community": 24,
-      "community_name": "Configuration Reference",
-      "file_type": "document",
-      "node_kind": "heading",
-      "norm_label": "deployment",
-      "source_file": ".agents/skills/firebase-data-connect/reference/config.md",
-      "source_location": "L211"
-    },
-    {
       "id": "agents_skills_firebase_data_connect_reference_config_emulator",
       "label": "Emulator",
       "_origin": "ast",
@@ -9317,42 +9482,6 @@
       "source_location": "L265"
     },
     {
-      "id": "agents_skills_firebase_data_connect_reference_config_firebase_cli_commands",
-      "label": "Firebase CLI Commands",
-      "_origin": "ast",
-      "community": 24,
-      "community_name": "Configuration Reference",
-      "file_type": "document",
-      "node_kind": "heading",
-      "norm_label": "firebase cli commands",
-      "source_file": ".agents/skills/firebase-data-connect/reference/config.md",
-      "source_location": "L102"
-    },
-    {
-      "id": "agents_skills_firebase_data_connect_reference_config_initialize_sql_connect",
-      "label": "Initialize SQL Connect",
-      "_origin": "ast",
-      "community": 24,
-      "community_name": "Configuration Reference",
-      "file_type": "document",
-      "node_kind": "heading",
-      "norm_label": "initialize sql connect",
-      "source_file": ".agents/skills/firebase-data-connect/reference/config.md",
-      "source_location": "L104"
-    },
-    {
-      "id": "agents_skills_firebase_data_connect_reference_config_local_development",
-      "label": "Local Development",
-      "_origin": "ast",
-      "community": 24,
-      "community_name": "Configuration Reference",
-      "file_type": "document",
-      "node_kind": "heading",
-      "norm_label": "local development",
-      "source_file": ".agents/skills/firebase-data-connect/reference/config.md",
-      "source_location": "L114"
-    },
-    {
       "id": "agents_skills_firebase_data_connect_reference_config_project_structure",
       "label": "Project Structure",
       "_origin": "ast",
@@ -9363,30 +9492,6 @@
       "norm_label": "project structure",
       "source_file": ".agents/skills/firebase-data-connect/reference/config.md",
       "source_location": "L14"
-    },
-    {
-      "id": "agents_skills_firebase_data_connect_reference_config_schema_management",
-      "label": "Schema Management",
-      "_origin": "ast",
-      "community": 24,
-      "community_name": "Configuration Reference",
-      "file_type": "document",
-      "node_kind": "heading",
-      "norm_label": "schema management",
-      "source_file": ".agents/skills/firebase-data-connect/reference/config.md",
-      "source_location": "L130"
-    },
-    {
-      "id": "agents_skills_firebase_data_connect_reference_config_schema_migrations",
-      "label": "Schema Migrations",
-      "_origin": "ast",
-      "community": 24,
-      "community_name": "Configuration Reference",
-      "file_type": "document",
-      "node_kind": "heading",
-      "norm_label": "schema migrations",
-      "source_file": ".agents/skills/firebase-data-connect/reference/config.md",
-      "source_location": "L220"
     },
     {
       "id": "agents_skills_firebase_data_connect_reference_config_sdk_generation_options",
@@ -9540,7 +9645,7 @@
       "label": "AuthContext.jsx",
       "_origin": "ast",
       "community": 27,
-      "community_name": "useAuth",
+      "community_name": "AuthContext.jsx",
       "file_type": "code",
       "norm_label": "authcontext.jsx",
       "source_file": "src/context/AuthContext.jsx",
@@ -9551,29 +9656,18 @@
       "label": "AuthContext",
       "_origin": "ast",
       "community": 27,
-      "community_name": "useAuth",
+      "community_name": "AuthContext.jsx",
       "file_type": "code",
       "norm_label": "authcontext",
       "source_file": "src/context/AuthContext.jsx",
       "source_location": "L8"
     },
     {
-      "id": "src_routes_protectedroute",
-      "label": "ProtectedRoute.jsx",
-      "_origin": "ast",
-      "community": 27,
-      "community_name": "useAuth",
-      "file_type": "code",
-      "norm_label": "protectedroute.jsx",
-      "source_file": "src/routes/ProtectedRoute.jsx",
-      "source_location": "L1"
-    },
-    {
       "id": "src_routes_rootredirect",
       "label": "RootRedirect.jsx",
       "_origin": "ast",
       "community": 27,
-      "community_name": "useAuth",
+      "community_name": "AuthContext.jsx",
       "file_type": "code",
       "norm_label": "rootredirect.jsx",
       "source_file": "src/routes/RootRedirect.jsx",
@@ -9584,7 +9678,7 @@
       "label": "roleRoutes.js",
       "_origin": "ast",
       "community": 27,
-      "community_name": "useAuth",
+      "community_name": "AuthContext.jsx",
       "file_type": "code",
       "norm_label": "roleroutes.js",
       "source_file": "src/utils/roleRoutes.js",
@@ -10695,6 +10789,39 @@
       "source_location": "L28"
     },
     {
+      "id": "src_pages_settingspage",
+      "label": "SettingsPage.jsx",
+      "_origin": "ast",
+      "community": 43,
+      "community_name": "App.jsx",
+      "file_type": "code",
+      "norm_label": "settingspage.jsx",
+      "source_file": "src/pages/SettingsPage.jsx",
+      "source_location": "L1"
+    },
+    {
+      "id": "src_pages_settingspage_default_settings",
+      "label": "DEFAULT_SETTINGS",
+      "_origin": "ast",
+      "community": 43,
+      "community_name": "App.jsx",
+      "file_type": "code",
+      "norm_label": "default_settings",
+      "source_file": "src/pages/SettingsPage.jsx",
+      "source_location": "L20"
+    },
+    {
+      "id": "src_pages_settingspage_safe_cache_prefixes",
+      "label": "SAFE_CACHE_PREFIXES",
+      "_origin": "ast",
+      "community": 43,
+      "community_name": "App.jsx",
+      "file_type": "code",
+      "norm_label": "safe_cache_prefixes",
+      "source_file": "src/pages/SettingsPage.jsx",
+      "source_location": "L46"
+    },
+    {
       "id": "src_pages_termsofservicepage",
       "label": "TermsOfServicePage.jsx",
       "_origin": "ast",
@@ -10703,6 +10830,17 @@
       "file_type": "code",
       "norm_label": "termsofservicepage.jsx",
       "source_file": "src/pages/TermsOfServicePage.jsx",
+      "source_location": "L1"
+    },
+    {
+      "id": "src_routes_protectedroute",
+      "label": "ProtectedRoute.jsx",
+      "_origin": "ast",
+      "community": 43,
+      "community_name": "App.jsx",
+      "file_type": "code",
+      "norm_label": "protectedroute.jsx",
+      "source_file": "src/routes/ProtectedRoute.jsx",
       "source_location": "L1"
     },
     {
@@ -10765,18 +10903,6 @@
       "source_location": "L33"
     },
     {
-      "id": "agents_skills_firebase_data_connect_reference_security_anti_patterns",
-      "label": "Anti-Patterns",
-      "_origin": "ast",
-      "community": 45,
-      "community_name": "Security Reference",
-      "file_type": "document",
-      "node_kind": "heading",
-      "norm_label": "anti-patterns",
-      "source_file": ".agents/skills/firebase-data-connect/reference/security.md",
-      "source_location": "L252"
-    },
-    {
       "id": "agents_skills_firebase_data_connect_reference_security_auth_directive",
       "label": "@auth Directive",
       "_origin": "ast",
@@ -10811,18 +10937,6 @@
       "norm_label": "authorization data lookup",
       "source_file": ".agents/skills/firebase-data-connect/reference/security.md",
       "source_location": "L140"
-    },
-    {
-      "id": "agents_skills_firebase_data_connect_reference_security_authorization_patterns",
-      "label": "Authorization Patterns",
-      "_origin": "ast",
-      "community": 45,
-      "community_name": "Security Reference",
-      "file_type": "document",
-      "node_kind": "heading",
-      "norm_label": "authorization patterns",
-      "source_file": ".agents/skills/firebase-data-connect/reference/security.md",
-      "source_location": "L172"
     },
     {
       "id": "agents_skills_firebase_data_connect_reference_security_available_bindings",
@@ -10885,54 +10999,6 @@
       "source_location": "L3"
     },
     {
-      "id": "agents_skills_firebase_data_connect_reference_security_don_t_pass_user_id_as_variable",
-      "label": "\u274c Don't Pass User ID as Variable",
-      "_origin": "ast",
-      "community": 45,
-      "community_name": "Security Reference",
-      "file_type": "document",
-      "node_kind": "heading",
-      "norm_label": "\u274c don't pass user id as variable",
-      "source_file": ".agents/skills/firebase-data-connect/reference/security.md",
-      "source_location": "L254"
-    },
-    {
-      "id": "agents_skills_firebase_data_connect_reference_security_don_t_trust_unverified_email",
-      "label": "\u274c Don't Trust Unverified Email",
-      "_origin": "ast",
-      "community": 45,
-      "community_name": "Security Reference",
-      "file_type": "document",
-      "node_kind": "heading",
-      "norm_label": "\u274c don't trust unverified email",
-      "source_file": ".agents/skills/firebase-data-connect/reference/security.md",
-      "source_location": "L282"
-    },
-    {
-      "id": "agents_skills_firebase_data_connect_reference_security_don_t_use_public_user_for_prototyping",
-      "label": "\u274c Don't Use PUBLIC/USER for Prototyping",
-      "_origin": "ast",
-      "community": 45,
-      "community_name": "Security Reference",
-      "file_type": "document",
-      "node_kind": "heading",
-      "norm_label": "\u274c don't use public/user for prototyping",
-      "source_file": ".agents/skills/firebase-data-connect/reference/security.md",
-      "source_location": "L292"
-    },
-    {
-      "id": "agents_skills_firebase_data_connect_reference_security_don_t_use_user_without_filters",
-      "label": "\u274c Don't Use USER Without Filters",
-      "_origin": "ast",
-      "community": 45,
-      "community_name": "Security Reference",
-      "file_type": "document",
-      "node_kind": "heading",
-      "norm_label": "\u274c don't use user without filters",
-      "source_file": ".agents/skills/firebase-data-connect/reference/security.md",
-      "source_location": "L268"
-    },
-    {
       "id": "agents_skills_firebase_data_connect_reference_security_expression_examples",
       "label": "Expression Examples",
       "_origin": "ast",
@@ -10943,18 +11009,6 @@
       "norm_label": "expression examples",
       "source_file": ".agents/skills/firebase-data-connect/reference/security.md",
       "source_location": "L72"
-    },
-    {
-      "id": "agents_skills_firebase_data_connect_reference_security_public_data_with_filters",
-      "label": "Public Data with Filters",
-      "_origin": "ast",
-      "community": 45,
-      "community_name": "Security Reference",
-      "file_type": "document",
-      "node_kind": "heading",
-      "norm_label": "public data with filters",
-      "source_file": ".agents/skills/firebase-data-connect/reference/security.md",
-      "source_location": "L227"
     },
     {
       "id": "agents_skills_firebase_data_connect_reference_security_redact",
@@ -10969,18 +11023,6 @@
       "source_location": "L132"
     },
     {
-      "id": "agents_skills_firebase_data_connect_reference_security_role_based_access",
-      "label": "Role-Based Access",
-      "_origin": "ast",
-      "community": 45,
-      "community_name": "Security Reference",
-      "file_type": "document",
-      "node_kind": "heading",
-      "norm_label": "role-based access",
-      "source_file": ".agents/skills/firebase-data-connect/reference/security.md",
-      "source_location": "L208"
-    },
-    {
       "id": "agents_skills_firebase_data_connect_reference_security_security_reference",
       "label": "Security Reference",
       "_origin": "ast",
@@ -10991,30 +11033,6 @@
       "norm_label": "security reference",
       "source_file": ".agents/skills/firebase-data-connect/reference/security.md",
       "source_location": "L1"
-    },
-    {
-      "id": "agents_skills_firebase_data_connect_reference_security_tiered_access_pro_content",
-      "label": "Tiered Access (Pro Content)",
-      "_origin": "ast",
-      "community": 45,
-      "community_name": "Security Reference",
-      "file_type": "document",
-      "node_kind": "heading",
-      "norm_label": "tiered access (pro content)",
-      "source_file": ".agents/skills/firebase-data-connect/reference/security.md",
-      "source_location": "L240"
-    },
-    {
-      "id": "agents_skills_firebase_data_connect_reference_security_user_owned_resources",
-      "label": "User-Owned Resources",
-      "_origin": "ast",
-      "community": 45,
-      "community_name": "Security Reference",
-      "file_type": "document",
-      "node_kind": "heading",
-      "norm_label": "user-owned resources",
-      "source_file": ".agents/skills/firebase-data-connect/reference/security.md",
-      "source_location": "L174"
     },
     {
       "id": "agents_skills_firebase_data_connect_reference_security_using_eq_expr_in_filters",
@@ -15777,39 +15795,6 @@
       "source_location": "L13"
     },
     {
-      "id": "src_services_authenticatedapi",
-      "label": "authenticatedApi.js",
-      "_origin": "ast",
-      "community": 7,
-      "community_name": "ReforestationAnalyticsPage.jsx",
-      "file_type": "code",
-      "norm_label": "authenticatedapi.js",
-      "source_file": "src/services/authenticatedApi.js",
-      "source_location": "L1"
-    },
-    {
-      "id": "src_services_authenticatedapi_configuredapiurl",
-      "label": "configuredApiUrl",
-      "_origin": "ast",
-      "community": 7,
-      "community_name": "ReforestationAnalyticsPage.jsx",
-      "file_type": "code",
-      "norm_label": "configuredapiurl",
-      "source_file": "src/services/authenticatedApi.js",
-      "source_location": "L3"
-    },
-    {
-      "id": "src_services_authenticatedapi_localapiurl",
-      "label": "localApiUrl",
-      "_origin": "ast",
-      "community": 7,
-      "community_name": "ReforestationAnalyticsPage.jsx",
-      "file_type": "code",
-      "norm_label": "localapiurl",
-      "source_file": "src/services/authenticatedApi.js",
-      "source_location": "L4"
-    },
-    {
       "id": "ref_recharts",
       "label": "recharts",
       "_origin": "ast",
@@ -18604,37 +18589,64 @@
       "source_location": "L72"
     },
     {
-      "id": "src_pages_settingspage",
-      "label": "SettingsPage.jsx",
+      "id": "agents_skills_firebase_data_connect_reference_config_breaking_changes",
+      "label": "Breaking Changes",
       "_origin": "ast",
       "community": 95,
-      "community_name": "SettingsPage.jsx",
-      "file_type": "code",
-      "norm_label": "settingspage.jsx",
-      "source_file": "src/pages/SettingsPage.jsx",
-      "source_location": "L1"
+      "community_name": "Deployment",
+      "file_type": "document",
+      "node_kind": "heading",
+      "norm_label": "breaking changes",
+      "source_file": ".agents/skills/firebase-data-connect/reference/config.md",
+      "source_location": "L235"
     },
     {
-      "id": "src_pages_settingspage_default_settings",
-      "label": "DEFAULT_SETTINGS",
+      "id": "agents_skills_firebase_data_connect_reference_config_ci_cd_integration",
+      "label": "CI/CD Integration",
       "_origin": "ast",
       "community": 95,
-      "community_name": "SettingsPage.jsx",
-      "file_type": "code",
-      "norm_label": "default_settings",
-      "source_file": "src/pages/SettingsPage.jsx",
-      "source_location": "L20"
+      "community_name": "Deployment",
+      "file_type": "document",
+      "node_kind": "heading",
+      "norm_label": "ci/cd integration",
+      "source_file": ".agents/skills/firebase-data-connect/reference/config.md",
+      "source_location": "L245"
     },
     {
-      "id": "src_pages_settingspage_safe_cache_prefixes",
-      "label": "SAFE_CACHE_PREFIXES",
+      "id": "agents_skills_firebase_data_connect_reference_config_deploy_workflow",
+      "label": "Deploy Workflow",
       "_origin": "ast",
       "community": 95,
-      "community_name": "SettingsPage.jsx",
-      "file_type": "code",
-      "norm_label": "safe_cache_prefixes",
-      "source_file": "src/pages/SettingsPage.jsx",
-      "source_location": "L46"
+      "community_name": "Deployment",
+      "file_type": "document",
+      "node_kind": "heading",
+      "norm_label": "deploy workflow",
+      "source_file": ".agents/skills/firebase-data-connect/reference/config.md",
+      "source_location": "L213"
+    },
+    {
+      "id": "agents_skills_firebase_data_connect_reference_config_deployment_211",
+      "label": "Deployment",
+      "_origin": "ast",
+      "community": 95,
+      "community_name": "Deployment",
+      "file_type": "document",
+      "node_kind": "heading",
+      "norm_label": "deployment",
+      "source_file": ".agents/skills/firebase-data-connect/reference/config.md",
+      "source_location": "L211"
+    },
+    {
+      "id": "agents_skills_firebase_data_connect_reference_config_schema_migrations",
+      "label": "Schema Migrations",
+      "_origin": "ast",
+      "community": 95,
+      "community_name": "Deployment",
+      "file_type": "document",
+      "node_kind": "heading",
+      "norm_label": "schema migrations",
+      "source_file": ".agents/skills/firebase-data-connect/reference/config.md",
+      "source_location": "L220"
     },
     {
       "id": "agents_skills_firebase_firestore_references_enterprise_flutter_setup",
@@ -19024,8 +19036,8 @@
       "id": "ref_eslint_config",
       "label": "ref_eslint_config",
       "_origin": "semantic",
-      "community": 116,
-      "community_name": "eslint.config.js",
+      "community": 13,
+      "community_name": "package.json",
       "external": true,
       "file_type": "concept",
       "norm_label": "ref_eslint_config",
@@ -19369,6 +19381,18 @@
       "type": "external"
     },
     {
+      "id": "src_styles_settings_page",
+      "label": "src_styles_settings_page",
+      "_origin": "semantic",
+      "community": 43,
+      "community_name": "App.jsx",
+      "external": true,
+      "file_type": "concept",
+      "norm_label": "src_styles_settings_page",
+      "source_file": "",
+      "type": "external"
+    },
+    {
       "id": "ref_node_assert_strict",
       "label": "ref_node_assert_strict",
       "_origin": "semantic",
@@ -19509,18 +19533,6 @@
       "external": true,
       "file_type": "concept",
       "norm_label": "src_styles_my_requests",
-      "source_file": "",
-      "type": "external"
-    },
-    {
-      "id": "src_styles_settings_page",
-      "label": "src_styles_settings_page",
-      "_origin": "semantic",
-      "community": 95,
-      "community_name": "SettingsPage.jsx",
-      "external": true,
-      "file_type": "concept",
-      "norm_label": "src_styles_settings_page",
       "source_file": "",
       "type": "external"
     }
@@ -21016,7 +21028,7 @@
     },
     {
       "source": "src_pages_loginpage_loginpage",
-      "target": "src_services_googleredirectauth_startgoogleredirect",
+      "target": "src_services_googleredirectauth_startgooglepopup",
       "relation": "calls",
       "_origin": "ast",
       "confidence": "EXTRACTED",
@@ -23452,7 +23464,7 @@
     },
     {
       "source": "src_pages_registerpage_registerpage",
-      "target": "src_services_googleredirectauth_startgoogleredirect",
+      "target": "src_services_googleredirectauth_startgooglepopup",
       "relation": "calls",
       "_origin": "ast",
       "confidence": "EXTRACTED",
@@ -24839,7 +24851,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "src/services/googleRedirectAuth.js",
-      "source_location": "L30",
+      "source_location": "L32",
       "weight": 1.0
     },
     {
@@ -25499,7 +25511,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "src/pages/RegisterPage.jsx",
-      "source_location": "L368",
+      "source_location": "L391",
       "weight": 1.0
     },
     {
@@ -25511,7 +25523,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "src/pages/RegisterPage.jsx",
-      "source_location": "L374",
+      "source_location": "L397",
       "weight": 1.0
     },
     {
@@ -26824,7 +26836,7 @@
     },
     {
       "source": "src_pages_loginpage",
-      "target": "src_services_googleredirectauth_startgoogleredirect",
+      "target": "src_services_googleredirectauth_startgooglepopup",
       "relation": "imports",
       "_origin": "ast",
       "confidence": "EXTRACTED",
@@ -27184,7 +27196,7 @@
     },
     {
       "source": "src_pages_registerpage",
-      "target": "src_services_googleredirectauth_startgoogleredirect",
+      "target": "src_services_googleredirectauth_startgooglepopup",
       "relation": "imports",
       "_origin": "ast",
       "confidence": "EXTRACTED",
@@ -45674,13 +45686,24 @@
     },
     {
       "source": "src_services_googleredirectauth",
+      "target": "src_services_googleredirectauth_startgoogleredirect",
+      "relation": "contains",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "src/services/googleRedirectAuth.js",
+      "source_location": "L10",
+      "weight": 1.0
+    },
+    {
+      "source": "src_services_googleredirectauth",
       "target": "src_services_googleredirectauth_haspendinggoogleredirect",
       "relation": "contains",
       "_origin": "ast",
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "src/services/googleRedirectAuth.js",
-      "source_location": "L19",
+      "source_location": "L21",
       "weight": 1.0
     },
     {
@@ -45691,12 +45714,12 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "src/services/googleRedirectAuth.js",
-      "source_location": "L22",
+      "source_location": "L24",
       "weight": 1.0
     },
     {
       "source": "src_services_googleredirectauth",
-      "target": "src_services_googleredirectauth_startgoogleredirect",
+      "target": "src_services_googleredirectauth_startgooglepopup",
       "relation": "contains",
       "_origin": "ast",
       "confidence": "EXTRACTED",

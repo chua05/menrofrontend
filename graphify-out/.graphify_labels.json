@@ -15,7 +15,7 @@
   "13": "package.json",
   "14": "RegisterPage.jsx",
   "15": "react",
-  "16": "GuestEventPage.jsx",
+  "16": "UsersPage.jsx",
   "17": "App Hosting CLI Commands",
   "18": "devDependencies",
   "19": "Deterministic Rules for Migration",
@@ -94,7 +94,7 @@
   "92": "Flutter Setup for Firebase AI Logic",
   "93": "Firebase AI Logic Basics",
   "94": "Core Capabilities",
-  "95": "Deployment",
+  "95": "authenticatedApi.js",
   "96": "Cloud Firestore in Flutter",
   "97": "Cloud Firestore in Flutter",
   "98": "Manual Initialization",
@@ -115,8 +115,8 @@
   "113": "Android Studio Setup",
   "114": "firebase-ai-logic-basics/SKILL.md",
   "115": "Package.swift",
-  "116": "Firebase CLI Commands",
-  "117": "Anti-Patterns",
+  "116": "LoginPage.jsx",
+  "117": "LandingPage.jsx",
   "118": ".audit-temp/artifact.md",
-  "119": "Authorization Patterns"
+  "119": "eslint.config.js"
 }

@@ -54,9 +54,9 @@
     "semantic_hash": "19eb1e2d53bd0fb755f7bed6b9a775d7"
   },
   "src/context/AuthContext.jsx": {
-    "mtime": 1790830236.9595816,
-    "seen": 1790830271.3308864,
-    "ast_hash": "fe8b2532b077d1989ca5b0f835846ec4",
+    "mtime": 1790834665.1789496,
+    "seen": 1790836778.6818967,
+    "ast_hash": "f660ac58f4cb6622162c693d44715c26",
     "semantic_hash": ""
   },
   "src/firebase/config.js": {
@@ -96,9 +96,9 @@
     "semantic_hash": "a56fbb9c025646ca6f9f35cea1123729"
   },
   "src/pages/DashboardPage.jsx": {
-    "mtime": 1790742798.50105,
-    "seen": 1790742961.461956,
-    "ast_hash": "09979c8caed1e0008071a8631ab3a0a1",
+    "mtime": 1790836758.8128107,
+    "seen": 1790836778.6819174,
+    "ast_hash": "c5e3c98d6f97c07e789166971c1e4652",
     "semantic_hash": ""
   },
   "src/pages/EventSchedulePage.jsx": {
@@ -114,9 +114,9 @@
     "semantic_hash": ""
   },
   "src/pages/LoginPage.jsx": {
-    "mtime": 1790830382.712408,
-    "seen": 1790830408.6750336,
-    "ast_hash": "462935b63eaa964d9da7b61014935ca0",
+    "mtime": 1790836759.079365,
+    "seen": 1790836778.6819239,
+    "ast_hash": "596b95b16b24196571e5aa7578cc48b0",
     "semantic_hash": ""
   },
   "src/pages/MapVisualizationPage.jsx": {
@@ -162,9 +162,9 @@
     "semantic_hash": ""
   },
   "src/pages/RegisterPage.jsx": {
-    "mtime": 1790830383.2694564,
-    "seen": 1790830408.6750467,
-    "ast_hash": "6778c361bcf16de9878111d4a9f8ec4a",
+    "mtime": 1790834737.8807738,
+    "seen": 1790836778.681936,
+    "ast_hash": "0a96016d2b5d2e95a50d9abd6b81f5fc",
     "semantic_hash": ""
   },
   "src/pages/ReportsPage.jsx": {
@@ -948,9 +948,9 @@
     "semantic_hash": ""
   },
   "src/services/authenticatedApi.js": {
-    "mtime": 1790782038.4331007,
-    "seen": 1790782259.6033542,
-    "ast_hash": "17541464dd2c657df708a07dc6d412ff",
+    "mtime": 1790834649.6965039,
+    "seen": 1790836778.6819532,
+    "ast_hash": "62abedc089a74d4581c9dcaa5a597343",
     "semantic_hash": ""
   },
   "src/utils/exifGps.js": {
@@ -1014,9 +1014,9 @@
     "semantic_hash": ""
   },
   "src/services/googleRedirectAuth.js": {
-    "mtime": 1790830381.6009433,
-    "seen": 1790830408.6750674,
-    "ast_hash": "4d55c30176bfdab6560a4a4e863b9051",
+    "mtime": 1790834650.1911223,
+    "seen": 1790836778.6819549,
+    "ast_hash": "3bd7b3193e82c77fb048014ac22c7433",
     "semantic_hash": ""
   },
   "src/utils/eventStatus.js": {
@@ -1029,6 +1029,18 @@
     "mtime": 1790787151.5852222,
     "seen": 1790830041.7248552,
     "ast_hash": "362802b7f26ede17d352f608b7b434ad",
+    "semantic_hash": ""
+  },
+  "src/utils/authErrors.js": {
+    "mtime": 1790834649.968652,
+    "seen": 1790836778.681957,
+    "ast_hash": "19b40bf7ca9e0eb566a7d006c70a9253",
+    "semantic_hash": ""
+  },
+  "tests/authErrors.test.js": {
+    "mtime": 1790834756.980306,
+    "seen": 1790836778.681967,
+    "ast_hash": "0ef6a3cca8ee075e2ead35a8b748d7c6",
     "semantic_hash": ""
   }
 }
