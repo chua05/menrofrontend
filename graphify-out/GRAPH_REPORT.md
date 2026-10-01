@@ -1,17 +1,17 @@
 # Graph Report - menrosystem  (2026-10-01)
 
 ## Corpus Check
-- 157 files · ~188,630 words
+- 157 files · ~188,402 words
 - Verdict: corpus is large enough that graph structure adds value.
 - Unclassified: 28 file(s) not represented in the graph (top: .css 21, (none) 4, .resolved 1)
 
 ## Summary
-- 1638 nodes · 2400 edges · 117 communities (104 shown, 13 thin omitted)
-- Extraction: 99% EXTRACTED · 1% INFERRED · 0% AMBIGUOUS · INFERRED: 18 edges (avg confidence: 0.86)
+- 1638 nodes · 2402 edges · 120 communities (107 shown, 13 thin omitted)
+- Extraction: 99% EXTRACTED · 1% INFERRED · 0% AMBIGUOUS · INFERRED: 17 edges (avg confidence: 0.86)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `2326100e`
+- Built from commit: `cceb400d`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -30,8 +30,8 @@
 - SeedlingsPage.jsx
 - components.json
 - package.json
-- ProfilePage.jsx
-- AuthContext.jsx
+- RegisterPage.jsx
+- react
 - GuestEventPage.jsx
 - App Hosting CLI Commands
 - devDependencies
@@ -39,11 +39,11 @@
 - Mutations
 - Key Attributes
 - Topbar.jsx
-- LoginPage.jsx
+- config.js
 - Configuration Reference
 - scripts
 - vite.config.js
-- react
+- AuthContext.jsx
 - lucide-react
 - compilerOptions
 - vercel.json
@@ -64,7 +64,7 @@
 - Security Reference
 - Firebase Crashlytics - Android Setup Guide (Kotlin)
 - Firebase Remote Config - Android Setup Guide (Kotlin)
-- Examples
+- Native SQL Examples
 - firebase-basics/SKILL.md
 - 1. Vector Similarity Search (Semantic)
 - Firestore Web SDK Usage Guide
@@ -75,7 +75,7 @@
 - ⛔️ CRITICAL RULES & ENVIRONMENT CHECKS
 - Step-by-Step Migration Execution
 - Firebase Android Setup Guide
-- ⛔️ CRITICAL RULE: INITIALIZATION ORDER ⛔️
+- main.jsx
 - Schema Reference
 - Web SDK
 - Firebase SQL Connect
@@ -111,7 +111,7 @@
 - Flutter Setup for Firebase AI Logic
 - Firebase AI Logic Basics
 - Core Capabilities
-- Native SQL Examples
+- Deployment
 - Cloud Firestore in Flutter
 - Cloud Firestore in Flutter
 - Manual Initialization
@@ -129,14 +129,17 @@
 - Cursor Setup
 - Android Studio Setup
 - Package.swift
+- Firebase CLI Commands
+- Anti-Patterns
 - .audit-temp/artifact.md
+- Authorization Patterns
 
 ## God Nodes (most connected - your core abstractions)
 1. `PlantingPage()` - 66 edges
 2. `useAuth()` - 39 edges
 3. `SitesPage()` - 32 edges
-4. `MonitoringPage()` - 30 edges
-5. `DashboardPage()` - 29 edges
+4. `DashboardPage()` - 29 edges
+5. `MonitoringPage()` - 29 edges
 6. `formatDisplayId()` - 29 edges
 7. `react` - 28 edges
 8. `react-router-dom` - 25 edges
@@ -158,11 +161,11 @@
 ## Import Cycles
 - None detected.
 
-## Communities (117 total, 13 thin omitted)
+## Communities (120 total, 13 thin omitted)
 
 ### Community 0 - "PlantingPage"
 Cohesion: 0.06
-Nodes (68): calculateDistanceMeters(), canRenderImage(), displayReportStatus(), formatDate(), formatDateTime(), formatFileSize(), getCurrentUserIdentity(), getDistributionReference() (+60 more)
+Nodes (69): calculateDistanceMeters(), canRenderImage(), displayReportStatus(), formatDate(), formatDateTime(), formatFileSize(), getCurrentUserIdentity(), getDistributionReference() (+61 more)
 
 ### Community 1 - "SitesPage.jsx"
 Cohesion: 0.08
@@ -185,8 +188,8 @@ Cohesion: 0.06
 Nodes (48): ref_node_assert_strict, ref_node_test, BARANGAYS, EVENT_TYPES, EventForm(), EventSchedulePage(), apiRequest(), getAuthToken() (+40 more)
 
 ### Community 7 - "ReforestationAnalyticsPage.jsx"
-Cohesion: 0.18
-Nodes (10): recharts, CONDITION_COLORS, displayRate(), EMPTY_ANALYTICS, EMPTY_FILTERS, escapeCsv(), formatNumber(), Kpi() (+2 more)
+Cohesion: 0.19
+Nodes (9): recharts, CONDITION_COLORS, displayRate(), EMPTY_ANALYTICS, EMPTY_FILTERS, formatNumber(), Kpi(), ReforestationAnalyticsPage() (+1 more)
 
 ### Community 8 - "MapVisualizationPage.jsx"
 Cohesion: 0.18
@@ -212,13 +215,13 @@ Nodes (21): aliases, components, hooks, lib, ui, utils, iconLibrary, menuAccent 
 Cohesion: 0.08
 Nodes (26): name, private, type, version, @base-ui/react, crypto-js, dayjs, eslint (+18 more)
 
-### Community 14 - "ProfilePage.jsx"
-Cohesion: 0.24
-Nodes (10): CompleteProfilePage(), getProfileAffiliationLabel(), fieldStyle(), formatAccountDate(), getInitialForm(), ProfilePage(), API_BASE_URL, JUBAN_BARANGAYS (+2 more)
+### Community 14 - "RegisterPage.jsx"
+Cohesion: 0.14
+Nodes (17): axios, src_assets_menro_logo, auth, CompleteProfilePage(), fieldStyle(), formatAccountDate(), getInitialForm(), ProfilePage() (+9 more)
 
-### Community 15 - "AuthContext.jsx"
-Cohesion: 0.18
-Nodes (13): ref_firebase_app, ref_firebase_auth, AuthContext, AuthProvider(), auth, firebaseConfig, googleProvider, missingFirebaseConfig (+5 more)
+### Community 15 - "react"
+Cohesion: 0.27
+Nodes (9): react, react-dom, DashboardLayout(), getFallbackName(), getInitials(), getRoleLabel(), NAVIGATION, Sidebar() (+1 more)
 
 ### Community 16 - "GuestEventPage.jsx"
 Cohesion: 0.14
@@ -248,13 +251,13 @@ Nodes (23): `cleanUrls` (Optional), Full Example, `headers` (Optional), Hosting 
 Cohesion: 0.22
 Nodes (10): getDisplayName(), getInitials(), getRoleLabel(), getSearchPlaceholder(), SEARCH_ICONS, timestampText(), Topbar(), clearSearch() (+2 more)
 
-### Community 23 - "LoginPage.jsx"
-Cohesion: 0.17
-Nodes (18): axios, ref_react_icons_fc, getLoginErrorMessage(), isFirebaseNetworkError(), LoginPage(), signInWithNetworkRetry(), verifyBackendSession(), wait() (+10 more)
+### Community 23 - "config.js"
+Cohesion: 0.18
+Nodes (17): ref_firebase_app, ref_firebase_auth, ref_react_icons_fc, firebaseConfig, googleProvider, missingFirebaseConfig, requiredFirebaseConfig, getLoginErrorMessage() (+9 more)
 
 ### Community 24 - "Configuration Reference"
-Cohesion: 0.08
-Nodes (24): Breaking Changes, CI/CD Integration, Cloud SQL Configuration, Configuration Reference, Connect from SDK, connector.yaml, Contents, dataconnect.yaml (+16 more)
+Cohesion: 0.13
+Nodes (14): Cloud SQL Configuration, Configuration Reference, Connect from SDK, connector.yaml, Contents, dataconnect.yaml, Emulator, Emulator Configuration (firebase.json) (+6 more)
 
 ### Community 25 - "scripts"
 Cohesion: 0.40
@@ -264,13 +267,13 @@ Nodes (5): scripts, build, dev, lint, preview
 Cohesion: 0.40
 Nodes (4): ref_node_url, @tailwindcss/vite, vite, @vitejs/plugin-react
 
-### Community 27 - "react"
-Cohesion: 0.18
-Nodes (12): react, react-dom, ref_react_dom_client, src_index, DashboardLayout(), getFallbackName(), getInitials(), getRoleLabel() (+4 more)
+### Community 27 - "AuthContext.jsx"
+Cohesion: 0.36
+Nodes (8): AuthContext, AuthProvider(), GuestOnlyRoute(), RootRedirect(), useEffectiveAuth(), authenticatedFetch(), dashboardPathForRole(), normalizeRole()
 
 ### Community 28 - "lucide-react"
-Cohesion: 0.17
-Nodes (13): ref_data_dashboardmockdata, lucide-react, src_assets_aboutsys, src_assets_headerimg, src_assets_menro_logo, getConditionColor(), getUtilizationColor(), PlantingSitesMap() (+5 more)
+Cohesion: 0.19
+Nodes (12): ref_data_dashboardmockdata, lucide-react, src_assets_aboutsys, src_assets_headerimg, getConditionColor(), getUtilizationColor(), PlantingSitesMap(), sitePositions (+4 more)
 
 ### Community 31 - "What You Must Do When Invoked"
 Cohesion: 0.08
@@ -309,8 +312,8 @@ Cohesion: 0.15
 Nodes (17): ref_react_icons_fi, react-router-dom, useAuth(), PrivacyPolicyPage(), formatDate(), getReportTypeLabel(), REPORT_TYPES, ReportsPage() (+9 more)
 
 ### Community 45 - "Security Reference"
-Cohesion: 0.08
-Nodes (24): Access Levels, Anti-Patterns, @auth Directive, auth.token Fields, Authorization Data Lookup, Authorization Patterns, Available Bindings, CEL Expressions (+16 more)
+Cohesion: 0.13
+Nodes (14): Access Levels, @auth Directive, auth.token Fields, Authorization Data Lookup, Available Bindings, CEL Expressions, @check, @check and @redact (+6 more)
 
 ### Community 46 - "Firebase Crashlytics - Android Setup Guide (Kotlin)"
 Cohesion: 0.08
@@ -320,9 +323,9 @@ Nodes (21): 1. Add dependencies to Gradle build files, 2. *Optional:* Install th
 Cohesion: 0.08
 Nodes (21): 1. Add dependencies to Gradle build files, 2. Set in-app defaults, 3. Fetch and activate values, Firebase Remote Config - Android Setup Guide (Kotlin), Prerequisites, Add Swift Package Dependencies, Fetch and Activate Values, Firebase Remote Config iOS Setup Guide (+13 more)
 
-### Community 48 - "Examples"
-Cohesion: 0.15
-Nodes (12): Blog with Permissions, E-Commerce Store, Examples, Movie Review App, Mutations, Operations, Operations with Role Checks, Queries (+4 more)
+### Community 48 - "Native SQL Examples"
+Cohesion: 0.10
+Nodes (20): Advanced aggregation with RANK, Advanced CTE with upserts (atomic get-or-create), Basic SELECT with field aliasing, Basic UPDATE, Blog with Permissions, E-Commerce Store, Examples, Movie Review App (+12 more)
 
 ### Community 49 - "firebase-basics/SKILL.md"
 Cohesion: 0.11
@@ -364,9 +367,9 @@ Nodes (13): 1. Declarative IAM & APIs (Zero-Local-Overhead), 2. Global Parameter
 Cohesion: 0.14
 Nodes (13): 1. Check if the Android project is connected to a Firebase Project, 2. Create a new Firebase project or use an existing one, 3. Register the Android project, 4. Obtain and save `google-services.json`, 5. Add the `google-services` plugin, Firebase Android Setup Guide, `google-services.json` file is NOT present, `google-services.json` file is present (+5 more)
 
-### Community 59 - "⛔️ CRITICAL RULE: INITIALIZATION ORDER ⛔️"
-Cohesion: 0.22
-Nodes (9): 1. Create a Firebase Project and App (Automated), 2. Installation (Automated via Swift Package Manager CLI), 3. Initialization, AppDelegate (Traditional / UIKit), ⛔️ CRITICAL RULE: INITIALIZATION ORDER ⛔️, ⛔️ CRITICAL RULE: STATE MANAGEMENT (OBSERVATION VS COMBINE) ⛔️, Firebase iOS Setup Guide, SwiftUI (Modern - SAFE PATTERN) (+1 more)
+### Community 59 - "main.jsx"
+Cohesion: 0.15
+Nodes (12): 1. Create a Firebase Project and App (Automated), 2. Installation (Automated via Swift Package Manager CLI), 3. Initialization, AppDelegate (Traditional / UIKit), ⛔️ CRITICAL RULE: INITIALIZATION ORDER ⛔️, ⛔️ CRITICAL RULE: STATE MANAGEMENT (OBSERVATION VS COMBINE) ⛔️, Firebase iOS Setup Guide, SwiftUI (Modern - SAFE PATTERN) (+4 more)
 
 ### Community 60 - "Schema Reference"
 Cohesion: 0.10
@@ -508,9 +511,9 @@ Nodes (7): Advanced Features, Chat Session (Multi-turn), Core Capabilities, Fire
 Cohesion: 0.29
 Nodes (7): Chat Session (Multi-turn), Core Capabilities, Generate Images with Nano Banana, Multimodal (Text + Images/Audio/Video/PDF input), Search Grounding with the built in googleSearch tool, Streaming Responses, Text-Only Generation
 
-### Community 95 - "Native SQL Examples"
-Cohesion: 0.25
-Nodes (8): Advanced aggregation with RANK, Advanced CTE with upserts (atomic get-or-create), Basic SELECT with field aliasing, Basic UPDATE, Multi-statement Transactions, Native SQL Examples, UPDATE with RETURNING and Auth Context, Use of extensions (e.g. PostGIS for geospatial data)
+### Community 95 - "Deployment"
+Cohesion: 0.40
+Nodes (5): Breaking Changes, CI/CD Integration, Deploy Workflow, Deployment, Schema Migrations
 
 ### Community 96 - "Cloud Firestore in Flutter"
 Cohesion: 0.29
@@ -576,6 +579,18 @@ Nodes (4): 1. Install and Verify Firebase Skills, 2. Configure and Verify Fireba
 Cohesion: 0.50
 Nodes (3): Android Studio Setup, MCP Setup, Skills Installation
 
+### Community 116 - "Firebase CLI Commands"
+Cohesion: 0.40
+Nodes (5): Deployment, Firebase CLI Commands, Initialize SQL Connect, Local Development, Schema Management
+
+### Community 117 - "Anti-Patterns"
+Cohesion: 0.40
+Nodes (5): Anti-Patterns, ❌ Don't Pass User ID as Variable, ❌ Don't Trust Unverified Email, ❌ Don't Use PUBLIC/USER for Prototyping, ❌ Don't Use USER Without Filters
+
+### Community 119 - "Authorization Patterns"
+Cohesion: 0.40
+Nodes (5): Authorization Patterns, Public Data with Filters, Role-Based Access, Tiered Access (Pro Content), User-Owned Resources
+
 ## Knowledge Gaps
 - **734 isolated node(s):** `PackageDescription`, `Foundation`, `PathKit`, `$schema`, `style` (+729 more)
   These have ≤1 connection - possible missing edges or undocumented components. (Counts symbols only; 863 node(s) total have ≤1 connection when file, concept and rationale nodes are included.)
@@ -584,17 +599,17 @@ Nodes (3): Android Studio Setup, MCP Setup, Skills Installation
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `App()` connect `⛔️ CRITICAL RULE: INITIALIZATION ORDER ⛔️` to `react`, `App.jsx`?**
+- **Why does `App()` connect `main.jsx` to `App.jsx`?**
   _High betweenness centrality (0.048) - this node is a cross-community bridge._
-- **Why does `PlantingPage()` connect `PlantingPage` to `App.jsx`, `EventSchedulePage.jsx`, `ProfilePage.jsx`?**
-  _High betweenness centrality (0.030) - this node is a cross-community bridge._
+- **Why does `PlantingPage()` connect `PlantingPage` to `App.jsx`, `EventSchedulePage.jsx`, `RegisterPage.jsx`?**
+  _High betweenness centrality (0.028) - this node is a cross-community bridge._
 - **What connects `PackageDescription`, `Foundation`, `PathKit` to the rest of the system?**
   _734 weakly-connected nodes found - possible documentation gaps or missing edges._
 - **Should `PlantingPage` be split into smaller, more focused modules?**
-  _Cohesion score 0.0640503517215846 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.06306306306306306 - nodes in this community are weakly interconnected._
 - **Should `SitesPage.jsx` be split into smaller, more focused modules?**
   _Cohesion score 0.0824524312896406 - nodes in this community are weakly interconnected._
 - **Should `SeedlingRequestsPage.jsx` be split into smaller, more focused modules?**
   _Cohesion score 0.09178743961352658 - nodes in this community are weakly interconnected._
 - **Should `MonitoringPage.jsx` be split into smaller, more focused modules?**
-  _Cohesion score 0.08527131782945736 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.08826945412311266 - nodes in this community are weakly interconnected._

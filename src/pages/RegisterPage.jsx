@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { FiUser, FiMail, FiLock, FiEye, FiEyeOff } from "react-icons/fi";
 import { FcGoogle } from "react-icons/fc";
@@ -8,12 +8,9 @@ import { auth } from "../firebase/config";
 import { useAuth } from "../context/AuthContext";
 import { JUBAN_BARANGAYS, USER_TYPES, userTypeField } from "../utils/userTypes";
 import { dashboardPathForRole } from "../utils/roleRoutes";
-import { API_BASE_URL } from "../services/authenticatedApi";
-import {
-  consumeGoogleRedirectResult,
-  hasPendingGoogleRedirect,
-  startGooglePopup,
-} from "../services/googleRedirectAuth";
+import { API_BASE_URL, verifyMenroSession } from "../services/authenticatedApi";
+import { startGooglePopup } from "../services/googleRedirectAuth";
+import { getAuthErrorMessage, isGoogleCancellation } from "../utils/authErrors";
 
 import menroLogo from "../assets/menro-logo.png";
 import "../styles/register.css";
@@ -49,55 +46,6 @@ export default function RegisterPage() {
   const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(false);
   const [acceptedTerms, setAcceptedTerms] = useState(false);
-
-  useEffect(() => {
-    let active = true;
-
-    const finishGoogleRedirect = async () => {
-      const redirectPending = hasPendingGoogleRedirect("register");
-      if (redirectPending) setLoading(true);
-
-      try {
-        const result = await consumeGoogleRedirectResult("register");
-        if (!active || !result) return;
-
-        const token = await result.user.getIdToken();
-        const response = await axios.post(`${API_BASE_URL}/auth/verify`, {}, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        if (!active) return;
-
-        const userData = response.data.data;
-        login(userData, userData.role);
-        navigate(
-          userData.profileComplete === false
-            ? "/complete-profile"
-            : dashboardPathForRole(userData.role),
-          { replace: true }
-        );
-      } catch (error) {
-        if (!active) return;
-        console.error(
-          "Google redirect registration failed:",
-          error?.code || error?.message
-        );
-        setErrors({
-          general:
-            error.response?.data?.message ||
-            (error.code === "auth/unauthorized-domain"
-              ? "Google sign-in is not enabled for this website. Please contact the administrator."
-              : "Google registration failed. Please try again."),
-        });
-      } finally {
-        if (active && redirectPending) setLoading(false);
-      }
-    };
-
-    finishGoogleRedirect();
-    return () => {
-      active = false;
-    };
-  }, [login, navigate]);
 
   const update = (field) => (e) =>
     setForm((prev) => ({
@@ -216,11 +164,7 @@ export default function RegisterPage() {
     setLoading(true);
     try {
       const result = await startGooglePopup();
-      const token = await result.user.getIdToken();
-      const response = await axios.post(`${API_BASE_URL}/auth/verify`, {}, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const userData = response.data.data;
+      const userData = await verifyMenroSession(result.user);
 
       login(userData, userData.role);
       navigate(
@@ -230,17 +174,17 @@ export default function RegisterPage() {
         { replace: true }
       );
     } catch (error) {
+      if (isGoogleCancellation(error)) {
+        console.info("Google registration window was closed before completion.");
+        setErrors({});
+        return;
+      }
       console.error("Google registration failed:", error?.code || error?.message);
       setErrors({
-        general:
-          error.response?.data?.message ||
-          (error.code === "auth/popup-blocked"
-            ? "The Google sign-in window was blocked. Allow pop-ups, then try again."
-            : error.code === "auth/popup-closed-by-user"
-              ? "Google sign-in was cancelled."
-              : error.code === "auth/unauthorized-domain"
-                ? "Google sign-in is not enabled for this website. Please contact the administrator."
-                : "Google registration failed. Please try again."),
+        general: getAuthErrorMessage(error, {
+          provider: "google",
+          online: navigator.onLine !== false,
+        }),
       });
     } finally {
       setLoading(false);

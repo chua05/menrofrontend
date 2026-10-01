@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { FiMail, FiLock, FiEye, FiEyeOff } from "react-icons/fi";
 import { FcGoogle } from "react-icons/fc";
@@ -10,13 +10,9 @@ import {
 import { auth } from "../firebase/config";
 import { useAuth } from "../context/AuthContext";
 import { dashboardPathForRole } from "../utils/roleRoutes";
-import { API_BASE_URL } from "../services/authenticatedApi";
-import {
-  consumeGoogleRedirectResult,
-  hasPendingGoogleRedirect,
-  startGooglePopup,
-} from "../services/googleRedirectAuth";
-import axios from "axios";
+import { verifyMenroSession } from "../services/authenticatedApi";
+import { startGooglePopup } from "../services/googleRedirectAuth";
+import { getAuthErrorMessage, isGoogleCancellation } from "../utils/authErrors";
 
 import menroLogo from "../assets/menro-logo.png";
 import "../styles/login.css";
@@ -26,27 +22,6 @@ const isFirebaseNetworkError = (error) =>
 
 const wait = (milliseconds) =>
   new Promise((resolve) => window.setTimeout(resolve, milliseconds));
-
-const verifyBackendSession = async (token) => {
-  const request = () =>
-    axios.post(
-      `${API_BASE_URL}/auth/verify`,
-      {},
-      {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      }
-    );
-
-  try {
-    return await request();
-  } catch (error) {
-    if (error?.response || error?.code !== "ERR_NETWORK") throw error;
-    await wait(1000);
-    return request();
-  }
-};
 
 const signInWithNetworkRetry = async (email, password) => {
   try {
@@ -61,48 +36,6 @@ const signInWithNetworkRetry = async (email, password) => {
     await wait(500);
     return signInWithEmailAndPassword(auth, email, password);
   }
-};
-
-const getLoginErrorMessage = (error, provider = "email") => {
-  if (error?.response?.status === 429 ||
-      /Too many requests\. Please slow down\./i.test(error?.response?.data?.message || "")) {
-    return "Sign in is temporarily unavailable. Please try again later.";
-  }
-
-  if (isFirebaseNetworkError(error)) {
-    return navigator.onLine === false
-      ? "You appear to be offline. Reconnect to the internet, then try again."
-      : "Unable to reach Firebase Authentication. Check your connection or disable any VPN/ad blocker, then try again.";
-  }
-
-  const firebaseMessages = {
-    "auth/invalid-credential": "Invalid email or password.",
-    "auth/user-not-found": "Account not found.",
-    "auth/wrong-password": "Incorrect password.",
-    "auth/invalid-email": "Please enter a valid email address.",
-    "auth/user-disabled": "This account has been disabled. Please contact the administrator.",
-    "auth/too-many-requests": "Too many failed attempts. Please wait a while, then try again.",
-    "auth/popup-closed-by-user": "Google sign-in was cancelled.",
-    "auth/popup-blocked": "The Google sign-in window was blocked. Allow pop-ups, then try again.",
-    "auth/cancelled-popup-request": "Another Google sign-in request was cancelled. Please try again.",
-    "auth/unauthorized-domain": "Google sign-in is not enabled for this website. Please contact the administrator.",
-  };
-
-  if (firebaseMessages[error?.code]) {
-    return firebaseMessages[error.code];
-  }
-
-  if (error?.response?.data?.message) {
-    return error.response.data.message;
-  }
-
-  if (error?.code === "ERR_NETWORK") {
-    return "Signed in to Firebase, but the MENRO server could not be reached. Please try again shortly.";
-  }
-
-  return provider === "google"
-    ? "Google sign-in failed. Please try again."
-    : "Login failed. Please try again.";
 };
 
 export default function LoginPage() {
@@ -121,49 +54,6 @@ export default function LoginPage() {
   const [resetLoading, setResetLoading] = useState(false);
   const navigate = useNavigate();
   const { login } = useAuth();
-
-  useEffect(() => {
-    let active = true;
-
-    const finishGoogleRedirect = async () => {
-      const redirectPending = hasPendingGoogleRedirect("login");
-      if (redirectPending) setLoading(true);
-
-      try {
-        const result = await consumeGoogleRedirectResult("login");
-        if (!active || !result) return;
-
-        const token = await result.user.getIdToken();
-        const response = await verifyBackendSession(token);
-        if (!active) return;
-
-        const userData = response.data.data;
-        if (userData.role === "participant" && userData.profileComplete === false) {
-          login(userData, userData.role);
-          navigate("/complete-profile", { replace: true });
-          return;
-        }
-
-        login(userData, userData.role);
-        navigate(dashboardPathForRole(userData.role), { replace: true });
-      } catch (redirectError) {
-        if (!active) return;
-        console.error(
-          "Google redirect sign in failed:",
-          redirectError?.code || redirectError?.message
-        );
-        setSuccess("");
-        setError(getLoginErrorMessage(redirectError, "google"));
-      } finally {
-        if (active && redirectPending) setLoading(false);
-      }
-    };
-
-    finishGoogleRedirect();
-    return () => {
-      active = false;
-    };
-  }, [login, navigate]);
 
   const [verificationSending, setVerificationSending] = useState(false);
 
@@ -197,20 +87,14 @@ export default function LoginPage() {
         password
       );
 
-      const token =
-        await credential.user.getIdToken();
-
-      const response = await verifyBackendSession(token);
-
-      const userData =
-        response.data.data;
+      const userData = await verifyMenroSession(credential.user);
 
       login(userData, userData.role);
       navigate(dashboardPathForRole(userData.role), { replace: true });
     } catch (err) {
       setSuccess("");
       console.error("Email sign in failed:", err?.code || err?.message);
-      setError(getLoginErrorMessage(err));
+      setError(getAuthErrorMessage(err, { online: navigator.onLine !== false }));
     } finally {
       signInInProgress.current = false;
       setLoading(false);
@@ -241,9 +125,7 @@ export default function LoginPage() {
 
       try {
         const result = await startGooglePopup();
-        const token = await result.user.getIdToken();
-        const response = await verifyBackendSession(token);
-        const userData = response.data.data;
+        const userData = await verifyMenroSession(result.user);
 
         login(userData, userData.role);
         navigate(
@@ -253,9 +135,17 @@ export default function LoginPage() {
           { replace: true }
         );
       } catch (err) {
+        if (isGoogleCancellation(err)) {
+          console.info("Google sign-in window was closed before completion.");
+          setError("");
+          return;
+        }
         console.error("Google sign in failed:", err?.code || err?.message);
         setSuccess("");
-        setError(getLoginErrorMessage(err, "google"));
+        setError(getAuthErrorMessage(err, {
+          provider: "google",
+          online: navigator.onLine !== false,
+        }));
       } finally {
         signInInProgress.current = false;
         setLoading(false);

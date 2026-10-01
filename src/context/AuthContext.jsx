@@ -2,7 +2,10 @@
 import { createContext, useContext, useEffect, useRef, useState } from "react";
 import { onAuthStateChanged, signOut } from "firebase/auth";
 import { auth } from "../firebase/config";
-import { authenticatedFetch } from "../services/authenticatedApi";
+import {
+  resetMenroSessionRequest,
+  verifyMenroSession,
+} from "../services/authenticatedApi";
 import { normalizeRole } from "../utils/roleRoutes";
 
 const AuthContext = createContext();
@@ -24,6 +27,7 @@ export function AuthProvider({ children }) {
 
       if (!firebaseUser) {
         if (revision !== authRevision.current) return;
+        resetMenroSessionRequest();
         setCurrentUser(null);
         setUserRole(null);
         setAuthLoading(false);
@@ -31,12 +35,10 @@ export function AuthProvider({ children }) {
       }
 
       try {
-        const response = await authenticatedFetch("/auth/profile");
-        const payload = await response.json().catch(() => null);
-        if (!response.ok || !payload?.data) throw new Error("Unable to restore session.");
+        const profile = await verifyMenroSession(firebaseUser);
         if (revision !== authRevision.current) return;
-        const resolvedRole = normalizeRole(payload.data.role);
-        setCurrentUser({ ...payload.data, role: resolvedRole });
+        const resolvedRole = normalizeRole(profile.role);
+        setCurrentUser({ ...profile, role: resolvedRole });
         setUserRole(resolvedRole);
       } catch {
         if (revision !== authRevision.current) return;
@@ -61,6 +63,7 @@ export function AuthProvider({ children }) {
 
   const logout = async () => {
     authRevision.current += 1;
+    resetMenroSessionRequest();
     await signOut(auth);
     localStorage.removeItem("user");
     localStorage.removeItem("token");
