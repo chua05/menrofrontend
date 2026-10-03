@@ -1,5 +1,5 @@
 import { NavLink, useNavigate } from "react-router-dom";
-import {useState,} from "react";
+import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import {
   LayoutDashboard,
@@ -20,6 +20,11 @@ import {
 } from "lucide-react";
 
 import { useAuth } from "../context/AuthContext";
+import { authenticatedFetch } from "../services/authenticatedApi";
+import {
+  getUnreadCountsByPath,
+  NOTIFICATIONS_UPDATED_EVENT,
+} from "../utils/notificationRoutes";
 import menroLogo from "../assets/menro-logo.png";
 
 const NAVIGATION = {
@@ -310,10 +315,55 @@ export default function Sidebar({ isOpen, onClose }) {
     setLoggingOut,
   ] = useState(false);
 
+  const [notifications, setNotifications] = useState([]);
+
   const resolvedRole =
     userRole && NAVIGATION[userRole] ? userRole : "participant";
 
   const navigation = NAVIGATION[resolvedRole];
+  const unreadCounts = useMemo(
+    () => getUnreadCountsByPath(notifications, resolvedRole),
+    [notifications, resolvedRole],
+  );
+
+  useEffect(() => {
+    if (!currentUser?.uid) {
+      return undefined;
+    }
+
+    let cancelled = false;
+
+    const loadNotifications = async () => {
+      try {
+        const response = await authenticatedFetch("/notifications");
+        const payload = await response.json().catch(() => null);
+        if (!response.ok) throw new Error(payload?.message || "Unable to load notifications.");
+        if (!cancelled) setNotifications(payload?.data?.notifications || []);
+      } catch (error) {
+        if (!cancelled) console.error("Unable to load sidebar notifications:", error);
+      }
+    };
+
+    const handleNotificationsUpdated = (event) => {
+      if (Array.isArray(event.detail?.notifications)) {
+        setNotifications(event.detail.notifications);
+      } else {
+        void loadNotifications();
+      }
+    };
+
+    void loadNotifications();
+    window.addEventListener(NOTIFICATIONS_UPDATED_EVENT, handleNotificationsUpdated);
+    window.addEventListener("focus", loadNotifications);
+    const refreshTimer = window.setInterval(loadNotifications, 60000);
+
+    return () => {
+      cancelled = true;
+      window.removeEventListener(NOTIFICATIONS_UPDATED_EVENT, handleNotificationsUpdated);
+      window.removeEventListener("focus", loadNotifications);
+      window.clearInterval(refreshTimer);
+    };
+  }, [currentUser?.uid]);
 
   const displayName =
     currentUser?.fullName?.trim() || getFallbackName(resolvedRole);
@@ -390,6 +440,7 @@ export default function Sidebar({ isOpen, onClose }) {
 
             {group.items.map((item) => {
               const Icon = item.icon;
+              const unreadCount = unreadCounts[item.to] || 0;
 
               return (
                 <NavLink
@@ -407,6 +458,15 @@ export default function Sidebar({ isOpen, onClose }) {
                   />
 
                   <span className="sb-item-label">{item.label}</span>
+
+                  {unreadCount > 0 && (
+                    <span
+                      className="sb-item-badge"
+                      aria-label={`${unreadCount} unread update${unreadCount === 1 ? "" : "s"}`}
+                    >
+                      {unreadCount > 99 ? "99+" : unreadCount}
+                    </span>
+                  )}
                 </NavLink>
               );
             })}

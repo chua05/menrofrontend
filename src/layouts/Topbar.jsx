@@ -6,6 +6,7 @@ import {
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { auth } from "../firebase/config";
+import { publishNotifications } from "../utils/notificationRoutes";
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
 
@@ -193,7 +194,11 @@ export default function Topbar({ onOpenSidebar }) {
         });
         const payload = await response.json().catch(() => null);
         if (!response.ok) throw new Error(payload?.message || "Unable to load notifications.");
-        if (!cancelled) setNotifications(payload?.data?.notifications || []);
+        if (!cancelled) {
+          const nextNotifications = payload?.data?.notifications || [];
+          setNotifications(nextNotifications);
+          publishNotifications(nextNotifications);
+        }
       } catch (error) {
         if (!cancelled) setNotificationError(error.message || "Unable to load notifications.");
       } finally {
@@ -243,7 +248,11 @@ export default function Topbar({ onOpenSidebar }) {
           method: "PATCH", headers: { Authorization: `Bearer ${token}` },
         });
         if (!response.ok) throw new Error("Unable to mark notification as read.");
-        setNotifications((previous) => previous.map((entry) => entry.id === item.id ? { ...entry, isRead: true } : entry));
+        setNotifications((previous) => {
+          const nextNotifications = previous.map((entry) => entry.id === item.id ? { ...entry, isRead: true } : entry);
+          publishNotifications(nextNotifications);
+          return nextNotifications;
+        });
       } catch (error) {
         setNotificationError(error.message);
         return;

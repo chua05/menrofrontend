@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { getAuthErrorMessage, isGoogleCancellation } from "../src/utils/authErrors.js";
+import { getAuthErrorMessage, getVerificationErrorMessage, isGoogleCancellation } from "../src/utils/authErrors.js";
 
 test("Google popup cancellation is treated as a user action", () => {
   assert.equal(isGoogleCancellation({ code: "auth/popup-closed-by-user" }), true);
@@ -28,5 +28,16 @@ test("authentication errors distinguish Firebase, network, and backend rejection
   assert.match(
     getAuthErrorMessage({ code: "BACKEND_SERVER_ERROR", status: 500 }),
     /could not complete sign-in/i
+  );
+});
+
+test("verification action errors are safe and actionable", () => {
+  assert.match(
+    getVerificationErrorMessage({ code: "auth/expired-action-code" }),
+    /expired.*request a new verification email/i,
+  );
+  assert.doesNotMatch(
+    getVerificationErrorMessage({ code: "auth/internal-error", message: "secret details" }),
+    /secret details|FirebaseError/i,
   );
 });

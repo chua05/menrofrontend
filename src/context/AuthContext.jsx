@@ -14,6 +14,7 @@ export function AuthProvider({ children }) {
   const [currentUser, setCurrentUser] = useState(null);
   const [userRole, setUserRole] = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
+  const [verificationRequired, setVerificationRequired] = useState(false);
   const authRevision = useRef(0);
 
   useEffect(() => {
@@ -30,6 +31,7 @@ export function AuthProvider({ children }) {
         resetMenroSessionRequest();
         setCurrentUser(null);
         setUserRole(null);
+        setVerificationRequired(false);
         setAuthLoading(false);
         return;
       }
@@ -44,6 +46,10 @@ export function AuthProvider({ children }) {
         if (revision !== authRevision.current) return;
         setCurrentUser(null);
         setUserRole(null);
+        const providerIds = firebaseUser.providerData.map((provider) => provider.providerId);
+        setVerificationRequired(
+          providerIds.includes("password") && firebaseUser.emailVerified !== true
+        );
       } finally {
         if (revision === authRevision.current) setAuthLoading(false);
       }
@@ -58,6 +64,7 @@ export function AuthProvider({ children }) {
     const userWithRole = { ...user, role: resolvedRole };
     setCurrentUser(userWithRole);
     setUserRole(resolvedRole);
+    setVerificationRequired(false);
     setAuthLoading(false);
   };
 
@@ -70,10 +77,11 @@ export function AuthProvider({ children }) {
     localStorage.removeItem("profile");
     setCurrentUser(null);
     setUserRole(null);
+    setVerificationRequired(false);
   };
 
   return (
-    <AuthContext.Provider value={{ currentUser, userRole, authLoading, login, logout }}>
+    <AuthContext.Provider value={{ currentUser, userRole, authLoading, verificationRequired, login, logout }}>
       {children}
     </AuthContext.Provider>
   );

@@ -1,14 +1,11 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { FiUser, FiMail, FiLock, FiEye, FiEyeOff } from "react-icons/fi";
 import { FcGoogle } from "react-icons/fc";
-import axios from "axios";
-import { sendEmailVerification, signInWithEmailAndPassword, signOut } from "firebase/auth";
-import { auth } from "../firebase/config";
 import { useAuth } from "../context/AuthContext";
 import { JUBAN_BARANGAYS, USER_TYPES, userTypeField } from "../utils/userTypes";
 import { dashboardPathForRole } from "../utils/roleRoutes";
-import { API_BASE_URL, verifyMenroSession } from "../services/authenticatedApi";
+import { publicApiFetch, verifyMenroSession } from "../services/authenticatedApi";
 import { startGooglePopup } from "../services/googleRedirectAuth";
 import { getAuthErrorMessage, isGoogleCancellation } from "../utils/authErrors";
 
@@ -26,6 +23,7 @@ const Field = ({ label, error, children }) => (
 );
 
 export default function RegisterPage() {
+  const registrationInProgress = useRef(false);
   const navigate = useNavigate();
   const { login } = useAuth();
 
@@ -111,6 +109,7 @@ export default function RegisterPage() {
 
   const handleRegister = async (e) => {
     e.preventDefault();
+    if (registrationInProgress.current) return;
 
     const errs = validate();
 
@@ -120,12 +119,13 @@ export default function RegisterPage() {
     }
 
     setErrors({});
+    registrationInProgress.current = true;
     setLoading(true);
 
     try {
-      await axios.post(
-        `${API_BASE_URL}/auth/register`,
-        {
+      const response = await publicApiFetch("/auth/register", {
+        method: "POST",
+        body: JSON.stringify({
           fullName: form.fullName,
           username: form.username,
           email: form.email,
@@ -134,32 +134,39 @@ export default function RegisterPage() {
           userType: form.userType,
           userTypeDetail: form.userTypeDetail.trim(),
           barangay: form.barangay,
-        }
-      );
-      const credential = await signInWithEmailAndPassword(
-        auth,
-        form.email.trim().toLowerCase(),
-        form.password,
-      );
-      await sendEmailVerification(credential.user);
-      await signOut(auth);
+        }),
+      });
+      const payload = await response.json().catch(() => null);
+      if (!response.ok) {
+        const error = new Error(payload?.message || "Registration failed.");
+        error.status = response.status;
+        throw error;
+      }
+      const verificationSent = payload?.data?.emailDelivery?.verification?.sent === true;
       navigate("/login", {
-        state: { message: "Account created. Please verify your email address before signing in." },
+        state: {
+          message: verificationSent
+            ? "Account created. Check your email and verify your address before signing in."
+            : "Account created, but the verification email could not be sent. Sign in and use Resend Verification Email.",
+        },
       });
     } catch (err) {
       setErrors({
-        general:
-          err.response?.data?.message ||
-          (err.request
-            ? "Cannot reach the registration server. Please try again shortly."
-            : "Registration failed"),
+        general: err.status === 409
+          ? "An account with this email already exists."
+          : err.status
+            ? err.message || "Registration failed. Please try again."
+            : "Cannot reach the registration server. Please check your connection and try again.",
       });
     } finally {
+      registrationInProgress.current = false;
       setLoading(false);
     }
   };
 
   const handleGoogleRegister = async () => {
+    if (registrationInProgress.current) return;
+    registrationInProgress.current = true;
     setErrors({});
     setLoading(true);
     try {
@@ -187,6 +194,7 @@ export default function RegisterPage() {
         }),
       });
     } finally {
+      registrationInProgress.current = false;
       setLoading(false);
     }
   };

@@ -1,0 +1,48 @@
+.verify-email-shell {
+  max-width: 560px;
+}
+
+.verify-email-card {
+  padding: 38px;
+  text-align: center;
+}
+
+.verify-email-icon {
+  width: 58px;
+  height: 58px;
+  margin: 0 auto 20px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  font-size: 27px;
+  font-weight: 800;
+}
+
+.verify-email-icon-loading {
+  color: #176b3a;
+  background: #e8f5ec;
+}
+
+.verify-email-icon-success {
+  color: #fff;
+  background: #178447;
+}
+
+.verify-email-icon-error {
+  color: #9f2d24;
+  background: #fdecea;
+}
+
+.verify-email-link {
+  margin-top: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+}
+
+@media (max-width: 600px) {
+  .verify-email-card {
+    padding: 28px 20px;
+  }
+}

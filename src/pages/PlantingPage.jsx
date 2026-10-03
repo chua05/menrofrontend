@@ -199,6 +199,28 @@ function getEventDateValue(event) {
   return Number.isNaN(date.getTime()) ? "" : date.toISOString().slice(0, 10);
 }
 
+function getEventStartTime(event) {
+  const date = getEventDateValue(event);
+  if (!date) return null;
+  const startTime = /^\d{2}:\d{2}/.test(String(event?.startTime || ""))
+    ? String(event.startTime).slice(0, 5)
+    : "00:00";
+  const value = new Date(`${date}T${startTime}:00+08:00`);
+  return Number.isNaN(value.getTime()) ? null : value;
+}
+
+function getReportEventStatus(event, now = new Date()) {
+  const recordStatus = String(event?.recordStatus || "").trim().toLowerCase();
+  if (recordStatus === "completed") return "Completed";
+  const startsAt = getEventStartTime(event);
+  const date = getEventDateValue(event);
+  const endTime = /^\d{2}:\d{2}/.test(String(event?.endTime || ""))
+    ? new Date(`${date}T${String(event.endTime).slice(0, 5)}:00+08:00`)
+    : null;
+  if (startsAt && startsAt <= now && (!endTime || now <= endTime)) return "Ongoing";
+  return startsAt && startsAt <= now ? "Completed" : "Upcoming";
+}
+
 function getProfileAffiliation(profile) {
   return profile?.affiliationName || profile?.userTypeDetail ||
     profile?.organization || profile?.barangay || "";
@@ -1030,15 +1052,24 @@ export default function PlantingPage() {
       "completed",
     ].includes(recordStatus);
 
-    const isCancelled =
-      calendarStatus === "cancelled";
+    const isUnavailable = [calendarStatus, recordStatus].some((status) =>
+      ["cancelled", "canceled", "rejected", "deleted", "archived"].includes(status));
+    const startsAt = getEventStartTime(event);
 
     return (
       eventSiteId === selectedSiteId &&
       validRecordStatus &&
-      !isCancelled &&
+      !isUnavailable &&
+      startsAt && startsAt <= new Date() &&
       (!isParticipant || event.isMyEvent === true)
     );
+  }).sort((left, right) => {
+    const statusRank = { Ongoing: 0, Completed: 1 };
+    const rankDifference = (statusRank[getReportEventStatus(left)] ?? 2) -
+      (statusRank[getReportEventStatus(right)] ?? 2);
+    if (rankDifference !== 0) return rankDifference;
+    return (getEventStartTime(right)?.getTime() || 0) -
+      (getEventStartTime(left)?.getTime() || 0);
   });
 }, [
   events,
@@ -2634,14 +2665,14 @@ export default function PlantingPage() {
                         </option>
                         {filteredEvents.map((event) => (
                           <option key={getEventId(event)} value={getEventId(event)}>
-                            {formatDisplayId("EVT", event.eventNumber, event.eventId, getEventId(event))} — {getEventName(event)} — {formatDate(getEventDateValue(event))}
+                            {getEventName(event)} — {formatDate(getEventDateValue(event))} — {getReportEventStatus(event)}
                           </option>
                         ))}
                       </select>
                       {noEventsAlertSiteId === String(form.siteId) && (
                         <div className="pr-no-events-alert-slot">
                           <div className="pr-no-events-alert" role="status">
-                            No planting events are currently available for this planting site.
+                            No planting events are available for this planting site.
                           </div>
                         </div>
                       )}
@@ -2667,7 +2698,7 @@ export default function PlantingPage() {
                         </option>
                         {eligibleDistributions.map((distribution) => (
                           <option key={distribution.id} value={distribution.id}>
-                            {getDistributionReference(distribution)} — {distribution.participantName || distribution.organization || "Requester"}
+                            {(distribution.items || []).map((item) => item.species).filter(Boolean).join(", ") || distribution.species || "Saplings"} — {distribution.totalQuantityReleased ?? distribution.quantityReleased ?? "—"} released — {formatDate(distribution.releasedAt)} — {getDistributionReference(distribution)} — {distribution.participantName || distribution.organization || "Recipient"}
                           </option>
                         ))}
                       </select>

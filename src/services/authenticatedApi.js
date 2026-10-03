@@ -123,3 +123,13 @@ export async function authenticatedFetch(path, options = {}, forceRefresh = fals
   }
   return response;
 }
+
+export async function publicApiFetch(path, options = {}) {
+  return fetch(path.startsWith("http") ? path : `${API_BASE_URL}${path}`, {
+    ...options,
+    headers: {
+      ...(options.body instanceof FormData ? {} : options.body ? { "Content-Type": "application/json" } : {}),
+      ...(options.headers || {}),
+    },
+  });
+}

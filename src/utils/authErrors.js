@@ -17,6 +17,13 @@ const GOOGLE_CANCELLATION_CODES = new Set([
 export const isGoogleCancellation = (error) =>
   GOOGLE_CANCELLATION_CODES.has(error?.code);
 
+export function getVerificationErrorMessage(error) {
+  if (["auth/expired-action-code", "auth/invalid-action-code"].includes(error?.code)) {
+    return "This verification link is invalid, expired, or has already been used. Sign in and request a new verification email.";
+  }
+  return "We could not verify your email right now. Check your connection and try the link again.";
+}
+
 export function getAuthErrorMessage(error, { provider = "email", online = true } = {}) {
   if (FIREBASE_MESSAGES[error?.code]) return FIREBASE_MESSAGES[error.code];
 

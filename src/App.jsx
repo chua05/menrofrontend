@@ -18,6 +18,7 @@ import { GuestOnlyRoute } from "./routes/RootRedirect";
 import LoginPage from "./pages/LoginPage";
 import RegisterPage from "./pages/RegisterPage";
 import CompleteProfilePage from "./pages/CompleteProfilePage";
+import VerifyEmailPage from "./pages/VerifyEmailPage";
 import GuestEventPage from "./pages/GuestEventPage";
 import TermsOfServicePage from "./pages/TermsOfServicePage";
 import PrivacyPolicyPage from "./pages/PrivacyPolicyPage";
@@ -82,6 +83,7 @@ function App() {
           />
 
           <Route path="/join-event/:token" element={<GuestEventPage />} />
+          <Route path="/verify-email" element={<VerifyEmailPage />} />
 
           <Route path="/terms-of-service" element={<TermsOfServicePage />} />
           <Route path="/privacy-policy" element={<PrivacyPolicyPage />} />

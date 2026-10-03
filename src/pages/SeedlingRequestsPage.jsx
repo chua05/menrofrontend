@@ -30,6 +30,10 @@ import {
 } from "lucide-react";
 
 import { useAuth } from "../context/AuthContext";
+import {
+  IDENTIFICATION_DOCUMENTS,
+  validateIdentificationForm,
+} from "../utils/identificationDocuments";
 import { auth } from "../firebase/config";
 import { formatDisplayId } from "../utils/displayId";
 
@@ -591,6 +595,51 @@ export default function SeedlingRequestsPage() {
 
   const [selectedRequest, setSelectedRequest] =
     useState(null);
+  const [revealedIdentification, setRevealedIdentification] = useState({ requestId: "", idNumber: "" });
+  const [identificationLoading, setIdentificationLoading] = useState(false);
+  const [identificationError, setIdentificationError] = useState({ requestId: "", message: "" });
+  const revealedIdNumber = revealedIdentification.requestId === selectedRequest?.id
+    ? revealedIdentification.idNumber
+    : "";
+  const visibleIdentificationError = identificationError.requestId === selectedRequest?.id
+    ? identificationError.message
+    : "";
+  const closeRequestDetails = () => {
+    setRevealedIdentification({ requestId: "", idNumber: "" });
+    setIdentificationError({ requestId: "", message: "" });
+    setSelectedRequest(null);
+  };
+
+  useEffect(() => {
+    if (!revealedIdNumber) return undefined;
+    const timer = window.setTimeout(
+      () => setRevealedIdentification({ requestId: "", idNumber: "" }),
+      30000,
+    );
+    return () => window.clearTimeout(timer);
+  }, [revealedIdNumber]);
+
+  const revealIdentification = async () => {
+    if (userRole !== "admin" || !selectedRequest?.id || identificationLoading) return;
+    setIdentificationLoading(true);
+    setIdentificationError({ requestId: selectedRequest.id, message: "" });
+    try {
+      const data = await apiRequest(
+        `/seedling-requests/${encodeURIComponent(selectedRequest.id)}/identification`,
+      );
+      setRevealedIdentification({
+        requestId: selectedRequest.id,
+        idNumber: String(data?.idNumber || ""),
+      });
+    } catch (error) {
+      setIdentificationError({
+        requestId: selectedRequest.id,
+        message: error.message || "Unable to show the full ID number.",
+      });
+    } finally {
+      setIdentificationLoading(false);
+    }
+  };
 
   useEffect(() => {
     const requestId = pageSearchParams.get("request");
@@ -1548,7 +1597,7 @@ useEffect(() => {
       )
     );
 
-    setSelectedRequest(null);
+    closeRequestDetails();
 
     setSuccessMessage(
       `${getRequestDisplayId(request)} was archived.`
@@ -2786,9 +2835,7 @@ useEffect(() => {
               <button
                 type="button"
                 className="sr-modal-close"
-                onClick={() =>
-                  setSelectedRequest(null)
-                }
+                onClick={closeRequestDetails}
               >
                 <X size={18} />
               </button>
@@ -2847,6 +2894,45 @@ useEffect(() => {
                   <strong>{getTotalSeedlings(selectedRequest.trees)}</strong>
                 </div>
               </div>
+
+              {userRole === "admin" && selectedRequest.identification && (
+                <section className="sr-identification-details" aria-labelledby="admin-identification-title">
+                  <div className="sr-identification-heading">
+                    <div>
+                      <h3 id="admin-identification-title">Identification Information</h3>
+                      <p>Supporting identification provided by the requester.</p>
+                    </div>
+                  </div>
+                  <dl>
+                    <div>
+                      <dt>Identification Type</dt>
+                      <dd>{selectedRequest.identification.identificationTypeLabel}</dd>
+                    </div>
+                    {selectedRequest.identification.schoolInstitutionName && (
+                      <div>
+                        <dt>School / Institution</dt>
+                        <dd>{selectedRequest.identification.schoolInstitutionName}</dd>
+                      </div>
+                    )}
+                    <div>
+                      <dt>{selectedRequest.identification.identificationType === "school_id" ? "Student ID Number" : "ID Number"}</dt>
+                      <dd className="sr-masked-id">
+                        {revealedIdNumber || selectedRequest.identification.maskedIdNumber}
+                      </dd>
+                    </div>
+                  </dl>
+                  <div className="sr-identification-actions">
+                    {revealedIdNumber ? (
+                      <button type="button" className="sr-secondary-btn" onClick={() => setRevealedIdentification({ requestId: "", idNumber: "" })}>Hide Full ID Number</button>
+                    ) : (
+                      <button type="button" className="sr-secondary-btn" onClick={() => void revealIdentification()} disabled={identificationLoading}>
+                        {identificationLoading ? "Loading..." : "Show Full ID Number"}
+                      </button>
+                    )}
+                    {visibleIdentificationError && <small className="sr-field-error" role="alert">{visibleIdentificationError}</small>}
+                  </div>
+                </section>
+              )}
 
               {Array.isArray(selectedRequest.releasedItems) && selectedRequest.releasedItems.length > 0 && (
                 <div className="sr-detail-seedlings">
@@ -2908,9 +2994,7 @@ useEffect(() => {
                 <button
                   type="button"
                   className="sr-secondary-btn"
-                  onClick={() =>
-                    setSelectedRequest(null)
-                  }
+                  onClick={closeRequestDetails}
                 >
                   Close
                 </button>
@@ -3989,6 +4073,9 @@ function getParticipantRequestForm(profile = {}, request = null) {
     eventLocation: proposal.eventLocation || request?.plantingLocation || "",
     eventDescription:
       proposal.description || proposal.eventDescription || request?.eventDescription || "",
+    identificationType: "",
+    idNumber: "",
+    schoolInstitutionName: "",
     confirmedInformation: false,
   };
 }
@@ -4342,6 +4429,9 @@ useEffect(() => {
             eventLocation: "",
           }
         : {}),
+      ...(field === "identificationType" && value !== "school_id"
+        ? { schoolInstitutionName: "" }
+        : {}),
     }));
 
     setFormErrors((previous) => ({
@@ -4351,6 +4441,9 @@ useEffect(() => {
         ? {
             plantingSite: "",
           }
+        : {}),
+      ...(field === "identificationType"
+        ? { schoolInstitutionName: "", idNumber: "" }
         : {}),
     }));
   };
@@ -4541,9 +4634,10 @@ useEffect(() => {
         "Enter the expected number of participants.";
     }
 
-    if (!form.confirmedInformation) {
-      errors.confirmedInformation =
-        "Please confirm that the information is correct.";
+    if (!editingRequest) {
+      Object.assign(errors, validateIdentificationForm(form));
+    } else if (!form.confirmedInformation) {
+      errors.confirmedInformation = "Please confirm that the information provided is correct.";
     }
 
     return errors;
@@ -4629,6 +4723,16 @@ useEffect(() => {
         expectedParticipants: Number(form.expectedParticipants),
         eventDescription: form.eventDescription.trim(),
       },
+      ...(!editingRequest ? {
+        identification: {
+          identificationType: form.identificationType,
+          idNumber: form.idNumber.trim(),
+          ...(form.identificationType === "school_id"
+            ? { schoolInstitutionName: form.schoolInstitutionName.trim() }
+            : {}),
+          confirmed: form.confirmedInformation,
+        },
+      } : {}),
     };
 
     setSubmitting(true);
@@ -5200,6 +5304,65 @@ useEffect(() => {
             </div>
           </div>
 
+          {!editingRequest && (
+            <section className="participant-identification-section" aria-labelledby="identification-information-title">
+              <div className="participant-section-title">
+                <div>
+                  <h3 id="identification-information-title">Identification Information</h3>
+                  <p>
+                    This information is collected as supporting identification for your MENRO seedling request.
+                    Access to this information is restricted to authorized MENRO personnel.
+                  </p>
+                </div>
+              </div>
+
+              <div className="sr-form-grid">
+                <FormField label="Identification Type *" error={formErrors.identificationType} fullWidth>
+                  <select
+                    value={form.identificationType}
+                    onChange={(event) => updateForm("identificationType", event.target.value)}
+                  >
+                    <option value="">Select identification document</option>
+                    {IDENTIFICATION_DOCUMENTS.map((document) => (
+                      <option key={document.value} value={document.value}>{document.label}</option>
+                    ))}
+                  </select>
+                </FormField>
+
+                {form.identificationType === "school_id" && (
+                  <FormField label="School / Institution Name *" error={formErrors.schoolInstitutionName} fullWidth>
+                    <input
+                      type="text"
+                      maxLength={120}
+                      value={form.schoolInstitutionName}
+                      onChange={(event) => updateForm("schoolInstitutionName", event.target.value)}
+                      placeholder="Enter school or institution name"
+                      autoComplete="organization"
+                    />
+                  </FormField>
+                )}
+
+                <FormField
+                  label={form.identificationType === "school_id" ? "Student ID Number *" : "ID Number *"}
+                  error={formErrors.idNumber}
+                  fullWidth
+                >
+                  <input
+                    type="text"
+                    inputMode="text"
+                    maxLength={form.identificationType === "school_id" ? 50 : 40}
+                    value={form.idNumber}
+                    onChange={(event) => updateForm("idNumber", event.target.value)}
+                    placeholder={form.identificationType === "school_id"
+                      ? "Enter your Student ID number"
+                      : "Enter the ID number exactly as shown on your ID"}
+                    autoComplete="off"
+                  />
+                </FormField>
+              </div>
+            </section>
+          )}
+
           <div className="participant-confirmation">
             <label>
               <input
@@ -5216,8 +5379,7 @@ useEffect(() => {
               />
 
               <span>
-                I confirm that the information provided
-                in this sapling request is correct.
+                I confirm that the information provided is correct.
               </span>
             </label>
 

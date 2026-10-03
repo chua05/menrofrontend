@@ -1,16 +1,15 @@
-import { useRef, useState } from "react";
-import { useNavigate, Link } from "react-router-dom";
+import { useEffect, useRef, useState } from "react";
+import { useNavigate, Link, useLocation } from "react-router-dom";
 import { FiMail, FiLock, FiEye, FiEyeOff } from "react-icons/fi";
 import { FcGoogle } from "react-icons/fc";
 import {
   signInWithEmailAndPassword,
   sendPasswordResetEmail,
-  sendEmailVerification,
 } from "firebase/auth";
 import { auth } from "../firebase/config";
 import { useAuth } from "../context/AuthContext";
 import { dashboardPathForRole } from "../utils/roleRoutes";
-import { verifyMenroSession } from "../services/authenticatedApi";
+import { authenticatedFetch, verifyMenroSession } from "../services/authenticatedApi";
 import { startGooglePopup } from "../services/googleRedirectAuth";
 import { getAuthErrorMessage, isGoogleCancellation } from "../utils/authErrors";
 
@@ -40,6 +39,8 @@ const signInWithNetworkRetry = async (email, password) => {
 
 export default function LoginPage() {
   const signInInProgress = useRef(false);
+  const navigate = useNavigate();
+  const location = useLocation();
   const [email, setEmail] = useState("");
   const [password, setPassword] =
     useState("");
@@ -48,14 +49,23 @@ export default function LoginPage() {
   const [error, setError] =
     useState("");
   const [success, setSuccess] =
-    useState("");
+    useState(() => location.state?.message || "");
   const [loading, setLoading] =
     useState(false);
   const [resetLoading, setResetLoading] = useState(false);
-  const navigate = useNavigate();
-  const { login } = useAuth();
+  const { login, verificationRequired } = useAuth();
 
   const [verificationSending, setVerificationSending] = useState(false);
+  const [resendCooldown, setResendCooldown] = useState(0);
+
+  useEffect(() => {
+    if (resendCooldown <= 0) return undefined;
+    const timer = window.setInterval(
+      () => setResendCooldown((seconds) => Math.max(0, seconds - 1)),
+      1000,
+    );
+    return () => window.clearInterval(timer);
+  }, [resendCooldown]);
 
   const handleLogin = async (e) => {
     e.preventDefault();
@@ -102,14 +112,17 @@ export default function LoginPage() {
   };
 
   const handleResendVerification = async () => {
-    if (!auth.currentUser || verificationSending) return;
+    if (!auth.currentUser || verificationSending || resendCooldown > 0) return;
     setVerificationSending(true);
     try {
-      await sendEmailVerification(auth.currentUser);
+      const response = await authenticatedFetch("/auth/resend-verification", { method: "POST" });
+      const payload = await response.json().catch(() => null);
+      if (!response.ok) throw new Error(payload?.message || "Unable to resend verification email.");
       setError("");
       setSuccess("A new verification email was sent. Verify your address, then sign in again.");
-    } catch {
-      setError("Unable to resend the verification email right now. Please try again later.");
+      setResendCooldown(60);
+    } catch (resendError) {
+      setError(resendError.message || "Unable to resend the verification email right now. Please try again later.");
     } finally {
       setVerificationSending(false);
     }
@@ -266,9 +279,13 @@ export default function LoginPage() {
             </div>
           )}
 
-          {error === "Please verify your email address before continuing." && auth.currentUser && (
-            <button type="button" className="login-forgot-button" onClick={handleResendVerification} disabled={verificationSending}>
-              {verificationSending ? "Sending verification email..." : "Resend verification email"}
+          {(verificationRequired || error === "Please verify your email address before continuing.") && auth.currentUser && (
+            <button type="button" className="login-forgot-button" onClick={handleResendVerification} disabled={verificationSending || resendCooldown > 0}>
+              {verificationSending
+                ? "Sending verification email..."
+                : resendCooldown > 0
+                  ? `Resend available in ${resendCooldown}s`
+                  : "Resend verification email"}
             </button>
           )}
 

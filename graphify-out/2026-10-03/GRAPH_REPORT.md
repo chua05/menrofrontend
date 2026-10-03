@@ -1,12 +1,12 @@
 # Graph Report - menrosystem  (2026-10-03)
 
 ## Corpus Check
-- 164 files · ~190,668 words
+- 164 files · ~190,666 words
 - Verdict: corpus is large enough that graph structure adds value.
-- Unclassified: 30 file(s) not represented in the graph (top: .css 23, (none) 4, .resolved 1)
+- Unclassified: 29 file(s) not represented in the graph (top: .css 22, (none) 4, .resolved 1)
 
 ## Summary
-- 1665 nodes · 2482 edges · 121 communities (107 shown, 14 thin omitted)
+- 1664 nodes · 2481 edges · 122 communities (109 shown, 13 thin omitted)
 - Extraction: 99% EXTRACTED · 1% INFERRED · 0% AMBIGUOUS · INFERRED: 17 edges (avg confidence: 0.86)
 - Token cost: 0 input · 0 output
 
@@ -23,6 +23,7 @@
 - DashboardPage.jsx
 - EventSchedulePage.jsx
 - dropdown-menu.jsx
+- ReforestationAnalyticsPage.jsx
 - MapVisualizationPage.jsx
 - MyRequestsPage.jsx
 - dependencies
@@ -30,19 +31,19 @@
 - components.json
 - package.json
 - RegisterPage.jsx
-- Sidebar.jsx
-- ReforestationAnalyticsPage.jsx
+- react
+- GuestEventPage.jsx
 - App Hosting CLI Commands
 - devDependencies
 - Deterministic Rules for Migration
 - Mutations
 - Key Attributes
-- react
-- CEL Expressions
+- Topbar.jsx
+- Native SQL Examples
 - Configuration Reference
 - scripts
 - vite.config.js
-- @check and @redact
+- ReportsPage.jsx
 - eslint.config.js
 - compilerOptions
 - vercel.json
@@ -63,7 +64,7 @@
 - Security Reference
 - Firebase Crashlytics - Android Setup Guide (Kotlin)
 - Firebase Remote Config - Android Setup Guide (Kotlin)
-- Native SQL Examples
+- Examples
 - firebase-basics/SKILL.md
 - 1. Vector Similarity Search (Semantic)
 - Firestore Web SDK Usage Guide
@@ -80,7 +81,7 @@
 - Firebase SQL Connect
 - Writing Data
 - Cloud Functions Integration Reference
-- 1. Local Prototyping: Data Seeding
+- firebase-data-connect/SKILL.md
 - Templates
 - Firebase Authentication - Android Setup Guide (Kotlin)
 - Flutter & Firebase Setup Guide
@@ -127,6 +128,7 @@
 - Antigravity Setup
 - Recommended Method: Using Plugins
 - Cursor Setup
+- 1. Local Prototyping: Data Seeding
 - Android Studio Setup
 - Package.swift
 - config.js
@@ -162,7 +164,7 @@
 ## Import Cycles
 - None detected.
 
-## Communities (121 total, 14 thin omitted)
+## Communities (122 total, 13 thin omitted)
 
 ### Community 0 - "PlantingPage"
 Cohesion: 0.06
@@ -174,7 +176,7 @@ Nodes (35): BARANGAYS, COVERAGE_RADIUS_PRESETS, formatDate(), formatNumber(), ge
 
 ### Community 2 - "SeedlingRequestsPage.jsx"
 Cohesion: 0.08
-Nodes (43): AdminDecisionModal(), apiRequest(), BARANGAYS, createRequestId(), formatDate(), formatLocalDateLabel(), formatTime(), getAuthToken() (+35 more)
+Nodes (44): ref_node_test, AdminDecisionModal(), apiRequest(), BARANGAYS, createRequestId(), formatDate(), formatLocalDateLabel(), formatTime() (+36 more)
 
 ### Community 3 - "MonitoringPage.jsx"
 Cohesion: 0.09
@@ -186,7 +188,11 @@ Nodes (40): ACTIVITY_CHART_INITIAL_SIZE, addRecordAliases(), apiGet(), belongsTo
 
 ### Community 5 - "EventSchedulePage.jsx"
 Cohesion: 0.06
-Nodes (47): ref_node_test, BARANGAYS, EVENT_TYPES, EventForm(), EventSchedulePage(), apiRequest(), getAuthToken(), loadEvents() (+39 more)
+Nodes (47): ref_node_assert_strict, BARANGAYS, EVENT_TYPES, EventForm(), EventSchedulePage(), apiRequest(), getAuthToken(), loadEvents() (+39 more)
+
+### Community 7 - "ReforestationAnalyticsPage.jsx"
+Cohesion: 0.19
+Nodes (9): recharts, CONDITION_COLORS, displayRate(), EMPTY_ANALYTICS, EMPTY_FILTERS, formatNumber(), Kpi(), ReforestationAnalyticsPage() (+1 more)
 
 ### Community 8 - "MapVisualizationPage.jsx"
 Cohesion: 0.18
@@ -216,13 +222,13 @@ Nodes (21): name, private, type, version, @base-ui/react, crypto-js, dayjs, esli
 Cohesion: 0.21
 Nodes (12): src_assets_menro_logo, CompleteProfilePage(), fieldStyle(), formatAccountDate(), getInitialForm(), ProfilePage(), RegisterPage(), publicApiFetch() (+4 more)
 
-### Community 15 - "Sidebar.jsx"
+### Community 15 - "react"
 Cohesion: 0.23
-Nodes (12): ref_node_assert_strict, react-dom, getFallbackName(), getInitials(), getRoleLabel(), NAVIGATION, Sidebar(), authenticatedFetch() (+4 more)
+Nodes (11): react, react-dom, DashboardLayout(), getFallbackName(), getInitials(), getRoleLabel(), NAVIGATION, Sidebar() (+3 more)
 
-### Community 16 - "ReforestationAnalyticsPage.jsx"
-Cohesion: 0.08
-Nodes (25): exifr, leaflet, ref_leaflet_dist_leaflet_css, recharts, AnalyticsSitesMap(), conditionColor(), FALLBACK_CENTER, utilization() (+17 more)
+### Community 16 - "GuestEventPage.jsx"
+Cohesion: 0.14
+Nodes (16): exifr, leaflet, ref_leaflet_dist_leaflet_css, AnalyticsSitesMap(), conditionColor(), FALLBACK_CENTER, utilization(), utilizationMeta() (+8 more)
 
 ### Community 17 - "App Hosting CLI Commands"
 Cohesion: 0.06
@@ -244,13 +250,13 @@ Nodes (26): Aliases, Basic Query, Contents, Create, Create with Server Values, D
 Cohesion: 0.08
 Nodes (23): `cleanUrls` (Optional), Full Example, `headers` (Optional), Hosting Configuration (`firebase.json`), `ignore` (Optional), Key Attributes, `public` (Required), `redirects` (Optional) (+15 more)
 
-### Community 22 - "react"
-Cohesion: 0.18
-Nodes (16): react, DashboardLayout(), getDisplayName(), getInitials(), getRoleLabel(), getSearchPlaceholder(), SEARCH_ICONS, timestampText() (+8 more)
+### Community 22 - "Topbar.jsx"
+Cohesion: 0.17
+Nodes (16): getDisplayName(), getInitials(), getRoleLabel(), getSearchPlaceholder(), SEARCH_ICONS, timestampText(), Topbar(), clearSearch() (+8 more)
 
-### Community 23 - "CEL Expressions"
-Cohesion: 0.40
-Nodes (5): auth.token Fields, Available Bindings, CEL Expressions, Expression Examples, Using eq_expr in Filters
+### Community 23 - "Native SQL Examples"
+Cohesion: 0.25
+Nodes (8): Advanced aggregation with RANK, Advanced CTE with upserts (atomic get-or-create), Basic SELECT with field aliasing, Basic UPDATE, Multi-statement Transactions, Native SQL Examples, UPDATE with RETURNING and Auth Context, Use of extensions (e.g. PostGIS for geospatial data)
 
 ### Community 24 - "Configuration Reference"
 Cohesion: 0.08
@@ -264,9 +270,9 @@ Nodes (5): scripts, build, dev, lint, preview
 Cohesion: 0.40
 Nodes (4): ref_node_url, @tailwindcss/vite, vite, @vitejs/plugin-react
 
-### Community 27 - "@check and @redact"
-Cohesion: 0.40
-Nodes (5): Authorization Data Lookup, @check, @check and @redact, @redact, Validate Key Exists
+### Community 27 - "ReportsPage.jsx"
+Cohesion: 0.39
+Nodes (6): formatDate(), getReportTypeLabel(), REPORT_TYPES, ReportsPage(), API_BASE_URL, src_styles_reports
 
 ### Community 28 - "eslint.config.js"
 Cohesion: 0.33
@@ -309,8 +315,8 @@ Cohesion: 0.32
 Nodes (5): DEFAULT_SETTINGS, loadStoredSettings(), SAFE_CACHE_PREFIXES, SettingsPage(), src_styles_settings_page
 
 ### Community 45 - "Security Reference"
-Cohesion: 0.13
-Nodes (14): Access Levels, Anti-Patterns, @auth Directive, Authorization Patterns, Contents, ❌ Don't Pass User ID as Variable, ❌ Don't Trust Unverified Email, ❌ Don't Use PUBLIC/USER for Prototyping (+6 more)
+Cohesion: 0.08
+Nodes (24): Access Levels, Anti-Patterns, @auth Directive, auth.token Fields, Authorization Data Lookup, Authorization Patterns, Available Bindings, CEL Expressions (+16 more)
 
 ### Community 46 - "Firebase Crashlytics - Android Setup Guide (Kotlin)"
 Cohesion: 0.08
@@ -320,9 +326,9 @@ Nodes (21): 1. Add dependencies to Gradle build files, 2. *Optional:* Install th
 Cohesion: 0.08
 Nodes (21): 1. Add dependencies to Gradle build files, 2. Set in-app defaults, 3. Fetch and activate values, Firebase Remote Config - Android Setup Guide (Kotlin), Prerequisites, Add Swift Package Dependencies, Fetch and Activate Values, Firebase Remote Config iOS Setup Guide (+13 more)
 
-### Community 48 - "Native SQL Examples"
-Cohesion: 0.10
-Nodes (20): Advanced aggregation with RANK, Advanced CTE with upserts (atomic get-or-create), Basic SELECT with field aliasing, Basic UPDATE, Blog with Permissions, E-Commerce Store, Examples, Movie Review App (+12 more)
+### Community 48 - "Examples"
+Cohesion: 0.15
+Nodes (12): Blog with Permissions, E-Commerce Store, Examples, Movie Review App, Mutations, Operations, Operations with Role Checks, Queries (+4 more)
 
 ### Community 49 - "firebase-basics/SKILL.md"
 Cohesion: 0.11
@@ -365,8 +371,8 @@ Cohesion: 0.14
 Nodes (13): 1. Check if the Android project is connected to a Firebase Project, 2. Create a new Firebase project or use an existing one, 3. Register the Android project, 4. Obtain and save `google-services.json`, 5. Add the `google-services` plugin, Firebase Android Setup Guide, `google-services.json` file is NOT present, `google-services.json` file is present (+5 more)
 
 ### Community 59 - "main.jsx"
-Cohesion: 0.14
-Nodes (13): 1. Create a Firebase Project and App (Automated), 2. Installation (Automated via Swift Package Manager CLI), 3. Initialization, AppDelegate (Traditional / UIKit), ⛔️ CRITICAL RULE: INITIALIZATION ORDER ⛔️, ⛔️ CRITICAL RULE: STATE MANAGEMENT (OBSERVATION VS COMBINE) ⛔️, Firebase iOS Setup Guide, SwiftUI (Modern - SAFE PATTERN) (+5 more)
+Cohesion: 0.15
+Nodes (12): 1. Create a Firebase Project and App (Automated), 2. Installation (Automated via Swift Package Manager CLI), 3. Initialization, AppDelegate (Traditional / UIKit), ⛔️ CRITICAL RULE: INITIALIZATION ORDER ⛔️, ⛔️ CRITICAL RULE: STATE MANAGEMENT (OBSERVATION VS COMBINE) ⛔️, Firebase iOS Setup Guide, SwiftUI (Modern - SAFE PATTERN) (+4 more)
 
 ### Community 60 - "Schema Reference"
 Cohesion: 0.10
@@ -388,9 +394,9 @@ Nodes (13): Add a Document with Auto-ID, Get a Single Document, Get Multiple Doc
 Cohesion: 0.15
 Nodes (12): Accessing User Authentication Context, Auth Context Mappings, Auth Extraction Example, Cloud Functions Integration Reference, Comprehensive Example, Core Trigger Configuration, 🚨 Critical Infinite Loop Constraint, Event Filtering (+4 more)
 
-### Community 65 - "1. Local Prototyping: Data Seeding"
-Cohesion: 0.15
-Nodes (12): 1. Local Prototyping: Data Seeding, 2. Production: Admin SDK Bulk Operations, 3. Production: Bulk Operations via raw SQL, 🚨 Critical SQL Operations Constraint, Data Seeding & Bulk Operations Reference, Resetting Seed Data, SDK Bulk APIs Features:, SDK Bulk Operations Example (+4 more)
+### Community 65 - "firebase-data-connect/SKILL.md"
+Cohesion: 0.21
+Nodes (6): 2. Production: Admin SDK Bulk Operations, 3. Production: Bulk Operations via raw SQL, 🚨 Critical SQL Operations Constraint, Data Seeding & Bulk Operations Reference, SDK Bulk APIs Features:, SDK Bulk Operations Example
 
 ### Community 66 - "Templates"
 Cohesion: 0.15
@@ -576,6 +582,10 @@ Nodes (4): 1. Install and Verify Plugins, 2. Restart and Verify Connection, Clau
 Cohesion: 0.40
 Nodes (4): 1. Install and Verify Firebase Skills, 2. Configure and Verify Firebase MCP Server, 3. Restart and Verify Connection, Cursor Setup
 
+### Community 112 - "1. Local Prototyping: Data Seeding"
+Cohesion: 0.33
+Nodes (6): 1. Local Prototyping: Data Seeding, Resetting Seed Data, ⚠️ Seeding Directives Rule, Seeding Independent Tables (FK Order), Seeding Related Tables (Nested Relational Inserts), The `seed_data.gql` Workflow
+
 ### Community 113 - "Android Studio Setup"
 Cohesion: 0.50
 Nodes (3): Android Studio Setup, MCP Setup, Skills Installation
@@ -585,8 +595,8 @@ Cohesion: 0.14
 Nodes (21): ref_firebase_app, ref_firebase_auth, ref_react_icons_fc, auth, firebaseConfig, googleProvider, missingFirebaseConfig, requiredFirebaseConfig (+13 more)
 
 ### Community 117 - "App.jsx"
-Cohesion: 0.15
-Nodes (17): ref_react_icons_fi, react-router-dom, src_assets_aboutsys, src_assets_headerimg, LandingPage(), PROGRAM_ITEMS, scrollToSection(), PrivacyPolicyPage() (+9 more)
+Cohesion: 0.23
+Nodes (11): ref_react_icons_fi, react-router-dom, src_assets_aboutsys, src_assets_headerimg, LandingPage(), PROGRAM_ITEMS, scrollToSection(), PrivacyPolicyPage() (+3 more)
 
 ### Community 119 - "useAuth"
 Cohesion: 0.30
@@ -594,8 +604,8 @@ Nodes (10): AuthContext, AuthProvider(), useAuth(), ProtectedRoute(), GuestOnlyR
 
 ## Knowledge Gaps
 - **735 isolated node(s):** `PackageDescription`, `Foundation`, `PathKit`, `$schema`, `style` (+730 more)
-  These have ≤1 connection - possible missing edges or undocumented components. (Counts symbols only; 862 node(s) total have ≤1 connection when file, concept and rationale nodes are included.)
-- **14 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
+  These have ≤1 connection - possible missing edges or undocumented components. (Counts symbols only; 861 node(s) total have ≤1 connection when file, concept and rationale nodes are included.)
+- **13 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
@@ -611,6 +621,6 @@ _Questions this graph is uniquely positioned to answer:_
 - **Should `SitesPage.jsx` be split into smaller, more focused modules?**
   _Cohesion score 0.0824524312896406 - nodes in this community are weakly interconnected._
 - **Should `SeedlingRequestsPage.jsx` be split into smaller, more focused modules?**
-  _Cohesion score 0.08392156862745098 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.08144796380090498 - nodes in this community are weakly interconnected._
 - **Should `MonitoringPage.jsx` be split into smaller, more focused modules?**
   _Cohesion score 0.08826945412311266 - nodes in this community are weakly interconnected._
