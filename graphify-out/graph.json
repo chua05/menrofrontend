@@ -1517,6 +1517,30 @@
       "source_location": "L35"
     },
     {
+      "id": "src_services_authservice_getprofile",
+      "label": "getProfile()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 112,
+      "community_name": "authService.js",
+      "file_type": "code",
+      "norm_label": "getprofile()",
+      "source_file": "src/services/authService.js",
+      "source_location": "L22"
+    },
+    {
+      "id": "src_services_authservice_registeruser",
+      "label": "registerUser()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 112,
+      "community_name": "authService.js",
+      "file_type": "code",
+      "norm_label": "registeruser()",
+      "source_file": "src/services/authService.js",
+      "source_location": "L7"
+    },
+    {
       "id": "src_pages_loginpage_isfirebasenetworkerror",
       "label": "isFirebaseNetworkError()",
       "_callable": true,
@@ -1827,30 +1851,6 @@
       "norm_label": "normalizerole()",
       "source_file": "src/utils/roleRoutes.js",
       "source_location": "L1"
-    },
-    {
-      "id": "src_services_authservice_getprofile",
-      "label": "getProfile()",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 122,
-      "community_name": "authService.js",
-      "file_type": "code",
-      "norm_label": "getprofile()",
-      "source_file": "src/services/authService.js",
-      "source_location": "L22"
-    },
-    {
-      "id": "src_services_authservice_registeruser",
-      "label": "registerUser()",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 122,
-      "community_name": "authService.js",
-      "file_type": "code",
-      "norm_label": "registeruser()",
-      "source_file": "src/services/authService.js",
-      "source_location": "L7"
     },
     {
       "id": "src_pages_completeprofilepage_completeprofilepage",
@@ -3041,6 +3041,54 @@
       "source_location": "L36"
     },
     {
+      "id": "src_pages_settingspage_loadstoredsettings",
+      "label": "loadStoredSettings()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 23,
+      "community_name": "SettingsPage.jsx",
+      "file_type": "code",
+      "norm_label": "loadstoredsettings()",
+      "source_file": "src/pages/SettingsPage.jsx",
+      "source_location": "L52"
+    },
+    {
+      "id": "src_pages_settingspage_settingspage",
+      "label": "SettingsPage()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 23,
+      "community_name": "SettingsPage.jsx",
+      "file_type": "code",
+      "norm_label": "settingspage()",
+      "source_file": "src/pages/SettingsPage.jsx",
+      "source_location": "L115"
+    },
+    {
+      "id": "src_pages_settingspage_settingssection",
+      "label": "SettingsSection()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 23,
+      "community_name": "SettingsPage.jsx",
+      "file_type": "code",
+      "norm_label": "settingssection()",
+      "source_file": "src/pages/SettingsPage.jsx",
+      "source_location": "L90"
+    },
+    {
+      "id": "src_pages_settingspage_toggleswitch",
+      "label": "ToggleSwitch()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 23,
+      "community_name": "SettingsPage.jsx",
+      "file_type": "code",
+      "norm_label": "toggleswitch()",
+      "source_file": "src/pages/SettingsPage.jsx",
+      "source_location": "L71"
+    },
+    {
       "id": "src_components_formalert_formalert",
       "label": "FormAlert()",
       "_callable": true,
@@ -3939,54 +3987,6 @@
       "norm_label": "set_cell_text_preserving_format()",
       "source_file": ".docx-work/fill_test_cases.py",
       "source_location": "L36"
-    },
-    {
-      "id": "src_pages_settingspage_loadstoredsettings",
-      "label": "loadStoredSettings()",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 43,
-      "community_name": "SettingsPage.jsx",
-      "file_type": "code",
-      "norm_label": "loadstoredsettings()",
-      "source_file": "src/pages/SettingsPage.jsx",
-      "source_location": "L52"
-    },
-    {
-      "id": "src_pages_settingspage_settingspage",
-      "label": "SettingsPage()",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 43,
-      "community_name": "SettingsPage.jsx",
-      "file_type": "code",
-      "norm_label": "settingspage()",
-      "source_file": "src/pages/SettingsPage.jsx",
-      "source_location": "L115"
-    },
-    {
-      "id": "src_pages_settingspage_settingssection",
-      "label": "SettingsSection()",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 43,
-      "community_name": "SettingsPage.jsx",
-      "file_type": "code",
-      "norm_label": "settingssection()",
-      "source_file": "src/pages/SettingsPage.jsx",
-      "source_location": "L90"
-    },
-    {
-      "id": "src_pages_settingspage_toggleswitch",
-      "label": "ToggleSwitch()",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 43,
-      "community_name": "SettingsPage.jsx",
-      "file_type": "code",
-      "norm_label": "toggleswitch()",
-      "source_file": "src/pages/SettingsPage.jsx",
-      "source_location": "L71"
     },
     {
       "id": "src_pages_eventschedulepage_detailitem",
@@ -6639,6 +6639,28 @@
       "source_location": "L1"
     },
     {
+      "id": "src_services_authservice",
+      "label": "authService.js",
+      "_origin": "ast",
+      "community": 112,
+      "community_name": "authService.js",
+      "file_type": "code",
+      "norm_label": "authservice.js",
+      "source_file": "src/services/authService.js",
+      "source_location": "L1"
+    },
+    {
+      "id": "ref_axios",
+      "label": "axios",
+      "_origin": "ast",
+      "community": 112,
+      "community_name": "authService.js",
+      "file_type": "concept",
+      "norm_label": "axios",
+      "source_file": "package.json",
+      "source_location": "L16"
+    },
+    {
       "id": "agents_skills_firebase_basics_references_setup_android_studio",
       "label": "setup/android_studio.md",
       "_origin": "ast",
@@ -7377,28 +7399,6 @@
       "norm_label": "standard/provisioning.md",
       "source_file": ".agents/skills/firebase-firestore/references/standard/provisioning.md",
       "source_location": "L1"
-    },
-    {
-      "id": "src_services_authservice",
-      "label": "authService.js",
-      "_origin": "ast",
-      "community": 122,
-      "community_name": "authService.js",
-      "file_type": "code",
-      "norm_label": "authservice.js",
-      "source_file": "src/services/authService.js",
-      "source_location": "L1"
-    },
-    {
-      "id": "ref_axios",
-      "label": "axios",
-      "_origin": "ast",
-      "community": 122,
-      "community_name": "authService.js",
-      "file_type": "concept",
-      "norm_label": "axios",
-      "source_file": "package.json",
-      "source_location": "L16"
     },
     {
       "id": "package",
@@ -9538,64 +9538,37 @@
       "source_location": "L25"
     },
     {
-      "id": "agents_skills_firebase_data_connect_reference_security_auth_token_fields",
-      "label": "auth.token Fields",
+      "id": "src_pages_settingspage",
+      "label": "SettingsPage.jsx",
       "_origin": "ast",
       "community": 23,
-      "community_name": "CEL Expressions",
-      "file_type": "document",
-      "node_kind": "heading",
-      "norm_label": "auth.token fields",
-      "source_file": ".agents/skills/firebase-data-connect/reference/security.md",
-      "source_location": "L60"
+      "community_name": "SettingsPage.jsx",
+      "file_type": "code",
+      "norm_label": "settingspage.jsx",
+      "source_file": "src/pages/SettingsPage.jsx",
+      "source_location": "L1"
     },
     {
-      "id": "agents_skills_firebase_data_connect_reference_security_available_bindings",
-      "label": "Available Bindings",
+      "id": "src_pages_settingspage_default_settings",
+      "label": "DEFAULT_SETTINGS",
       "_origin": "ast",
       "community": 23,
-      "community_name": "CEL Expressions",
-      "file_type": "document",
-      "node_kind": "heading",
-      "norm_label": "available bindings",
-      "source_file": ".agents/skills/firebase-data-connect/reference/security.md",
-      "source_location": "L50"
+      "community_name": "SettingsPage.jsx",
+      "file_type": "code",
+      "norm_label": "default_settings",
+      "source_file": "src/pages/SettingsPage.jsx",
+      "source_location": "L20"
     },
     {
-      "id": "agents_skills_firebase_data_connect_reference_security_cel_expressions",
-      "label": "CEL Expressions",
+      "id": "src_pages_settingspage_safe_cache_prefixes",
+      "label": "SAFE_CACHE_PREFIXES",
       "_origin": "ast",
       "community": 23,
-      "community_name": "CEL Expressions",
-      "file_type": "document",
-      "node_kind": "heading",
-      "norm_label": "cel expressions",
-      "source_file": ".agents/skills/firebase-data-connect/reference/security.md",
-      "source_location": "L48"
-    },
-    {
-      "id": "agents_skills_firebase_data_connect_reference_security_expression_examples",
-      "label": "Expression Examples",
-      "_origin": "ast",
-      "community": 23,
-      "community_name": "CEL Expressions",
-      "file_type": "document",
-      "node_kind": "heading",
-      "norm_label": "expression examples",
-      "source_file": ".agents/skills/firebase-data-connect/reference/security.md",
-      "source_location": "L72"
-    },
-    {
-      "id": "agents_skills_firebase_data_connect_reference_security_using_eq_expr_in_filters",
-      "label": "Using eq_expr in Filters",
-      "_origin": "ast",
-      "community": 23,
-      "community_name": "CEL Expressions",
-      "file_type": "document",
-      "node_kind": "heading",
-      "norm_label": "using eq_expr in filters",
-      "source_file": ".agents/skills/firebase-data-connect/reference/security.md",
-      "source_location": "L88"
+      "community_name": "SettingsPage.jsx",
+      "file_type": "code",
+      "norm_label": "safe_cache_prefixes",
+      "source_file": "src/pages/SettingsPage.jsx",
+      "source_location": "L46"
     },
     {
       "id": "agents_skills_firebase_data_connect_reference_config",
@@ -9997,64 +9970,64 @@
       "source_location": "L43"
     },
     {
-      "id": "agents_skills_firebase_data_connect_reference_security_authorization_data_lookup",
-      "label": "Authorization Data Lookup",
+      "id": "agents_skills_firebase_data_connect_reference_security_auth_token_fields",
+      "label": "auth.token Fields",
       "_origin": "ast",
       "community": 27,
-      "community_name": "@check and @redact",
+      "community_name": "CEL Expressions",
       "file_type": "document",
       "node_kind": "heading",
-      "norm_label": "authorization data lookup",
+      "norm_label": "auth.token fields",
       "source_file": ".agents/skills/firebase-data-connect/reference/security.md",
-      "source_location": "L140"
+      "source_location": "L60"
     },
     {
-      "id": "agents_skills_firebase_data_connect_reference_security_check",
-      "label": "@check",
+      "id": "agents_skills_firebase_data_connect_reference_security_available_bindings",
+      "label": "Available Bindings",
       "_origin": "ast",
       "community": 27,
-      "community_name": "@check and @redact",
+      "community_name": "CEL Expressions",
       "file_type": "document",
       "node_kind": "heading",
-      "norm_label": "@check",
+      "norm_label": "available bindings",
       "source_file": ".agents/skills/firebase-data-connect/reference/security.md",
-      "source_location": "L116"
+      "source_location": "L50"
     },
     {
-      "id": "agents_skills_firebase_data_connect_reference_security_check_and_redact",
-      "label": "@check and @redact",
+      "id": "agents_skills_firebase_data_connect_reference_security_cel_expressions",
+      "label": "CEL Expressions",
       "_origin": "ast",
       "community": 27,
-      "community_name": "@check and @redact",
+      "community_name": "CEL Expressions",
       "file_type": "document",
       "node_kind": "heading",
-      "norm_label": "@check and @redact",
+      "norm_label": "cel expressions",
       "source_file": ".agents/skills/firebase-data-connect/reference/security.md",
-      "source_location": "L112"
+      "source_location": "L48"
     },
     {
-      "id": "agents_skills_firebase_data_connect_reference_security_redact",
-      "label": "@redact",
+      "id": "agents_skills_firebase_data_connect_reference_security_expression_examples",
+      "label": "Expression Examples",
       "_origin": "ast",
       "community": 27,
-      "community_name": "@check and @redact",
+      "community_name": "CEL Expressions",
       "file_type": "document",
       "node_kind": "heading",
-      "norm_label": "@redact",
+      "norm_label": "expression examples",
       "source_file": ".agents/skills/firebase-data-connect/reference/security.md",
-      "source_location": "L132"
+      "source_location": "L72"
     },
     {
-      "id": "agents_skills_firebase_data_connect_reference_security_validate_key_exists",
-      "label": "Validate Key Exists",
+      "id": "agents_skills_firebase_data_connect_reference_security_using_eq_expr_in_filters",
+      "label": "Using eq_expr in Filters",
       "_origin": "ast",
       "community": 27,
-      "community_name": "@check and @redact",
+      "community_name": "CEL Expressions",
       "file_type": "document",
       "node_kind": "heading",
-      "norm_label": "validate key exists",
+      "norm_label": "using eq_expr in filters",
       "source_file": ".agents/skills/firebase-data-connect/reference/security.md",
-      "source_location": "L161"
+      "source_location": "L88"
     },
     {
       "id": "eslint_config",
@@ -11117,37 +11090,64 @@
       "source_location": "L1"
     },
     {
-      "id": "src_pages_settingspage",
-      "label": "SettingsPage.jsx",
+      "id": "agents_skills_firebase_data_connect_reference_security_authorization_data_lookup",
+      "label": "Authorization Data Lookup",
       "_origin": "ast",
       "community": 43,
-      "community_name": "SettingsPage.jsx",
-      "file_type": "code",
-      "norm_label": "settingspage.jsx",
-      "source_file": "src/pages/SettingsPage.jsx",
-      "source_location": "L1"
+      "community_name": "@check and @redact",
+      "file_type": "document",
+      "node_kind": "heading",
+      "norm_label": "authorization data lookup",
+      "source_file": ".agents/skills/firebase-data-connect/reference/security.md",
+      "source_location": "L140"
     },
     {
-      "id": "src_pages_settingspage_default_settings",
-      "label": "DEFAULT_SETTINGS",
+      "id": "agents_skills_firebase_data_connect_reference_security_check",
+      "label": "@check",
       "_origin": "ast",
       "community": 43,
-      "community_name": "SettingsPage.jsx",
-      "file_type": "code",
-      "norm_label": "default_settings",
-      "source_file": "src/pages/SettingsPage.jsx",
-      "source_location": "L20"
+      "community_name": "@check and @redact",
+      "file_type": "document",
+      "node_kind": "heading",
+      "norm_label": "@check",
+      "source_file": ".agents/skills/firebase-data-connect/reference/security.md",
+      "source_location": "L116"
     },
     {
-      "id": "src_pages_settingspage_safe_cache_prefixes",
-      "label": "SAFE_CACHE_PREFIXES",
+      "id": "agents_skills_firebase_data_connect_reference_security_check_and_redact",
+      "label": "@check and @redact",
       "_origin": "ast",
       "community": 43,
-      "community_name": "SettingsPage.jsx",
-      "file_type": "code",
-      "norm_label": "safe_cache_prefixes",
-      "source_file": "src/pages/SettingsPage.jsx",
-      "source_location": "L46"
+      "community_name": "@check and @redact",
+      "file_type": "document",
+      "node_kind": "heading",
+      "norm_label": "@check and @redact",
+      "source_file": ".agents/skills/firebase-data-connect/reference/security.md",
+      "source_location": "L112"
+    },
+    {
+      "id": "agents_skills_firebase_data_connect_reference_security_redact",
+      "label": "@redact",
+      "_origin": "ast",
+      "community": 43,
+      "community_name": "@check and @redact",
+      "file_type": "document",
+      "node_kind": "heading",
+      "norm_label": "@redact",
+      "source_file": ".agents/skills/firebase-data-connect/reference/security.md",
+      "source_location": "L132"
+    },
+    {
+      "id": "agents_skills_firebase_data_connect_reference_security_validate_key_exists",
+      "label": "Validate Key Exists",
+      "_origin": "ast",
+      "community": 43,
+      "community_name": "@check and @redact",
+      "file_type": "document",
+      "node_kind": "heading",
+      "norm_label": "validate key exists",
+      "source_file": ".agents/skills/firebase-data-connect/reference/security.md",
+      "source_location": "L161"
     },
     {
       "id": "docx_work_artifact",
@@ -19562,6 +19562,18 @@
       "type": "external"
     },
     {
+      "id": "src_styles_settings_page",
+      "label": "src_styles_settings_page",
+      "_origin": "semantic",
+      "community": 23,
+      "community_name": "SettingsPage.jsx",
+      "external": true,
+      "file_type": "concept",
+      "norm_label": "src_styles_settings_page",
+      "source_file": "",
+      "type": "external"
+    },
+    {
       "id": "ref_node_url",
       "label": "ref_node_url",
       "_origin": "semantic",
@@ -19706,18 +19718,6 @@
       "type": "external"
     },
     {
-      "id": "src_styles_settings_page",
-      "label": "src_styles_settings_page",
-      "_origin": "semantic",
-      "community": 43,
-      "community_name": "SettingsPage.jsx",
-      "external": true,
-      "file_type": "concept",
-      "norm_label": "src_styles_settings_page",
-      "source_file": "",
-      "type": "external"
-    },
-    {
       "id": "ref_node_test",
       "label": "ref_node_test",
       "_origin": "semantic",
@@ -19802,6 +19802,18 @@
       "type": "external"
     },
     {
+      "id": "src_styles_leaflet_containment",
+      "label": "src_styles_leaflet_containment",
+      "_origin": "semantic",
+      "community": 59,
+      "community_name": "main.jsx",
+      "external": true,
+      "file_type": "concept",
+      "norm_label": "src_styles_leaflet_containment",
+      "source_file": "",
+      "type": "external"
+    },
+    {
       "id": "ref_base_ui_react_menu",
       "label": "ref_base_ui_react_menu",
       "_origin": "semantic",
@@ -19834,17 +19846,6 @@
       "external": true,
       "file_type": "concept",
       "norm_label": "src_styles_my_requests",
-      "source_file": "",
-      "type": "external"
-    },
-    {
-      "id": "src_styles_leaflet_containment",
-      "label": "src_styles_leaflet_containment",
-      "community": 59,
-      "community_name": "main.jsx",
-      "external": true,
-      "file_type": "concept",
-      "norm_label": "src_styles_leaflet_containment",
       "source_file": "",
       "type": "external"
     }
@@ -20147,7 +20148,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "src/layouts/Topbar.jsx",
-      "source_location": "L326",
+      "source_location": "L328",
       "weight": 1.0
     },
     {
@@ -20159,7 +20160,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "src/layouts/Topbar.jsx",
-      "source_location": "L436",
+      "source_location": "L438",
       "weight": 1.0
     },
     {
@@ -20699,7 +20700,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "src/pages/DashboardPage.jsx",
-      "source_location": "L2855",
+      "source_location": "L2859",
       "weight": 1.0
     },
     {
@@ -20711,7 +20712,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "src/pages/DashboardPage.jsx",
-      "source_location": "L2887",
+      "source_location": "L2891",
       "weight": 1.0
     },
     {
@@ -20723,7 +20724,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "src/pages/DashboardPage.jsx",
-      "source_location": "L2953",
+      "source_location": "L2957",
       "weight": 1.0
     },
     {
@@ -26039,7 +26040,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "src/pages/RegisterPage.jsx",
-      "source_location": "L343",
+      "source_location": "L361",
       "weight": 1.0
     },
     {
@@ -26051,7 +26052,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "src/pages/RegisterPage.jsx",
-      "source_location": "L349",
+      "source_location": "L367",
       "weight": 1.0
     },
     {
@@ -48189,5 +48190,5 @@
     }
   ],
   "hyperedges": [],
-  "built_at_commit": "800219b6a7abe02c0247a2d0622edbd7717148b9"
+  "built_at_commit": "951c7f69f0cdd6c5114baf2a11a0d9e51bfa2cb9"
 }

@@ -1,7 +1,7 @@
-# Graph Report - menrosystem  (2026-10-03)
+# Graph Report - menrosystem  (2026-10-04)
 
 ## Corpus Check
-- 164 files · ~190,668 words
+- 164 files · ~190,732 words
 - Verdict: corpus is large enough that graph structure adds value.
 - Unclassified: 30 file(s) not represented in the graph (top: .css 23, (none) 4, .resolved 1)
 
@@ -11,7 +11,7 @@
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `800219b6`
+- Built from commit: `951c7f69`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -38,11 +38,11 @@
 - Mutations
 - Key Attributes
 - react
-- CEL Expressions
+- SettingsPage.jsx
 - Configuration Reference
 - scripts
 - vite.config.js
-- @check and @redact
+- CEL Expressions
 - eslint.config.js
 - compilerOptions
 - vercel.json
@@ -58,7 +58,7 @@
 - AGENTS.md
 - extraction-spec.md
 - fill_test_cases.py
-- SettingsPage.jsx
+- @check and @redact
 - artifact.md
 - Security Reference
 - Firebase Crashlytics - Android Setup Guide (Kotlin)
@@ -127,13 +127,13 @@
 - Antigravity Setup
 - Recommended Method: Using Plugins
 - Cursor Setup
+- authService.js
 - Android Studio Setup
 - Package.swift
 - config.js
 - App.jsx
 - .audit-temp/artifact.md
 - useAuth
-- authService.js
 
 ## God Nodes (most connected - your core abstractions)
 1. `PlantingPage()` - 68 edges
@@ -248,9 +248,9 @@ Nodes (23): `cleanUrls` (Optional), Full Example, `headers` (Optional), Hosting 
 Cohesion: 0.18
 Nodes (16): react, DashboardLayout(), getDisplayName(), getInitials(), getRoleLabel(), getSearchPlaceholder(), SEARCH_ICONS, timestampText() (+8 more)
 
-### Community 23 - "CEL Expressions"
-Cohesion: 0.40
-Nodes (5): auth.token Fields, Available Bindings, CEL Expressions, Expression Examples, Using eq_expr in Filters
+### Community 23 - "SettingsPage.jsx"
+Cohesion: 0.32
+Nodes (5): DEFAULT_SETTINGS, loadStoredSettings(), SAFE_CACHE_PREFIXES, SettingsPage(), src_styles_settings_page
 
 ### Community 24 - "Configuration Reference"
 Cohesion: 0.08
@@ -264,9 +264,9 @@ Nodes (5): scripts, build, dev, lint, preview
 Cohesion: 0.40
 Nodes (4): ref_node_url, @tailwindcss/vite, vite, @vitejs/plugin-react
 
-### Community 27 - "@check and @redact"
+### Community 27 - "CEL Expressions"
 Cohesion: 0.40
-Nodes (5): Authorization Data Lookup, @check, @check and @redact, @redact, Validate Key Exists
+Nodes (5): auth.token Fields, Available Bindings, CEL Expressions, Expression Examples, Using eq_expr in Filters
 
 ### Community 28 - "eslint.config.js"
 Cohesion: 0.33
@@ -304,9 +304,9 @@ Nodes (3): Expanding the ESLint configuration, React Compiler, React + Vite
 Cohesion: 0.20
 Nodes (9): copy, datetime, docx, docx_enum_table, docx_enum_text, docx_oxml, docx_oxml_ns, docx_shared (+1 more)
 
-### Community 43 - "SettingsPage.jsx"
-Cohesion: 0.32
-Nodes (5): DEFAULT_SETTINGS, loadStoredSettings(), SAFE_CACHE_PREFIXES, SettingsPage(), src_styles_settings_page
+### Community 43 - "@check and @redact"
+Cohesion: 0.40
+Nodes (5): Authorization Data Lookup, @check, @check and @redact, @redact, Validate Key Exists
 
 ### Community 45 - "Security Reference"
 Cohesion: 0.13

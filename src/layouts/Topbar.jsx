@@ -322,6 +322,8 @@ export default function Topbar({ onOpenSidebar }) {
 
         <div className="topbar-search" ref={searchRef}>
           <input
+            id="global-search"
+            name="globalSearch"
             type="search"
             placeholder={getSearchPlaceholder(userRole)}
             aria-label="Search system"

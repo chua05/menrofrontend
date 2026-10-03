@@ -295,7 +295,7 @@ export default function LoginPage() {
           >
             <div className="login-field">
               <div className="login-label">
-                Email Address
+                <label htmlFor="login-email">Email Address</label>
               </div>
 
               <div className="login-input-wrap">
@@ -305,6 +305,8 @@ export default function LoginPage() {
                 />
 
                 <input
+                  id="login-email"
+                  name="email"
                   type="email"
                   autoComplete="email"
                   placeholder="Enter your email"
@@ -321,7 +323,7 @@ export default function LoginPage() {
 
             <div className="login-field">
               <div className="login-label login-password-label">
-                <span>Password</span>
+                <label htmlFor="login-password">Password</label>
                 <button type="button" className="login-forgot-button" onClick={handleForgotPassword} disabled={loading || resetLoading}>
                   {resetLoading ? "Sending..." : "Forgot password?"}
                 </button>
@@ -334,6 +336,8 @@ export default function LoginPage() {
                 />
 
                 <input
+                  id="login-password"
+                  name="password"
                   type={
                     showPassword
                       ? "text"
@@ -378,6 +382,7 @@ export default function LoginPage() {
               <input
                 type="checkbox"
                 id="remember"
+                name="rememberMe"
               />
 
               <label htmlFor="remember">

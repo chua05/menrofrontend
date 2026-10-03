@@ -12,9 +12,9 @@ import { getAuthErrorMessage, isGoogleCancellation } from "../utils/authErrors";
 import menroLogo from "../assets/menro-logo.png";
 import "../styles/register.css";
 
-const Field = ({ label, error, children }) => (
+const Field = ({ label, htmlFor, error, children }) => (
   <div className="register-field">
-    <div className="register-label">{label}</div>
+    <div className="register-label"><label htmlFor={htmlFor}>{label}</label></div>
 
     {children}
 
@@ -247,6 +247,7 @@ export default function RegisterPage() {
             <div className="register-form-grid">
               <Field
                 label="Full Name"
+                htmlFor="register-full-name"
                 error={errors.fullName}
               >
                 <div className="register-input-wrap">
@@ -256,7 +257,10 @@ export default function RegisterPage() {
                   />
 
                   <input
+                    id="register-full-name"
+                    name="fullName"
                     type="text"
+                    autoComplete="name"
                     placeholder="Juan Dela Cruz"
                     value={form.fullName}
                     onChange={update("fullName")}
@@ -267,6 +271,7 @@ export default function RegisterPage() {
 
               <Field
                 label="Username"
+                htmlFor="register-username"
                 error={errors.username}
               >
                 <div className="register-input-wrap">
@@ -276,7 +281,10 @@ export default function RegisterPage() {
                   />
 
                   <input
+                    id="register-username"
+                    name="username"
                     type="text"
+                    autoComplete="username"
                     placeholder="juandelacruz"
                     value={form.username}
                     onChange={update("username")}
@@ -287,6 +295,7 @@ export default function RegisterPage() {
 
               <Field
                 label="Email Address"
+                htmlFor="register-email"
                 error={errors.email}
               >
                 <div className="register-input-wrap">
@@ -296,7 +305,10 @@ export default function RegisterPage() {
                   />
 
                   <input
+                    id="register-email"
+                    name="email"
                     type="email"
+                    autoComplete="email"
                     placeholder="juan@example.com"
                     value={form.email}
                     onChange={update("email")}
@@ -307,6 +319,7 @@ export default function RegisterPage() {
 
               <Field
                 label="Contact Number"
+                htmlFor="register-contact-number"
                 error={errors.contactNumber}
               >
                 <div className="register-input-wrap">
@@ -316,6 +329,8 @@ export default function RegisterPage() {
                   />
 
                   <input
+                    id="register-contact-number"
+                    name="contactNumber"
                     type="tel"
                     inputMode="numeric"
                     pattern="[0-9]*"
@@ -332,9 +347,12 @@ export default function RegisterPage() {
               <div className="register-full-width">
                 <Field
                   label="User Type *"
+                  htmlFor="register-user-type"
                   error={errors.userType}
                 >
                   <select
+                    id="register-user-type"
+                    name="userType"
                     value={form.userType}
                     onChange={update("userType")}
                     className="register-input register-input-no-icon"
@@ -346,15 +364,16 @@ export default function RegisterPage() {
               </div>
 
               {conditionalField?.kind === "barangay" && (
-                <div className="register-full-width"><Field label={conditionalField.label} error={errors.barangay}><select value={form.barangay} onChange={update("barangay")} className="register-input register-input-no-icon"><option value="">Select barangay</option>{JUBAN_BARANGAYS.map((barangay) => <option key={barangay}>{barangay}</option>)}</select></Field></div>
+                <div className="register-full-width"><Field label={conditionalField.label} htmlFor="register-barangay" error={errors.barangay}><select id="register-barangay" name="barangay" value={form.barangay} onChange={update("barangay")} className="register-input register-input-no-icon"><option value="">Select barangay</option>{JUBAN_BARANGAYS.map((barangay) => <option key={barangay}>{barangay}</option>)}</select></Field></div>
               )}
 
               {conditionalField?.kind === "detail" && (
-                <div className="register-full-width"><Field label={conditionalField.label} error={errors.userTypeDetail}><input type="text" value={form.userTypeDetail} onChange={update("userTypeDetail")} className="register-input register-input-no-icon" /></Field></div>
+                <div className="register-full-width"><Field label={conditionalField.label} htmlFor="register-user-type-detail" error={errors.userTypeDetail}><input id="register-user-type-detail" name="userTypeDetail" type="text" value={form.userTypeDetail} onChange={update("userTypeDetail")} className="register-input register-input-no-icon" /></Field></div>
               )}
 
               <Field
                 label="Password"
+                htmlFor="register-password"
                 error={errors.password}
               >
                 <div className="register-input-wrap">
@@ -364,6 +383,8 @@ export default function RegisterPage() {
                   />
 
                   <input
+                    id="register-password"
+                    name="password"
                     type={showPass ? "text" : "password"}
                     autoComplete="new-password"
                     placeholder="••••••"
@@ -395,6 +416,7 @@ export default function RegisterPage() {
 
               <Field
                 label="Confirm"
+                htmlFor="register-confirm-password"
                 error={errors.confirmPassword}
               >
                 <div className="register-input-wrap">
@@ -404,6 +426,8 @@ export default function RegisterPage() {
                   />
 
                   <input
+                    id="register-confirm-password"
+                    name="confirmPassword"
                     type={
                       showConfirm ? "text" : "password"
                     }
@@ -440,6 +464,7 @@ export default function RegisterPage() {
               <input
                 type="checkbox"
                 id="terms"
+                name="acceptedTerms"
                 checked={acceptedTerms}
                 onChange={(e) =>
                   setAcceptedTerms(e.target.checked)

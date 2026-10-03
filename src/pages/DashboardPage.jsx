@@ -2437,6 +2437,8 @@ export default function DashboardPage() {
       <div className="dashboard-filter-row">
         {!isParticipant && (
           <select
+            id="dashboard-barangay-filter"
+            name="barangay"
             value={barangay}
             onChange={(event) =>
               setBarangay(
@@ -2529,6 +2531,8 @@ export default function DashboardPage() {
             </h2>
 
             <select
+              id="dashboard-chart-period"
+              name="chartPeriod"
               value={chartPeriod}
               onChange={(event) =>
                 setChartPeriod(

@@ -78,9 +78,9 @@
     "semantic_hash": ""
   },
   "src/layouts/Topbar.jsx": {
-    "mtime": 1790838929.3539243,
-    "seen": 1790838973.1690884,
-    "ast_hash": "54cfbd2f0d6b8431a8cfb9f1b0536cdc",
+    "mtime": 1791046561.5088127,
+    "seen": 1791046625.110248,
+    "ast_hash": "4c57aaba367429663dc9e7cf540bbcf6",
     "semantic_hash": ""
   },
   "src/lib/utils.js": {
@@ -96,9 +96,9 @@
     "semantic_hash": ""
   },
   "src/pages/DashboardPage.jsx": {
-    "mtime": 1790836796.8532617,
-    "seen": 1790838973.1690958,
-    "ast_hash": "fa03dba9a52240502f345b2a98106d73",
+    "mtime": 1791046561.7903907,
+    "seen": 1791046625.110261,
+    "ast_hash": "22fa5da467f0dd3a7d027ee35cbe5df0",
     "semantic_hash": ""
   },
   "src/pages/EventSchedulePage.jsx": {
@@ -114,9 +114,9 @@
     "semantic_hash": ""
   },
   "src/pages/LoginPage.jsx": {
-    "mtime": 1790956863.004325,
-    "seen": 1790957062.3522625,
-    "ast_hash": "f412d9e5073d679d90b35921e6b8d033",
+    "mtime": 1791046983.068281,
+    "seen": 1791047249.095975,
+    "ast_hash": "7e55846421a2bee68d728ab5ac469e15",
     "semantic_hash": ""
   },
   "src/pages/MapVisualizationPage.jsx": {
@@ -162,9 +162,9 @@
     "semantic_hash": ""
   },
   "src/pages/RegisterPage.jsx": {
-    "mtime": 1790956797.9359057,
-    "seen": 1790957062.3522778,
-    "ast_hash": "7034375652a483731eb13a3627af6c8d",
+    "mtime": 1791046983.389985,
+    "seen": 1791047249.0960138,
+    "ast_hash": "3ebb175bb1a7fb6537fabe1738d6fc20",
     "semantic_hash": ""
   },
   "src/pages/ReportsPage.jsx": {
@@ -360,9 +360,9 @@
     "semantic_hash": ""
   },
   "src/pages/CompleteProfilePage.jsx": {
-    "mtime": 1790782039.6665154,
-    "seen": 1790782259.6033225,
-    "ast_hash": "dbc73607af8670d0a665837fd70cbad7",
+    "mtime": 1791046983.707372,
+    "seen": 1791047249.0959134,
+    "ast_hash": "05929cdc626d07df17ad12251e73c08d",
     "semantic_hash": ""
   },
   "src/utils/userTypes.js": {

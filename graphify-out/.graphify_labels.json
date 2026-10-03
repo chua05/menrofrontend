@@ -22,11 +22,11 @@
   "20": "Mutations",
   "21": "Key Attributes",
   "22": "react",
-  "23": "CEL Expressions",
+  "23": "SettingsPage.jsx",
   "24": "Configuration Reference",
   "25": "scripts",
   "26": "vite.config.js",
-  "27": "@check and @redact",
+  "27": "CEL Expressions",
   "28": "eslint.config.js",
   "29": "compilerOptions",
   "30": "vercel.json",
@@ -42,7 +42,7 @@
   "40": "AGENTS.md",
   "41": "extraction-spec.md",
   "42": "fill_test_cases.py",
-  "43": "SettingsPage.jsx",
+  "43": "@check and @redact",
   "44": "artifact.md",
   "45": "Security Reference",
   "46": "Firebase Crashlytics - Android Setup Guide (Kotlin)",
@@ -111,6 +111,7 @@
   "109": "Antigravity Setup",
   "110": "Recommended Method: Using Plugins",
   "111": "Cursor Setup",
+  "112": "authService.js",
   "113": "Android Studio Setup",
   "114": "firebase-ai-logic-basics/SKILL.md",
   "115": "Package.swift",
@@ -118,6 +119,5 @@
   "117": "App.jsx",
   "118": ".audit-temp/artifact.md",
   "119": "useAuth",
-  "120": "firebase-firestore/SKILL.md",
-  "122": "authService.js"
+  "120": "firebase-firestore/SKILL.md"
 }
