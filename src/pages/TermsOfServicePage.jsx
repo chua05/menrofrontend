@@ -18,9 +18,9 @@ export default function TermsOfServicePage() {
 
           <p>
             These Terms of Service ("Terms") govern your access to and use of
-            the MENRO Juban Reforestation Monitoring System (the "System"),
+            the MENRO Bulan Reforestation Monitoring System (the "System"),
             operated by the Municipal Environment and Natural Resources
-            Office (MENRO) of Juban, Sorsogon. By creating an account or
+            Office (MENRO) of Bulan, Sorsogon. By creating an account or
             otherwise using the System, you agree to these Terms.
           </p>
 
@@ -28,7 +28,7 @@ export default function TermsOfServicePage() {
           <p>
             The System is intended for MENRO staff, administrators, and
             registered participants (e.g. seedling recipients, event
-            volunteers, and partner organizations) taking part in Juban's
+            volunteers, and partner organizations) taking part in Bulan's
             reforestation and tree-planting programs. You must provide
             accurate registration information, including your full name,
             a valid contact number, and your organization or affiliation.
@@ -70,7 +70,7 @@ export default function TermsOfServicePage() {
 
           <h2>6. Contact</h2>
           <p>
-            Questions about these Terms can be directed to the MENRO Juban
+            Questions about these Terms can be directed to the MENRO Bulan
             office through your program coordinator or the contact details
             listed on the municipal office's official channels.
           </p>

@@ -2,8 +2,9 @@ import { useEffect, useRef, useState } from "react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 
-const BOUNDARY_URL = "/data/juban-barangays.geojson";
-const FALLBACK_CENTER = [12.848, 123.987];
+const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
+const BOUNDARY_URL = `${API_BASE_URL}/sites/barangay-boundaries`;
+const FALLBACK_CENTER = [12.6598, 123.918];
 const MAPTILER_KEY = import.meta.env.VITE_MAPTILER_API_KEY;
 
 function utilization(site) {
@@ -67,7 +68,7 @@ export default function AnalyticsSitesMap({ sites = [], onViewFullMap }) {
           style: { color: "#17643a", weight: 1.7, opacity: 0.96, fillColor: "#dff2e5", fillOpacity: 0.32 },
           interactive: false,
           onEachFeature(feature, layer) {
-            const name = feature?.properties?.brgy_name || feature?.properties?.barangay || feature?.properties?.name || feature?.properties?.NAME;
+            const name = feature?.properties?.ADM4_EN || feature?.properties?.brgy_name || feature?.properties?.barangay || feature?.properties?.name || feature?.properties?.NAME;
             if (name) layer.bindTooltip(String(name), { permanent: true, direction: "center", className: "ps-barangay-label", interactive: false, opacity: 1 });
           },
         }).addTo(map);
@@ -78,7 +79,7 @@ export default function AnalyticsSitesMap({ sites = [], onViewFullMap }) {
           map.options.maxBoundsViscosity = 0.9;
         }
       })
-      .catch(() => { if (!cancelled) setError("Unable to load the Juban barangay boundary data."); });
+      .catch(() => { if (!cancelled) setError("Unable to load the Bulan barangay boundary data."); });
 
     const observer = new ResizeObserver(() => map.invalidateSize({ animate: false }));
     observer.observe(containerRef.current);
@@ -120,7 +121,7 @@ export default function AnalyticsSitesMap({ sites = [], onViewFullMap }) {
     <section className="ra-map-card">
       <div className="ra-card-heading"><h2>Planting Sites Map</h2><p>Registered sites, utilization, and latest recorded tree condition</p></div>
       <div className="ra-map-frame">
-        <div ref={containerRef} className="ra-map" aria-label="Interactive map of registered planting sites in Juban" />
+        <div ref={containerRef} className="ra-map" aria-label="Interactive map of registered planting sites in Bulan" />
         {error && <div className="ra-map-error" role="alert">{error}</div>}
         {!error && sites.length === 0 && <div className="ra-map-empty">No registered sites match the selected filters.</div>}
         <div className="ra-map-legend">

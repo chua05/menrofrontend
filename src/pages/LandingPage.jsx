@@ -104,10 +104,10 @@ export default function LandingPage() {
       <header className="landing-header">
         <nav className="landing-nav" aria-label="Public navigation">
           <button type="button" className="landing-brand" onClick={() => goTo("home")} aria-label="MENRO home">
-            <img src={menroLogo} alt="MENRO Juban logo" />
+            <img src={menroLogo} alt="MENRO Bulan logo" />
             <span>
               <strong>Municipal Environment and Natural Resources Office</strong>
-              <small>Municipality of Juban, Sorsogon</small>
+              <small>Municipality of Bulan, Sorsogon</small>
             </span>
           </button>
 
@@ -160,12 +160,12 @@ export default function LandingPage() {
       <main>
         <section id="home" className="landing-hero" style={{ "--landing-hero-image": `url(${heroImage})` }}>
           <div className="landing-hero-content">
-            <p className="landing-eyebrow">GREENER JUBAN. BRIGHTER TOMORROW.</p>
+            <p className="landing-eyebrow">GREENER BULAN. BRIGHTER TOMORROW.</p>
             <h1>GEO-TAGGED REFORESTATION MONITORING SYSTEM</h1>
-            <h2>Municipality of Juban, Sorsogon</h2>
+            <h2>Municipality of Bulan, Sorsogon</h2>
             <p className="landing-hero-description">
               A digital platform that supports MENRO in managing sapling requests, distribution, planting activities,
-              geo-tagged planting records, and tree survival monitoring in the Municipality of Juban.
+              geo-tagged planting records, and tree survival monitoring in the Municipality of Bulan.
             </p>
             <div className="landing-hero-actions">
               <Link className="landing-get-started" to="/login">Get Started →</Link>
@@ -181,7 +181,7 @@ export default function LandingPage() {
               <h2>About the System</h2>
               <p>
                 The GEO-TAGGED Reforestation Monitoring System is a digital platform developed to support the Municipal
-                Environment and Natural Resources Office (MENRO) of Juban, Sorsogon in organizing and monitoring
+                Environment and Natural Resources Office (MENRO) of Bulan, Sorsogon in organizing and monitoring
                 reforestation-related activities.
               </p>
               <p>
@@ -194,7 +194,7 @@ export default function LandingPage() {
               </p>
             </div>
             <figure className="landing-about-image">
-              <img src={aboutImage} alt="Tree planting activity in Juban, Sorsogon" />
+              <img src={aboutImage} alt="Tree planting activity in Bulan, Sorsogon" />
             </figure>
           </div>
         </section>
@@ -206,7 +206,7 @@ export default function LandingPage() {
               <h2>Reforestation Program</h2>
               <p>
                 The Reforestation Program supports the management and monitoring of tree-planting activities in the
-                Municipality of Juban. The system helps organize sapling requests, distribution, planting records, site
+                Municipality of Bulan. The system helps organize sapling requests, distribution, planting records, site
                 information, and survival monitoring to improve record management and coordination.
               </p>
             </div>
@@ -260,7 +260,7 @@ export default function LandingPage() {
               <div className="landing-guideline-intro">
                 <h3>General System Guidelines</h3>
                 <p>
-                  These are general instructions for using the system. They are not presented as official MENRO Juban
+                  These are general instructions for using the system. They are not presented as official MENRO Bulan
                   policies or regulatory requirements.
                 </p>
               </div>
@@ -278,8 +278,8 @@ export default function LandingPage() {
       <footer id="contact" className="landing-footer">
         <div className="landing-footer-inner">
           <div className="landing-footer-brand">
-            <img src={menroLogo} alt="MENRO Juban logo" />
-            <div><strong>Municipal Environment and Natural Resources Office</strong><span>Municipality of Juban, Sorsogon</span></div>
+            <img src={menroLogo} alt="MENRO Bulan logo" />
+            <div><strong>Municipal Environment and Natural Resources Office</strong><span>Municipality of Bulan, Sorsogon</span></div>
           </div>
           <div className="landing-footer-links">
             <strong>Quick Links</strong>
@@ -292,11 +292,11 @@ export default function LandingPage() {
           <div className="landing-footer-contact">
             <strong>Contact</strong>
             <span>Municipal Environment and Natural Resources Office</span>
-            <span>Municipality of Juban, Sorsogon</span>
+            <span>Municipality of Bulan, Sorsogon</span>
           </div>
         </div>
         <div className="landing-footer-bottom">
-          <p>© 2026 Municipal Environment and Natural Resources Office (MENRO)<br />Municipality of Juban, Sorsogon.</p>
+          <p>© 2026 Municipal Environment and Natural Resources Office (MENRO)<br />Municipality of Bulan, Sorsogon.</p>
           <div><Link to="/privacy-policy">Privacy Notice</Link><Link to="/terms-of-service">Terms of Use</Link></div>
         </div>
       </footer>

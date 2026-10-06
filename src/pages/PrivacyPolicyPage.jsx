@@ -17,7 +17,7 @@ export default function PrivacyPolicyPage() {
           <p className="legal-updated">Last updated: September 2026</p>
 
           <p>
-            This Privacy Policy explains what information the MENRO Juban
+            This Privacy Policy explains what information the MENRO Bulan
             Reforestation Monitoring System (the "System") collects, how it
             is used, and how it is protected.
           </p>
@@ -63,7 +63,7 @@ export default function PrivacyPolicyPage() {
           <h2>4. Sharing of information</h2>
           <p>
             We do not sell your personal information. Information may be
-            shared internally within MENRO Juban for program administration,
+            shared internally within MENRO Bulan for program administration,
             or disclosed if required by law or a valid government request.
           </p>
 
@@ -92,7 +92,7 @@ export default function PrivacyPolicyPage() {
           <h2>8. Contact</h2>
           <p>
             Questions about this Privacy Policy or your data can be directed
-            to the MENRO Juban office through your program coordinator or
+            to the MENRO Bulan office through your program coordinator or
             the contact details listed on the municipal office's official
             channels.
           </p>

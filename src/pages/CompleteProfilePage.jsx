@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Navigate, useNavigate } from "react-router-dom";
 import { auth } from "../firebase/config";
 import { useAuth } from "../context/AuthContext";
-import { JUBAN_BARANGAYS, USER_TYPES, userTypeField } from "../utils/userTypes";
+import { BULAN_BARANGAYS, USER_TYPES, userTypeField } from "../utils/userTypes";
 import { API_BASE_URL } from "../services/authenticatedApi";
 import menroLogo from "../assets/menro-logo.png";
 import "../styles/register.css";
@@ -38,7 +38,7 @@ export default function CompleteProfilePage() {
     const next = {};
     if (!form.username.trim()) next.username = "Required";
     if (!/^09\d{9}$/.test(form.contactNumber.trim())) next.contactNumber = "Enter a valid mobile number";
-    if (!form.userType) next.userType = "Please select your user type.";
+    if (!form.userType) next.userType = "Please select a sector.";
     if (conditional?.kind === "barangay" && !form.barangay) next.barangay = conditional.error;
     if (conditional?.kind === "detail" && !form.userTypeDetail.trim()) next.userTypeDetail = conditional.error;
     if (Object.keys(next).length) { setErrors(next); return; }
@@ -73,8 +73,8 @@ export default function CompleteProfilePage() {
     <div className="register-page">
       <main className="register-shell">
         <div className="register-brand">
-          <img src={menroLogo} alt="MENRO Juban logo" className="register-brand-logo" />
-          <div className="register-brand-copy"><strong>MENRO</strong><span>ENVIRONMENT OFFICE · JUBAN</span></div>
+          <img src={menroLogo} alt="MENRO Bulan logo" className="register-brand-logo" />
+          <div className="register-brand-copy"><strong>MENRO</strong><span>ENVIRONMENT OFFICE · BULAN</span></div>
         </div>
         <section className="register-card">
           <div className="register-heading"><h1>Complete your <em>profile.</em></h1><p>Tell MENRO how you participate in local environmental activities.</p></div>
@@ -84,8 +84,8 @@ export default function CompleteProfilePage() {
             <div className="register-form-grid">
               <label className="register-field" htmlFor="complete-profile-username"><span className="register-label">Username *</span><input id="complete-profile-username" name="username" autoComplete="username" className="register-input register-input-no-icon" value={form.username} onChange={(e) => update("username", e.target.value)} />{errors.username && <p className="register-field-error">{errors.username}</p>}</label>
               <label className="register-field" htmlFor="complete-profile-contact-number"><span className="register-label">Contact Number *</span><input id="complete-profile-contact-number" name="contactNumber" type="tel" autoComplete="tel" className="register-input register-input-no-icon" inputMode="numeric" maxLength={11} value={form.contactNumber} onChange={(e) => update("contactNumber", e.target.value)} />{errors.contactNumber && <p className="register-field-error">{errors.contactNumber}</p>}</label>
-              <label className="register-field register-full-width" htmlFor="complete-profile-user-type"><span className="register-label">User Type *</span><select id="complete-profile-user-type" name="userType" className="register-input register-input-no-icon" value={form.userType} onChange={(e) => update("userType", e.target.value)}><option value="">Select user type</option>{USER_TYPES.map((type) => <option key={type}>{type}</option>)}</select>{errors.userType && <p className="register-field-error">{errors.userType}</p>}</label>
-              {conditional?.kind === "barangay" && <label className="register-field register-full-width" htmlFor="complete-profile-barangay"><span className="register-label">{conditional.label}</span><select id="complete-profile-barangay" name="barangay" className="register-input register-input-no-icon" value={form.barangay} onChange={(e) => update("barangay", e.target.value)}><option value="">Select barangay</option>{JUBAN_BARANGAYS.map((barangay) => <option key={barangay}>{barangay}</option>)}</select>{errors.barangay && <p className="register-field-error">{errors.barangay}</p>}</label>}
+              <label className="register-field register-full-width" htmlFor="complete-profile-user-type"><span className="register-label">Sector *</span><select id="complete-profile-user-type" name="userType" className="register-input register-input-no-icon" value={form.userType} onChange={(e) => update("userType", e.target.value)}><option value="">Select the group you represent</option>{USER_TYPES.map((type) => <option key={type}>{type}</option>)}</select>{errors.userType && <p className="register-field-error">{errors.userType}</p>}</label>
+              {conditional?.kind === "barangay" && <label className="register-field register-full-width" htmlFor="complete-profile-barangay"><span className="register-label">{conditional.label}</span><select id="complete-profile-barangay" name="barangay" className="register-input register-input-no-icon" value={form.barangay} onChange={(e) => update("barangay", e.target.value)}><option value="">Select barangay</option>{BULAN_BARANGAYS.map((barangay) => <option key={barangay}>{barangay}</option>)}</select>{errors.barangay && <p className="register-field-error">{errors.barangay}</p>}</label>}
               {conditional?.kind === "detail" && <label className="register-field register-full-width" htmlFor="complete-profile-user-type-detail"><span className="register-label">{conditional.label}</span><input id="complete-profile-user-type-detail" name="userTypeDetail" className="register-input register-input-no-icon" value={form.userTypeDetail} onChange={(e) => update("userTypeDetail", e.target.value)} />{errors.userTypeDetail && <p className="register-field-error">{errors.userTypeDetail}</p>}</label>}
             </div>
             <button className="register-primary-btn" type="submit" disabled={loading}>{loading ? "Saving profile..." : "Save and Continue →"}</button>

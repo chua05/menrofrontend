@@ -37,15 +37,15 @@ import { useAuth } from "../context/AuthContext";
 import { auth } from "../firebase/config";
 import { API_BASE_URL } from "../services/authenticatedApi";
 import { formatDisplayId } from "../utils/displayId";
-import { JUBAN_BARANGAYS } from "../utils/userTypes";
+import { BULAN_BARANGAYS } from "../utils/userTypes";
 import "../styles/dashboard-page.css";
 
-const BARANGAY_GEOJSON_URL = "/data/juban-barangays.geojson";
+const BARANGAY_GEOJSON_URL = `${API_BASE_URL}/sites/barangay-boundaries`;
 const DASHBOARD_REQUEST_TIMEOUT_MS = 15_000;
 
-const JUBAN_FALLBACK_CENTER = {
-  lat: 12.82,
-  lng: 124.0,
+const BULAN_FALLBACK_CENTER = {
+  lat: 12.6598,
+  lng: 123.918,
 };
 
 const SURVIVAL_COLORS = [
@@ -753,7 +753,7 @@ function createRecentActivities({
         record?.eventLocation ||
         record?.plantingSiteLocation ||
         record?.barangay ||
-        "Juban, Sorsogon",
+        "Bulan, Sorsogon",
       date: getEventDate(record),
     });
   });
@@ -843,7 +843,7 @@ function DashboardSitesMap({
   const mapContainerRef = useRef(null);
   const mapRef = useRef(null);
   const boundaryLayerRef = useRef(null);
-  const jubanBoundsRef = useRef(null);
+  const bulanBoundsRef = useRef(null);
   const siteLayersRef = useRef([]);
   const panControlRef = useRef(null);
   const [mapError, setMapError] = useState("");
@@ -857,8 +857,8 @@ function DashboardSitesMap({
 
         const map = L.map(mapContainerRef.current, {
           center: [
-            JUBAN_FALLBACK_CENTER.lat,
-            JUBAN_FALLBACK_CENTER.lng,
+            BULAN_FALLBACK_CENTER.lat,
+            BULAN_FALLBACK_CENTER.lng,
           ],
           zoom: 12,
           minZoom: 11,
@@ -1052,7 +1052,7 @@ function DashboardSitesMap({
 
         if (!response.ok) {
           throw new Error(
-            `Unable to load Juban GeoJSON (${response.status}).`
+            `Unable to load Bulan GeoJSON (${response.status}).`
           );
         }
 
@@ -1063,7 +1063,7 @@ function DashboardSitesMap({
           !Array.isArray(geoJson.features)
         ) {
           throw new Error(
-            "Invalid Juban barangay GeoJSON."
+            "Invalid Bulan barangay GeoJSON."
           );
         }
 
@@ -1082,6 +1082,7 @@ function DashboardSitesMap({
           interactive: false,
           onEachFeature: (feature, layer) => {
             const barangayName =
+              feature?.properties?.ADM4_EN ||
               feature?.properties?.brgy_name ||
               feature?.properties?.barangay ||
               feature?.properties?.name ||
@@ -1115,15 +1116,15 @@ function DashboardSitesMap({
         boundaryLayerRef.current =
           boundaryLayer;
 
-        const jubanBounds =
+        const bulanBounds =
           boundaryLayer.getBounds();
 
-        if (jubanBounds.isValid()) {
-          jubanBoundsRef.current =
-            jubanBounds;
+        if (bulanBounds.isValid()) {
+          bulanBoundsRef.current =
+            bulanBounds;
 
           map.fitBounds(
-            jubanBounds.pad(0.28),
+            bulanBounds.pad(0.28),
             {
               padding: [22, 22],
               maxZoom: 13,
@@ -1132,7 +1133,7 @@ function DashboardSitesMap({
           );
 
           const allowedBounds =
-            jubanBounds.pad(0.75);
+            bulanBounds.pad(0.75);
 
           map.setMaxBounds(
             allowedBounds
@@ -1141,21 +1142,21 @@ function DashboardSitesMap({
           map.options.maxBoundsViscosity =
             0.9;
 
-          const jubanFitZoom =
+          const bulanFitZoom =
             map.getBoundsZoom(
-              jubanBounds.pad(0.28),
+              bulanBounds.pad(0.28),
               false,
               [22, 22]
             );
 
           if (
             Number.isFinite(
-              jubanFitZoom
+              bulanFitZoom
             )
           ) {
             map.setMinZoom(
               Math.max(
-                jubanFitZoom - 1,
+                bulanFitZoom - 1,
                 9
               )
             );
@@ -1177,7 +1178,7 @@ function DashboardSitesMap({
 
         if (!cancelled) {
           setMapError(
-            "Unable to load the Juban map."
+            "Unable to load the Bulan map."
           );
         }
       }
@@ -1194,7 +1195,7 @@ function DashboardSitesMap({
       }
 
       boundaryLayerRef.current = null;
-      jubanBoundsRef.current = null;
+      bulanBoundsRef.current = null;
       panControlRef.current = null;
       siteLayersRef.current = [];
     };
@@ -1809,7 +1810,7 @@ export default function DashboardPage() {
 
   const barangayOptions = useMemo(() =>
     [...new Set([
-      ...JUBAN_BARANGAYS,
+      ...BULAN_BARANGAYS,
       ...sites.map((site) => String(site?.barangay || "").trim()).filter(Boolean),
     ])]
       .sort((a, b) => a.localeCompare(b)), [sites]);
@@ -2878,7 +2879,7 @@ export default function DashboardPage() {
                               event?.eventLocation ||
                               event?.plantingSiteLocation ||
                               event?.barangay ||
-                              "Juban, Sorsogon"}
+                              "Bulan, Sorsogon"}
                           </span>
 
                           <span>

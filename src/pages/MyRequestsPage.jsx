@@ -33,7 +33,7 @@ import { auth } from "../firebase/config";
 import "../styles/my-requests.css";
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
-const BARANGAY_GEOJSON_URL = "/data/juban-barangays.geojson";
+const BARANGAY_GEOJSON_URL = `${API_BASE_URL}/sites/barangay-boundaries`;
 const PAGE_SIZE = 10;
 const READABLE_REQUEST_ID_PATTERN = /^REQ-\d{4}-\d{3,}$/i;
 
@@ -333,7 +333,7 @@ function MyRequestLocationPreview({ request }) {
     }
 
     const map = L.map(mapContainerRef.current, {
-      center: [12.82, 124.0],
+      center: [12.6598, 123.918],
       zoom: 12,
       minZoom: 10,
       maxZoom: 19,
@@ -403,7 +403,7 @@ function MyRequestLocationPreview({ request }) {
         siteLayerRef.current = null;
       }
 
-      let jubanBounds = null;
+      let bulanBounds = null;
       let selectedBarangayBounds = null;
 
       try {
@@ -429,6 +429,7 @@ function MyRequestLocationPreview({ request }) {
             .toLowerCase();
 
         const getFeatureBarangayName = (feature) =>
+          feature?.properties?.ADM4_EN ||
           feature?.properties?.brgy_name ||
           feature?.properties?.barangay ||
           feature?.properties?.name ||
@@ -515,7 +516,7 @@ function MyRequestLocationPreview({ request }) {
           boundaryLayer.getBounds();
 
         if (bounds.isValid()) {
-          jubanBounds = bounds;
+          bulanBounds = bounds;
         }
       } catch (error) {
         console.error(
@@ -573,9 +574,9 @@ function MyRequestLocationPreview({ request }) {
             animate: false,
           }
         );
-      } else if (jubanBounds?.isValid()) {
+      } else if (bulanBounds?.isValid()) {
         map.fitBounds(
-          jubanBounds.pad(0.05),
+          bulanBounds.pad(0.05),
           {
             padding: [18, 18],
             maxZoom: 12,

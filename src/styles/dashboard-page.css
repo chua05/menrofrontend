@@ -439,18 +439,26 @@
   font-size: 9px;
 }
 
-.dashboard-map-barangay-label {
+.dashboard-leaflet-map .leaflet-tooltip.dashboard-map-barangay-label {
   border: none !important;
   box-shadow: none !important;
-  background: rgba(255, 255, 255, 0.72) !important;
-  color: #264b35 !important;
+  background: transparent !important;
+  border-radius: 0 !important;
+  color: #1f392b !important;
   font-size: 10px !important;
+  line-height: 1.2 !important;
   font-weight: 700 !important;
-  padding: 2px 4px !important;
+  padding: 0 !important;
   white-space: nowrap !important;
+
+  text-shadow:
+    0 1px 2px #ffffff,
+    1px 0 2px #ffffff,
+    -1px 0 2px #ffffff,
+    0 -1px 2px #ffffff;
 }
 
-.dashboard-map-barangay-label::before {
+.dashboard-leaflet-map .leaflet-tooltip.dashboard-map-barangay-label::before {
   display: none !important;
 }
 

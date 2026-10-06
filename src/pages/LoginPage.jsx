@@ -226,14 +226,14 @@ export default function LoginPage() {
         <div className="login-brand">
           <img
             src={menroLogo}
-            alt="MENRO Juban logo"
+            alt="MENRO Bulan logo"
             className="login-brand-logo"
           />
 
           <div className="login-brand-copy">
             <strong>MENRO</strong>
             <span>
-              ENVIRONMENT OFFICE · JUBAN
+              ENVIRONMENT OFFICE · BULAN
             </span>
           </div>
         </div>
@@ -428,7 +428,7 @@ export default function LoginPage() {
         </section>
 
         <footer className="login-footer">
-          © 2025 MENRO JUBAN, SORSOGON
+          © 2025 MENRO BULAN, SORSOGON
         </footer>
       </main>
 

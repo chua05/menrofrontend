@@ -27,9 +27,17 @@ import "../styles/seedlings.css";
 const API_BASE_URL =
   import.meta.env.VITE_API_URL || "http://localhost:5000/api";
 
-const NURSERY_OPTIONS = [
-  "Sorsogon Provincial Nursery",
-  "Sorsogon Provincial Nursery in Barangay Cogon, Juban, Sorsogon",
+const CATEGORY_OPTIONS = [
+  "Native Tree", "Fruit Tree", "Hardwood", "Mangrove", "Ornamental", "Other",
+];
+const STOCK_STATUS_OPTIONS = ["Available", "Limited", "Out of Stock"];
+const SOURCE_TYPE_OPTIONS = [
+  "MENRO Propagation", "DENR / PENRO", "Provincial Government",
+  "Other Government Office", "Donation", "Wildling Collection",
+  "Sorsogon Provincial Nursery", "Other",
+];
+const STORAGE_LOCATION_OPTIONS = [
+  "MENRO Nursery", "Temporary Holding / Storage Area", "Other",
 ];
 
 function timestampToIso(value) {
@@ -55,6 +63,7 @@ function normalizeInventoryItem(item) {
   return {
     ...item,
     id: item.id || "",
+    inventoryNumber: item.inventoryNumber || "",
     treeName:
       item.species ||
       item.treeName ||
@@ -63,8 +72,9 @@ function normalizeInventoryItem(item) {
       item.scientificName || "",
     category:
       item.category || "",
-    quantity:
-      Number(item.quantity || 0),
+    quantity: Number(item.initialQuantity ?? item.quantity ?? 0),
+    initialQuantity: Number(item.initialQuantity ?? item.quantity ?? 0),
+    currentQuantity: Number(item.currentQuantity ?? item.availableQuantity ?? item.available ?? 0),
     available:
       Number(
         item.availableQuantity ??
@@ -85,18 +95,18 @@ function normalizeInventoryItem(item) {
       ),
     planted:
       Number(item.planted || 0),
-    lowStockThreshold:
-      item.lowStockThreshold ?? null,
-    sourceNursery:
-      item.sourceNursery || "",
+    sourceType: item.sourceType || item.sourceNursery || "",
+    sourceSpecification: item.sourceSpecification || "",
+    storageLocation: item.storageLocation || item.sourceNursery || "",
+    storageLocationSpecification: item.storageLocationSpecification || "",
+    categorySpecification: item.categorySpecification || "",
     dateReceived:
       item.dateReceived || "",
     batchReference:
       item.batchReference || "",
     description:
       item.description || "",
-    status:
-      item.status || "",
+    status: item.stockStatus || item.status || "",
     createdAt:
       timestampToIso(item.createdAt) ||
       item.createdAt ||
@@ -227,15 +237,14 @@ function getInitialForm() {
     treeName: "",
     scientificName: "",
     category: "",
-
+    categorySpecification: "",
     quantity: "",
-    lowStockThreshold: "",
-
-    sourceNursery: "",
+    stockStatus: "Available",
+    sourceType: "",
+    sourceSpecification: "",
     dateReceived: "",
-
-    batchReference: "",
-
+    storageLocation: "",
+    storageLocationSpecification: "",
     description: "",
   };
 }
@@ -292,6 +301,7 @@ export default function SeedlingsPage() {
 
   const [seedlings, setSeedlings] =
     useState([]);
+  const [speciesOptions, setSpeciesOptions] = useState([]);
 
   const [distributions, setDistributions] = useState([]);
   const [distributionLoading, setDistributionLoading] = useState(false);
@@ -339,10 +349,7 @@ export default function SeedlingsPage() {
 
   const [editForm, setEditForm] =
     useState({
-      quantity: "",
-      available: "",
-      distributed: "",
-      planted: "",
+      stockStatus: "Available",
       description: "",
     });
 
@@ -421,6 +428,19 @@ export default function SeedlingsPage() {
     return () => {
       cancelled = true;
     };
+  }, [retryKey]);
+
+  useEffect(() => {
+    let cancelled = false;
+    apiRequest("/inventory/species")
+      .then((response) => {
+        if (!cancelled) setSpeciesOptions(Array.isArray(response.data) ? response.data : []);
+      })
+      .catch((error) => {
+        console.error("Failed to load MENRO species master:", error);
+        if (!cancelled) setLoadError("Unable to load the MENRO species list. Please try again.");
+      });
+    return () => { cancelled = true; };
   }, [retryKey]);
 
   useEffect(() => {
@@ -650,10 +670,22 @@ export default function SeedlingsPage() {
     formatDateTime(counts.lastUpdated);
 
   const updateForm = (field, value) => {
-    setForm((previous) => ({
-      ...previous,
-      [field]: value,
-    }));
+    setForm((previous) => {
+      const next = { ...previous, [field]: value };
+      if (field === "treeName") {
+        const species = speciesOptions.find((item) => item.treeName === value);
+        next.scientificName = species?.scientificName || "";
+      }
+      if (field === "quantity" && value !== "" && Number(value) === 0) {
+        next.stockStatus = "Out of Stock";
+      } else if (field === "quantity" && Number(value) > 0 && previous.stockStatus === "Out of Stock") {
+        next.stockStatus = "Available";
+      }
+      if (field === "category" && value !== "Other") next.categorySpecification = "";
+      if (field === "sourceType" && value !== "Other") next.sourceSpecification = "";
+      if (field === "storageLocation" && value !== "Other") next.storageLocationSpecification = "";
+      return next;
+    });
 
     setFormErrors((previous) => ({
       ...previous,
@@ -664,25 +696,26 @@ export default function SeedlingsPage() {
   const validateForm = () => {
     const errors = {};
 
+    const selectedSpecies = speciesOptions.find((item) => item.treeName === form.treeName);
     if (!form.treeName.trim()) {
       errors.treeName =
         "Tree name is required.";
-    } else if (
-      form.treeName.trim().length > 100
-    ) {
-      errors.treeName =
-        "Tree name must not exceed 100 characters.";
+    } else if (!selectedSpecies) {
+      errors.treeName = "Select a tree from the MENRO species list.";
     }
 
     if (!form.category) {
       errors.category =
         "Category / type is required.";
     }
+    if (form.category === "Other" && !form.categorySpecification.trim()) {
+      errors.categorySpecification = "Please specify the category / type.";
+    }
 
     const quantity =
       Number(form.quantity);
 
-    if (!form.quantity) {
+    if (form.quantity === "") {
       errors.quantity =
         "Initial quantity is required.";
     } else if (
@@ -690,39 +723,17 @@ export default function SeedlingsPage() {
     ) {
       errors.quantity =
         "Initial quantity must be a whole number.";
-    } else if (quantity <= 0) {
+    } else if (quantity < 0) {
       errors.quantity =
-        "Initial quantity must be greater than zero.";
+        "Initial quantity cannot be negative.";
     }
+    if (quantity === 0 && form.stockStatus !== "Out of Stock") errors.stockStatus = "Zero quantity must be Out of Stock.";
+    if (quantity > 0 && !["Available", "Limited"].includes(form.stockStatus)) errors.stockStatus = "Positive quantity must be Available or Limited.";
 
-    if (
-      form.lowStockThreshold !== ""
-    ) {
-      const threshold =
-        Number(
-          form.lowStockThreshold
-        );
-
-      if (
-        !Number.isInteger(
-          threshold
-        )
-      ) {
-        errors.lowStockThreshold =
-          "Threshold must be a whole number.";
-      } else if (
-        threshold < 0
-      ) {
-        errors.lowStockThreshold =
-          "Threshold cannot be negative.";
-      } else if (
-        form.quantity &&
-        threshold > quantity
-      ) {
-        errors.lowStockThreshold =
-          "Threshold cannot exceed the initial quantity.";
-      }
-    }
+    if (!SOURCE_TYPE_OPTIONS.includes(form.sourceType)) errors.sourceType = "Source type is required.";
+    if (form.sourceType === "Other" && !form.sourceSpecification.trim()) errors.sourceSpecification = "Please specify the source.";
+    if (!STORAGE_LOCATION_OPTIONS.includes(form.storageLocation)) errors.storageLocation = "Nursery / storage location is required.";
+    if (form.storageLocation === "Other" && !form.storageLocationSpecification.trim()) errors.storageLocationSpecification = "Please specify the nursery / storage location.";
 
     if (!form.dateReceived) {
       errors.dateReceived =
@@ -828,27 +839,17 @@ export default function SeedlingsPage() {
           {
             method: "POST",
             body: JSON.stringify({
-              species:
-                form.treeName.trim(),
-              category:
-                form.category,
-              quantity,
-              description:
-                form.description.trim(),
-
-              // Extra metadata is included
-              // for forward compatibility.
-              scientificName:
-                form.scientificName.trim(),
-              ...(form.lowStockThreshold !== ""
-                ? { lowStockThreshold: Number(form.lowStockThreshold) }
-                : {}),
-              sourceNursery:
-                form.sourceNursery.trim(),
-              dateReceived:
-                form.dateReceived,
-              batchReference:
-                form.batchReference.trim(),
+              species: form.treeName,
+              category: form.category,
+              categorySpecification: form.categorySpecification.trim(),
+              initialQuantity: quantity,
+              stockStatus: form.stockStatus,
+              sourceType: form.sourceType,
+              sourceSpecification: form.sourceSpecification.trim(),
+              dateReceived: form.dateReceived,
+              storageLocation: form.storageLocation,
+              storageLocationSpecification: form.storageLocationSpecification.trim(),
+              description: form.description.trim(),
             }),
           }
         );
@@ -868,7 +869,7 @@ export default function SeedlingsPage() {
       closeAddModal();
 
       showSuccess(
-        `${newSeedling.treeName || "Sapling"} was added successfully.`
+        `Sapling batch added successfully. Batch Reference: ${newSeedling.batchReference}`
       );
     } catch (error) {
       console.error(error);
@@ -891,22 +892,7 @@ export default function SeedlingsPage() {
     setSelectedSeedling(seedling);
 
     setEditForm({
-      quantity:
-        String(
-          seedling.quantity ?? 0
-        ),
-      available:
-        String(
-          seedling.available ?? 0
-        ),
-      distributed:
-        String(
-          seedling.distributed ?? 0
-        ),
-      planted:
-        String(
-          seedling.planted ?? 0
-        ),
+      stockStatus: seedling.currentQuantity <= 0 ? "Out of Stock" : seedling.status,
       description:
         seedling.description || "",
     });
@@ -936,9 +922,9 @@ export default function SeedlingsPage() {
     setActionLoading(true);
     setStockError("");
     try {
-      const response = await apiRequest(`/inventory/${selectedSeedling.id}`, {
+      const response = await apiRequest(`/inventory/${selectedSeedling.id}/stock`, {
         method: "PATCH",
-        body: JSON.stringify({ quantity: selectedSeedling.quantity + amount }),
+        body: JSON.stringify({ quantity: amount }),
       });
       const updated = normalizeInventoryItem(response.data || {});
       setSeedlings((previous) => previous.map((item) =>
@@ -980,53 +966,10 @@ export default function SeedlingsPage() {
 
     const errors = {};
 
-    if (
-      editForm.quantity === ""
-    ) {
-      errors.quantity =
-        "Total quantity is required.";
-    } else {
-      const quantity =
-        Number(
-          editForm.quantity
-        );
-
-      if (
-        !Number.isInteger(
-          quantity
-        )
-      ) {
-        errors.quantity =
-          "Total quantity must be a whole number.";
-      } else if (
-        quantity < 0
-      ) {
-        errors.quantity =
-          "Total quantity cannot be negative.";
-      } else {
-        const reserved =
-          Number(
-            selectedSeedling.reserved ||
-              0
-          );
-
-        const distributed =
-          Number(
-            selectedSeedling.distributed ||
-              0
-          );
-
-        const committed =
-          reserved +
-          distributed;
-
-        if (
-          quantity < committed
-        ) {
-          errors.quantity =
-            `Total quantity cannot be lower than ${committed} because those saplings are already reserved or distributed.`;
-        }
-      }
+    if (selectedSeedling.currentQuantity <= 0 && editForm.stockStatus !== "Out of Stock") {
+      errors.stockStatus = "Zero quantity must remain Out of Stock.";
+    } else if (selectedSeedling.currentQuantity > 0 && !["Available", "Limited"].includes(editForm.stockStatus)) {
+      errors.stockStatus = "Positive quantity must be Available or Limited.";
     }
 
     if (
@@ -1058,10 +1001,7 @@ export default function SeedlingsPage() {
           {
             method: "PATCH",
             body: JSON.stringify({
-              quantity:
-                Number(
-                  editForm.quantity
-                ),
+              stockStatus: editForm.stockStatus,
               description:
                 editForm.description.trim(),
             }),
@@ -1371,8 +1311,8 @@ export default function SeedlingsPage() {
                     Available
                   </option>
 
-                  <option value="Low Stock">
-                    Low Stock
+                  <option value="Limited">
+                    Limited
                   </option>
 
                   <option value="Out of Stock">
@@ -1454,18 +1394,14 @@ export default function SeedlingsPage() {
                 <thead>
                   <tr>
                     <th>#</th>
-                    <th>
-                      SEEDLING DETAILS
-                    </th>
+                    <th>BATCH / REFERENCE NO.</th>
                     <th>TREE NAME</th>
-                    <th>QUANTITY</th>
-                    <th>AVAILABLE</th>
-                    <th>DISTRIBUTED</th>
-                    <th>PLANTED</th>
-                    <th>STATUS</th>
-                    <th>
-                      LAST UPDATED
-                    </th>
+                    <th>SCIENTIFIC NAME</th>
+                    <th>CATEGORY</th>
+                    <th>CURRENT QUANTITY</th>
+                    <th>STOCK STATUS</th>
+                    <th>SOURCE TYPE</th>
+                    <th>DATE RECEIVED</th>
                     <th>ACTIONS</th>
                   </tr>
                 </thead>
@@ -1476,11 +1412,6 @@ export default function SeedlingsPage() {
                       seedling,
                       index
                     ) => {
-                      const updated =
-                        formatDateTime(
-                          seedling.updatedAt
-                        );
-
                       return (
                         <tr
                           key={
@@ -1492,30 +1423,7 @@ export default function SeedlingsPage() {
                               index}
                           </td>
 
-                          <td>
-                            <div className="sd-seedling-detail">
-                              <div className="sd-seedling-thumb">
-                                <Sprout
-                                  size={
-                                    18
-                                  }
-                                />
-                              </div>
-
-                              <div>
-                                <strong>
-                                  {
-                                    seedling.treeName
-                                  }
-                                </strong>
-
-                                <span>
-                                  {seedling.scientificName ||
-                                    "No scientific name"}
-                                </span>
-                              </div>
-                            </div>
-                          </td>
+                          <td className="sd-primary-text">{seedling.batchReference || seedling.inventoryNumber || "—"}</td>
 
                           <td className="sd-primary-text">
                             {
@@ -1523,29 +1431,9 @@ export default function SeedlingsPage() {
                             }
                           </td>
 
-                          <td className="sd-number">
-                            {formatNumber(
-                              seedling.quantity
-                            )}
-                          </td>
-
-                          <td className="sd-number sd-available-number">
-                            {formatNumber(
-                              seedling.available
-                            )}
-                          </td>
-
-                          <td className="sd-number sd-distributed-number">
-                            {formatNumber(
-                              seedling.distributed
-                            )}
-                          </td>
-
-                          <td className="sd-number sd-planted-number">
-                            {formatNumber(
-                              seedling.planted
-                            )}
-                          </td>
+                          <td>{seedling.scientificName || "Not yet specified"}</td>
+                          <td>{seedling.category === "Other" ? seedling.categorySpecification : seedling.category}</td>
+                          <td className="sd-number sd-available-number">{formatNumber(seedling.currentQuantity)}</td>
 
                           <td>
                             <StatusBadge
@@ -1555,19 +1443,8 @@ export default function SeedlingsPage() {
                             />
                           </td>
 
-                          <td>
-                            <div className="sd-primary-text">
-                              {
-                                updated.date
-                              }
-                            </div>
-
-                            <div className="sd-secondary-text">
-                              {
-                                updated.time
-                              }
-                            </div>
-                          </td>
+                          <td>{seedling.sourceType || "—"}</td>
+                          <td>{seedling.dateReceived || "—"}</td>
 
                           <td>
                             <div className="sd-actions">
@@ -1865,8 +1742,7 @@ export default function SeedlingsPage() {
                 </h2>
 
                 <p>
-                  Add a new tree sapling
-                  record to the inventory.
+                  Add a new sapling stock record to the inventory.
                 </p>
               </div>
 
@@ -1891,7 +1767,7 @@ export default function SeedlingsPage() {
       <div className="sd-form-section-heading">
         <h3>Sapling Information</h3>
         <p>
-          Basic identification of the sapling record.
+          Basic identification of the sapling.
         </p>
       </div>
 
@@ -1901,10 +1777,10 @@ export default function SeedlingsPage() {
           error={formErrors.treeName}
         >
           <input
-            type="text"
+            type="search"
+            list="menro-sapling-species"
             value={form.treeName}
-            maxLength={100}
-            placeholder="e.g. Narra"
+            placeholder="Select tree name"
             onChange={(event) =>
               updateForm(
                 "treeName",
@@ -1912,19 +1788,17 @@ export default function SeedlingsPage() {
               )
             }
           />
+          <datalist id="menro-sapling-species">
+            {speciesOptions.map((species) => <option key={species.treeName} value={species.treeName} />)}
+          </datalist>
         </FormField>
 
-        <FormField label="Scientific Name">
+        <FormField label="Scientific Name" hint="Automatically filled when a tree is selected.">
           <input
             type="text"
-            value={form.scientificName}
-            placeholder="e.g. Pterocarpus indicus"
-            onChange={(event) =>
-              updateForm(
-                "scientificName",
-                event.target.value
-              )
-            }
+            value={form.treeName === "Acacia" ? "Not yet specified" : form.scientificName}
+            placeholder="Automatically filled based on tree name"
+            readOnly
           />
         </FormField>
 
@@ -1946,31 +1820,14 @@ export default function SeedlingsPage() {
               Select category / type
             </option>
 
-            <option value="Native Tree">
-              Native Tree
-            </option>
-
-            <option value="Fruit Tree">
-              Fruit Tree
-            </option>
-
-            <option value="Hardwood">
-              Hardwood
-            </option>
-
-            <option value="Mangrove">
-              Mangrove
-            </option>
-
-            <option value="Ornamental">
-              Ornamental
-            </option>
-
-            <option value="Other">
-              Other
-            </option>
+            {CATEGORY_OPTIONS.map((category) => <option key={category} value={category}>{category}</option>)}
           </select>
         </FormField>
+        {form.category === "Other" && (
+          <FormField label="Please Specify *" error={formErrors.categorySpecification} fullWidth>
+            <input type="text" value={form.categorySpecification} placeholder="Enter category / type" onChange={(event) => updateForm("categorySpecification", event.target.value)} />
+          </FormField>
+        )}
       </div>
     </section>
 
@@ -1979,7 +1836,7 @@ export default function SeedlingsPage() {
       <div className="sd-form-section-heading">
         <h3>Inventory Information</h3>
         <p>
-          Initial quantity and receiving information.
+          Enter the quantity, source, and receiving information.
         </p>
       </div>
 
@@ -1990,10 +1847,10 @@ export default function SeedlingsPage() {
         >
           <input
             type="number"
-            min="1"
+            min="0"
             step="1"
             value={form.quantity}
-            placeholder="e.g. 500"
+            placeholder="Enter initial quantity"
             onChange={(event) =>
               updateForm(
                 "quantity",
@@ -2003,45 +1860,32 @@ export default function SeedlingsPage() {
           />
         </FormField>
 
-        <FormField
-          label="Low Stock Threshold"
-          error={
-            formErrors.lowStockThreshold
-          }
-        >
-          <input
-            type="number"
-            min="0"
-            step="1"
-            value={form.lowStockThreshold}
-            placeholder="e.g. 50"
-            onChange={(event) =>
-              updateForm(
-                "lowStockThreshold",
-                event.target.value
-              )
-            }
-          />
+        <FormField label="Stock Status *" error={formErrors.stockStatus}>
+          <select value={form.stockStatus} disabled={form.quantity !== "" && Number(form.quantity) === 0} onChange={(event) => updateForm("stockStatus", event.target.value)}>
+            {STOCK_STATUS_OPTIONS.map((status) => <option key={status} value={status} disabled={Number(form.quantity) > 0 && status === "Out of Stock"}>{status}</option>)}
+          </select>
         </FormField>
 
-        <FormField label="Source / Nursery">
+        <FormField label="Source Type *" error={formErrors.sourceType}>
           <select
-            value={form.sourceNursery}
+            value={form.sourceType}
             onChange={(event) =>
               updateForm(
-                "sourceNursery",
+                "sourceType",
                 event.target.value
               )
             }
           >
-            <option value="">Select a nursery</option>
-            {NURSERY_OPTIONS.map((nursery) => (
-              <option key={nursery} value={nursery}>
-                {nursery}
-              </option>
-            ))}
+            <option value="">Select source type</option>
+            {SOURCE_TYPE_OPTIONS.map((source) => <option key={source} value={source}>{source}</option>)}
           </select>
         </FormField>
+
+        {form.sourceType === "Other" && (
+          <FormField label="Please Specify *" error={formErrors.sourceSpecification}>
+            <input type="text" value={form.sourceSpecification} placeholder="Enter source" onChange={(event) => updateForm("sourceSpecification", event.target.value)} />
+          </FormField>
+        )}
 
         <FormField
           label="Date Received *"
@@ -2066,22 +1910,30 @@ export default function SeedlingsPage() {
       <div className="sd-form-section-heading">
         <h3>Storage Information</h3>
         <p>
-          Optional batch and reference information.
+          Specify where the saplings are currently stored.
         </p>
       </div>
 
       <div className="sd-form-grid">
+        <FormField label="Nursery / Storage Location *" error={formErrors.storageLocation}>
+          <select value={form.storageLocation} onChange={(event) => updateForm("storageLocation", event.target.value)}>
+            <option value="">Select nursery / storage location</option>
+            {STORAGE_LOCATION_OPTIONS.map((location) => <option key={location} value={location}>{location}</option>)}
+          </select>
+        </FormField>
+
+        {form.storageLocation === "Other" && (
+          <FormField label="Please Specify *" error={formErrors.storageLocationSpecification}>
+            <input type="text" value={form.storageLocationSpecification} placeholder="Enter nursery / storage location" onChange={(event) => updateForm("storageLocationSpecification", event.target.value)} />
+          </FormField>
+        )}
+
         <FormField label="Batch / Reference No.">
           <input
             type="text"
-            value={form.batchReference}
-            placeholder="e.g. BATCH-2026-001"
-            onChange={(event) =>
-              updateForm(
-                "batchReference",
-                event.target.value
-              )
-            }
+            value=""
+            placeholder="Automatically generated when saved"
+            readOnly
           />
         </FormField>
 
@@ -2093,7 +1945,7 @@ export default function SeedlingsPage() {
           <textarea
             value={form.description}
             maxLength={500}
-            placeholder="Enter optional notes about these saplings"
+            placeholder="Enter additional information about this sapling batch"
             onChange={(event) =>
               updateForm(
                 "description",
@@ -2174,57 +2026,18 @@ export default function SeedlingsPage() {
                 }
               >
                 <div className="sd-form-grid">
-                  <FormField label="Total Quantity" error={editErrors.quantity}>
-                    <input
-                      type="number"
-                      min="0"
-                      step="1"
-                      value={
-                        editForm.quantity
-                      }
-                      onChange={(
-                        event
-                      ) =>
-                        updateEditForm(
-                          "quantity",
-                          event.target
-                            .value
-                        )
-                      }
-                    />
-                  </FormField>
-
-                  <FormField label="Available (Auto-calculated)">
-                    <input
-                      type="number"
-                      min="0"
-                      value={
-                        editForm.available
-                      }
-                      readOnly
-                    />
-                  </FormField>
-
-                  <FormField label="Distributed (Read only)">
-                    <input
-                      type="number"
-                      min="0"
-                      value={
-                        editForm.distributed
-                      }
-                      readOnly
-                    />
-                  </FormField>
-
-                  <FormField label="Planted (Read only)">
-                    <input
-                      type="number"
-                      min="0"
-                      value={
-                        editForm.planted
-                      }
-                      readOnly
-                    />
+                  <FormField label="Stock Status *" error={editErrors.stockStatus}>
+                    <select
+                      value={editForm.stockStatus}
+                      disabled={selectedSeedling.currentQuantity <= 0}
+                      onChange={(event) => updateEditForm("stockStatus", event.target.value)}
+                    >
+                      {STOCK_STATUS_OPTIONS.map((status) => (
+                        <option key={status} value={status} disabled={selectedSeedling.currentQuantity > 0 && status === "Out of Stock"}>
+                          {status}
+                        </option>
+                      ))}
+                    </select>
                   </FormField>
 
                   <FormField
@@ -2285,7 +2098,7 @@ export default function SeedlingsPage() {
             <div className="sd-modal-header">
               <div>
                 <h2>Add Stock</h2>
-                <p>{selectedSeedling.treeName} · Current total: {formatNumber(selectedSeedling.quantity)}</p>
+                <p>{selectedSeedling.treeName} · Current quantity: {formatNumber(selectedSeedling.currentQuantity)}</p>
               </div>
               <button type="button" className="sd-modal-close" onClick={() => setShowStockModal(false)} disabled={actionLoading} aria-label="Close">
                 <X size={18} />
@@ -2375,16 +2188,21 @@ export default function SeedlingsPage() {
                   />
 
                   <DetailItem
-                    label="Total Quantity"
+                    label="Batch / Reference No."
+                    value={selectedSeedling.batchReference || selectedSeedling.inventoryNumber}
+                  />
+
+                  <DetailItem
+                    label="Initial Quantity"
                     value={formatNumber(
-                      selectedSeedling.quantity
+                      selectedSeedling.initialQuantity
                     )}
                   />
 
                   <DetailItem
-                    label="Available"
+                    label="Current Quantity"
                     value={formatNumber(
-                      selectedSeedling.available
+                      selectedSeedling.currentQuantity
                     )}
                   />
 
@@ -2401,6 +2219,12 @@ export default function SeedlingsPage() {
                       selectedSeedling.planted
                     )}
                   />
+
+                  <DetailItem label="Source Type" value={selectedSeedling.sourceType} />
+                  <DetailItem label="Source Specification" value={selectedSeedling.sourceSpecification} />
+                  <DetailItem label="Date Received" value={selectedSeedling.dateReceived} />
+                  <DetailItem label="Nursery / Storage Location" value={selectedSeedling.storageLocation} />
+                  <DetailItem label="Storage Specification" value={selectedSeedling.storageLocationSpecification} />
                 </div>
 
                 {selectedSeedling.description && (
@@ -2483,6 +2307,7 @@ function KpiCard({
 function FormField({
   label,
   error,
+  hint,
   fullWidth = false,
   children,
 }) {
@@ -2495,6 +2320,10 @@ function FormField({
       <span>{label}</span>
 
       {children}
+
+      {hint && !error && (
+        <small className="sd-field-hint">{hint}</small>
+      )}
 
       {error && (
         <small className="sd-field-error">

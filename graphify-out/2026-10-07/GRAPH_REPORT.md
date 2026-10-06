@@ -1,12 +1,12 @@
 # Graph Report - menrosystem  (2026-10-07)
 
 ## Corpus Check
-- 166 files · ~195,993 words
+- 166 files · ~196,003 words
 - Verdict: corpus is large enough that graph structure adds value.
 - Unclassified: 29 file(s) not represented in the graph (top: .css 23, (none) 4, .resolved 1)
 
 ## Summary
-- 1699 nodes · 2583 edges · 123 communities (108 shown, 15 thin omitted)
+- 1699 nodes · 2583 edges · 124 communities (109 shown, 15 thin omitted)
 - Extraction: 99% EXTRACTED · 1% INFERRED · 0% AMBIGUOUS · INFERRED: 17 edges (avg confidence: 0.86)
 - Token cost: 0 input · 0 output
 
@@ -31,7 +31,7 @@
 - components.json
 - package.json
 - ProfilePage.jsx
-- useAuth
+- react
 - ReforestationAnalyticsPage.jsx
 - App Hosting CLI Commands
 - devDependencies
@@ -44,6 +44,7 @@
 - scripts
 - vite.config.js
 - ParticipantSaplingRequestWizard.jsx
+- useAuth
 - compilerOptions
 - vercel.json
 - What You Must Do When Invoked
@@ -158,13 +159,13 @@
   src/pages/ParticipantSaplingRequestWizard.jsx → src/utils/userTypes.js
 - `AuthProvider()` --calls--> `verifyMenroSession()`  [EXTRACTED]
   src/context/AuthContext.jsx → src/services/authenticatedApi.js
-- `Topbar()` --calls--> `useAuth()`  [EXTRACTED]
-  src/layouts/Topbar.jsx → src/context/AuthContext.jsx
+- `Sidebar()` --calls--> `useAuth()`  [EXTRACTED]
+  src/layouts/Sidebar.jsx → src/context/AuthContext.jsx
 
 ## Import Cycles
 - None detected.
 
-## Communities (123 total, 15 thin omitted)
+## Communities (124 total, 15 thin omitted)
 
 ### Community 0 - "PlantingPage"
 Cohesion: 0.06
@@ -219,12 +220,12 @@ Cohesion: 0.08
 Nodes (26): name, private, type, version, @base-ui/react, crypto-js, dayjs, eslint (+18 more)
 
 ### Community 14 - "ProfilePage.jsx"
-Cohesion: 0.26
-Nodes (9): CompleteProfilePage(), fieldStyle(), formatAccountDate(), getInitialForm(), ProfilePage(), API_BASE_URL, BULAN_BARANGAYS, USER_TYPES (+1 more)
+Cohesion: 0.28
+Nodes (8): CompleteProfilePage(), fieldStyle(), formatAccountDate(), getInitialForm(), ProfilePage(), BULAN_BARANGAYS, USER_TYPES, userTypeField()
 
-### Community 15 - "useAuth"
-Cohesion: 0.16
-Nodes (14): react, useAuth(), DashboardLayout(), getFallbackName(), getInitials(), getRoleLabel(), NAVIGATION, Sidebar() (+6 more)
+### Community 15 - "react"
+Cohesion: 0.23
+Nodes (11): react, react-dom, DashboardLayout(), getFallbackName(), getInitials(), getRoleLabel(), NAVIGATION, Sidebar() (+3 more)
 
 ### Community 16 - "ReforestationAnalyticsPage.jsx"
 Cohesion: 0.08
@@ -251,8 +252,8 @@ Cohesion: 0.08
 Nodes (23): `cleanUrls` (Optional), Full Example, `headers` (Optional), Hosting Configuration (`firebase.json`), `ignore` (Optional), Key Attributes, `public` (Required), `redirects` (Optional) (+15 more)
 
 ### Community 22 - "Topbar.jsx"
-Cohesion: 0.13
-Nodes (20): ref_node_assert_strict, ref_node_test, react-dom, getDisplayName(), getInitials(), getRoleLabel(), getSearchPlaceholder(), SEARCH_ICONS (+12 more)
+Cohesion: 0.14
+Nodes (19): ref_node_assert_strict, ref_node_test, getDisplayName(), getInitials(), getRoleLabel(), getSearchPlaceholder(), SEARCH_ICONS, timestampText() (+11 more)
 
 ### Community 23 - "config.js"
 Cohesion: 0.19
@@ -273,6 +274,10 @@ Nodes (4): ref_node_url, @tailwindcss/vite, vite, @vitejs/plugin-react
 ### Community 27 - "ParticipantSaplingRequestWizard.jsx"
 Cohesion: 0.11
 Nodes (32): api(), AREAS, BULAN_CENTER, destinationPoint(), formatFileSize(), fresh(), geometryContainsPoint(), hectaresFromForm() (+24 more)
+
+### Community 28 - "useAuth"
+Cohesion: 0.25
+Nodes (7): useAuth(), DEFAULT_SETTINGS, loadStoredSettings(), SAFE_CACHE_PREFIXES, SettingsPage(), ProtectedRoute(), src_styles_settings_page
 
 ### Community 31 - "What You Must Do When Invoked"
 Cohesion: 0.08
@@ -571,8 +576,8 @@ Cohesion: 0.40
 Nodes (4): 1. Install and Verify Firebase Skills, 2. Configure and Verify Firebase MCP Server, 3. Restart and Verify Connection, Cursor Setup
 
 ### Community 112 - "authenticatedApi.js"
-Cohesion: 0.29
-Nodes (9): authenticatedFetch(), backendErrorCode(), configuredApiUrl, getAuthToken(), localApiUrl, MenroApiError, requestBackendSession(), verifyMenroSession() (+1 more)
+Cohesion: 0.36
+Nodes (7): backendErrorCode(), configuredApiUrl, localApiUrl, MenroApiError, requestBackendSession(), verifyMenroSession(), wait()
 
 ### Community 113 - "Android Studio Setup"
 Cohesion: 0.50

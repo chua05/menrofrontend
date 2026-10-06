@@ -36,8 +36,10 @@ import {
 } from "../utils/identificationDocuments";
 import { auth } from "../firebase/config";
 import { formatDisplayId } from "../utils/displayId";
+import { BULAN_BARANGAYS } from "../utils/userTypes";
 
 import "../styles/seedling-requests.css";
+import ParticipantSaplingRequestWizard from "./ParticipantSaplingRequestWizard";
 
 
 const TABS = [
@@ -79,40 +81,13 @@ const TABS = [
   },
 ];
 
-const BARANGAYS = [
-  "Añog",
-  "Aroroy",
-  "Bacolod",
-  "Binanuahan",
-  "Biriran",
-  "Buraburan",
-  "Calateo",
-  "Calmayon",
-  "Caruhayon",
-  "Catanagan",
-  "Catanusan",
-  "Cogon",
-  "Embarcadero",
-  "Guruyan",
-  "Lajong",
-  "Maalo",
-  "North Poblacion",
-  "South Poblacion",
-  "Puting Sapa",
-  "Rangas",
-  "Sablayan",
-  "Sipaya",
-  "Taboc",
-  "Tinago",
-  "Tughan",
-];
-
-const BARANGAY_GEOJSON_URL = "/data/juban-barangays.geojson";
+const BARANGAYS = BULAN_BARANGAYS;
 
 const REQUEST_TYPES = ["New Planting", "Replacement"];
 
 const API_BASE_URL =
   import.meta.env.VITE_API_URL || "http://localhost:5000/api";
+const BARANGAY_GEOJSON_URL = `${API_BASE_URL}/sites/barangay-boundaries`;
 
 async function getAuthToken() {
   return auth.currentUser?.getIdToken() || "";
@@ -417,7 +392,7 @@ function getPlantingSiteLocationText(site) {
   }
 
   if (site.barangay) {
-    parts.push(`${site.barangay}, Juban, Sorsogon`);
+    parts.push(`${site.barangay}, Bulan, Sorsogon`);
   }
 
   const latitude = Number(site.latitude);
@@ -1701,7 +1676,7 @@ useEffect(() => {
 
   if (userRole === "participant") {
   return (
-    <ParticipantSeedlingRequest
+    <ParticipantSaplingRequestWizard
       currentUser={currentUser}
     />
   );
@@ -2879,7 +2854,33 @@ useEffect(() => {
                 <DetailItem label="Request Date" value={formatDate(selectedRequest.requestDate)} subvalue={formatTime(selectedRequest.requestDate)} />
               </div>
 
-              
+              {selectedRequest.workflow && (
+                <div className="sr-detail-seedlings">
+                  <h3>Request Workflow Information</h3>
+                  {[
+                    ["Sector", selectedRequest.workflow.sector],
+                    ["Request Address", `${selectedRequest.workflow.street || ""}, ${selectedRequest.workflow.addressBarangay || ""}, Bulan, Sorsogon`],
+                    ["Preferred Release Method", selectedRequest.workflow.releaseMethod],
+                    ["Planting Site Type", selectedRequest.workflow.siteMode === "proposed" ? "Proposed Site" : "Existing Site"],
+                    ["Planting Area", selectedRequest.workflow.areaChoice],
+                    ["Niyogan Status", selectedRequest.workflow.siteMode === "proposed"
+                      ? selectedRequest.workflow.niyogan === "unsure"
+                        ? "Requires MENRO Verification"
+                        : selectedRequest.workflow.niyogan === "no"
+                          ? "For MENRO Site Review"
+                          : selectedRequest.workflow.niyogan
+                      : "Not applicable"],
+                    ["Land / Area Type", selectedRequest.workflow.landType],
+                    ["Current Condition / Use", selectedRequest.workflow.currentCondition],
+                    ["Responsible Caretaker", selectedRequest.workflow.caretaker],
+                    ["Care / Maintenance Plan", selectedRequest.workflow.carePlan],
+                    ["Monitoring Frequency", selectedRequest.workflow.monitoringFrequency],
+                    ["Supporting Document", selectedRequest.workflow.requestLetter?.name],
+                  ].filter(([, value]) => value).map(([label, value]) => (
+                    <div className="sr-detail-tree-row" key={label}><span>{label}</span><strong>{value}</strong></div>
+                  ))}
+                </div>
+              )}
 
               <div className="sr-detail-seedlings">
                 <h3>Saplings Requested</h3>
@@ -3342,7 +3343,7 @@ function ParticipantLocationPreview({ barangay, site }) {
     }
 
     const map = L.map(mapContainerRef.current, {
-      center: [12.82, 124.0],
+      center: [12.6598, 123.918],
       zoom: 12,
       minZoom: 10,
       maxZoom: 19,
@@ -3412,7 +3413,7 @@ function ParticipantLocationPreview({ barangay, site }) {
         siteLayerRef.current = null;
       }
 
-      let jubanBounds = null;
+      let bulanBounds = null;
       let selectedBarangayBounds = null;
 
       try {
@@ -3438,6 +3439,7 @@ function ParticipantLocationPreview({ barangay, site }) {
             .toLowerCase();
 
         const getFeatureBarangayName = (feature) =>
+          feature?.properties?.ADM4_EN ||
           feature?.properties?.brgy_name ||
           feature?.properties?.barangay ||
           feature?.properties?.name ||
@@ -3526,16 +3528,16 @@ function ParticipantLocationPreview({ barangay, site }) {
           boundaryLayer.getBounds();
 
         if (bounds.isValid()) {
-          jubanBounds = bounds;
+          bulanBounds = bounds;
         }
       } catch (error) {
         console.error(
-          "Unable to load Juban barangay preview:",
+          "Unable to load Bulan barangay preview:",
           error
         );
 
         setMapError(
-          "Juban barangay boundary preview is unavailable."
+          "Bulan barangay boundary preview is unavailable."
         );
       }
 
@@ -3616,9 +3618,9 @@ function ParticipantLocationPreview({ barangay, site }) {
             animate: false,
           }
         );
-      } else if (jubanBounds?.isValid()) {
+      } else if (bulanBounds?.isValid()) {
         map.fitBounds(
-          jubanBounds.pad(0.05),
+          bulanBounds.pad(0.05),
           {
             padding: [18, 18],
             maxZoom: 12,
@@ -3627,7 +3629,7 @@ function ParticipantLocationPreview({ barangay, site }) {
         );
       } else {
         map.setView(
-          [12.82, 124.0],
+          [12.6598, 123.918],
           12,
           { animate: false }
         );
@@ -3709,7 +3711,7 @@ function ParticipantLocationPreview({ barangay, site }) {
         >
           <MapPin size={16} />
           <span>
-            Select a barangay. All Juban barangay
+            Select a barangay. All Bulan barangay
             boundaries are shown on the map.
           </span>
         </div>
@@ -4260,7 +4262,7 @@ function AdminDecisionModal({
   );
 }
 
-function ParticipantSeedlingRequest({ currentUser }) {
+export function ParticipantSeedlingRequest({ currentUser }) {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const editRequestId = searchParams.get("edit")?.trim() || "";

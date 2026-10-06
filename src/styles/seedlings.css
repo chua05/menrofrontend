@@ -812,7 +812,8 @@
   color: #177d3f;
 }
 
-.sd-status-low-stock {
+.sd-status-low-stock,
+.sd-status-limited {
   background: #fff0d7;
   color: #db8500;
 }
@@ -1193,6 +1194,12 @@
   font-size: 14px;
   line-height: 1.4;
   font-weight: 600;
+}
+
+.sd-field-hint {
+  color: #718078;
+  font-size: 11px;
+  line-height: 1.35;
 }
 
 .sd-form-field input,

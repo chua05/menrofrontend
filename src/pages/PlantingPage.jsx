@@ -31,7 +31,7 @@ import { useAuth } from "../context/AuthContext";
 import ProtectedEvidenceImage from "../components/ProtectedEvidenceImage";
 import { auth } from "../firebase/config";
 import { formatDisplayId } from "../utils/displayId";
-import { JUBAN_BARANGAYS, userTypeField } from "../utils/userTypes";
+import { BULAN_BARANGAYS, userTypeField } from "../utils/userTypes";
 import "../styles/planting-reports.css";
 
 const API_BASE_URL =
@@ -44,8 +44,8 @@ const OUTSIDE_SITE_WARNING =
   "The photo location is outside the selected planting site's coverage area. This report may still be submitted for MENRO Staff verification.";
 const SITE_MATCH_MESSAGE =
   "Photo location successfully verified within the selected planting site.";
-const OUTSIDE_JUBAN_MESSAGE =
-  "Your photo is outside the Municipality of Juban coverage area. Please upload or take a photo within the covered area.";
+const OUTSIDE_BULAN_MESSAGE =
+  "Your photo is outside the Municipality of Bulan coverage area. Please upload or take a photo within the covered area.";
 const MISSING_EXIF_MESSAGE =
   "This photo does not contain GPS location metadata. Please upload an original geotagged photo with location information.";
 const UNREADABLE_METADATA_MESSAGE =
@@ -57,8 +57,8 @@ const UNREADABLE_PHOTO_MESSAGE =
 const NO_DISTRIBUTION_MESSAGE =
   "No released sapling distributions are available for this planting event.";
 const PHOTO_EXIF_LOCATION_SOURCE = "Photo Metadata";
-const BARANGAY_GEOJSON_URL = "/data/juban-barangays.geojson";
-const JUBAN_FALLBACK_CENTER = { lat: 12.82, lng: 124.0 };
+const BARANGAY_GEOJSON_URL = `${API_BASE_URL}/sites/barangay-boundaries`;
+const BULAN_FALLBACK_CENTER = { lat: 12.6598, lng: 123.918 };
 
 const STATUS_OPTIONS = [
   "Awaiting Submission",
@@ -234,6 +234,7 @@ function getProfileAffiliationLabel(profile) {
 function getFeatureBarangayName(feature) {
   const properties = feature?.properties || {};
   return (
+    properties.ADM4_EN ||
     properties.brgy_name ||
     properties.barangay ||
     properties.name ||
@@ -268,7 +269,7 @@ function isPointInGeoJsonPolygon(latitude, longitude, coordinates) {
   );
 }
 
-function isPointInJubanBoundary(latitude, longitude, geoJson) {
+function isPointInBulanBoundary(latitude, longitude, geoJson) {
   if (geoJson?.type !== "FeatureCollection" || !Array.isArray(geoJson.features)) return false;
   return geoJson.features.some((feature) => {
     const geometry = feature?.geometry;
@@ -386,7 +387,7 @@ export default function PlantingPage() {
   const [distributions, setDistributions] = useState([]);
   const [events, setEvents] = useState([]);
   const [participantProfile, setParticipantProfile] = useState(currentUser || null);
-  const [jubanGeoJson, setJubanGeoJson] = useState(null);
+  const [bulanGeoJson, setBulanGeoJson] = useState(null);
 
   const [loading, setLoading] = useState(true);
   const [referenceLoading, setReferenceLoading] = useState(false);
@@ -741,7 +742,7 @@ export default function PlantingPage() {
 
       try {
         const map = L.map(locationMapContainerRef.current, {
-          center: [JUBAN_FALLBACK_CENTER.lat, JUBAN_FALLBACK_CENTER.lng],
+          center: [BULAN_FALLBACK_CENTER.lat, BULAN_FALLBACK_CENTER.lng],
           zoom: 12,
           minZoom: 11,
           maxZoom: 19,
@@ -761,7 +762,7 @@ export default function PlantingPage() {
 
         const response = await fetch(BARANGAY_GEOJSON_URL);
         if (!response.ok) {
-          throw new Error(`Unable to load Juban GeoJSON (${response.status}).`);
+          throw new Error(`Unable to load Bulan GeoJSON (${response.status}).`);
         }
 
         const geoJson = await response.json();
@@ -771,10 +772,10 @@ export default function PlantingPage() {
           geoJson?.type !== "FeatureCollection" ||
           !Array.isArray(geoJson.features)
         ) {
-          throw new Error("Invalid Juban barangay GeoJSON.");
+          throw new Error("Invalid Bulan barangay GeoJSON.");
         }
 
-        setJubanGeoJson(geoJson);
+        setBulanGeoJson(geoJson);
 
         const barangayLayer = L.geoJSON(geoJson, {
           style: (feature) => {
@@ -815,7 +816,7 @@ export default function PlantingPage() {
       } catch (error) {
         console.error("Failed to load planting-report location preview:", error);
         if (!cancelled) {
-          showPopup("Unable to load the Juban map preview. Check the boundary file and map connection.", "error");
+          showPopup("Unable to load the Bulan map preview. Check the boundary file and map connection.", "error");
         }
       }
     }
@@ -1255,13 +1256,13 @@ export default function PlantingPage() {
 
   const municipalityScopeStatus = useMemo(() => {
     if (!hasGps) return "unverified";
-    if (!jubanGeoJson) return "checking";
-    return isPointInJubanBoundary(
+    if (!bulanGeoJson) return "checking";
+    return isPointInBulanBoundary(
       Number(form.latitude),
       Number(form.longitude),
-      jubanGeoJson
+      bulanGeoJson
     ) ? "inside" : "outside";
-  }, [hasGps, jubanGeoJson, form.latitude, form.longitude]);
+  }, [hasGps, bulanGeoJson, form.latitude, form.longitude]);
 
   const activeSiteRadiusMeters =
     siteCoverageRadiusMeters ?? SITE_GPS_TOLERANCE_METERS;
@@ -1293,11 +1294,11 @@ export default function PlantingPage() {
     }
 
     if (municipalityScopeStatus === "checking") {
-      return { type: "waiting", label: "Checking Municipality of Juban boundary..." };
+      return { type: "waiting", label: "Checking Municipality of Bulan boundary..." };
     }
 
     if (municipalityScopeStatus === "outside") {
-      return { type: "flagged", label: "Outside Municipality of Juban" };
+      return { type: "flagged", label: "Outside Municipality of Bulan" };
     }
 
     if (
@@ -1360,7 +1361,7 @@ export default function PlantingPage() {
       return undefined;
     }
     const nextPopup = municipalityScopeStatus === "outside"
-      ? { message: OUTSIDE_JUBAN_MESSAGE, type: "error" }
+      ? { message: OUTSIDE_BULAN_MESSAGE, type: "error" }
       : {
           message: isInsideSelectedSite ? SITE_MATCH_MESSAGE : OUTSIDE_SITE_WARNING,
           type: isInsideSelectedSite ? "success" : "warning",
@@ -1622,12 +1623,12 @@ export default function PlantingPage() {
   }
 
   function evaluatePhotoCoordinates(latitude, longitude) {
-    if (jubanGeoJson && !isPointInJubanBoundary(latitude, longitude, jubanGeoJson)) {
+    if (bulanGeoJson && !isPointInBulanBoundary(latitude, longitude, bulanGeoJson)) {
       return {
         verificationStatus: "failed",
         verificationTone: "error",
-        verificationLabel: "Verification Failed — Outside Municipality of Juban",
-        verificationMessage: OUTSIDE_JUBAN_MESSAGE,
+        verificationLabel: "Verification Failed — Outside Municipality of Bulan",
+        verificationMessage: OUTSIDE_BULAN_MESSAGE,
         submissionBlocked: true,
       };
     }
@@ -2018,7 +2019,7 @@ export default function PlantingPage() {
     event.preventDefault();
 
     if (!participantProfile?.userType) {
-      showPopup("Your saved User Type is missing. Please complete your profile before submitting a planting report.", "error");
+      showPopup("Your saved Sector is missing. Please complete your profile before submitting a planting report.", "error");
       return;
     }
 
@@ -2109,12 +2110,12 @@ export default function PlantingPage() {
     }
 
     if (municipalityScopeStatus === "checking") {
-      showPopup("Please wait while the photo location is checked against the Municipality of Juban boundary.", "error");
+      showPopup("Please wait while the photo location is checked against the Municipality of Bulan boundary.", "error");
       return;
     }
 
     if (municipalityScopeStatus === "outside") {
-      showPopup(OUTSIDE_JUBAN_MESSAGE, "error");
+      showPopup(OUTSIDE_BULAN_MESSAGE, "error");
       return;
     }
 
@@ -2567,7 +2568,7 @@ export default function PlantingPage() {
                     </div>
 
                     <div>
-                      <label className="pr-label">Participant Type</label>
+                      <label className="pr-label">Sector</label>
                       <div className="pr-readonly-value">{participantProfile?.userType || "—"}</div>
                     </div>
 
@@ -2603,7 +2604,7 @@ export default function PlantingPage() {
                         <option value="">
                           {referenceLoading ? "Loading barangays..." : "Select barangay"}
                         </option>
-                        {JUBAN_BARANGAYS.map((barangay) => {
+                        {BULAN_BARANGAYS.map((barangay) => {
                           const hasSite = barangaysWithSites.has(normalizeBarangayName(barangay));
                           return (
                             <option key={barangay} value={barangay} disabled={!hasSite}>
@@ -2808,7 +2809,7 @@ export default function PlantingPage() {
                         <div>
                           <div className="pr-gps-value-label">Location Status</div>
                           <div className="pr-gps-value">
-                            {municipalityScopeStatus === "outside" ? "Outside Municipality of Juban" :
+                            {municipalityScopeStatus === "outside" ? "Outside Municipality of Bulan" :
                               isOutsideAssignedSite ? "Outside Assigned Site" :
                               locationPreviewStatus.type === "valid" ? "Within Assigned Site" : "Unable to Compare"}
                           </div>
@@ -2819,7 +2820,7 @@ export default function PlantingPage() {
                     <div className="pr-location-map-section">
                       <div className="pr-location-map-heading">
                         <div>
-                          <div className="pr-location-map-title">Juban Location Preview</div>
+                          <div className="pr-location-map-title">Bulan Location Preview</div>
                   
                         </div>
 
@@ -2834,7 +2835,7 @@ export default function PlantingPage() {
                                       <div
                                         ref={locationMapContainerRef}
                                         className="pr-location-map"
-                                        aria-label="Interactive Juban barangay and planting site location preview"
+                                        aria-label="Interactive Bulan barangay and planting site location preview"
                                       />
 
                                       
@@ -3342,7 +3343,7 @@ export default function PlantingPage() {
                     <div className="pr-info-label">Municipality Scope</div>
                     <div className="pr-info-value">
                       {selectedRecord.municipalityScope === "inside"
-                        ? "Inside Municipality of Juban"
+                        ? "Inside Municipality of Bulan"
                         : selectedRecord.municipalityScope || "—"}
                     </div>
                   </div>

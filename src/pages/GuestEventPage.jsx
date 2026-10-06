@@ -264,7 +264,7 @@ export default function GuestEventPage() {
       <div className="guest-event-shell">
         <header className="guest-event-brand">
           <img src={logo} alt="MENRO seal" />
-          <div><strong>MENRO</strong><span>Environment Office · Juban</span></div>
+          <div><strong>MENRO</strong><span>Environment Office · Bulan</span></div>
         </header>
         <article className="guest-event-card" aria-label="Guest event">
           <div className="guest-event-heading"><h1>Tree Planting Event</h1><p>View your invitation and join as a guest participant.</p></div>

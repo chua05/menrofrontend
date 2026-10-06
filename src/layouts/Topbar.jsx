@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import {
   Activity, Bell, CalendarDays, ChevronDown, Copy, FileText,
-  MapPin, Menu, Package, Search, Sprout, UserRound, X,
+  LogOut, MapPin, Menu, Package, Search, Sprout, UserRound, X,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
@@ -69,7 +70,7 @@ function timestampText(value) {
 }
 
 export default function Topbar({ onOpenSidebar }) {
-  const { currentUser, userRole } = useAuth();
+  const { currentUser, userRole, logout } = useAuth();
   const navigate = useNavigate();
 
   const [showNotifications, setShowNotifications] = useState(false);
@@ -80,6 +81,8 @@ export default function Topbar({ onOpenSidebar }) {
   const [guestLink, setGuestLink] = useState("");
   const [copyMessage, setCopyMessage] = useState("");
   const [showProfileMenu, setShowProfileMenu] = useState(false);
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+  const [loggingOut, setLoggingOut] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState([]);
   const [searchOpen, setSearchOpen] = useState(false);
@@ -287,6 +290,31 @@ export default function Topbar({ onOpenSidebar }) {
       setCopyMessage("Unable to copy automatically. Select and copy the link manually.");
     }
   }
+
+  const handleLogout = async () => {
+    if (loggingOut) {
+      return;
+    }
+
+    setLoggingOut(true);
+
+    try {
+      await logout();
+
+      setShowLogoutConfirm(false);
+
+      navigate("/login", {
+        replace: true,
+      });
+    } catch (error) {
+      console.error(
+        "Logout failed:",
+        error
+      );
+
+      setLoggingOut(false);
+    }
+  };
 
   const displayName = getDisplayName(
     currentUser,
@@ -508,10 +536,152 @@ export default function Topbar({ onOpenSidebar }) {
                 <UserRound size={17} aria-hidden="true" />
                 Profile
               </button>
+              <button
+                type="button"
+                className="topbar-profile-link"
+                role="menuitem"
+                onClick={() => {
+                  setShowProfileMenu(false);
+                  setShowLogoutConfirm(true);
+                }}
+              >
+                <LogOut size={17} aria-hidden="true" />
+                Logout
+              </button>
             </div>
           )}
         </div>
       </div>
+
+      {showLogoutConfirm && createPortal(
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 99999,
+            background: "rgba(20, 30, 24, 0.32)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: "16px",
+          }}
+          onMouseDown={(event) => {
+            if (
+              event.target === event.currentTarget &&
+              !loggingOut
+            ) {
+              setShowLogoutConfirm(false);
+            }
+          }}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="logout-title"
+            aria-describedby="logout-description"
+            style={{
+              width: "360px",
+              maxWidth: "calc(100vw - 32px)",
+              background: "#ffffff",
+              borderRadius: "10px",
+              padding: "22px",
+              boxShadow: "0 12px 32px rgba(0, 0, 0, 0.16)",
+            }}
+          >
+            <h3
+              id="logout-title"
+              style={{
+                margin: "0 0 6px",
+                fontSize: "19px",
+                lineHeight: "1.3",
+                fontWeight: 700,
+                color: "#1f2d25",
+              }}
+            >
+              Log out
+            </h3>
+
+            <p
+              id="logout-description"
+              style={{
+                margin: 0,
+                fontSize: "14px",
+                lineHeight: "1.45",
+                color: "#66736b",
+              }}
+            >
+              Are you sure you want to log out?
+            </p>
+
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "flex-end",
+                gap: "10px",
+                flexWrap: "wrap",
+                marginTop: "16px",
+              }}
+            >
+              <button
+                type="button"
+                disabled={loggingOut}
+                onClick={() => setShowLogoutConfirm(false)}
+                style={{
+                  minWidth: "90px",
+                  minHeight: "40px",
+                  padding: "0 14px",
+                  margin: 0,
+                  border: "1px solid #d7dfda",
+                  borderRadius: "7px",
+                  background: "#ffffff",
+                  color: "#445149",
+                  fontSize: "14px",
+                  lineHeight: 1,
+                  fontWeight: 600,
+                  cursor: loggingOut ? "not-allowed" : "pointer",
+                  opacity: loggingOut ? 0.6 : 1,
+                  display: "inline-flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  flex: "0 0 auto",
+                }}
+              >
+                Cancel
+              </button>
+
+              <button
+                type="button"
+                onClick={handleLogout}
+                disabled={loggingOut}
+                style={{
+                  minWidth: "90px",
+                  minHeight: "40px",
+                  padding: "0 14px",
+                  margin: 0,
+                  border: "none",
+                  borderRadius: "7px",
+                  background: "#087443",
+                  color: "#ffffff",
+                  fontSize: "14px",
+                  lineHeight: 1,
+                  fontWeight: 600,
+                  cursor: loggingOut ? "not-allowed" : "pointer",
+                  opacity: loggingOut ? 0.75 : 1,
+                  display: "inline-flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  flex: "0 0 auto",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {loggingOut ? "Logging out..." : "Log out"}
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
 
       {selectedNotification && (
         <div className="notification-detail-backdrop" onMouseDown={(event) => {

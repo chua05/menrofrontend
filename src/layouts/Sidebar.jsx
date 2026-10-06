@@ -1,6 +1,5 @@
-import { NavLink, useNavigate } from "react-router-dom";
+import { NavLink } from "react-router-dom";
 import { useEffect, useMemo, useState } from "react";
-import { createPortal } from "react-dom";
 import {
   LayoutDashboard,
   ClipboardList,
@@ -15,7 +14,6 @@ import {
   Users,
   Settings,
   UserRound,
-  LogOut,
   X,
 } from "lucide-react";
 
@@ -302,18 +300,7 @@ function getInitials(name, role) {
 }
 
 export default function Sidebar({ isOpen, onClose }) {
-  const { userRole, currentUser, logout } = useAuth();
-  const navigate = useNavigate();
-
-  const [
-    showLogoutConfirm,
-    setShowLogoutConfirm,
-  ] = useState(false);
-
-  const [
-    loggingOut,
-    setLoggingOut,
-  ] = useState(false);
+  const { userRole, currentUser } = useAuth();
 
   const [notifications, setNotifications] = useState([]);
 
@@ -374,33 +361,6 @@ export default function Sidebar({ isOpen, onClose }) {
 
   const initials = getInitials(displayName, resolvedRole);
 
-  const handleLogout = async () => {
-    if (loggingOut) {
-      return;
-    }
-
-    setLoggingOut(true);
-
-    try {
-      await logout();
-
-      setShowLogoutConfirm(false);
-
-      onClose?.();
-
-      navigate("/login", {
-        replace: true,
-      });
-    } catch (error) {
-      console.error(
-        "Logout failed:",
-        error
-      );
-
-      setLoggingOut(false);
-    }
-  };
-
   return (
     <aside
       className={`sidebar ${isOpen ? "open" : ""}`}
@@ -411,13 +371,13 @@ export default function Sidebar({ isOpen, onClose }) {
         <div className="sb-brand">
           <img
             src={menroLogo}
-            alt="MENRO Juban logo"
+            alt="MENRO Bulan logo"
             className="sb-brand-logo"
           />
 
           <div className="sb-brand-text">
             <div className="sb-brand-name">MENRO</div>
-            <div className="sb-brand-location">Juban, Sorsogon</div>
+            <div className="sb-brand-location">Bulan, Sorsogon</div>
           </div>
         </div>
 
@@ -485,156 +445,7 @@ export default function Sidebar({ isOpen, onClose }) {
           </div>
         </div>
 
-        <button
-          type="button"
-          className="sb-logout"
-          onClick={() =>
-          setShowLogoutConfirm(true)
-        }
-        >
-          <LogOut size={17} strokeWidth={1.8} />
-          <span>Logout</span>
-        </button>
       </div>
-
-      {showLogoutConfirm && createPortal(
-  <div
-    style={{
-      position: "fixed",
-      inset: 0,
-      zIndex: 99999,
-      background: "rgba(20, 30, 24, 0.32)",
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "center",
-      padding: "16px",
-    }}
-    onMouseDown={(event) => {
-      if (
-        event.target === event.currentTarget &&
-        !loggingOut
-      ) {
-        setShowLogoutConfirm(false);
-      }
-    }}
-  >
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="logout-title"
-      aria-describedby="logout-description"
-      style={{
-        width: "360px",
-        maxWidth: "calc(100vw - 32px)",
-        background: "#ffffff",
-        borderRadius: "10px",
-        padding: "22px",
-        boxShadow:
-          "0 12px 32px rgba(0, 0, 0, 0.16)",
-      }}
-    >
-      <h3
-        id="logout-title"
-        style={{
-          margin: "0 0 6px",
-          fontSize: "19px",
-          lineHeight: "1.3",
-          fontWeight: 700,
-          color: "#1f2d25",
-        }}
-      >
-        Log out
-      </h3>
-
-      <p
-        id="logout-description"
-        style={{
-          margin: 0,
-          fontSize: "14px",
-          lineHeight: "1.45",
-          color: "#66736b",
-        }}
-      >
-        Are you sure you want to log out?
-      </p>
-
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "flex-end",
-          gap: "10px",
-          flexWrap: "wrap",
-          marginTop: "16px",
-        }}
-      >
-        <button
-          type="button"
-          disabled={loggingOut}
-          onClick={() =>
-            setShowLogoutConfirm(false)
-          }
-          style={{
-            minWidth: "90px",
-            minHeight: "40px",
-            padding: "0 14px",
-            margin: 0,
-            border: "1px solid #d7dfda",
-            borderRadius: "7px",
-            background: "#ffffff",
-            color: "#445149",
-            fontSize: "14px",
-            lineHeight: 1,
-            fontWeight: 600,
-            cursor: loggingOut
-              ? "not-allowed"
-              : "pointer",
-            opacity: loggingOut ? 0.6 : 1,
-            display: "inline-flex",
-            alignItems: "center",
-            justifyContent: "center",
-            flex: "0 0 auto",
-          }}
-        >
-          Cancel
-        </button>
-
-        <button
-          type="button"
-          onClick={handleLogout}
-          disabled={loggingOut}
-          style={{
-            minWidth: "90px",
-            minHeight: "40px",
-            padding: "0 14px",
-            margin: 0,
-            border: "none",
-            borderRadius: "7px",
-            background: "#087443",
-            color: "#ffffff",
-            fontSize: "14px",
-            lineHeight: 1,
-            fontWeight: 600,
-            cursor: loggingOut
-              ? "not-allowed"
-              : "pointer",
-            opacity: loggingOut ? 0.75 : 1,
-            display: "inline-flex",
-            alignItems: "center",
-            justifyContent: "center",
-            flex: "0 0 auto",
-            whiteSpace: "nowrap",
-          }}
-        >
-          {loggingOut
-            ? "Logging out..."
-            : "Log out"}
-        </button>
-      </div>
-    </div>
-  </div>
-, document.body)}
-
     </aside>
   );
 }

@@ -19,9 +19,9 @@ const SETTINGS_STORAGE_KEY = "menro_system_settings";
 
 const DEFAULT_SETTINGS = {
   systemName: "MENRO Geo-Tagged Reforestation Monitoring System",
-  municipality: "Juban, Sorsogon",
+  municipality: "Bulan, Sorsogon",
   systemDescription:
-    "A centralized platform for monitoring reforestation efforts, seedling distribution, and environmental reporting across the Municipality of Juban, Sorsogon.",
+    "A centralized platform for monitoring reforestation efforts, seedling distribution, and environmental reporting across the Municipality of Bulan, Sorsogon.",
   systemLogo: "",
 
   lowStockThreshold: "10",

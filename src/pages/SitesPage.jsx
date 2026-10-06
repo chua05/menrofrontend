@@ -26,40 +26,13 @@ import {
 import { useAuth } from "../context/AuthContext";
 import { auth } from "../firebase/config";
 import { formatDisplayId } from "../utils/displayId";
+import { BULAN_BARANGAYS } from "../utils/userTypes";
 import "../styles/planting-sites.css";
 
 const API_BASE_URL =
   import.meta.env.VITE_API_URL || "http://localhost:5000/api";
 
-const BARANGAY_GEOJSON_URL = "/data/juban-barangays.geojson";
-
-const BARANGAYS = [
-  "Añog",
-  "Aroroy",
-  "Bacolod",
-  "Binanuahan",
-  "Biriran",
-  "Buraburan",
-  "Calateo",
-  "Calmayon",
-  "Caruhayon",
-  "Catanagan",
-  "Catanusan",
-  "Cogon",
-  "Embarcadero",
-  "Guruyan",
-  "Lajong",
-  "Maalo",
-  "North Poblacion",
-  "South Poblacion",
-  "Puting Sapa",
-  "Rangas",
-  "Sablayan",
-  "Sipaya",
-  "Taboc",
-  "Tinago",
-  "Tughan",
-];
+const BARANGAYS = BULAN_BARANGAYS;
 
 const SITE_TYPES = [
   "Reforestation Site",
@@ -92,10 +65,28 @@ const TREE_CONDITION_OPTIONS = [
   "Not Yet Monitored",
 ];
 
-const JUBAN_FALLBACK_CENTER = {
-  lat: 12.82,
-  lng: 124.0,
+const BULAN_FALLBACK_CENTER = {
+  lat: 12.6598,
+  lng: 123.918,
 };
+
+function getBarangayDisplayName(feature) {
+  const properties = feature?.properties || {};
+  const officialName = String(
+    properties.brgy_name ||
+      properties.NAME_3 ||
+      properties.ADM4_EN ||
+      properties.barangay ||
+      properties.name ||
+      properties.NAME ||
+      ""
+  );
+
+  return officialName
+    .replace(/^(Zone)(I{1,3}|IV|V|VI{0,3})(Poblacion)$/i, "$1 $2 $3")
+    .replace(/([a-z])([A-Z])/g, "$1 $2")
+    .trim();
+}
 
 const COVERAGE_RADIUS_PRESETS = [20, 50, 100, 200, 500];
 
@@ -246,11 +237,10 @@ export default function SitesPage() {
 
   const mapContainerRef = useRef(null);
   const mapRef = useRef(null);
-  const jubanBoundsRef = useRef(null);
+  const bulanBoundsRef = useRef(null);
 
   const sitePolygonsRef = useRef([]);
   const siteMarkersRef = useRef([]);
-  const barangayLabelsRef = useRef([]);
   const panControlRef = useRef(null);
 
   const openedSiteFromSearchRef = useRef("");
@@ -516,33 +506,18 @@ export default function SitesPage() {
 
   async function loadBarangayBoundaries(map, isCancelled) {
     try {
-      const response = await fetch(BARANGAY_GEOJSON_URL);
-
-      if (!response.ok) {
-        throw new Error(
-          `Unable to load Juban GeoJSON (${response.status}).`
-        );
-      }
-
-      const geoJson = await response.json();
+      const geoJson = await apiRequest("/sites/barangay-boundaries");
 
       if (
         geoJson?.type !== "FeatureCollection" ||
         !Array.isArray(geoJson.features)
       ) {
-        throw new Error("Invalid Juban barangay GeoJSON.");
+        throw new Error("Invalid Bulan barangay GeoJSON.");
       }
 
       if (isCancelled?.() || mapRef.current !== map) {
         return null;
       }
-
-      barangayLabelsRef.current.forEach((label) => {
-        if (map.hasLayer(label)) {
-          map.removeLayer(label);
-        }
-      });
-      barangayLabelsRef.current = [];
 
       const boundaryLayer = L.geoJSON(geoJson, {
         style: {
@@ -554,11 +529,7 @@ export default function SitesPage() {
         },
         interactive: false,
         onEachFeature: (feature, layer) => {
-          const barangayName =
-            feature?.properties?.brgy_name ||
-            feature?.properties?.barangay ||
-            feature?.properties?.name ||
-            feature?.properties?.NAME;
+          const barangayName = getBarangayDisplayName(feature);
 
           if (!barangayName || !layer.getBounds) return;
 
@@ -573,48 +544,50 @@ export default function SitesPage() {
             opacity: 1,
           });
         },
-      }).addTo(map);
+      });
 
-      const jubanBounds = boundaryLayer.getBounds();
+      boundaryLayer.addTo(map);
 
-      if (jubanBounds.isValid()) {
-        jubanBoundsRef.current = jubanBounds;
+      const bulanBounds = boundaryLayer.getBounds();
+
+      if (bulanBounds.isValid()) {
+        bulanBoundsRef.current = bulanBounds;
 
         /*
-          Keep nearby map context visible, but keep Juban as the visual focus.
-          The basemap itself has no place-name labels; only Juban barangay names
+          Keep nearby map context visible, but keep Bulan as the visual focus.
+          The basemap itself has no place-name labels; only Bulan barangay names
           are added by our GeoJSON tooltips above.
         */
-        map.fitBounds(jubanBounds.pad(0.28), {
+        map.fitBounds(bulanBounds.pad(0.28), {
           padding: [22, 22],
           maxZoom: 13,
           animate: false,
         });
 
-        const allowedBounds = jubanBounds.pad(0.75);
+        const allowedBounds = bulanBounds.pad(0.75);
         map.setMaxBounds(allowedBounds);
         map.options.maxBoundsViscosity = 0.9;
 
-        const jubanFitZoom = map.getBoundsZoom(
-          jubanBounds.pad(0.28),
+        const bulanFitZoom = map.getBoundsZoom(
+          bulanBounds.pad(0.28),
           false,
           [22, 22]
         );
 
-        if (Number.isFinite(jubanFitZoom)) {
-          map.setMinZoom(Math.max(jubanFitZoom - 1, 9));
+        if (Number.isFinite(bulanFitZoom)) {
+          map.setMinZoom(Math.max(bulanFitZoom - 1, 9));
         }
       }
 
       return boundaryLayer;
     } catch (error) {
       console.error(
-        "Failed to load Juban barangay boundaries:",
+        "Failed to load Bulan barangay boundaries:",
         error
       );
 
       setMapError(
-        "Unable to load the Juban barangay boundary data."
+        "Unable to load the Bulan barangay boundary data."
       );
 
       return null;
@@ -640,7 +613,7 @@ export default function SitesPage() {
         }
 
         const map = L.map(mapContainerRef.current, {
-          center: [JUBAN_FALLBACK_CENTER.lat, JUBAN_FALLBACK_CENTER.lng],
+          center: [BULAN_FALLBACK_CENTER.lat, BULAN_FALLBACK_CENTER.lng],
           zoom: 12,
           minZoom: 11,
           maxZoom: 19,
@@ -872,13 +845,12 @@ export default function SitesPage() {
         mapRef.current = null;
       }
 
-      jubanBoundsRef.current = null;
-      barangayLabelsRef.current = [];
+      bulanBoundsRef.current = null;
       panControlRef.current = null;
       sitePolygonsRef.current = [];
       siteMarkersRef.current = [];
     };
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
   if (!mapReady || !mapRef.current) {
@@ -1239,9 +1211,9 @@ export default function SitesPage() {
 
     mapRef.current.invalidateSize();
 
-    if (jubanBoundsRef.current?.isValid()) {
+    if (bulanBoundsRef.current?.isValid()) {
       mapRef.current.fitBounds(
-        jubanBoundsRef.current.pad(0.28),
+        bulanBoundsRef.current.pad(0.28),
         {
           padding: [22, 22],
           maxZoom: 13,
@@ -1250,7 +1222,7 @@ export default function SitesPage() {
       );
     } else {
       mapRef.current.setView(
-        [JUBAN_FALLBACK_CENTER.lat, JUBAN_FALLBACK_CENTER.lng],
+        [BULAN_FALLBACK_CENTER.lat, BULAN_FALLBACK_CENTER.lng],
         12
       );
     }
@@ -1837,7 +1809,7 @@ export default function SitesPage() {
                 <p>
                   Register a planting or
                   reforestation area
-                  within Juban.
+                  within Bulan.
                 </p>
               </div>
 
@@ -2411,7 +2383,7 @@ function SiteCoverageMap({
     }
 
     const map = L.map(containerRef.current, {
-      center: [JUBAN_FALLBACK_CENTER.lat, JUBAN_FALLBACK_CENTER.lng],
+      center: [BULAN_FALLBACK_CENTER.lat, BULAN_FALLBACK_CENTER.lng],
       zoom: 13,
       minZoom: 11,
       maxZoom: 20,
@@ -2477,7 +2449,7 @@ function SiteCoverageMap({
       siteLongitude > 180
     ) {
       map.setView(
-        [JUBAN_FALLBACK_CENTER.lat, JUBAN_FALLBACK_CENTER.lng],
+        [BULAN_FALLBACK_CENTER.lat, BULAN_FALLBACK_CENTER.lng],
         13,
         { animate: false }
       );

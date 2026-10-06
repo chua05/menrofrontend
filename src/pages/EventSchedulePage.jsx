@@ -24,6 +24,7 @@ import { useAuth } from "../context/AuthContext";
 import { auth } from "../firebase/config";
 import { formatDisplayId } from "../utils/displayId";
 import { getEventStatus, getEventStatusClass } from "../utils/eventStatus";
+import { BULAN_BARANGAYS } from "../utils/userTypes";
 
 import "../styles/event-calendar.css";
 import "../styles/dashboard-page.css";
@@ -36,33 +37,7 @@ const EVENT_TYPES = [
   "Other MENRO Activity",
 ];
 
-const BARANGAYS = [
-  "Añog",
-  "Aroroy",
-  "Bacolod",
-  "Binanuahan",
-  "Biriran",
-  "Buraburan",
-  "Calateo",
-  "Calmayon",
-  "Caruhayon",
-  "Catanagan",
-  "Catanusan",
-  "Cogon",
-  "Embarcadero",
-  "Guruyan",
-  "Lajong",
-  "Maalo",
-  "North Poblacion",
-  "South Poblacion",
-  "Puting Sapa",
-  "Rangas",
-  "Sablayan",
-  "Sipaya",
-  "Taboc",
-  "Tinago",
-  "Tughan",
-];
+const BARANGAYS = BULAN_BARANGAYS;
 
 const WEEK_DAYS = [
   "Sun",

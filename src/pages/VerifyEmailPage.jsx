@@ -37,8 +37,8 @@ export default function VerifyEmailPage() {
     <div className="register-page verify-email-page">
       <main className="register-shell verify-email-shell">
         <div className="register-brand">
-          <img src={menroLogo} alt="MENRO Juban logo" className="register-brand-logo" />
-          <div className="register-brand-copy"><strong>MENRO</strong><span>ENVIRONMENT OFFICE · JUBAN</span></div>
+          <img src={menroLogo} alt="MENRO Bulan logo" className="register-brand-logo" />
+          <div className="register-brand-copy"><strong>MENRO</strong><span>ENVIRONMENT OFFICE · BULAN</span></div>
         </div>
         <section className="register-card verify-email-card" aria-live="polite">
           <div className={`verify-email-icon verify-email-icon-${state.status}`} aria-hidden="true">

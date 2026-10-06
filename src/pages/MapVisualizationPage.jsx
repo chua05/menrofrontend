@@ -336,11 +336,11 @@ export default function MapVisualizationPage() {
   useEffect(() => {
     let isMounted = true;
 
-    fetch("/data/juban-barangays.geojson")
+    fetch(`${API_BASE_URL}/sites/barangay-boundaries`)
       .then((response) => {
         if (!response.ok) {
           throw new Error(
-            "Failed to load Juban barangay boundaries."
+            "Failed to load Bulan barangay boundaries."
           );
         }
 
@@ -708,7 +708,7 @@ export default function MapVisualizationPage() {
     }
 
     map.setView(
-      [12.85, 123.98],
+      [12.6598, 123.918],
       11
     );
 
@@ -748,8 +748,8 @@ export default function MapVisualizationPage() {
           featureLayer
         ) => {
           const name =
-            feature?.properties
-              ?.brgy_name || "";
+            feature?.properties?.ADM4_EN ||
+            feature?.properties?.brgy_name || "";
 
           if (name) {
             featureLayer.bindTooltip(
@@ -915,7 +915,7 @@ export default function MapVisualizationPage() {
               utilization status, verified
               planting activity, and tree
               monitoring information across
-              Juban, Sorsogon.
+              Bulan, Sorsogon.
             </p>
           </div>
         </div>

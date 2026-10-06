@@ -3,7 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { FiUser, FiMail, FiLock, FiEye, FiEyeOff } from "react-icons/fi";
 import { FcGoogle } from "react-icons/fc";
 import { useAuth } from "../context/AuthContext";
-import { JUBAN_BARANGAYS, USER_TYPES, userTypeField } from "../utils/userTypes";
+import { BULAN_BARANGAYS, USER_TYPES, userTypeField } from "../utils/userTypes";
 import { dashboardPathForRole } from "../utils/roleRoutes";
 import { publicApiFetch, verifyMenroSession } from "../services/authenticatedApi";
 import { startGooglePopup } from "../services/googleRedirectAuth";
@@ -87,7 +87,7 @@ export default function RegisterPage() {
       e.contactNumber = "Enter a valid mobile number";
     }
 
-    if (!form.userType) e.userType = "Please select your user type.";
+    if (!form.userType) e.userType = "Please select a sector.";
     const conditional = userTypeField(form.userType);
     if (conditional?.kind === "barangay" && !form.barangay) e.barangay = conditional.error;
     if (conditional?.kind === "detail" && !form.userTypeDetail.trim()) e.userTypeDetail = conditional.error;
@@ -211,13 +211,13 @@ export default function RegisterPage() {
         <div className="register-brand">
           <img
             src={menroLogo}
-            alt="MENRO Juban logo"
+            alt="MENRO Bulan logo"
             className="register-brand-logo"
           />
 
           <div className="register-brand-copy">
             <strong>MENRO</strong>
-            <span>ENVIRONMENT OFFICE · JUBAN</span>
+            <span>ENVIRONMENT OFFICE · BULAN</span>
           </div>
         </div>
 
@@ -346,7 +346,7 @@ export default function RegisterPage() {
 
               <div className="register-full-width">
                 <Field
-                  label="User Type *"
+                  label="Sector *"
                   htmlFor="register-user-type"
                   error={errors.userType}
                 >
@@ -357,14 +357,14 @@ export default function RegisterPage() {
                     onChange={update("userType")}
                     className="register-input register-input-no-icon"
                   >
-                    <option value="">Select user type</option>
+                    <option value="">Select the group you represent</option>
                     {USER_TYPES.map((type) => <option key={type} value={type}>{type}</option>)}
                   </select>
                 </Field>
               </div>
 
               {conditionalField?.kind === "barangay" && (
-                <div className="register-full-width"><Field label={conditionalField.label} htmlFor="register-barangay" error={errors.barangay}><select id="register-barangay" name="barangay" value={form.barangay} onChange={update("barangay")} className="register-input register-input-no-icon"><option value="">Select barangay</option>{JUBAN_BARANGAYS.map((barangay) => <option key={barangay}>{barangay}</option>)}</select></Field></div>
+                <div className="register-full-width"><Field label={conditionalField.label} htmlFor="register-barangay" error={errors.barangay}><select id="register-barangay" name="barangay" value={form.barangay} onChange={update("barangay")} className="register-input register-input-no-icon"><option value="">Select barangay</option>{BULAN_BARANGAYS.map((barangay) => <option key={barangay}>{barangay}</option>)}</select></Field></div>
               )}
 
               {conditionalField?.kind === "detail" && (
@@ -523,7 +523,7 @@ export default function RegisterPage() {
         </section>
 
         <footer className="register-footer">
-          © 2025 MENRO JUBAN, SORSOGON
+          © 2025 MENRO BULAN, SORSOGON
         </footer>
       </main>
     </div>

@@ -17,7 +17,7 @@ import {
 import { useAuth } from "../context/AuthContext";
 import { auth } from "../firebase/config";
 import { formatDisplayId } from "../utils/displayId";
-import { JUBAN_BARANGAYS, USER_TYPES, userTypeField } from "../utils/userTypes";
+import { BULAN_BARANGAYS, USER_TYPES, userTypeField } from "../utils/userTypes";
 import { API_BASE_URL } from "../services/authenticatedApi";
 
 function getInitialForm(currentUser) {
@@ -756,8 +756,8 @@ export default function ProfilePage() {
                       <FiMapPin size={15} />
                       <span>
                         {form.barangay
-                          ? `${form.barangay}, Juban, Sorsogon`
-                          : "Juban, Sorsogon"}
+                          ? `${form.barangay}, Bulan, Sorsogon`
+                          : "Bulan, Sorsogon"}
                       </span>
                     </div>
                   </div>
@@ -907,11 +907,11 @@ export default function ProfilePage() {
                 </ProfileField>
 
                 <ProfileField
-                  label="User Type"
+                  label="Sector"
                   icon={<FiUser size={15} />}
                 >
                   <select value={form.userType} onChange={update("userType")} disabled={!isEditing} style={fieldStyle(isEditing, "select")}>
-                    <option value="">Select user type</option>
+                    <option value="">Select the group you represent</option>
                     {USER_TYPES.map((type) => <option key={type}>{type}</option>)}
                   </select>
                 </ProfileField>
@@ -933,7 +933,7 @@ export default function ProfilePage() {
                       Select barangay
                     </option>
 
-                    {JUBAN_BARANGAYS.map((barangay) => (
+                    {BULAN_BARANGAYS.map((barangay) => (
                       <option
                         key={barangay}
                         value={barangay}
