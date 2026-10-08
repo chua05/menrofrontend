@@ -37,6 +37,10 @@ export function getAuthErrorMessage(error, { provider = "email", online = true }
     return "Signed in to Firebase, but the MENRO server could not be reached. Please try again shortly.";
   }
 
+  if (error?.code === "BACKEND_TIMEOUT") {
+    return "Signed in to Google, but MENRO verification took too long. Please try again.";
+  }
+
   if (error?.code === "BACKEND_UNAUTHORIZED" || error?.status === 401) {
     return "MENRO could not verify this sign-in. Please sign in again.";
   }
