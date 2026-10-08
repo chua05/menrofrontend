@@ -133,8 +133,11 @@ async function getFreshToken() {
   });
 }
 
-async function apiGet(path, token) {
+async function apiGet(path, token, requestSignal) {
   const controller = new AbortController();
+  const abortRequest = () => controller.abort();
+  if (requestSignal?.aborted) controller.abort();
+  else requestSignal?.addEventListener("abort", abortRequest, { once: true });
   const timeoutId = window.setTimeout(
     () => controller.abort(),
     DASHBOARD_REQUEST_TIMEOUT_MS
@@ -156,6 +159,7 @@ async function apiGet(path, token) {
     throw error;
   } finally {
     window.clearTimeout(timeoutId);
+    requestSignal?.removeEventListener("abort", abortRequest);
   }
 
   const payload = await response.json().catch(() => ({}));
@@ -1435,8 +1439,12 @@ export default function DashboardPage() {
 
   useEffect(() => {
     let cancelled = false;
+    let requestInFlight = false;
+    const requestController = new AbortController();
 
     const loadDashboard = async () => {
+      if (requestInFlight) return;
+      requestInFlight = true;
       setFatalLoadError("");
       try {
         const token =
@@ -1447,34 +1455,39 @@ export default function DashboardPage() {
             isParticipant
               ? "/seedling-requests/my"
               : "/seedling-requests",
-            token
+            token,
+            requestController.signal
           ),
-          apiGet("/sites", token),
+          apiGet("/sites", token, requestController.signal),
           apiGet(
             isParticipant
               ? "/planting-reports/my-reports"
               : "/planting-reports",
-            token
+            token,
+            requestController.signal
           ),
-          apiGet("/events", token),
+          apiGet("/events", token, requestController.signal),
           apiGet(
             isParticipant
               ? "/monitoring/my-records"
               : "/monitoring",
-            token
+            token,
+            requestController.signal
           ),
         ];
 
         if (isManagement) {
           endpointCalls.push(
-            apiGet("/users", token),
+            apiGet("/users", token, requestController.signal),
             apiGet(
               "/inventory",
-              token
+              token,
+              requestController.signal
             ),
             apiGet(
               "/distributions",
-              token
+              token,
+              requestController.signal
             )
           );
         }
@@ -1572,24 +1585,18 @@ export default function DashboardPage() {
         );
         setFatalLoadError("Unable to load dashboard records. Please try again.");
       } finally {
+        requestInFlight = false;
         if (!cancelled) {
           setLoading(false);
         }
       }
     };
 
-    loadDashboard();
-
-    const intervalId = window.setInterval(() => {
-      if (document.visibilityState === "visible") loadDashboard();
-    }, 60_000);
-    const handleFocus = () => loadDashboard();
-    window.addEventListener("focus", handleFocus);
+    void loadDashboard();
 
     return () => {
       cancelled = true;
-      window.clearInterval(intervalId);
-      window.removeEventListener("focus", handleFocus);
+      requestController.abort();
     };
   }, [isManagement, isParticipant, retryKey]);
 

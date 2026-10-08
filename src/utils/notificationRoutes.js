@@ -1,5 +1,7 @@
 export const NOTIFICATIONS_UPDATED_EVENT = "menro:notifications-updated";
 
+let latestNotifications = [];
+
 export function getNotificationPath(notification, role) {
   const prefix = `/${role}`;
 
@@ -34,7 +36,12 @@ export function getUnreadCountsByPath(notifications, role) {
 }
 
 export function publishNotifications(notifications) {
+  latestNotifications = Array.isArray(notifications) ? notifications : [];
   window.dispatchEvent(new CustomEvent(NOTIFICATIONS_UPDATED_EVENT, {
-    detail: { notifications },
+    detail: { notifications: latestNotifications },
   }));
+}
+
+export function getPublishedNotifications() {
+  return latestNotifications;
 }

@@ -18,8 +18,8 @@ import {
 } from "lucide-react";
 
 import { useAuth } from "../context/AuthContext";
-import { authenticatedFetch } from "../services/authenticatedApi";
 import {
+  getPublishedNotifications,
   getUnreadCountsByPath,
   NOTIFICATIONS_UPDATED_EVENT,
 } from "../utils/notificationRoutes";
@@ -302,7 +302,7 @@ function getInitials(name, role) {
 export default function Sidebar({ isOpen, onClose }) {
   const { userRole, currentUser } = useAuth();
 
-  const [notifications, setNotifications] = useState([]);
+  const [notifications, setNotifications] = useState(getPublishedNotifications);
 
   const resolvedRole =
     userRole && NAVIGATION[userRole] ? userRole : "participant";
@@ -318,37 +318,16 @@ export default function Sidebar({ isOpen, onClose }) {
       return undefined;
     }
 
-    let cancelled = false;
-
-    const loadNotifications = async () => {
-      try {
-        const response = await authenticatedFetch("/notifications");
-        const payload = await response.json().catch(() => null);
-        if (!response.ok) throw new Error(payload?.message || "Unable to load notifications.");
-        if (!cancelled) setNotifications(payload?.data?.notifications || []);
-      } catch (error) {
-        if (!cancelled) console.error("Unable to load sidebar notifications:", error);
-      }
-    };
-
     const handleNotificationsUpdated = (event) => {
       if (Array.isArray(event.detail?.notifications)) {
         setNotifications(event.detail.notifications);
-      } else {
-        void loadNotifications();
       }
     };
 
-    void loadNotifications();
     window.addEventListener(NOTIFICATIONS_UPDATED_EVENT, handleNotificationsUpdated);
-    window.addEventListener("focus", loadNotifications);
-    const refreshTimer = window.setInterval(loadNotifications, 60000);
 
     return () => {
-      cancelled = true;
       window.removeEventListener(NOTIFICATIONS_UPDATED_EVENT, handleNotificationsUpdated);
-      window.removeEventListener("focus", loadNotifications);
-      window.clearInterval(refreshTimer);
     };
   }, [currentUser?.uid]);
 

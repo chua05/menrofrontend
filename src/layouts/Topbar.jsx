@@ -7,6 +7,7 @@ import {
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { auth } from "../firebase/config";
+import { authenticatedFetch } from "../services/authenticatedApi";
 import { publishNotifications } from "../utils/notificationRoutes";
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
@@ -185,15 +186,21 @@ export default function Topbar({ onOpenSidebar }) {
   }, [selectedNotification]);
 
   useEffect(() => {
+    if (!currentUser?.uid) return undefined;
+
     let cancelled = false;
+    let requestInFlight = false;
+    let requestController = null;
+
     async function loadNotifications() {
+      if (requestInFlight || document.visibilityState !== "visible") return;
+      requestInFlight = true;
+      requestController = new AbortController();
       setNotificationLoading(true);
       setNotificationError("");
       try {
-        const token = await auth.currentUser?.getIdToken();
-        if (!token) throw new Error("Please sign in again.");
-        const response = await fetch(`${API_BASE_URL}/notifications`, {
-          headers: { Authorization: `Bearer ${token}` },
+        const response = await authenticatedFetch("/notifications", {
+          signal: requestController.signal,
         });
         const payload = await response.json().catch(() => null);
         if (!response.ok) throw new Error(payload?.message || "Unable to load notifications.");
@@ -203,14 +210,30 @@ export default function Topbar({ onOpenSidebar }) {
           publishNotifications(nextNotifications);
         }
       } catch (error) {
-        if (!cancelled) setNotificationError(error.message || "Unable to load notifications.");
+        if (!cancelled && error.name !== "AbortError") {
+          setNotificationError(error.message || "Unable to load notifications.");
+        }
       } finally {
+        requestInFlight = false;
+        requestController = null;
         if (!cancelled) setNotificationLoading(false);
       }
     }
+
     void loadNotifications();
-    return () => { cancelled = true; };
-  }, [showNotifications, currentUser?.uid]);
+    const refreshTimer = window.setInterval(loadNotifications, 60_000);
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") void loadNotifications();
+    };
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    return () => {
+      cancelled = true;
+      requestController?.abort();
+      window.clearInterval(refreshTimer);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [currentUser?.uid]);
 
   function clearSearch() {
     setSearchQuery("");

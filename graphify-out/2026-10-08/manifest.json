@@ -66,15 +66,15 @@
     "semantic_hash": "4f5dc0a143687c8301893da887956907"
   },
   "src/layouts/Sidebar.jsx": {
-    "mtime": 1791472081.9253414,
-    "seen": 1791472106.0328205,
-    "ast_hash": "a5861f499ead48f10d77e62a7d2e3223",
+    "mtime": 1791309231.773173,
+    "seen": 1791309257.313531,
+    "ast_hash": "ec779d3a2bca090c26aa827d83fd012f",
     "semantic_hash": ""
   },
   "src/layouts/Topbar.jsx": {
-    "mtime": 1791472059.3153436,
-    "seen": 1791472106.0328248,
-    "ast_hash": "f895b5ec69ae196f9245331ee6b7ee35",
+    "mtime": 1791309232.142026,
+    "seen": 1791309257.3135376,
+    "ast_hash": "cb6135afe392b91cad3a183718ec0298",
     "semantic_hash": ""
   },
   "src/lib/utils.js": {
@@ -90,9 +90,9 @@
     "semantic_hash": ""
   },
   "src/pages/DashboardPage.jsx": {
-    "mtime": 1791472059.5867484,
-    "seen": 1791472106.0328372,
-    "ast_hash": "40d1b8f7f74b790ed969ca456908d9fd",
+    "mtime": 1791261318.8273034,
+    "seen": 1791261434.7625313,
+    "ast_hash": "5c7a9160d57ed990d1e82cda944bf06d",
     "semantic_hash": ""
   },
   "src/pages/EventSchedulePage.jsx": {
@@ -1038,9 +1038,9 @@
     "semantic_hash": ""
   },
   "src/utils/notificationRoutes.js": {
-    "mtime": 1791472058.759811,
-    "seen": 1791472106.032927,
-    "ast_hash": "39f480908d42445510b9be6f5bf63074",
+    "mtime": 1790838928.9193451,
+    "seen": 1790838973.169143,
+    "ast_hash": "bd77f4443095dcf0d0755d217668c70a",
     "semantic_hash": ""
   },
   "tests/notificationRoutes.test.js": {
