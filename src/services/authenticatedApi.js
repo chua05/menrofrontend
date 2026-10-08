@@ -22,8 +22,6 @@ export class MenroApiError extends Error {
 let backendSessionRequest = null;
 const BACKEND_SESSION_TIMEOUT_MS = 15_000;
 
-const now = () => performance.now();
-
 const wait = (milliseconds) =>
   new Promise((resolve) => window.setTimeout(resolve, milliseconds));
 
@@ -35,23 +33,9 @@ const backendErrorCode = (status) => {
   return "BACKEND_REJECTED";
 };
 
-const parseServerTiming = (value = "") => Object.fromEntries(
-  value.split(",").map((entry) => {
-    const [name, ...parameters] = entry.trim().split(";");
-    const duration = parameters
-      .map((parameter) => parameter.trim())
-      .find((parameter) => parameter.startsWith("dur="));
-    return [name, Number(duration?.slice(4)) || 0];
-  }).filter(([name]) => name),
-);
-
 async function requestBackendSession(firebaseUser) {
-  const startedAt = now();
-  const tokenStartedAt = now();
   const token = await firebaseUser.getIdToken();
-  const tokenDurationMs = now() - tokenStartedAt;
   let response;
-  let backendStartedAt;
 
   for (let attempt = 0; attempt < 2; attempt += 1) {
     const controller = new AbortController();
@@ -60,7 +44,6 @@ async function requestBackendSession(firebaseUser) {
       BACKEND_SESSION_TIMEOUT_MS,
     );
     try {
-      backendStartedAt = now();
       response = await fetch(`${API_BASE_URL}/auth/verify`, {
         method: "POST",
         signal: controller.signal,
@@ -91,8 +74,6 @@ async function requestBackendSession(firebaseUser) {
     }
   }
 
-  const backendDurationMs = now() - backendStartedAt;
-  const serverTiming = parseServerTiming(response.headers.get("Server-Timing") || "");
   const payload = await response.json().catch(() => null);
   if (!response.ok) {
     throw new MenroApiError(
@@ -103,23 +84,10 @@ async function requestBackendSession(firebaseUser) {
   if (!payload?.data) {
     throw new MenroApiError("The MENRO server returned an invalid authentication response.");
   }
-  return {
-    profile: payload.data,
-    timing: {
-      tokenDurationMs,
-      backendDurationMs,
-      totalVerificationDurationMs: now() - startedAt,
-      firebaseTokenVerificationMs: serverTiming["firebase-token"] || 0,
-      profileLookupMs: serverTiming["profile-read"] || 0,
-      profileSyncMs: serverTiming["profile-sync"] || 0,
-    },
-  };
+  return payload.data;
 }
 
-export async function verifyMenroSession(
-  firebaseUser = auth.currentUser,
-  { onTiming } = {},
-) {
+export async function verifyMenroSession(firebaseUser = auth.currentUser) {
   if (!firebaseUser) {
     throw new MenroApiError(
       "Firebase authentication is required.", {
@@ -130,9 +98,7 @@ export async function verifyMenroSession(
   }
 
   if (backendSessionRequest?.uid === firebaseUser.uid) {
-    const result = await backendSessionRequest.promise;
-    onTiming?.(result.timing);
-    return result.profile;
+    return backendSessionRequest.promise;
   }
 
   const request = requestBackendSession(firebaseUser);
@@ -140,9 +106,7 @@ export async function verifyMenroSession(
   request.catch(() => {
     if (backendSessionRequest?.promise === request) backendSessionRequest = null;
   });
-  const result = await request;
-  onTiming?.(result.timing);
-  return result.profile;
+  return request;
 }
 
 export function resetMenroSessionRequest() {

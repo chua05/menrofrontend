@@ -1438,17 +1438,6 @@ export default function DashboardPage() {
     useState([]);
 
   useEffect(() => {
-    const navigationStartedAt = Number(
-      sessionStorage.getItem("menro:login-navigation-start"),
-    );
-    if (!Number.isFinite(navigationStartedAt) || navigationStartedAt <= 0) return;
-    sessionStorage.removeItem("menro:login-navigation-start");
-    console.info("MENRO dashboard navigation timing", {
-      routeMountedMs: Math.round(performance.now() - navigationStartedAt),
-    });
-  }, []);
-
-  useEffect(() => {
     let cancelled = false;
     let requestInFlight = false;
     const requestController = new AbortController();

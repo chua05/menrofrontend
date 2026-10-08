@@ -90,9 +90,9 @@
     "semantic_hash": ""
   },
   "src/pages/DashboardPage.jsx": {
-    "mtime": 1791475196.4742048,
-    "seen": 1791475280.531816,
-    "ast_hash": "3b5708b0f59aeaf92c86b198a41a35df",
+    "mtime": 1791477140.810501,
+    "seen": 1791477213.9761627,
+    "ast_hash": "40d1b8f7f74b790ed969ca456908d9fd",
     "semantic_hash": ""
   },
   "src/pages/EventSchedulePage.jsx": {
@@ -108,9 +108,9 @@
     "semantic_hash": ""
   },
   "src/pages/LoginPage.jsx": {
-    "mtime": 1791475205.4162261,
-    "seen": 1791475280.53183,
-    "ast_hash": "79a0f2b22124f76a475563cc4e976936",
+    "mtime": 1791477140.271143,
+    "seen": 1791477213.9761739,
+    "ast_hash": "3946dc55d77ee3a2108b5949c9f64306",
     "semantic_hash": ""
   },
   "src/pages/MapVisualizationPage.jsx": {
@@ -942,9 +942,9 @@
     "semantic_hash": ""
   },
   "src/services/authenticatedApi.js": {
-    "mtime": 1791475195.1396952,
-    "seen": 1791475280.531885,
-    "ast_hash": "e929ea880536a737116744daa8ba0daa",
+    "mtime": 1791477141.3011131,
+    "seen": 1791477213.9762244,
+    "ast_hash": "d32a0fe9b4b3d62aef7880ce789d0078",
     "semantic_hash": ""
   },
   "src/utils/exifGps.js": {

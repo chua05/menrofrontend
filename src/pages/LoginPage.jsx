@@ -22,8 +22,6 @@ const isFirebaseNetworkError = (error) =>
 const wait = (milliseconds) =>
   new Promise((resolve) => window.setTimeout(resolve, milliseconds));
 
-const roundedMilliseconds = (value) => Math.round(Number(value) || 0);
-
 const signInWithNetworkRetry = async (email, password) => {
   try {
     return await signInWithEmailAndPassword(auth, email, password);
@@ -137,32 +135,12 @@ export default function LoginPage() {
       setError("");
       setSuccess("");
       setLoading(true);
-      const signInStartedAt = performance.now();
-      const popupStartedAt = performance.now();
-      let popupDurationMs = 0;
 
       try {
         const result = await startGooglePopup();
-        popupDurationMs = performance.now() - popupStartedAt;
-        let verificationTiming = {};
-        const userData = await verifyMenroSession(result.user, {
-          onTiming: (timing) => {
-            verificationTiming = timing;
-          },
-        });
+        const userData = await verifyMenroSession(result.user);
 
         login(userData, userData.role);
-        const navigationStartedAt = performance.now();
-        sessionStorage.setItem("menro:login-navigation-start", String(navigationStartedAt));
-        console.info("MENRO Google sign-in timing", {
-          popupMs: roundedMilliseconds(popupDurationMs),
-          tokenRetrievalMs: roundedMilliseconds(verificationTiming.tokenDurationMs),
-          backendVerificationMs: roundedMilliseconds(verificationTiming.backendDurationMs),
-          firebaseTokenVerificationMs: roundedMilliseconds(verificationTiming.firebaseTokenVerificationMs),
-          profileLookupMs: roundedMilliseconds(verificationTiming.profileLookupMs),
-          profileSyncMs: roundedMilliseconds(verificationTiming.profileSyncMs),
-          preNavigationTotalMs: roundedMilliseconds(performance.now() - signInStartedAt),
-        });
         navigate(
           userData.role === "participant" && userData.profileComplete === false
             ? "/complete-profile"
@@ -170,7 +148,6 @@ export default function LoginPage() {
           { replace: true }
         );
       } catch (err) {
-        if (!popupDurationMs) popupDurationMs = performance.now() - popupStartedAt;
         if (isGoogleCancellation(err)) {
           // Chrome/Firebase can report popup-closed after the OAuth credential
           // has already been persisted. In that case Firebase is authoritative:
@@ -179,24 +156,8 @@ export default function LoginPage() {
           const firebaseUser = auth.currentUser;
           if (firebaseUser) {
             try {
-              let verificationTiming = {};
-              const userData = await verifyMenroSession(firebaseUser, {
-                onTiming: (timing) => {
-                  verificationTiming = timing;
-                },
-              });
+              const userData = await verifyMenroSession(firebaseUser);
               login(userData, userData.role);
-              const navigationStartedAt = performance.now();
-              sessionStorage.setItem("menro:login-navigation-start", String(navigationStartedAt));
-              console.info("MENRO Google sign-in timing", {
-                popupMs: roundedMilliseconds(popupDurationMs),
-                tokenRetrievalMs: roundedMilliseconds(verificationTiming.tokenDurationMs),
-                backendVerificationMs: roundedMilliseconds(verificationTiming.backendDurationMs),
-                firebaseTokenVerificationMs: roundedMilliseconds(verificationTiming.firebaseTokenVerificationMs),
-                profileLookupMs: roundedMilliseconds(verificationTiming.profileLookupMs),
-                profileSyncMs: roundedMilliseconds(verificationTiming.profileSyncMs),
-                preNavigationTotalMs: roundedMilliseconds(performance.now() - signInStartedAt),
-              });
               navigate(
                 userData.role === "participant" && userData.profileComplete === false
                   ? "/complete-profile"
