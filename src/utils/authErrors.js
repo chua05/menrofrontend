@@ -17,6 +17,15 @@ const GOOGLE_CANCELLATION_CODES = new Set([
 export const isGoogleCancellation = (error) =>
   GOOGLE_CANCELLATION_CODES.has(error?.code);
 
+export const hasNewGoogleSession = (userBeforePopup, authenticatedUser) => {
+  if (!authenticatedUser?.uid || authenticatedUser.uid === userBeforePopup?.uid) {
+    return false;
+  }
+  return authenticatedUser.providerData?.some(
+    (provider) => provider.providerId === "google.com",
+  ) === true;
+};
+
 export function getVerificationErrorMessage(error) {
   if (["auth/expired-action-code", "auth/invalid-action-code"].includes(error?.code)) {
     return "This verification link is invalid, expired, or has already been used. Sign in and request a new verification email.";
@@ -35,10 +44,6 @@ export function getAuthErrorMessage(error, { provider = "email", online = true }
 
   if (error?.code === "BACKEND_UNAVAILABLE" || error?.code === "ERR_NETWORK") {
     return "Signed in to Firebase, but the MENRO server could not be reached. Please try again shortly.";
-  }
-
-  if (error?.code === "BACKEND_TIMEOUT") {
-    return "Signed in to Google, but MENRO verification took too long. Please try again.";
   }
 
   if (error?.code === "BACKEND_UNAUTHORIZED" || error?.status === 401) {

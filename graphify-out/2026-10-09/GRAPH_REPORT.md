@@ -1,17 +1,17 @@
 # Graph Report - menrosystem  (2026-10-09)
 
 ## Corpus Check
-- 166 files · ~196,334 words
+- 168 files · ~196,568 words
 - Verdict: corpus is large enough that graph structure adds value.
 - Unclassified: 29 file(s) not represented in the graph (top: .css 23, (none) 4, .resolved 1)
 
 ## Summary
-- 1704 nodes · 2595 edges · 119 communities (107 shown, 12 thin omitted)
-- Extraction: 99% EXTRACTED · 1% INFERRED · 0% AMBIGUOUS · INFERRED: 18 edges (avg confidence: 0.86)
+- 1707 nodes · 2603 edges · 122 communities (107 shown, 15 thin omitted)
+- Extraction: 99% EXTRACTED · 1% INFERRED · 0% AMBIGUOUS · INFERRED: 19 edges (avg confidence: 0.86)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `48cbc1db`
+- Built from commit: `07912c3b`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -30,8 +30,8 @@
 - SeedlingsPage.jsx
 - components.json
 - package.json
-- ProfilePage.jsx
-- SettingsPage.jsx
+- RegisterPage.jsx
+- useAuth
 - ReforestationAnalyticsPage.jsx
 - App Hosting CLI Commands
 - devDependencies
@@ -39,12 +39,12 @@
 - Mutations
 - Key Attributes
 - Topbar.jsx
-- useAuth
+- Sidebar.jsx
 - Configuration Reference
 - scripts
 - vite.config.js
 - ParticipantSaplingRequestWizard.jsx
-- Sidebar.jsx
+- UsersPage.jsx
 - compilerOptions
 - vercel.json
 - What You Must Do When Invoked
@@ -59,12 +59,11 @@
 - AGENTS.md
 - extraction-spec.md
 - fill_test_cases.py
-- Native SQL Examples
 - artifact.md
 - Security Reference
 - Firebase Crashlytics - Android Setup Guide (Kotlin)
 - Firebase Remote Config - Android Setup Guide (Kotlin)
-- Examples
+- Native SQL Examples
 - firebase-basics/SKILL.md
 - 1. Vector Similarity Search (Semantic)
 - Firestore Web SDK Usage Guide
@@ -81,7 +80,7 @@
 - Firebase SQL Connect
 - Writing Data
 - Cloud Functions Integration Reference
-- firebase-data-connect/SKILL.md
+- 1. Local Prototyping: Data Seeding
 - Templates
 - Firebase Authentication - Android Setup Guide (Kotlin)
 - Flutter & Firebase Setup Guide
@@ -111,10 +110,10 @@
 - Flutter Setup for Firebase AI Logic
 - Firebase AI Logic Basics
 - Core Capabilities
-- 1. Local Prototyping: Data Seeding
+- config.js
 - Cloud Firestore in Flutter
 - Cloud Firestore in Flutter
-- firebase-firestore/SKILL.md
+- Manual Initialization
 - 1. Instance Selection and Edition Detection
 - Assessment: Security Validator (Red Team Edition)
 - button.jsx
@@ -131,9 +130,11 @@
 - authenticatedApi.js
 - Android Studio Setup
 - Package.swift
-- react
-- main.jsx
+- LoginPage.jsx
 - .audit-temp/artifact.md
+- main.jsx
+- authService.js
+- ReportsPage.jsx
 
 ## God Nodes (most connected - your core abstractions)
 1. `PlantingPage()` - 68 edges
@@ -154,19 +155,19 @@
   .agents/skills/firebase-basics/references/ios_setup.md → src/App.jsx
 - `SelectBarangay()` --references--> `BULAN_BARANGAYS`  [EXTRACTED]
   src/pages/ParticipantSaplingRequestWizard.jsx → src/utils/userTypes.js
-- `AuthProvider()` --calls--> `verifyMenroSession()`  [EXTRACTED]
-  src/context/AuthContext.jsx → src/services/authenticatedApi.js
 - `Sidebar()` --calls--> `useAuth()`  [EXTRACTED]
   src/layouts/Sidebar.jsx → src/context/AuthContext.jsx
+- `Topbar()` --calls--> `useAuth()`  [EXTRACTED]
+  src/layouts/Topbar.jsx → src/context/AuthContext.jsx
 
 ## Import Cycles
 - None detected.
 
-## Communities (119 total, 12 thin omitted)
+## Communities (122 total, 15 thin omitted)
 
 ### Community 0 - "PlantingPage"
 Cohesion: 0.06
-Nodes (74): CompleteProfilePage(), BULAN_FALLBACK_CENTER, calculateDistanceMeters(), canRenderImage(), displayReportStatus(), formatDate(), formatDateTime(), formatFileSize() (+66 more)
+Nodes (71): BULAN_FALLBACK_CENTER, calculateDistanceMeters(), canRenderImage(), displayReportStatus(), formatDate(), formatDateTime(), formatFileSize(), getCurrentUserIdentity() (+63 more)
 
 ### Community 1 - "SitesPage.jsx"
 Cohesion: 0.08
@@ -185,20 +186,20 @@ Cohesion: 0.10
 Nodes (40): ACTIVITY_CHART_INITIAL_SIZE, addRecordAliases(), apiGet(), belongsToParticipant(), buildMonthlyActivity(), buildSurvivalByBarangay(), BULAN_FALLBACK_CENTER, createRecentActivities() (+32 more)
 
 ### Community 5 - "EventSchedulePage.jsx"
-Cohesion: 0.07
-Nodes (43): EVENT_TYPES, EventForm(), EventSchedulePage(), apiRequest(), getAuthToken(), loadEvents(), loadInitialData(), loadSites() (+35 more)
+Cohesion: 0.10
+Nodes (33): EVENT_TYPES, EventForm(), EventSchedulePage(), apiRequest(), getAuthToken(), loadEvents(), loadInitialData(), loadSites() (+25 more)
 
 ### Community 7 - "App.jsx"
-Cohesion: 0.21
-Nodes (12): ref_react_icons_fi, react-router-dom, DashboardLayout(), PrivacyPolicyPage(), formatDate(), getReportTypeLabel(), REPORT_TYPES, ReportsPage() (+4 more)
+Cohesion: 0.17
+Nodes (13): react, ref_react_icons_fi, react-router-dom, DashboardLayout(), PrivacyPolicyPage(), DEFAULT_SETTINGS, loadStoredSettings(), SAFE_CACHE_PREFIXES (+5 more)
 
 ### Community 8 - "MapVisualizationPage.jsx"
 Cohesion: 0.18
 Nodes (24): CONDITION_OPTIONS, formatNumber(), getConditionColor(), getLatestMonitoringCondition(), getMonitoringSiteId(), getMonitoringSiteName(), getMonitoringTotals(), getReportQuantity() (+16 more)
 
 ### Community 9 - "MyRequestsPage.jsx"
-Cohesion: 0.07
-Nodes (41): exifr, leaflet, ref_leaflet_dist_leaflet_css, AnalyticsSitesMap(), conditionColor(), FALLBACK_CENTER, utilization(), utilizationMeta() (+33 more)
+Cohesion: 0.13
+Nodes (25): formatDate(), formatDateTime(), formatFullDateTime(), formatTime(), getBarangay(), getContactNumber(), getEventLocation(), getEventName() (+17 more)
 
 ### Community 10 - "dependencies"
 Cohesion: 0.08
@@ -216,17 +217,17 @@ Nodes (21): aliases, components, hooks, lib, ui, utils, iconLibrary, menuAccent 
 Cohesion: 0.08
 Nodes (27): name, private, type, version, @base-ui/react, crypto-js, dayjs, eslint (+19 more)
 
-### Community 14 - "ProfilePage.jsx"
-Cohesion: 0.33
-Nodes (5): fieldStyle(), formatAccountDate(), getInitialForm(), ProfilePage(), USER_TYPES
+### Community 14 - "RegisterPage.jsx"
+Cohesion: 0.20
+Nodes (13): src_assets_menro_logo, CompleteProfilePage(), fieldStyle(), formatAccountDate(), getInitialForm(), ProfilePage(), RegisterPage(), publicApiFetch() (+5 more)
 
-### Community 15 - "SettingsPage.jsx"
-Cohesion: 0.32
-Nodes (5): DEFAULT_SETTINGS, loadStoredSettings(), SAFE_CACHE_PREFIXES, SettingsPage(), src_styles_settings_page
+### Community 15 - "useAuth"
+Cohesion: 0.28
+Nodes (11): AuthContext, AuthProvider(), useAuth(), ProtectedRoute(), GuestOnlyRoute(), RootRedirect(), useEffectiveAuth(), resetMenroSessionRequest() (+3 more)
 
 ### Community 16 - "ReforestationAnalyticsPage.jsx"
-Cohesion: 0.19
-Nodes (9): recharts, CONDITION_COLORS, displayRate(), EMPTY_ANALYTICS, EMPTY_FILTERS, formatNumber(), Kpi(), ReforestationAnalyticsPage() (+1 more)
+Cohesion: 0.08
+Nodes (25): exifr, leaflet, ref_leaflet_dist_leaflet_css, recharts, AnalyticsSitesMap(), conditionColor(), FALLBACK_CENTER, utilization() (+17 more)
 
 ### Community 17 - "App Hosting CLI Commands"
 Cohesion: 0.06
@@ -250,11 +251,11 @@ Nodes (23): `cleanUrls` (Optional), Full Example, `headers` (Optional), Hosting 
 
 ### Community 22 - "Topbar.jsx"
 Cohesion: 0.23
-Nodes (14): getDisplayName(), getInitials(), getRoleLabel(), getSearchPlaceholder(), SEARCH_ICONS, timestampText(), Topbar(), clearSearch() (+6 more)
+Nodes (13): getDisplayName(), getInitials(), getRoleLabel(), getSearchPlaceholder(), SEARCH_ICONS, timestampText(), Topbar(), clearSearch() (+5 more)
 
-### Community 23 - "useAuth"
-Cohesion: 0.30
-Nodes (10): AuthContext, AuthProvider(), useAuth(), ProtectedRoute(), GuestOnlyRoute(), RootRedirect(), useEffectiveAuth(), resetMenroSessionRequest() (+2 more)
+### Community 23 - "Sidebar.jsx"
+Cohesion: 0.17
+Nodes (14): ref_node_assert_strict, ref_node_test, getFallbackName(), getInitials(), getRoleLabel(), NAVIGATION, Sidebar(), createAuthSessionRequest() (+6 more)
 
 ### Community 24 - "Configuration Reference"
 Cohesion: 0.08
@@ -270,11 +271,11 @@ Nodes (4): ref_node_url, @tailwindcss/vite, vite, @vitejs/plugin-react
 
 ### Community 27 - "ParticipantSaplingRequestWizard.jsx"
 Cohesion: 0.11
-Nodes (32): api(), AREAS, BULAN_CENTER, destinationPoint(), formatFileSize(), fresh(), geometryContainsPoint(), hectaresFromForm() (+24 more)
+Nodes (33): api(), AREAS, BULAN_CENTER, destinationPoint(), formatFileSize(), fresh(), geometryContainsPoint(), hectaresFromForm() (+25 more)
 
-### Community 28 - "Sidebar.jsx"
-Cohesion: 0.21
-Nodes (13): ref_node_assert_strict, ref_node_test, getFallbackName(), getInitials(), getRoleLabel(), NAVIGATION, Sidebar(), getNotificationPath() (+5 more)
+### Community 28 - "UsersPage.jsx"
+Cohesion: 0.23
+Nodes (10): formatDateTime(), getInitials(), getRoleLabel(), normalizeRole(), normalizeStatus(), PAGE_SIZE_OPTIONS, ROLE_OPTIONS, toRegistryUser() (+2 more)
 
 ### Community 31 - "What You Must Do When Invoked"
 Cohesion: 0.08
@@ -308,10 +309,6 @@ Nodes (3): Expanding the ESLint configuration, React Compiler, React + Vite
 Cohesion: 0.20
 Nodes (9): copy, datetime, docx, docx_enum_table, docx_enum_text, docx_oxml, docx_oxml_ns, docx_shared (+1 more)
 
-### Community 43 - "Native SQL Examples"
-Cohesion: 0.25
-Nodes (8): Advanced aggregation with RANK, Advanced CTE with upserts (atomic get-or-create), Basic SELECT with field aliasing, Basic UPDATE, Multi-statement Transactions, Native SQL Examples, UPDATE with RETURNING and Auth Context, Use of extensions (e.g. PostGIS for geospatial data)
-
 ### Community 45 - "Security Reference"
 Cohesion: 0.08
 Nodes (24): Access Levels, Anti-Patterns, @auth Directive, auth.token Fields, Authorization Data Lookup, Authorization Patterns, Available Bindings, CEL Expressions (+16 more)
@@ -324,9 +321,9 @@ Nodes (21): 1. Add dependencies to Gradle build files, 2. *Optional:* Install th
 Cohesion: 0.08
 Nodes (21): 1. Add dependencies to Gradle build files, 2. Set in-app defaults, 3. Fetch and activate values, Firebase Remote Config - Android Setup Guide (Kotlin), Prerequisites, Add Swift Package Dependencies, Fetch and Activate Values, Firebase Remote Config iOS Setup Guide (+13 more)
 
-### Community 48 - "Examples"
-Cohesion: 0.15
-Nodes (12): Blog with Permissions, E-Commerce Store, Examples, Movie Review App, Mutations, Operations, Operations with Role Checks, Queries (+4 more)
+### Community 48 - "Native SQL Examples"
+Cohesion: 0.10
+Nodes (20): Advanced aggregation with RANK, Advanced CTE with upserts (atomic get-or-create), Basic SELECT with field aliasing, Basic UPDATE, Blog with Permissions, E-Commerce Store, Examples, Movie Review App (+12 more)
 
 ### Community 49 - "firebase-basics/SKILL.md"
 Cohesion: 0.11
@@ -392,9 +389,9 @@ Nodes (13): Add a Document with Auto-ID, Get a Single Document, Get Multiple Doc
 Cohesion: 0.15
 Nodes (12): Accessing User Authentication Context, Auth Context Mappings, Auth Extraction Example, Cloud Functions Integration Reference, Comprehensive Example, Core Trigger Configuration, 🚨 Critical Infinite Loop Constraint, Event Filtering (+4 more)
 
-### Community 65 - "firebase-data-connect/SKILL.md"
-Cohesion: 0.21
-Nodes (6): 2. Production: Admin SDK Bulk Operations, 3. Production: Bulk Operations via raw SQL, 🚨 Critical SQL Operations Constraint, Data Seeding & Bulk Operations Reference, SDK Bulk APIs Features:, SDK Bulk Operations Example
+### Community 65 - "1. Local Prototyping: Data Seeding"
+Cohesion: 0.15
+Nodes (12): 1. Local Prototyping: Data Seeding, 2. Production: Admin SDK Bulk Operations, 3. Production: Bulk Operations via raw SQL, 🚨 Critical SQL Operations Constraint, Data Seeding & Bulk Operations Reference, Resetting Seed Data, SDK Bulk APIs Features:, SDK Bulk Operations Example (+4 more)
 
 ### Community 66 - "Templates"
 Cohesion: 0.15
@@ -512,9 +509,9 @@ Nodes (7): Advanced Features, Chat Session (Multi-turn), Core Capabilities, Fire
 Cohesion: 0.29
 Nodes (7): Chat Session (Multi-turn), Core Capabilities, Generate Images with Nano Banana, Multimodal (Text + Images/Audio/Video/PDF input), Search Grounding with the built in googleSearch tool, Streaming Responses, Text-Only Generation
 
-### Community 95 - "1. Local Prototyping: Data Seeding"
-Cohesion: 0.33
-Nodes (6): 1. Local Prototyping: Data Seeding, Resetting Seed Data, ⚠️ Seeding Directives Rule, Seeding Independent Tables (FK Order), Seeding Related Tables (Nested Relational Inserts), The `seed_data.gql` Workflow
+### Community 95 - "config.js"
+Cohesion: 0.23
+Nodes (10): ref_firebase_app, ref_firebase_auth, auth, firebaseConfig, googleProvider, missingFirebaseConfig, requiredFirebaseConfig, VerifyEmailPage() (+2 more)
 
 ### Community 96 - "Cloud Firestore in Flutter"
 Cohesion: 0.29
@@ -524,8 +521,8 @@ Nodes (6): 1. Setup, 2. Best Practices: Type-Safe Models, 3. The Service Layer, 
 Cohesion: 0.29
 Nodes (6): 1. Setup, 2. Best Practices: Type-Safe Models, 3. The Service Layer, 4. Listening to Streams in the UI (`StreamBuilder`), Cloud Firestore in Flutter, Initialization & References
 
-### Community 98 - "firebase-firestore/SKILL.md"
-Cohesion: 0.20
+### Community 98 - "Manual Initialization"
+Cohesion: 0.29
 Nodes (7): 1. Create `firebase.json`, 2. Create `firestore.rules`, 3. Create `firestore.indexes.json`, Deploy database, rules and indexes, Local Emulation, Manual Initialization, Provisioning Cloud Firestore
 
 ### Community 99 - "1. Instance Selection and Edition Detection"
@@ -577,37 +574,41 @@ Cohesion: 0.40
 Nodes (4): 1. Install and Verify Firebase Skills, 2. Configure and Verify Firebase MCP Server, 3. Restart and Verify Connection, Cursor Setup
 
 ### Community 112 - "authenticatedApi.js"
-Cohesion: 0.18
-Nodes (12): axios, API_BASE_URL, backendErrorCode(), configuredApiUrl, getAuthToken(), localApiUrl, MenroApiError, now() (+4 more)
+Cohesion: 0.25
+Nodes (9): authenticatedFetch(), authSessionRequest, backendErrorCode(), configuredApiUrl, getAuthToken(), localApiUrl, MenroApiError, requestBackendSession() (+1 more)
 
 ### Community 113 - "Android Studio Setup"
 Cohesion: 0.50
 Nodes (3): Android Studio Setup, MCP Setup, Skills Installation
 
-### Community 116 - "react"
-Cohesion: 0.12
-Nodes (27): ref_firebase_app, ref_firebase_auth, react, ref_react_icons_fc, src_assets_menro_logo, auth, firebaseConfig, googleProvider (+19 more)
+### Community 116 - "LoginPage.jsx"
+Cohesion: 0.29
+Nodes (11): ref_react_icons_fc, isFirebaseNetworkError(), LoginPage(), signInWithNetworkRetry(), wait(), src_styles_login, FIREBASE_MESSAGES, getAuthErrorMessage() (+3 more)
 
-### Community 117 - "main.jsx"
+### Community 120 - "main.jsx"
 Cohesion: 0.40
 Nodes (4): ref_react_dom_client, src_index, src_styles_auth, src_styles_leaflet_containment
 
+### Community 122 - "ReportsPage.jsx"
+Cohesion: 0.39
+Nodes (6): formatDate(), getReportTypeLabel(), REPORT_TYPES, ReportsPage(), API_BASE_URL, src_styles_reports
+
 ## Knowledge Gaps
-- **733 isolated node(s):** `PackageDescription`, `Foundation`, `PathKit`, `$schema`, `style` (+728 more)
-  These have ≤1 connection - possible missing edges or undocumented components. (Counts symbols only; 864 node(s) total have ≤1 connection when file, concept and rationale nodes are included.)
-- **12 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
+- **734 isolated node(s):** `PackageDescription`, `Foundation`, `PathKit`, `$schema`, `style` (+729 more)
+  These have ≤1 connection - possible missing edges or undocumented components. (Counts symbols only; 865 node(s) total have ≤1 connection when file, concept and rationale nodes are included.)
+- **15 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
 - **Why does `App()` connect `⛔️ CRITICAL RULE: INITIALIZATION ORDER ⛔️` to `main.jsx`, `App.jsx`?**
-  _High betweenness centrality (0.038) - this node is a cross-community bridge._
-- **Why does `PlantingPage()` connect `PlantingPage` to `useAuth`, `EventSchedulePage.jsx`, `App.jsx`?**
+  _High betweenness centrality (0.037) - this node is a cross-community bridge._
+- **Why does `PlantingPage()` connect `PlantingPage` to `useAuth`, `EventSchedulePage.jsx`, `RegisterPage.jsx`, `App.jsx`?**
   _High betweenness centrality (0.035) - this node is a cross-community bridge._
 - **What connects `PackageDescription`, `Foundation`, `PathKit` to the rest of the system?**
-  _733 weakly-connected nodes found - possible documentation gaps or missing edges._
+  _734 weakly-connected nodes found - possible documentation gaps or missing edges._
 - **Should `PlantingPage` be split into smaller, more focused modules?**
-  _Cohesion score 0.057813911472448055 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.06220095693779904 - nodes in this community are weakly interconnected._
 - **Should `SitesPage.jsx` be split into smaller, more focused modules?**
   _Cohesion score 0.08456659619450317 - nodes in this community are weakly interconnected._
 - **Should `SeedlingRequestsPage.jsx` be split into smaller, more focused modules?**

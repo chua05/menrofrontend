@@ -10,6 +10,18 @@
   line-height: 1.5;
 }
 
+.myr-submission-success {
+  margin-bottom: 20px;
+  padding: 13px 15px;
+  border: 1px solid #b9ddc7;
+  border-radius: 8px;
+  background: #eef9f2;
+  color: #087443;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.5;
+}
+
 /* =========================================================
    PAGE HEADER
 ========================================================= */

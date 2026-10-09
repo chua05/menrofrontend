@@ -108,9 +108,9 @@
     "semantic_hash": ""
   },
   "src/pages/LoginPage.jsx": {
-    "mtime": 1791477140.271143,
-    "seen": 1791477213.9761739,
-    "ast_hash": "3946dc55d77ee3a2108b5949c9f64306",
+    "mtime": 1791480355.2166119,
+    "seen": 1791480497.1123753,
+    "ast_hash": "859a069f53f0803719d982db237a3105",
     "semantic_hash": ""
   },
   "src/pages/MapVisualizationPage.jsx": {
@@ -126,9 +126,9 @@
     "semantic_hash": ""
   },
   "src/pages/MyRequestsPage.jsx": {
-    "mtime": 1791261319.8904731,
-    "seen": 1791261434.7625606,
-    "ast_hash": "37d0fa5683f5880b56f6300ee167cd81",
+    "mtime": 1791478277.8579078,
+    "seen": 1791478419.8725488,
+    "ast_hash": "ccf1856d9f9cfc424018bb8fa8be0173",
     "semantic_hash": ""
   },
   "src/pages/PlantingPage.jsx": {
@@ -942,9 +942,9 @@
     "semantic_hash": ""
   },
   "src/services/authenticatedApi.js": {
-    "mtime": 1791477141.3011131,
-    "seen": 1791477213.9762244,
-    "ast_hash": "d32a0fe9b4b3d62aef7880ce789d0078",
+    "mtime": 1791530229.1176746,
+    "seen": 1791530298.3454466,
+    "ast_hash": "c784f24fe1fe1de37bdcce8a13cad7b6",
     "semantic_hash": ""
   },
   "src/utils/exifGps.js": {
@@ -1026,15 +1026,15 @@
     "semantic_hash": ""
   },
   "src/utils/authErrors.js": {
-    "mtime": 1791475195.4871314,
-    "seen": 1791475280.5318906,
-    "ast_hash": "5f0ca2fb141cd443f4929120bd2634c6",
+    "mtime": 1791530229.3768218,
+    "seen": 1791530298.3454547,
+    "ast_hash": "27c7548c3a28fc8022ec64ea913522d6",
     "semantic_hash": ""
   },
   "tests/authErrors.test.js": {
-    "mtime": 1790956864.156651,
-    "seen": 1790957062.3523188,
-    "ast_hash": "47c1929a50dbd8a3e7780a170d56ab12",
+    "mtime": 1791479033.12372,
+    "seen": 1791479064.0311854,
+    "ast_hash": "73b795c27b48cb44949e9319b7c9ad9e",
     "semantic_hash": ""
   },
   "src/utils/notificationRoutes.js": {
@@ -1068,9 +1068,9 @@
     "semantic_hash": ""
   },
   "src/pages/ParticipantSaplingRequestWizard.jsx": {
-    "mtime": 1791308796.1564233,
-    "seen": 1791308871.8798876,
-    "ast_hash": "02f84be6a6bf3874469b3d835912425f",
+    "mtime": 1791478401.6941104,
+    "seen": 1791478419.8725564,
+    "ast_hash": "941941e2d3d860ff3ced12a17d94fd4d",
     "semantic_hash": ""
   },
   "src/utils/saplingRequestWorkflow.js": {
@@ -1083,6 +1083,18 @@
     "mtime": 1791308811.7238758,
     "seen": 1791308871.8800044,
     "ast_hash": "a02342e51fbe35a3419efa869556e470",
+    "semantic_hash": ""
+  },
+  "src/services/authSessionRequest.js": {
+    "mtime": 1791480433.0023525,
+    "seen": 1791480497.112431,
+    "ast_hash": "1765d6ce1ac4a6b6caba3dc60de317f7",
+    "semantic_hash": ""
+  },
+  "tests/authSessionRequest.test.js": {
+    "mtime": 1791530229.597833,
+    "seen": 1791530298.3454838,
+    "ast_hash": "2ec8fbb769765eaa706c0d5f83249909",
     "semantic_hash": ""
   }
 }

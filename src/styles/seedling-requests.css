@@ -1869,7 +1869,7 @@
 /* ---------- Section titles ---------- */
 
 .participant-section-title {
-  margin-bottom: 14px;
+  margin-bottom: 16px;
 }
 
 .participant-section-title:not(:first-child) {
@@ -2179,18 +2179,24 @@
 ===================================================== */
 
 .participant-confirmation {
-  margin-top: 24px;
   padding: 16px;
   border: 1px solid #dce9e0;
   border-radius: 8px;
   background: #f5faf7;
-}
-
-.participant-confirmation label {
   display: flex;
   align-items: flex-start;
   gap: 11px;
   cursor: pointer;
+}
+
+.participant-confirmation-row {
+  margin-top: 24px;
+  display: grid;
+  gap: 8px;
+}
+
+.participant-request-form .sr-wizard-actions {
+  margin-top: 24px;
 }
 
 .participant-confirmation input {
@@ -2208,10 +2214,8 @@
   line-height: 1.6;
 }
 
-.participant-confirmation
-  .sr-field-error {
+.participant-confirmation-row > .sr-field-error {
   display: block;
-  margin-top: 8px;
   margin-left: 30px;
 }
 
@@ -3225,6 +3229,7 @@
 }
 
 .sr-coverage-summary {
+  margin-top: 20px;
   padding: 15px 16px;
   border: 1px solid #cfe2d6;
   border-left: 4px solid #087443;

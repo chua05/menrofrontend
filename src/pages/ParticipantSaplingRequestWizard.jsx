@@ -13,7 +13,7 @@ import {
   X,
 } from "lucide-react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { auth } from "../firebase/config";
+import { authenticatedFetch, API_BASE_URL } from "../services/authenticatedApi";
 import { BULAN_BARANGAYS } from "../utils/userTypes";
 import { IDENTIFICATION_DOCUMENTS } from "../utils/identificationDocuments";
 import {
@@ -27,7 +27,7 @@ import {
   validateRequestLetterFile,
 } from "../utils/saplingRequestWorkflow";
 
-const API = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
+const API = API_BASE_URL;
 const BARANGAY_GEOJSON_URL = `${API}/sites/barangay-boundaries`;
 const BULAN_CENTER = [12.6598, 123.918];
 const STEPS = [
@@ -192,19 +192,27 @@ const fresh = (p) => ({
   confirmed: false,
 });
 async function api(path, options = {}) {
-  const token = await auth.currentUser?.getIdToken();
-  const response = await fetch(`${API}${path}`, {
-    ...options,
-    headers: {
-      Authorization: `Bearer ${token}`,
-      ...(options.body ? { "Content-Type": "application/json" } : {}),
-      ...(options.headers || {}),
-    },
-  });
+  const response = await authenticatedFetch(path, options);
   const body = await response.json().catch(() => null);
-  if (!response.ok)
-    throw new Error(body?.message || "Unable to complete the request.");
+  if (!response.ok) {
+    const error = new Error(body?.message || "Unable to complete the request.");
+    error.status = response.status;
+    throw error;
+  }
   return body?.data ?? body;
+}
+
+function submissionErrorMessage(error) {
+  if (error?.name === "AbortError") {
+    return "The request is taking longer than expected. Its status is uncertain; check My Requests before trying again.";
+  }
+  if (error?.status === 401) return "Your session has expired. Please sign in again and retry.";
+  if (error?.status === 403) return "Your account is not authorized to submit this request.";
+  if (error?.status === 503) return "Request submission is temporarily unavailable. Please contact MENRO.";
+  if (!navigator.onLine || error instanceof TypeError) {
+    return "Unable to reach MENRO. Check your connection, then check My Requests before retrying.";
+  }
+  return error?.message || "An unexpected error prevented the request from being submitted.";
 }
 function Field({ label, error, children, wide }) {
   return (
@@ -351,8 +359,10 @@ export default function ParticipantSaplingRequestWizard({ currentUser }) {
     [editing, setEditing] = useState(null),
     [errors, setErrors] = useState({}),
     [loading, setLoading] = useState(true),
+    [submitting, setSubmitting] = useState(false),
     [notice, setNotice] = useState(""),
     [mapValidation, setMapValidation] = useState("pending");
+  const submissionId = useRef(crypto.randomUUID());
   const group = isGroupRequester(form.sector, form.requestingAs);
   const chosenSite = sites.find((x) => x.id === form.existingSiteId);
   const siteOptions = useMemo(
@@ -598,8 +608,9 @@ export default function ParticipantSaplingRequestWizard({ currentUser }) {
     put("requestLetter", file);
   };
   const submit = async () => {
-    if (!validate(4)) return;
-    setLoading(true);
+    if (submitting || !validate(4)) return;
+    setNotice("");
+    setSubmitting(true);
     const location =
       form.siteMode === "existing"
         ? `${chosenSite?.locationDescription || ""}, ${form.siteBarangay}, Bulan, Sorsogon`
@@ -664,6 +675,7 @@ export default function ParticipantSaplingRequestWizard({ currentUser }) {
       },
       ...(!editing
         ? {
+            clientSubmissionId: submissionId.current,
             identification: {
               identificationType: form.identificationType,
               idNumber: form.idNumber,
@@ -673,17 +685,34 @@ export default function ParticipantSaplingRequestWizard({ currentUser }) {
           }
         : {}),
     };
+    const controller = new AbortController();
+    const timeoutId = window.setTimeout(() => controller.abort(), 30000);
     try {
-      await api(
+      const savedRequest = await api(
         editing
           ? `/seedling-requests/${encodeURIComponent(editing.id)}/resubmit`
           : "/seedling-requests",
-        { method: editing ? "PATCH" : "POST", body: JSON.stringify(payload) },
+        {
+          method: editing ? "PATCH" : "POST",
+          body: JSON.stringify(payload),
+          signal: controller.signal,
+        },
       );
-      navigate("/participant/my-requests", { replace: true });
+      const requestReference = savedRequest?.requestNumber || savedRequest?.id;
+      navigate("/participant/my-requests", {
+        replace: true,
+        state: {
+          submissionMessage: editing
+            ? `Your sapling request ${requestReference} was resubmitted successfully. Status: Pending Review.`
+            : `Your sapling request has been submitted successfully. Request Reference: ${requestReference}. Status: Pending Review.`,
+        },
+      });
     } catch (e) {
-      setNotice(e.message);
-      setLoading(false);
+      setNotice(submissionErrorMessage(e));
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    } finally {
+      window.clearTimeout(timeoutId);
+      setSubmitting(false);
     }
   };
   if (loading && !form.fullName)
@@ -1437,17 +1466,19 @@ export default function ParticipantSaplingRequestWizard({ currentUser }) {
                   {form.preferredReleaseDate}
                 </p>
               </div>
-              <label className="participant-confirmation">
-                <input
-                  type="checkbox"
-                  checked={form.confirmed}
-                  onChange={(e) => put("confirmed", e.target.checked)}
-                />
-                <span>I confirm that the information provided is correct.</span>
-              </label>
-              {errors.confirmed && (
-                <small className="sr-field-error">{errors.confirmed}</small>
-              )}
+              <div className="participant-confirmation-row">
+                <label className="participant-confirmation">
+                  <input
+                    type="checkbox"
+                    checked={form.confirmed}
+                    onChange={(e) => put("confirmed", e.target.checked)}
+                  />
+                  <span>I confirm that the information provided is correct.</span>
+                </label>
+                {errors.confirmed && (
+                  <small className="sr-field-error">{errors.confirmed}</small>
+                )}
+              </div>
             </>
           )}
           <div className="sr-wizard-actions">
@@ -1472,10 +1503,14 @@ export default function ParticipantSaplingRequestWizard({ currentUser }) {
               <button
                 type="button"
                 className="sr-primary-btn sr-wizard-nav-btn"
-                disabled={loading}
+                disabled={submitting}
                 onClick={submit}
               >
-                {editing ? "Resubmit Request" : "Submit Request"}
+                {submitting
+                  ? "Submitting..."
+                  : editing
+                    ? "Resubmit Request"
+                    : "Submit Request"}
               </button>
             )}
           </div>

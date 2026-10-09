@@ -1,6 +1,6 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 
@@ -775,6 +775,7 @@ function MyRequestLocationPreview({ request }) {
 
 export default function MyRequestsPage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
   const relatedRequestId = searchParams.get("request")?.trim() || "";
 
@@ -990,6 +991,11 @@ export default function MyRequestsPage() {
 
   return (
     <div className="myr-page">
+      {location.state?.submissionMessage && (
+        <div className="myr-submission-success" role="status">
+          {location.state.submissionMessage}
+        </div>
+      )}
       <div className="myr-page-header">
         <div className="myr-title-group">
           <div className="myr-title-icon">

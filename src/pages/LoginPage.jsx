@@ -11,7 +11,11 @@ import { useAuth } from "../context/AuthContext";
 import { dashboardPathForRole } from "../utils/roleRoutes";
 import { authenticatedFetch, verifyMenroSession } from "../services/authenticatedApi";
 import { startGooglePopup } from "../services/googleRedirectAuth";
-import { getAuthErrorMessage, isGoogleCancellation } from "../utils/authErrors";
+import {
+  getAuthErrorMessage,
+  hasNewGoogleSession,
+  isGoogleCancellation,
+} from "../utils/authErrors";
 
 import menroLogo from "../assets/menro-logo.png";
 import "../styles/login.css";
@@ -39,6 +43,8 @@ const signInWithNetworkRetry = async (email, password) => {
 
 export default function LoginPage() {
   const signInInProgress = useRef(false);
+  const googleAttempt = useRef(0);
+  const mounted = useRef(true);
   const navigate = useNavigate();
   const location = useLocation();
   const [email, setEmail] = useState("");
@@ -52,11 +58,20 @@ export default function LoginPage() {
     useState(() => location.state?.message || "");
   const [loading, setLoading] =
     useState(false);
+  const [loginStage, setLoginStage] = useState("");
   const [resetLoading, setResetLoading] = useState(false);
   const { login, verificationRequired } = useAuth();
 
   const [verificationSending, setVerificationSending] = useState(false);
   const [resendCooldown, setResendCooldown] = useState(0);
+
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+      googleAttempt.current += 1;
+    };
+  }, []);
 
   useEffect(() => {
     if (resendCooldown <= 0) return undefined;
@@ -90,6 +105,7 @@ export default function LoginPage() {
 
     signInInProgress.current = true;
     setLoading(true);
+    setLoginStage("Signing in...");
 
     try {
       const credential = await signInWithNetworkRetry(
@@ -97,6 +113,7 @@ export default function LoginPage() {
         password
       );
 
+      setLoginStage("Verifying with MENRO...");
       const userData = await verifyMenroSession(credential.user);
 
       login(userData, userData.role);
@@ -108,6 +125,7 @@ export default function LoginPage() {
     } finally {
       signInInProgress.current = false;
       setLoading(false);
+      setLoginStage("");
     }
   };
 
@@ -131,15 +149,47 @@ export default function LoginPage() {
   const handleGoogleLogin =
     async () => {
       if (signInInProgress.current) return;
+      const attempt = ++googleAttempt.current;
+      const isCurrentAttempt = () =>
+        mounted.current && googleAttempt.current === attempt;
+      const userBeforePopup = auth.currentUser;
       signInInProgress.current = true;
       setError("");
       setSuccess("");
       setLoading(true);
+      setLoginStage("Waiting for Google...");
 
       try {
-        const result = await startGooglePopup();
-        const userData = await verifyMenroSession(result.user);
+        let firebaseUser = auth.currentUser;
 
+        if (!firebaseUser?.providerData?.some(
+          (provider) => provider.providerId === "google.com"
+        )) {
+          try {
+            const result = await startGooglePopup();
+            firebaseUser = result.user;
+          } catch (popupError) {
+            if (!isCurrentAttempt()) return;
+            const authenticatedUser = auth.currentUser;
+            if (hasNewGoogleSession(userBeforePopup, authenticatedUser)) {
+              firebaseUser = authenticatedUser;
+            } else if (isGoogleCancellation(popupError)) {
+              console.info("Google sign-in was cancelled before authentication completed.");
+              setError("");
+              return;
+            } else {
+              throw popupError;
+            }
+          }
+        }
+
+        if (!isCurrentAttempt()) return;
+        setLoginStage("Verifying with MENRO...");
+        const userData = await verifyMenroSession(firebaseUser);
+        if (!isCurrentAttempt()) return;
+
+        setError("");
+        setSuccess("");
         login(userData, userData.role);
         navigate(
           userData.role === "participant" && userData.profileComplete === false
@@ -148,40 +198,7 @@ export default function LoginPage() {
           { replace: true }
         );
       } catch (err) {
-        if (isGoogleCancellation(err)) {
-          // Chrome/Firebase can report popup-closed after the OAuth credential
-          // has already been persisted. In that case Firebase is authoritative:
-          // finish MENRO verification instead of treating the normal close as a
-          // cancelled sign-in.
-          const firebaseUser = auth.currentUser;
-          if (firebaseUser) {
-            try {
-              const userData = await verifyMenroSession(firebaseUser);
-              login(userData, userData.role);
-              navigate(
-                userData.role === "participant" && userData.profileComplete === false
-                  ? "/complete-profile"
-                  : dashboardPathForRole(userData.role),
-                { replace: true }
-              );
-              return;
-            } catch (verificationError) {
-              console.error(
-                "MENRO verification after Google sign-in failed:",
-                verificationError?.code || verificationError?.message
-              );
-              setError(getAuthErrorMessage(verificationError, {
-                provider: "google",
-                online: navigator.onLine !== false,
-              }));
-              return;
-            }
-          }
-
-          console.info("Google sign-in was cancelled before authentication completed.");
-          setError("");
-          return;
-        }
+        if (!isCurrentAttempt()) return;
         console.error("Google sign in failed:", err?.code || err?.message);
         setSuccess("");
         setError(getAuthErrorMessage(err, {
@@ -189,8 +206,11 @@ export default function LoginPage() {
           online: navigator.onLine !== false,
         }));
       } finally {
-        signInInProgress.current = false;
-        setLoading(false);
+        if (isCurrentAttempt()) {
+          signInInProgress.current = false;
+          setLoading(false);
+          setLoginStage("");
+        }
       }
     };
 
@@ -396,7 +416,7 @@ export default function LoginPage() {
               className="login-primary-btn"
             >
               {loading
-                ? "Continuing..."
+                ? loginStage || "Continuing..."
                 : "Continue →"}
             </button>
           </form>
@@ -416,7 +436,7 @@ export default function LoginPage() {
             disabled={loading}
           >
             <FcGoogle size={17} />
-            Continue with Google
+            {loading ? loginStage || "Continuing..." : "Continue with Google"}
           </button>
 
           <div className="login-switch">
