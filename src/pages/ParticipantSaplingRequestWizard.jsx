@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { cloneElement, isValidElement, useEffect, useId, useMemo, useRef, useState } from "react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import {
@@ -19,6 +19,10 @@ import { BULAN_BARANGAYS } from "../utils/userTypes";
 import { IDENTIFICATION_DOCUMENTS } from "../utils/identificationDocuments";
 import { createLeafletResizeScheduler } from "../utils/leafletLifecycle";
 import {
+  getMunicipalitiesForProvince,
+  getPhilippineProvinces,
+} from "../utils/philippineLocations";
+import {
   canNavigateToStep,
   EXACT_AREA_CHOICES,
   getPlantingAreaError,
@@ -26,6 +30,7 @@ import {
   getStepState,
   invalidateCompletedSteps,
   isGroupRequester,
+  validatePlantingSchedule,
   validateRequestLetterFile,
 } from "../utils/saplingRequestWorkflow";
 
@@ -58,6 +63,7 @@ const PURPOSES = [
   "Personal Planting",
   "Other",
 ];
+const PROVINCES = getPhilippineProvinces();
 const AREAS = [
   "Less than 1 hectare",
   "1 hectare",
@@ -157,6 +163,10 @@ const fresh = (p) => ({
   sector: "",
   sectorOther: "",
   requestingAs: "",
+  addressProvince: "",
+  addressProvinceOther: "",
+  addressMunicipality: "",
+  addressMunicipalityOther: "",
   addressBarangay: "",
   street: "",
   purpose: "",
@@ -199,6 +209,7 @@ async function api(path, options = {}) {
   if (!response.ok) {
     const error = new Error(body?.message || "Unable to complete the request.");
     error.status = response.status;
+    error.fieldErrors = body?.fieldErrors || null;
     throw error;
   }
   return body?.data ?? body;
@@ -217,11 +228,18 @@ function submissionErrorMessage(error) {
   return error?.message || "An unexpected error prevented the request from being submitted.";
 }
 function Field({ label, error, children, wide }) {
+  const errorId = useId();
+  const control = isValidElement(children)
+    ? cloneElement(children, {
+        "aria-invalid": error ? "true" : undefined,
+        "aria-describedby": error ? errorId : undefined,
+      })
+    : children;
   return (
-    <label className={`sr-form-field ${wide ? "full-width" : ""}`}>
+    <label className={`sr-form-field ${wide ? "full-width" : ""} ${error ? "has-error sr-invalid-field" : ""}`}>
       <span>{label}</span>
-      {children}
-      {error && <small className="sr-field-error">{error}</small>}
+      {control}
+      {error && <small id={errorId} className="sr-field-error">{error}</small>}
     </label>
   );
 }
@@ -264,7 +282,7 @@ function RequestLetterUpload({ file, error, onSelect, onRemove }) {
     />
   );
   return (
-    <div className="sr-request-letter-field">
+    <div className={`sr-request-letter-field ${error ? "sr-invalid-field" : ""}`}>
       <span className="sr-request-letter-label">Request Letter *</span>
       {file ? (
         <div className="sr-request-letter-selected">
@@ -367,6 +385,10 @@ export default function ParticipantSaplingRequestWizard({ currentUser }) {
   const submissionId = useRef(crypto.randomUUID());
   const group = isGroupRequester(form.sector, form.requestingAs);
   const chosenSite = sites.find((x) => x.id === form.existingSiteId);
+  const addressMunicipalities = useMemo(
+    () => getMunicipalitiesForProvince(form.addressProvince),
+    [form.addressProvince],
+  );
   const siteOptions = useMemo(
     () =>
       sites.filter(
@@ -399,6 +421,12 @@ export default function ParticipantSaplingRequestWizard({ currentUser }) {
         ...old,
         [key]: value,
         requestingAs,
+        ...(key === "addressProvince"
+          ? { addressProvinceOther: "", addressMunicipality: "", addressMunicipalityOther: "", addressBarangay: "" }
+          : {}),
+        ...(key === "addressMunicipality"
+          ? { addressMunicipalityOther: "", addressBarangay: "" }
+          : {}),
         ...(key === "siteMode"
           ? {
               existingSiteId: "",
@@ -443,6 +471,14 @@ export default function ParticipantSaplingRequestWizard({ currentUser }) {
       ...(key === "areaChoice" ? { exactArea: "" } : {}),
       ...(key === "landType" ? { landTypeOther: "" } : {}),
       ...(key === "monitoringFrequency" ? { monitoringOther: "" } : {}),
+      ...(key === "addressProvince"
+        ? { addressProvinceOther: "", addressMunicipality: "", addressMunicipalityOther: "", addressBarangay: "" }
+        : {}),
+      ...(key === "addressMunicipality"
+        ? { addressMunicipalityOther: "", addressBarangay: "" }
+        : {}),
+      ...(key === "activityDate" ? { startTime: "" } : {}),
+      ...(key === "startTime" ? { endTime: "" } : {}),
       ...(["latitude", "longitude"].includes(key)
         ? { niyogan: "", landType: "", currentCondition: "" }
         : {}),
@@ -463,6 +499,8 @@ export default function ParticipantSaplingRequestWizard({ currentUser }) {
           setForm({
             ...fresh(profile),
             ...(request.workflow || {}),
+            addressProvince: request.workflow?.addressProvince || "Sorsogon",
+            addressMunicipality: request.workflow?.addressMunicipality || "Bulan",
             fullName: request.participantName || profile.fullName,
             contactNumber: request.contactNumber || profile.contactNumber,
             trees: (request.items || []).map((x) => ({
@@ -484,15 +522,41 @@ export default function ParticipantSaplingRequestWizard({ currentUser }) {
       setErrors((current) => ({ ...current, location: "" }));
     }
   };
-  const validate = (s) => {
+  const focusFirstInvalidField = () => {
+    window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(() => {
+        const invalid = document.querySelector(".participant-request-form .sr-invalid-field");
+        if (!invalid) return;
+        const bounds = invalid.getBoundingClientRect();
+        if (bounds.top < 90 || bounds.bottom > window.innerHeight) {
+          invalid.scrollIntoView({ behavior: "smooth", block: "center", inline: "nearest" });
+        }
+        invalid.querySelector("input, select, textarea, button")?.focus({ preventScroll: true });
+      });
+    });
+  };
+  const validateStep = (s) => {
     const e = {};
     const need = (k, m = "This field is required.") => {
       if (!String(form[k] ?? "").trim()) e[k] = m;
     };
     if (s === 1) {
-      need("sector", "Select a sector.");
-      need("addressBarangay", "Select a barangay.");
-      need("street", "Enter the request address.");
+      need("fullName", "Please enter your full name.");
+      need("sector", "Please select a sector.");
+      need("contactNumber", "Please enter a valid contact number.");
+      if (form.contactNumber && !/^(?:\+63|0)9\d{9}$/.test(String(form.contactNumber).replace(/[\s-]/g, "")))
+        e.contactNumber = "Please enter a valid contact number.";
+      need("addressProvince", "Please select a province.");
+      if (form.addressProvince === "Other")
+        need("addressProvinceOther", "Please enter a province name.");
+      need("addressMunicipality", "Please select a municipality or city.");
+      if (form.addressMunicipality === "Other")
+        need("addressMunicipalityOther", "Please enter a municipality or city name.");
+      need("addressBarangay",
+        form.addressProvince === "Sorsogon" && form.addressMunicipality === "Bulan"
+          ? "Please select a barangay."
+          : "Please enter a barangay name.");
+      need("street", "Please enter your street, purok, or sitio.");
       if (form.sector === "Other (please specify)") {
         need("sectorOther");
         need("requestingAs", "Select how you are requesting.");
@@ -560,15 +624,15 @@ export default function ParticipantSaplingRequestWizard({ currentUser }) {
         }
       }
       need("releaseMethod", "Select a preferred release method.");
-      need("activityDate", "Select a planting date.");
+      Object.assign(e, validatePlantingSchedule({
+        date: form.activityDate,
+        startTime: form.startTime,
+        endTime: form.endTime,
+        group,
+        participants: form.participants,
+      }));
       if (group) {
         need("eventName", "Enter an event name.");
-        need("startTime");
-        need("endTime");
-        if (form.startTime && form.endTime && form.endTime <= form.startTime)
-          e.endTime = "End time must be later than start time.";
-        if (!(Number(form.participants) > 0))
-          e.participants = "Enter expected participants.";
       }
       need("caretaker");
       need("carePlan");
@@ -586,8 +650,13 @@ export default function ParticipantSaplingRequestWizard({ currentUser }) {
       e.requestLetter = "Upload a request letter.";
     if (s === 4 && !form.confirmed)
       e.confirmed = "Please confirm the information.";
-    setErrors(e);
-    return !Object.keys(e).length;
+    return e;
+  };
+  const validate = (s, { focus = true } = {}) => {
+    const stepErrors = validateStep(s);
+    setErrors((current) => ({ ...current, ...stepErrors }));
+    if (Object.keys(stepErrors).length && focus) focusFirstInvalidField();
+    return !Object.keys(stepErrors).length;
   };
   const next = () => {
     if (validate(step)) {
@@ -596,6 +665,13 @@ export default function ParticipantSaplingRequestWizard({ currentUser }) {
       setStep(step + 1);
       window.scrollTo({ top: 0, behavior: "smooth" });
     }
+  };
+  const navigateToStep = (targetStep) => {
+    if (targetStep < step) {
+      setStep(targetStep);
+      return;
+    }
+    if (targetStep > step && validate(step)) setStep(targetStep);
   };
   const handleRequestLetter = (file) => {
     if (!file) return;
@@ -610,7 +686,17 @@ export default function ParticipantSaplingRequestWizard({ currentUser }) {
     put("requestLetter", file);
   };
   const submit = async () => {
-    if (submitting || !validate(4)) return;
+    if (submitting) return;
+    const allErrors = [1, 2, 3, 4].map((number) => ({
+      step: number, errors: validateStep(number),
+    }));
+    const firstInvalid = allErrors.find((entry) => Object.keys(entry.errors).length);
+    if (firstInvalid) {
+      setErrors(Object.assign({}, ...allErrors.map((entry) => entry.errors)));
+      setStep(firstInvalid.step);
+      focusFirstInvalidField();
+      return;
+    }
     setSubmitting(true);
     const location =
       form.siteMode === "existing"
@@ -618,6 +704,12 @@ export default function ParticipantSaplingRequestWizard({ currentUser }) {
         : `${form.specificLocation}, ${form.siteBarangay}, Bulan, Sorsogon`;
     const workflow = {
       ...form,
+      addressProvince: form.addressProvince === "Other"
+        ? form.addressProvinceOther.trim() : form.addressProvince,
+      addressMunicipality: form.addressMunicipality === "Other"
+        ? form.addressMunicipalityOther.trim() : form.addressMunicipality,
+      addressBarangay: form.addressBarangay.trim(),
+      street: form.street.trim(),
       ...(form.siteMode === "proposed"
         ? {
             plantingAreaHectares: hectaresFromForm(form),
@@ -648,6 +740,8 @@ export default function ParticipantSaplingRequestWizard({ currentUser }) {
     if (!editing && form.siteMode === "proposed") delete workflow.siteNotes;
     delete workflow.trees;
     delete workflow.idNumber;
+    delete workflow.addressProvinceOther;
+    delete workflow.addressMunicipalityOther;
     const payload = {
       items: form.trees.map((x) => ({
         inventoryId: x.inventoryId,
@@ -662,8 +756,8 @@ export default function ParticipantSaplingRequestWizard({ currentUser }) {
         barangay: form.siteBarangay,
         plantingSiteId: form.existingSiteId || "PROPOSED",
         proposedDate: form.activityDate,
-        startTime: form.startTime || "08:00",
-        endTime: form.endTime || "09:00",
+        startTime: form.startTime,
+        endTime: group ? form.endTime : "",
         eventLocation: location,
         latitude: Number(
           form.siteMode === "existing" ? chosenSite?.latitude : form.latitude,
@@ -710,7 +804,15 @@ export default function ParticipantSaplingRequestWizard({ currentUser }) {
         },
       });
     } catch (e) {
-      showError(submissionErrorMessage(e));
+      if (e.fieldErrors && Object.keys(e.fieldErrors).length) {
+        const fieldStep = { identificationType: 4, idNumber: 4, schoolInstitutionName: 4,
+          activityDate: 3, startTime: 3, endTime: 3, participants: 3,
+          preferredReleaseDate: 2, trees: 2, purpose: 2 };
+        const targetStep = Math.min(...Object.keys(e.fieldErrors).map((key) => fieldStep[key] || 1));
+        setErrors((current) => ({ ...current, ...e.fieldErrors }));
+        setStep(targetStep);
+        focusFirstInvalidField();
+      } else showError(submissionErrorMessage(e));
     } finally {
       window.clearTimeout(timeoutId);
       setSubmitting(false);
@@ -757,7 +859,7 @@ export default function ParticipantSaplingRequestWizard({ currentUser }) {
             return (
               <li key={name} className={state}>
                 {clickable ? (
-                  <button type="button" onClick={() => setStep(stepNumber)}>
+                  <button type="button" onClick={() => navigateToStep(stepNumber)}>
                     {content}
                   </button>
                 ) : (
@@ -779,7 +881,7 @@ export default function ParticipantSaplingRequestWizard({ currentUser }) {
                 Requester Information
               </Title>
               <div className="sr-form-grid">
-                <Field label="Full Name *">
+                <Field label="Full Name *" error={errors.fullName}>
                   <input value={form.fullName} readOnly />
                 </Field>
                 <Field label="Sector *" error={errors.sector}>
@@ -814,23 +916,50 @@ export default function ParticipantSaplingRequestWizard({ currentUser }) {
                     </Field>
                   </>
                 )}
-                <Field label="Contact Number *">
+                <Field label="Contact Number *" error={errors.contactNumber}>
                   <input value={form.contactNumber} readOnly />
                 </Field>
               </div>
               <Title>Address Information</Title>
               <div className="sr-form-grid">
+                <div className="sr-address-field-group">
+                  <Field label="Province *" error={errors.addressProvince}>
+                    <select value={form.addressProvince} onChange={(e) => put("addressProvince", e.target.value)}>
+                      <option value="">Select province</option>
+                      {PROVINCES.map((province) => (
+                        <option key={province.psgcCode} value={province.name}>{province.name}</option>
+                      ))}
+                      <option value="Other">Other</option>
+                    </select>
+                  </Field>
+                  {form.addressProvince === "Other" && (
+                    <Field label="Specify Province *" error={errors.addressProvinceOther}>
+                      <input value={form.addressProvinceOther} onChange={(e) => put("addressProvinceOther", e.target.value)} placeholder="Enter province name" />
+                    </Field>
+                  )}
+                </div>
+                <div className="sr-address-field-group">
+                  <Field label="Municipality / City *" error={errors.addressMunicipality}>
+                    <select disabled={!form.addressProvince} value={form.addressMunicipality} onChange={(e) => put("addressMunicipality", e.target.value)}>
+                      <option value="">Select municipality or city</option>
+                      {addressMunicipalities.map((municipality) => (
+                        <option key={municipality.psgcCode} value={municipality.name}>{municipality.name}</option>
+                      ))}
+                      {form.addressProvince && <option value="Other">Other</option>}
+                    </select>
+                  </Field>
+                  {form.addressMunicipality === "Other" && (
+                    <Field label="Specify Municipality / City *" error={errors.addressMunicipalityOther}>
+                      <input value={form.addressMunicipalityOther} onChange={(e) => put("addressMunicipalityOther", e.target.value)} placeholder="Enter municipality or city" />
+                    </Field>
+                  )}
+                </div>
                 <Field label="Barangay *" error={errors.addressBarangay}>
-                  <SelectBarangay
-                    value={form.addressBarangay}
-                    set={(v) => put("addressBarangay", v)}
-                  />
-                </Field>
-                <Field label="Municipality">
-                  <input value="Bulan" readOnly />
-                </Field>
-                <Field label="Province">
-                  <input value="Sorsogon" readOnly />
+                  {form.addressProvince === "Sorsogon" && form.addressMunicipality === "Bulan" ? (
+                    <SelectBarangay value={form.addressBarangay} set={(v) => put("addressBarangay", v)} />
+                  ) : (
+                    <input value={form.addressBarangay} onChange={(e) => put("addressBarangay", e.target.value)} placeholder="Enter barangay name" />
+                  )}
                 </Field>
                 <Field label="Street / Purok / Sitio *" error={errors.street}>
                   <input
@@ -869,21 +998,19 @@ export default function ParticipantSaplingRequestWizard({ currentUser }) {
               <Title help="Add the tree species and quantity you are requesting.">
                 Saplings Requested
               </Title>
-              <div className="sr-tree-section participant-tree-section">
+              <div className={`sr-tree-section participant-tree-section ${errors.trees ? "sr-invalid-field" : ""}`}>
                 {form.trees.map((tree) => (
                   <div className="sr-tree-row" key={tree.id}>
                     <select
                       value={tree.inventoryId}
-                      onChange={(e) =>
+                      onChange={(e) => {
                         setForm((p) => ({
                           ...p,
                           trees: p.trees.map((x) =>
-                            x.id === tree.id
-                              ? { ...x, inventoryId: e.target.value }
-                              : x,
-                          ),
-                        }))
-                      }
+                            x.id === tree.id ? { ...x, inventoryId: e.target.value } : x),
+                        }));
+                        setErrors((current) => ({ ...current, trees: "" }));
+                      }}
                     >
                       <option value="">Select tree</option>
                       {inventory.map((x) => (
@@ -908,16 +1035,14 @@ export default function ParticipantSaplingRequestWizard({ currentUser }) {
                       step="1"
                       placeholder="Quantity"
                       value={tree.quantity}
-                      onChange={(e) =>
+                      onChange={(e) => {
                         setForm((p) => ({
                           ...p,
                           trees: p.trees.map((x) =>
-                            x.id === tree.id
-                              ? { ...x, quantity: e.target.value }
-                              : x,
-                          ),
-                        }))
-                      }
+                            x.id === tree.id ? { ...x, quantity: e.target.value } : x),
+                        }));
+                        setErrors((current) => ({ ...current, trees: "" }));
+                      }}
                     />
                     <button
                       type="button"
@@ -1260,7 +1385,7 @@ export default function ParticipantSaplingRequestWizard({ currentUser }) {
                   />
                 </Field>
                 <Field
-                  label={group ? "Start Time *" : "Planned Start Time"}
+                  label={group ? "Start Time *" : "Planned Start Time *"}
                   error={errors.startTime}
                 >
                   <input
@@ -1282,7 +1407,7 @@ export default function ParticipantSaplingRequestWizard({ currentUser }) {
                   label={
                     group
                       ? "Expected Participants *"
-                      : "Planned Number of Planters"
+                      : "Planned Number of Planters *"
                   }
                   error={errors.participants}
                 >
@@ -1293,7 +1418,7 @@ export default function ParticipantSaplingRequestWizard({ currentUser }) {
                     onChange={(e) => put("participants", e.target.value)}
                   />
                 </Field>
-                <Field label="Planting Site">
+                <Field label="Planting Site *">
                   <input
                     value={
                       form.siteMode === "existing"
@@ -1441,7 +1566,9 @@ export default function ParticipantSaplingRequestWizard({ currentUser }) {
                 </p>
                 <p>
                   <strong>Address:</strong> {form.street},{" "}
-                  {form.addressBarangay}, Bulan, Sorsogon
+                  {form.addressBarangay},{" "}
+                  {form.addressMunicipality === "Other" ? form.addressMunicipalityOther : form.addressMunicipality},{" "}
+                  {form.addressProvince === "Other" ? form.addressProvinceOther : form.addressProvince}
                 </p>
                 <p>
                   <strong>Purpose:</strong>{" "}
@@ -1467,11 +1594,12 @@ export default function ParticipantSaplingRequestWizard({ currentUser }) {
                   {form.preferredReleaseDate}
                 </p>
                 </div>
-                <div className="participant-confirmation-row">
+                <div className={`participant-confirmation-row ${errors.confirmed ? "sr-invalid-field" : ""}`}>
                   <label className="participant-confirmation">
                     <input
                       type="checkbox"
                       checked={form.confirmed}
+                      aria-invalid={errors.confirmed ? "true" : undefined}
                       onChange={(e) => put("confirmed", e.target.checked)}
                     />
                     <span>I confirm that the information provided is correct.</span>
@@ -1521,9 +1649,9 @@ export default function ParticipantSaplingRequestWizard({ currentUser }) {
     </div>
   );
 }
-function SelectBarangay({ value, set }) {
+function SelectBarangay({ value, set, ...accessibilityProps }) {
   return (
-    <select value={value} onChange={(e) => set(e.target.value)}>
+    <select value={value} onChange={(e) => set(e.target.value)} {...accessibilityProps}>
       <option value="">Select barangay</option>
       {BULAN_BARANGAYS.map((x) => (
         <option key={x}>{x}</option>

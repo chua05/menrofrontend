@@ -36,3 +36,21 @@ test("wizard does not schedule uncancelled Leaflet invalidation timers", () => {
   assert.match(source, /observer\?\.disconnect\(\)/);
   assert.match(source, /scheduler\.dispose\(\)/);
 });
+
+test("requester address uses dependent PSGC fields and preserves the Bulan barangay list", () => {
+  assert.match(source, /getPhilippineProvinces/);
+  assert.match(source, /getMunicipalitiesForProvince\(form\.addressProvince\)/);
+  assert.match(source, /key === "addressProvince"[\s\S]*addressMunicipality: ""[\s\S]*addressBarangay: ""/);
+  assert.match(source, /key === "addressMunicipality"[\s\S]*addressBarangay: ""/);
+  assert.match(source, /form\.addressProvince === "Sorsogon" && form\.addressMunicipality === "Bulan"/);
+  assert.match(source, /<SelectBarangay/);
+  assert.match(source, /placeholder="Enter barangay name"/);
+  assert.doesNotMatch(source, /Manual barangay input for locations outside Bulan/i);
+});
+
+test("review and submitted workflow use resolved custom address values", () => {
+  assert.match(source, /addressProvince: form\.addressProvince === "Other"[\s\S]*form\.addressProvinceOther\.trim\(\)/);
+  assert.match(source, /addressMunicipality: form\.addressMunicipality === "Other"[\s\S]*form\.addressMunicipalityOther\.trim\(\)/);
+  assert.match(source, /addressBarangay: form\.addressBarangay\.trim\(\)/);
+  assert.doesNotMatch(source, /\{form\.addressBarangay\}, Bulan, Sorsogon/);
+});

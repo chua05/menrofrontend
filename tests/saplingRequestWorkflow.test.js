@@ -7,6 +7,7 @@ import {
   getStepState,
   invalidateCompletedSteps,
   isGroupRequester,
+  validatePlantingSchedule,
   validateRequestLetterFile,
 } from "../src/utils/saplingRequestWorkflow.js";
 
@@ -106,4 +107,18 @@ test("validates request-letter type and ten-megabyte limit", () => {
     }),
     "File size must not exceed 10 MB.",
   );
+});
+
+test("validates individual planting without requiring an end time", () => {
+  const now = new Date("2026-10-10T09:00:00Z");
+  assert.deepEqual(validatePlantingSchedule({ date: "2026-10-10", startTime: "18:00", endTime: "", group: false, participants: "1" }, now), {});
+  assert.equal(validatePlantingSchedule({ date: "2026-10-10", startTime: "08:00", endTime: "", group: false, participants: "1" }, now).startTime, "The planned start time must be in the future.");
+  assert.equal(validatePlantingSchedule({ date: "2026-10-09", startTime: "08:00", endTime: "", group: false, participants: "1" }, now).activityDate, "The planting date cannot be in the past.");
+});
+
+test("validates group event end time separately", () => {
+  const now = new Date("2026-10-10T09:00:00Z");
+  assert.deepEqual(validatePlantingSchedule({ date: "2026-10-11", startTime: "08:00", endTime: "11:00", group: true, participants: "10" }, now), {});
+  assert.equal(validatePlantingSchedule({ date: "2026-10-11", startTime: "08:00", endTime: "08:00", group: true, participants: "10" }, now).endTime, "Event end time must be later than the start time.");
+  assert.equal(validatePlantingSchedule({ date: "2026-10-11", startTime: "08:00", endTime: "", group: true, participants: "10" }, now).endTime, "Please select an event end time.");
 });

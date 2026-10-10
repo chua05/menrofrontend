@@ -2871,7 +2871,7 @@ useEffect(() => {
                   <h3>Request Information</h3>
                   {[
                     ["Sector", selectedRequest.workflow.sector],
-                    ["Request Address", `${selectedRequest.workflow.street || ""}, ${selectedRequest.workflow.addressBarangay || ""}, Bulan, Sorsogon`],
+                    ["Request Address", `${selectedRequest.workflow.street || ""}, ${selectedRequest.workflow.addressBarangay || ""}, ${selectedRequest.workflow.addressMunicipality || "Bulan"}, ${selectedRequest.workflow.addressProvince || "Sorsogon"}`],
                     ["Preferred Release Method", selectedRequest.workflow.releaseMethod],
                     ["Planting Site Type", selectedRequest.workflow.siteMode === "proposed" ? "Proposed Site" : "Existing Site"],
                     ["Planting Area", selectedRequest.workflow.areaChoice],

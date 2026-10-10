@@ -1026,6 +1026,37 @@
   line-height: 1.45;
 }
 
+.participant-request-form .sr-invalid-field {
+  scroll-margin-top: 96px;
+}
+
+.participant-request-form .sr-address-field-group {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+
+.participant-request-form .sr-form-field.has-error input,
+.participant-request-form .sr-form-field.has-error select,
+.participant-request-form .sr-form-field.has-error textarea,
+.participant-request-form .sr-invalid-field input,
+.participant-request-form .sr-invalid-field select,
+.participant-request-form .sr-invalid-field textarea {
+  border-color: #d83b3b;
+}
+
+.participant-request-form .sr-form-field.has-error input:focus,
+.participant-request-form .sr-form-field.has-error select:focus,
+.participant-request-form .sr-form-field.has-error textarea:focus {
+  border-color: #d83b3b;
+  box-shadow: 0 0 0 3px rgba(216, 59, 59, 0.1);
+}
+
+.participant-request-form .sr-tree-section.sr-invalid-field,
+.participant-request-form .participant-confirmation-row.sr-invalid-field {
+  border-color: #d83b3b;
+}
+
 /* =====================================================
    MULTIPLE TREE ROWS
 ===================================================== */
