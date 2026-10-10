@@ -271,24 +271,13 @@
   place-items: center;
 }
 
-.ec-kpi-icon.green {
-  background: #e2f3e6;
-  color: #14823d;
-}
-
-.ec-kpi-icon.blue {
-  background: #e5effe;
-  color: #2472e7;
-}
-
-.ec-kpi-icon.orange {
-  background: #fff0df;
-  color: #ef9113;
-}
-
-.ec-kpi-icon.red {
-  background: #fde7e7;
-  color: #e23c3c;
+.ec-kpi-icon.green,
+.ec-kpi-icon.blue,
+.ec-kpi-icon.orange,
+.ec-kpi-icon.red,
+.ec-kpi-icon {
+  background: #e8f6ed;
+  color: #168a45;
 }
 
 .ec-kpi-card > div:last-child {

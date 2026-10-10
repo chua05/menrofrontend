@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import {
   FiBell,
   FiDatabase,
@@ -13,6 +13,7 @@ import {
 } from "react-icons/fi";
 
 import { useAuth } from "../context/AuthContext";
+import { useToast } from "../context/ToastContext";
 import "../styles/settings-page.css";
 
 const SETTINGS_STORAGE_KEY = "menro_system_settings";
@@ -114,12 +115,11 @@ function SettingsSection({
 
 export default function SettingsPage() {
   const { userRole } = useAuth();
+  const { success: showSuccess, error: showError } = useToast();
   const fileInputRef = useRef(null);
 
   const [settings, setSettings] = useState(loadStoredSettings);
   const [savedSettings, setSavedSettings] = useState(loadStoredSettings);
-  const [successMsg, setSuccessMsg] = useState("");
-  const [errorMsg, setErrorMsg] = useState("");
 
   const isAdmin = userRole === "admin";
   const isStaff = userRole === "staff";
@@ -129,17 +129,6 @@ export default function SettingsPage() {
     () => JSON.stringify(settings) !== JSON.stringify(savedSettings),
     [settings, savedSettings]
   );
-
-  useEffect(() => {
-    if (!successMsg && !errorMsg) return undefined;
-
-    const timer = window.setTimeout(() => {
-      setSuccessMsg("");
-      setErrorMsg("");
-    }, 3200);
-
-    return () => window.clearTimeout(timer);
-  }, [successMsg, errorMsg]);
 
   const update = (field) => (event) => {
     if (!canEdit) return;
@@ -179,13 +168,13 @@ export default function SettingsPage() {
     const allowedTypes = ["image/png", "image/jpeg", "image/webp"];
 
     if (!allowedTypes.includes(file.type)) {
-      setErrorMsg("Please select a PNG, JPG, JPEG, or WEBP image.");
+      showError("Please select a PNG, JPG, JPEG, or WEBP image.");
       event.target.value = "";
       return;
     }
 
     if (file.size > 2 * 1024 * 1024) {
-      setErrorMsg("System logo must not exceed 2 MB.");
+      showError("System logo must not exceed 2 MB.");
       event.target.value = "";
       return;
     }
@@ -197,11 +186,10 @@ export default function SettingsPage() {
         ...prev,
         systemLogo: String(reader.result || ""),
       }));
-      setErrorMsg("");
     };
 
     reader.onerror = () => {
-      setErrorMsg("Unable to read the selected image.");
+      showError("Unable to read the selected image.");
     };
 
     reader.readAsDataURL(file);
@@ -211,7 +199,7 @@ export default function SettingsPage() {
     event.preventDefault();
 
     if (!canEdit) {
-      setErrorMsg("Only administrators can modify system settings.");
+      showError("Only administrators can modify system settings.");
       return;
     }
 
@@ -221,35 +209,32 @@ export default function SettingsPage() {
     const retention = Number(settings.dataRetentionYears);
 
     if (Number.isNaN(gps) || gps < 5 || gps > 100) {
-      setErrorMsg("GPS tolerance radius must be between 5 and 100 meters.");
+      showError("GPS tolerance radius must be between 5 and 100 meters.");
       return;
     }
 
     if (Number.isNaN(threshold) || threshold < 1) {
-      setErrorMsg("Low stock alert threshold must be at least 1.");
+      showError("Low stock alert threshold must be at least 1.");
       return;
     }
 
     if (Number.isNaN(years) || years < 1 || years > 5) {
-      setErrorMsg("Maximum monitoring period must be between 1 and 5 years.");
+      showError("Maximum monitoring period must be between 1 and 5 years.");
       return;
     }
 
     if (Number.isNaN(retention) || retention < 1 || retention > 10) {
-      setErrorMsg("Data retention period must be between 1 and 10 years.");
+      showError("Data retention period must be between 1 and 10 years.");
       return;
     }
 
     localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(settings));
     setSavedSettings(settings);
-    setErrorMsg("");
-    setSuccessMsg("Settings saved successfully.");
+    showSuccess("Settings saved successfully.");
   };
 
   const handleResetUnsaved = () => {
     setSettings(savedSettings);
-    setSuccessMsg("");
-    setErrorMsg("");
   };
 
   const handleExport = () => {
@@ -278,7 +263,7 @@ export default function SettingsPage() {
 
     URL.revokeObjectURL(url);
 
-    setSuccessMsg("Settings backup exported successfully.");
+    showSuccess("Settings backup exported successfully.");
   };
 
   const handleClearCache = () => {
@@ -304,7 +289,7 @@ export default function SettingsPage() {
     keysToRemove.forEach((key) => localStorage.removeItem(key));
     sessionStorage.clear();
 
-    setSuccessMsg(
+    showSuccess(
       keysToRemove.length > 0
         ? `Temporary cache cleared (${keysToRemove.length} item${
             keysToRemove.length === 1 ? "" : "s"
@@ -352,16 +337,6 @@ export default function SettingsPage() {
             </div>
           )}
         </div>
-
-        {(successMsg || errorMsg) && (
-          <div
-            className={`settings-toast ${
-              errorMsg ? "settings-toast-error" : "settings-toast-success"
-            }`}
-          >
-            {errorMsg || successMsg}
-          </div>
-        )}
 
         {isStaff && (
           <div className="settings-readonly-note">

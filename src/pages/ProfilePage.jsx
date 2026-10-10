@@ -1,7 +1,6 @@
 import { useMemo, useRef, useState } from "react";
 import {
   FiCamera,
-  FiCheckCircle,
   FiCopy,
   FiEdit2,
   FiFileText,
@@ -15,6 +14,7 @@ import {
 } from "react-icons/fi";
 
 import { useAuth } from "../context/AuthContext";
+import { useToast } from "../context/ToastContext";
 import { auth } from "../firebase/config";
 import { formatDisplayId } from "../utils/displayId";
 import { BULAN_BARANGAYS, USER_TYPES, userTypeField } from "../utils/userTypes";
@@ -224,7 +224,7 @@ export default function ProfilePage() {
   const photoInputRef = useRef(null);
 
   const [isEditing, setIsEditing] = useState(false);
-  const [successMsg, setSuccessMsg] = useState("");
+  const { success: showSuccess } = useToast();
   const [photoError, setPhotoError] = useState("");
   const [photoMenuOpen, setPhotoMenuOpen] = useState(false);
   const [form, setForm] = useState(() =>
@@ -403,13 +403,7 @@ export default function ProfilePage() {
       photoInputRef.current.value = "";
     }
 
-    setSuccessMsg(
-      "You successfully updated your profile."
-    );
-
-    window.setTimeout(() => {
-      setSuccessMsg("");
-    }, 3000);
+    showSuccess("You successfully updated your profile.");
   };
 
   const copyUserId = async () => {
@@ -420,11 +414,7 @@ export default function ProfilePage() {
         String(userId)
       );
 
-      setSuccessMsg("User ID copied.");
-
-      window.setTimeout(() => {
-        setSuccessMsg("");
-      }, 2000);
+      showSuccess("User ID copied.");
     } catch {
       // Clipboard access may be blocked by the browser.
     }
@@ -439,33 +429,6 @@ export default function ProfilePage() {
         color: "#1f2937",
       }}
     >
-      {successMsg && (
-        <div
-          style={{
-            position: "fixed",
-            top: "84px",
-            right: "24px",
-            zIndex: 3000,
-            display: "flex",
-            alignItems: "center",
-            gap: "8px",
-            minWidth: "280px",
-            maxWidth: "390px",
-            padding: "12px 14px",
-            borderRadius: "10px",
-            background: "#17643a",
-            color: "#ffffff",
-            fontSize: "12.5px",
-            fontWeight: 600,
-            boxShadow:
-              "0 12px 35px rgba(0,0,0,0.18)",
-          }}
-        >
-          <FiCheckCircle size={17} />
-          <span>{successMsg}</span>
-        </div>
-      )}
-
       <div
         style={{
           display: "grid",

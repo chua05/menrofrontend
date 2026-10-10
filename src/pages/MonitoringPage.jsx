@@ -31,6 +31,7 @@ import {
 } from "recharts";
 
 import { useAuth } from "../context/AuthContext";
+import { useToast } from "../context/ToastContext";
 import FormAlert from "../components/FormAlert";
 import ProtectedEvidenceImage from "../components/ProtectedEvidenceImage";
 import { auth } from "../firebase/config";
@@ -382,6 +383,7 @@ async function apiRequest(
 
 export default function MonitoringPage() {
   const { userRole, currentUser } = useAuth();
+  const { success: showSuccess } = useToast();
   const [pageSearchParams] = useSearchParams();
 
   const isParticipant = userRole === "participant";
@@ -421,9 +423,7 @@ export default function MonitoringPage() {
   const [selectedRecord, setSelectedRecord] = useState(null);
   const [openActionMenuId, setOpenActionMenuId] = useState(null);
 
-  const [toast, setToast] = useState("");
   const [formError, setFormError] = useState("");
-  const [formSuccess, setFormSuccess] = useState("");
   const [locationLoading, setLocationLoading] = useState(false);
 
   const [photoFile, setPhotoFile] = useState(null);
@@ -561,19 +561,6 @@ export default function MonitoringPage() {
   }, []);
 
   useEffect(() => {
-    if (!toast) return undefined;
-
-    const timeout = window.setTimeout(() => setToast(""), 3200);
-    return () => window.clearTimeout(timeout);
-  }, [toast]);
-
-  useEffect(() => {
-    if (!formSuccess) return undefined;
-    const timeout = window.setTimeout(() => setFormSuccess(""), 4000);
-    return () => window.clearTimeout(timeout);
-  }, [formSuccess]);
-
-  useEffect(() => {
     function handleOutsideMenu(event) {
       if (!event.target.closest("[data-monitoring-action-menu]")) {
         setOpenActionMenuId(null);
@@ -643,7 +630,7 @@ export default function MonitoringPage() {
         )
       );
 
-      setToast(
+      showSuccess(
         "Monitoring data refreshed."
       );
     } catch (error) {
@@ -880,6 +867,7 @@ export default function MonitoringPage() {
         if (!grouped.has(month)) grouped.set(month, { month, alive: 0, total: 0 });
       }
     }
+
     return [...grouped.values()].sort((a, b) => a.month.localeCompare(b.month)).map((item) => ({
       month: getMonthLabel(item.month),
       survivalRate: item.total > 0 ? Math.round((item.alive / item.total) * 100) : 0,
@@ -940,14 +928,12 @@ export default function MonitoringPage() {
   async function openForm() {
     await refreshPlantingReports();
     resetForm();
-    setFormSuccess("");
     setShowForm(true);
   }
 
   function closeForm() {
     setShowForm(false);
     resetForm();
-    setFormSuccess("");
   }
 
   function updateFormField(field, value) {
@@ -957,7 +943,6 @@ export default function MonitoringPage() {
     }));
 
     if (formError) setFormError("");
-    if (formSuccess) setFormSuccess("");
   }
 
   function handlePlantingReportChange(event) {
@@ -1074,7 +1059,6 @@ export default function MonitoringPage() {
   async function handleSubmit(event) {
     event.preventDefault();
     setFormError("");
-    setFormSuccess("");
 
     if (!form.plantingReportId) {
       setFormError(
@@ -1229,7 +1213,7 @@ export default function MonitoringPage() {
       setRecords((previous) => [newRecord, ...previous.filter((item) => item.id !== newRecord.id)]);
 
       resetForm();
-      setFormSuccess("Your monitoring record was submitted successfully.");
+      showSuccess("Your monitoring record was submitted successfully.");
     } catch (error) {
       console.error(
         "Failed to submit monitoring record:",
@@ -1297,12 +1281,11 @@ export default function MonitoringPage() {
         updated
       );
 
-      setToast(
+      showSuccess(
         "Monitoring record marked as reviewed."
       );
     } catch (error) {
       console.error(error);
-      setToast("");
       setFormError(
         error.message ||
           "Unable to review monitoring record."
@@ -1348,7 +1331,7 @@ export default function MonitoringPage() {
         closeDetails();
       }
 
-      setToast(
+      showSuccess(
         "Monitoring record archived."
       );
     } catch (error) {
@@ -1376,13 +1359,6 @@ export default function MonitoringPage() {
 
   return (
     <div className="sm-page">
-      {toast && (
-        <div className="sm-toast">
-          <FiCheckCircle size={17} />
-          <span>{toast}</span>
-        </div>
-      )}
-
       {/* PAGE HEADER */}
       <div className="sm-header">
         <div className="sm-heading-wrap">
@@ -1600,21 +1576,10 @@ export default function MonitoringPage() {
           </div>
 
           <div className="sm-chart-area">
-            {trendData.length === 0 ? (
-              <div className="sm-chart-empty">
-                <div className="sm-chart-empty-icon">
-                  <FiTrendingUp size={28} />
-                </div>
-                <strong>No monitoring data yet</strong>
-                <span>
-                  Chart will appear after monitoring records are added.
-                </span>
-              </div>
-            ) : (
-              <ResponsiveContainer width="100%" height={260}>
-                <LineChart data={trendData}>
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={trendData} margin={{ top: 12, right: 16, left: 0, bottom: 8 }}>
                   <CartesianGrid strokeDasharray="4 4" vertical={false} />
-                  <XAxis dataKey="month" tickLine={false} axisLine={false} />
+                  <XAxis dataKey="month" tickLine={false} axisLine={false} minTickGap={20} />
                   <YAxis
                     domain={[0, 100]}
                     tickFormatter={(value) => `${value}%`}
@@ -1634,11 +1599,12 @@ export default function MonitoringPage() {
                   />
                 </LineChart>
               </ResponsiveContainer>
-            )}
-            {!hasMonitoringHistory && (
-              <div className="sm-chart-zero-message">No survival monitoring records have been submitted yet.</div>
-            )}
           </div>
+          {!hasMonitoringHistory && (
+            <p className="sm-chart-empty-message" role="status">
+              No survival monitoring records have been submitted yet.
+            </p>
+          )}
         </section>
 
         <section className="sm-summary-card">
@@ -1943,14 +1909,13 @@ export default function MonitoringPage() {
             <form onSubmit={handleSubmit}>
               <div className="sm-modal-body">
                 <FormAlert type="error">{formError}</FormAlert>
-                <FormAlert type="success">{formSuccess}</FormAlert>
-                {!formError && !formSuccess && selectedLifecycle?.status === "Not Yet Available" && (
+                {!formError && selectedLifecycle?.status === "Not Yet Available" && (
                   <FormAlert type="info">Monitoring is not available yet. You can submit the first monitoring record starting on {formatDate(selectedLifecycle.startMonitoringDate)}, which is two weeks after the planting event.</FormAlert>
                 )}
-                {!formError && !formSuccess && selectedLifecycle?.status === "Next Monitoring Scheduled" && (
+                {!formError && selectedLifecycle?.status === "Next Monitoring Scheduled" && (
                   <FormAlert type="info">Monitoring is not due yet. You can submit the next monitoring record starting on {formatDate(selectedLifecycle.nextMonitoringDate)}.</FormAlert>
                 )}
-                {!formError && !formSuccess && selectedLifecycle?.status === "Monitoring Completed" && (
+                {!formError && selectedLifecycle?.status === "Monitoring Completed" && (
                   <FormAlert type="info">The two-year monitoring period for this planting record has been completed. No additional monitoring record can be submitted.</FormAlert>
                 )}
 
@@ -2316,6 +2281,8 @@ export default function MonitoringPage() {
                 <FiX size={19} />
               </button>
             </div>
+
+            <div className="menro-toast-anchor" data-menro-toast-anchor />
 
             <div className="sm-drawer-body">
               <section className="sm-detail-section">

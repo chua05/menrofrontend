@@ -246,29 +246,14 @@
   place-items: center;
 }
 
-.sd-kpi-icon.green {
-  background: #e2f3e6;
-  color: #14823d;
-}
-
-.sd-kpi-icon.blue {
-  background: #e5effe;
-  color: #2472e7;
-}
-
-.sd-kpi-icon.orange {
-  background: #fff0df;
-  color: #f39818;
-}
-
-.sd-kpi-icon.purple {
-  background: #f2e8ff;
-  color: #8039e9;
-}
-
-.sd-kpi-icon.cyan {
-  background: #e3f6f5;
-  color: #18a6aa;
+.sd-kpi-icon.green,
+.sd-kpi-icon.blue,
+.sd-kpi-icon.orange,
+.sd-kpi-icon.purple,
+.sd-kpi-icon.cyan,
+.sd-kpi-icon {
+  background: #e8f6ed;
+  color: #168a45;
 }
 
 .sd-kpi-card > div:last-child {
@@ -1262,6 +1247,86 @@
 
   font-size: 12.5px;
   line-height: 1.45;
+}
+
+.sd-species-combobox {
+  position: relative;
+  width: 100%;
+  min-width: 0;
+}
+
+.sd-species-combobox > input {
+  padding-right: 42px;
+}
+
+.sd-species-combobox > input::-webkit-search-cancel-button {
+  display: none;
+}
+
+.sd-combobox-toggle {
+  position: absolute;
+  top: 0;
+  right: 0;
+  z-index: 2;
+  width: 42px;
+  height: 46px;
+  padding: 0;
+  border: 0;
+  display: grid;
+  place-items: center;
+  background: transparent;
+  color: #435149;
+  cursor: pointer;
+}
+
+.sd-combobox-list {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 40;
+  width: 100%;
+  min-width: 0;
+  max-height: min(260px, 40vh);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  border: 1px solid #b8c9be;
+  border-radius: 7px;
+  background: #ffffff;
+  box-shadow: 0 10px 24px rgba(14, 35, 21, 0.14);
+}
+
+.sd-species-combobox.opens-upward .sd-combobox-list {
+  top: auto;
+  bottom: calc(100% + 4px);
+}
+
+.sd-combobox-option,
+.sd-combobox-empty {
+  min-height: 40px;
+  padding: 9px 12px;
+  display: flex;
+  align-items: center;
+  color: #2e3a33;
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+.sd-combobox-option {
+  cursor: pointer;
+}
+
+.sd-combobox-option:hover,
+.sd-combobox-option.is-active {
+  background: #edf7f0;
+}
+
+.sd-combobox-option.is-selected {
+  color: #087443;
+  font-weight: 650;
+}
+
+.sd-combobox-empty {
+  color: #718078;
 }
 
 /* =====================================================

@@ -14,8 +14,10 @@ import {
 } from "lucide-react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { authenticatedFetch, API_BASE_URL } from "../services/authenticatedApi";
+import { useToast } from "../context/ToastContext";
 import { BULAN_BARANGAYS } from "../utils/userTypes";
 import { IDENTIFICATION_DOCUMENTS } from "../utils/identificationDocuments";
+import { createLeafletResizeScheduler } from "../utils/leafletLifecycle";
 import {
   canNavigateToStep,
   EXACT_AREA_CHOICES,
@@ -350,6 +352,7 @@ export default function ParticipantSaplingRequestWizard({ currentUser }) {
   const navigate = useNavigate(),
     [params] = useSearchParams(),
     editId = params.get("edit") || "";
+  const { error: showError } = useToast();
   const [step, setStep] = useState(1),
     [highestUnlockedStep, setHighestUnlockedStep] = useState(1),
     [completedSteps, setCompletedSteps] = useState(() => new Set()),
@@ -360,7 +363,6 @@ export default function ParticipantSaplingRequestWizard({ currentUser }) {
     [errors, setErrors] = useState({}),
     [loading, setLoading] = useState(true),
     [submitting, setSubmitting] = useState(false),
-    [notice, setNotice] = useState(""),
     [mapValidation, setMapValidation] = useState("pending");
   const submissionId = useRef(crypto.randomUUID());
   const group = isGroupRequester(form.sector, form.requestingAs);
@@ -473,9 +475,9 @@ export default function ParticipantSaplingRequestWizard({ currentUser }) {
           });
         else setForm(fresh(profile));
       })
-      .catch((e) => setNotice(e.message))
+      .catch((e) => showError(e.message))
       .finally(() => setLoading(false));
-  }, [editId]);
+  }, [editId, showError]);
   const handleMapValidation = (status) => {
     setMapValidation(status);
     if (status === "valid") {
@@ -609,7 +611,6 @@ export default function ParticipantSaplingRequestWizard({ currentUser }) {
   };
   const submit = async () => {
     if (submitting || !validate(4)) return;
-    setNotice("");
     setSubmitting(true);
     const location =
       form.siteMode === "existing"
@@ -702,14 +703,14 @@ export default function ParticipantSaplingRequestWizard({ currentUser }) {
       navigate("/participant/my-requests", {
         replace: true,
         state: {
+          submittedRequestReference: requestReference,
           submissionMessage: editing
             ? `Your sapling request ${requestReference} was resubmitted successfully. Status: Pending Review.`
             : `Your sapling request has been submitted successfully. Request Reference: ${requestReference}. Status: Pending Review.`,
         },
       });
     } catch (e) {
-      setNotice(submissionErrorMessage(e));
-      window.scrollTo({ top: 0, behavior: "smooth" });
+      showError(submissionErrorMessage(e));
     } finally {
       window.clearTimeout(timeoutId);
       setSubmitting(false);
@@ -732,11 +733,6 @@ export default function ParticipantSaplingRequestWizard({ currentUser }) {
           </div>
         </div>
       </section>
-      {notice && (
-        <div className="sr-api-error" role="alert">
-          {notice}
-        </div>
-      )}
       <section className="sr-record-card participant-request-card">
         <ol className="sr-request-stepper">
           {STEPS.map((name, index) => {
@@ -1130,7 +1126,7 @@ export default function ParticipantSaplingRequestWizard({ currentUser }) {
               {form.siteMode === "proposed" && (
                 <>
                   <Title>Selected Coordinates</Title>
-                  <div className="sr-form-grid">
+                  <div className="sr-form-grid participant-coordinate-grid">
                     <Field label="Latitude">
                       <input value={form.latitude} readOnly />
                     </Field>
@@ -1317,62 +1313,64 @@ export default function ParticipantSaplingRequestWizard({ currentUser }) {
                     : { latitude: form.latitude, longitude: form.longitude }
                 }
               />
-              <Title>Planting Care Information</Title>
-              <div className="sr-form-grid">
-                <Field
-                  label="Who will be responsible for caring for the planted saplings? *"
-                  error={errors.caretaker}
-                >
-                  <input
-                    value={form.caretaker}
-                    onChange={(e) => put("caretaker", e.target.value)}
-                    placeholder="Enter the person, group, or organization responsible"
-                  />
-                </Field>
-                <Field
-                  label="How often do you plan to check the planted saplings? *"
-                  error={errors.monitoringFrequency}
-                >
-                  <select
-                    value={form.monitoringFrequency}
-                    onChange={(e) => put("monitoringFrequency", e.target.value)}
-                  >
-                    <option value="">Select monitoring frequency</option>
-                    {[
-                      "Daily",
-                      "Several times a week",
-                      "Weekly",
-                      "Every two weeks",
-                      "Monthly",
-                      "Other",
-                    ].map((x) => (
-                      <option key={x}>{x}</option>
-                    ))}
-                  </select>
-                </Field>
-                {form.monitoringFrequency === "Other" && (
+              <div className="participant-care-section">
+                <Title>Planting Care Information</Title>
+                <div className="sr-form-grid participant-care-grid">
                   <Field
-                    label="Please Specify *"
-                    error={errors.monitoringOther}
+                    label="Who will be responsible for caring for the planted saplings? *"
+                    error={errors.caretaker}
                   >
                     <input
-                      value={form.monitoringOther}
-                      onChange={(e) => put("monitoringOther", e.target.value)}
-                      placeholder="Specify how often the saplings will be checked"
+                      value={form.caretaker}
+                      onChange={(e) => put("caretaker", e.target.value)}
+                      placeholder="Enter the person, group, or organization responsible"
                     />
                   </Field>
-                )}
-                <Field
-                  label="How will you care for and maintain the saplings after planting? *"
-                  error={errors.carePlan}
-                  wide
-                >
-                  <textarea
-                    value={form.carePlan}
-                    onChange={(e) => put("carePlan", e.target.value)}
-                    placeholder="Describe how the saplings will be watered, protected, checked, and maintained after planting."
-                  />
-                </Field>
+                  <Field
+                    label="How often do you plan to check the planted saplings? *"
+                    error={errors.monitoringFrequency}
+                  >
+                    <select
+                      value={form.monitoringFrequency}
+                      onChange={(e) => put("monitoringFrequency", e.target.value)}
+                    >
+                      <option value="">Select monitoring frequency</option>
+                      {[
+                        "Daily",
+                        "Several times a week",
+                        "Weekly",
+                        "Every two weeks",
+                        "Monthly",
+                        "Other",
+                      ].map((x) => (
+                        <option key={x}>{x}</option>
+                      ))}
+                    </select>
+                  </Field>
+                  {form.monitoringFrequency === "Other" && (
+                    <Field
+                      label="Please Specify *"
+                      error={errors.monitoringOther}
+                    >
+                      <input
+                        value={form.monitoringOther}
+                        onChange={(e) => put("monitoringOther", e.target.value)}
+                        placeholder="Specify how often the saplings will be checked"
+                      />
+                    </Field>
+                  )}
+                  <Field
+                    label="How will you care for and maintain the saplings after planting? *"
+                    error={errors.carePlan}
+                    wide
+                  >
+                    <textarea
+                      value={form.carePlan}
+                      onChange={(e) => put("carePlan", e.target.value)}
+                      placeholder="Describe how the saplings will be watered, protected, checked, and maintained after planting."
+                    />
+                  </Field>
+                </div>
               </div>
             </>
           )}
@@ -1380,13 +1378,15 @@ export default function ParticipantSaplingRequestWizard({ currentUser }) {
             <>
               {group && (
                 <>
-                  <Title>Supporting Document</Title>
-                  <RequestLetterUpload
-                    file={form.requestLetter}
-                    error={errors.requestLetter}
-                    onSelect={handleRequestLetter}
-                    onRemove={() => put("requestLetter", null)}
-                  />
+                  <div className="participant-supporting-section">
+                    <Title>Supporting Document</Title>
+                    <RequestLetterUpload
+                      file={form.requestLetter}
+                      error={errors.requestLetter}
+                      onSelect={handleRequestLetter}
+                      onRemove={() => put("requestLetter", null)}
+                    />
+                  </div>
                 </>
               )}
               {!editing && (
@@ -1433,8 +1433,9 @@ export default function ParticipantSaplingRequestWizard({ currentUser }) {
                   </div>
                 </>
               )}
-              <Title>Review Your Request</Title>
-              <div className="sr-wizard-review">
+              <div className="participant-review-section">
+                <Title>Review Your Request</Title>
+                <div className="sr-wizard-review">
                 <p>
                   <strong>Requester:</strong> {form.fullName} · {form.sector}
                 </p>
@@ -1465,19 +1466,20 @@ export default function ParticipantSaplingRequestWizard({ currentUser }) {
                   <strong>Release:</strong> {form.releaseMethod} ·{" "}
                   {form.preferredReleaseDate}
                 </p>
-              </div>
-              <div className="participant-confirmation-row">
-                <label className="participant-confirmation">
-                  <input
-                    type="checkbox"
-                    checked={form.confirmed}
-                    onChange={(e) => put("confirmed", e.target.checked)}
-                  />
-                  <span>I confirm that the information provided is correct.</span>
-                </label>
-                {errors.confirmed && (
-                  <small className="sr-field-error">{errors.confirmed}</small>
-                )}
+                </div>
+                <div className="participant-confirmation-row">
+                  <label className="participant-confirmation">
+                    <input
+                      type="checkbox"
+                      checked={form.confirmed}
+                      onChange={(e) => put("confirmed", e.target.checked)}
+                    />
+                    <span>I confirm that the information provided is correct.</span>
+                  </label>
+                  {errors.confirmed && (
+                    <small className="sr-field-error">{errors.confirmed}</small>
+                  )}
+                </div>
               </div>
             </>
           )}
@@ -1562,7 +1564,8 @@ function LocationMap({ barangay, site, editable = false, areaHectares = 0, onPic
     coverage = useRef(null),
     boundaries = useRef(null),
     selectedFeature = useRef(null),
-    siteRef = useRef(site);
+    siteRef = useRef(site),
+    resizeScheduler = useRef(null);
   const [boundaryRevision, setBoundaryRevision] = useState(0);
   const selectedBarangay = String(barangay || site?.barangay || "").trim().toLowerCase();
   useEffect(() => {
@@ -1570,6 +1573,8 @@ function LocationMap({ barangay, site, editable = false, areaHectares = 0, onPic
   }, [site]);
   useEffect(() => {
     if (!node.current || map.current) return;
+    const scheduler = createLeafletResizeScheduler();
+    resizeScheduler.current = scheduler;
     const instance = L.map(node.current, {
       center: BULAN_CENTER,
       zoom: 12,
@@ -1598,10 +1603,18 @@ function LocationMap({ barangay, site, editable = false, areaHectares = 0, onPic
           '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
       }).addTo(instance);
     map.current = instance;
-    setTimeout(() => instance.invalidateSize(), 0);
+    const isCurrent = () => map.current === instance;
+    scheduler.schedule(instance, isCurrent);
+    const observer = typeof ResizeObserver === "function"
+      ? new ResizeObserver(() => scheduler.schedule(instance, isCurrent))
+      : null;
+    observer?.observe(node.current);
     return () => {
-      instance.remove();
+      observer?.disconnect();
       map.current = null;
+      resizeScheduler.current = null;
+      scheduler.dispose();
+      instance.remove();
       marker.current = null;
       coverage.current = null;
       boundaries.current = null;
@@ -1617,7 +1630,7 @@ function LocationMap({ barangay, site, editable = false, areaHectares = 0, onPic
         const response = await fetch(BARANGAY_GEOJSON_URL);
         if (!response.ok) throw new Error("Boundary data unavailable");
         const data = await response.json();
-        if (cancelled || !map.current) return;
+        if (cancelled || map.current !== instance) return;
         if (boundaries.current) instance.removeLayer(boundaries.current);
         let selectedBounds = null;
         const selected = selectedBarangay;
@@ -1700,9 +1713,16 @@ function LocationMap({ barangay, site, editable = false, areaHectares = 0, onPic
           else instance.setView(BULAN_CENTER, 12);
         }
       } catch {
-        if (!cancelled) instance.setView(BULAN_CENTER, 12);
+        if (!cancelled && map.current === instance) {
+          instance.setView(BULAN_CENTER, 12);
+        }
       }
-      setTimeout(() => instance.invalidateSize(), 0);
+      if (!cancelled && map.current === instance) {
+        resizeScheduler.current?.schedule(
+          instance,
+          () => map.current === instance,
+        );
+      }
     }
     draw();
     return () => {
@@ -1759,7 +1779,10 @@ function LocationMap({ barangay, site, editable = false, areaHectares = 0, onPic
       });
       instance.setView([lat, lng], 16, { animate: false });
     } else if (editable) onValidationChange?.("pending");
-    setTimeout(() => instance.invalidateSize(), 0);
+    resizeScheduler.current?.schedule(
+      instance,
+      () => map.current === instance,
+    );
   }, [site?.latitude, site?.longitude, editable, areaHectares, boundaryRevision, onPick, onValidationChange]);
   useEffect(() => {
     const instance = map.current;

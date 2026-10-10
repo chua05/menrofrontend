@@ -30,6 +30,7 @@ import {
 } from "lucide-react";
 
 import { useAuth } from "../context/AuthContext";
+import { useToast } from "../context/ToastContext";
 import {
   IDENTIFICATION_DOCUMENTS,
   validateIdentificationForm,
@@ -514,8 +515,18 @@ function StatusBadge({ status }) {
   );
 }
 
+const waitForUiPaint = () => new Promise((resolve) => {
+  if (typeof window === "undefined" || typeof window.requestAnimationFrame !== "function") {
+    resolve();
+    return;
+  }
+
+  window.requestAnimationFrame(() => window.requestAnimationFrame(resolve));
+});
+
 export default function SeedlingRequestsPage() {
   const { userRole, currentUser } = useAuth();
+  const { success: showSuccess, warning: showWarning } = useToast();
   const [pageSearchParams] = useSearchParams();
 
   const [requests, setRequests] = useState([]);
@@ -630,8 +641,6 @@ export default function SeedlingRequestsPage() {
   );
 
   const [formErrors, setFormErrors] = useState({});
-  const [successMessage, setSuccessMessage] =
-    useState("");
 
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
@@ -678,25 +687,36 @@ export default function SeedlingRequestsPage() {
     };
   }, []);
 
-  const loadRequests = useCallback(async () => {
+  const loadRequests = useCallback(async ({ background = false } = {}) => {
   if (userRole === "participant") {
-    return;
+    return [];
   }
 
-  setLoadingRequests(true);
-  setLoadError("");
+  if (!background) {
+    setLoadingRequests(true);
+    setLoadError("");
+  }
 
   try {
     const data = await apiRequest("/seedling-requests");
     const list = Array.isArray(data) ? data : [];
+    const normalized = list.map(normalizeRequestForUi);
 
-    setRequests(list.map(normalizeRequestForUi));
+    setRequests(normalized);
+    setSelectedRequest((current) => {
+      if (!current?.id) return current;
+      return normalized.find((request) => request.id === current.id) || current;
+    });
+    return normalized;
   } catch (error) {
     console.error("Failed to load seedling requests:", error);
 
-    setLoadError("Unable to load sapling requests. Please try again.");
+    if (!background) {
+      setLoadError("Unable to load sapling requests. Please try again.");
+    }
+    return null;
   } finally {
-    setLoadingRequests(false);
+    if (!background) setLoadingRequests(false);
   }
 }, [userRole]);
 
@@ -1144,11 +1164,7 @@ useEffect(() => {
     setActiveTab("all");
     closeNewRequestModal();
 
-    setSuccessMessage(`${newRequest.id} was created successfully.`);
-
-    window.setTimeout(() => {
-      setSuccessMessage("");
-    }, 3000);
+    showSuccess(`${newRequest.id} was created successfully.`);
   };
 
   const refreshSelectedRequest = (updated) => {
@@ -1209,8 +1225,9 @@ useEffect(() => {
       );
 
       refreshSelectedRequest(updated);
-      setSuccessMessage(`${getRequestDisplayId(request)} was reviewed successfully.`);
       setReviewModal(null);
+      await waitForUiPaint();
+      showSuccess(`${getRequestDisplayId(request)} was reviewed successfully.`);
     } catch (error) {
       console.error(error);
       setReviewError(error.message || "Unable to review the request.");
@@ -1264,11 +1281,12 @@ useEffect(() => {
       );
 
       refreshSelectedRequest(updated);
-      setSuccessMessage(
-        `${getRequestDisplayId(request)} was returned for revision.`
-      );
       setReturnModal(null);
       setReturnReason("");
+      await waitForUiPaint();
+      showSuccess(
+        `${getRequestDisplayId(request)} was returned for revision.`
+      );
     } catch (error) {
       console.error("Return for revision failed:", error);
       setReturnError(
@@ -1290,7 +1308,16 @@ useEffect(() => {
       );
 
       refreshSelectedRequest(updated);
-      setSuccessMessage(`${getRequestDisplayId(request)} was released successfully.`);
+      const refreshed = await loadRequests({ background: true });
+      setReleaseModal(null);
+      await waitForUiPaint();
+      if (refreshed) {
+        showSuccess(`${getRequestDisplayId(request)} was released successfully.`);
+      } else {
+        showWarning(
+          `${getRequestDisplayId(request)} was released successfully, but the latest request list could not be refreshed.`
+        );
+      }
       return true;
     } catch (error) {
       console.error(error);
@@ -1361,10 +1388,7 @@ useEffect(() => {
       shortReleaseReason: Number(releaseEntries[index].quantity) < Number(tree.quantity)
         ? releaseEntries[index].reason.trim() : "",
     }));
-    if (await releaseRequest(releaseModal, items)) {
-      setReleaseModal(null);
-      void loadRequests();
-    }
+    await releaseRequest(releaseModal, items);
   };
 
   const openDecisionModal = (request, action) => {
@@ -1416,12 +1440,19 @@ useEffect(() => {
       );
 
       refreshSelectedRequest(updated);
-      setSuccessMessage(
-        `${getRequestDisplayId(request)} was ${action === "approve" ? "approved" : "rejected"} successfully.`
-      );
       setDecisionModal(null);
       setRejectionChoice("");
-      if (action === "approve") void loadRequests();
+      const refreshed = await loadRequests({ background: true });
+      await waitForUiPaint();
+      if (refreshed) {
+        showSuccess(
+          `${getRequestDisplayId(request)} was ${action === "approve" ? "approved" : "rejected"} successfully.`
+        );
+      } else {
+        showWarning(
+          `${getRequestDisplayId(request)} was ${action === "approve" ? "approved" : "rejected"} successfully, but the latest request list could not be refreshed.`
+        );
+      }
     } catch (error) {
       // Log full error for diagnostics but avoid exposing internal
       // configuration messages (such as secret validation) to Admin users.
@@ -1525,15 +1556,12 @@ useEffect(() => {
     setShowArchiveMode(false);
     setPage(1);
 
-    setSuccessMessage(
+    showSuccess(
       `${toArchive.length} request${
         toArchive.length > 1 ? "s were" : " was"
       } archived.`
     );
 
-    window.setTimeout(() => {
-      setSuccessMessage("");
-    }, 3000);
   };
 
   const archiveSingleRequest = (
@@ -1574,13 +1602,10 @@ useEffect(() => {
 
     closeRequestDetails();
 
-    setSuccessMessage(
+    showSuccess(
       `${getRequestDisplayId(request)} was archived.`
     );
 
-    window.setTimeout(() => {
-      setSuccessMessage("");
-    }, 3000);
   };
 
   const restoreArchivedRequest = (requestId) => {
@@ -1607,13 +1632,10 @@ useEffect(() => {
     )
   );
 
-  setSuccessMessage(
+  showSuccess(
     `${getRequestDisplayId(request)} was restored.`
   );
 
-  window.setTimeout(() => {
-    setSuccessMessage("");
-  }, 3000);
 };
 
   const currentTabCount = (tab) => {
@@ -1703,23 +1725,11 @@ useEffect(() => {
 
           <div>
             <h1>Sapling Requests</h1>
-
-            <p>
-              Manage and review all sapling
-              requests from barangays and
-              organizations.
-            </p>
           </div>
         </div>
 
       </section>
 
-      {successMessage && (
-        <div className="sr-success-message">
-          <CircleCheckBig size={16} />
-          {successMessage}
-        </div>
-      )}
 
       {requestError && (
         <div className="sr-api-error" role="alert">
@@ -2816,6 +2826,8 @@ useEffect(() => {
               </button>
             </div>
 
+            <div className="menro-toast-anchor" data-menro-toast-anchor />
+
             <div className="sr-modal-body">
               <div className="sr-detail-status-line">
                 <StatusBadge status={selectedRequest.status} />
@@ -2856,7 +2868,7 @@ useEffect(() => {
 
               {selectedRequest.workflow && (
                 <div className="sr-detail-seedlings">
-                  <h3>Request Workflow Information</h3>
+                  <h3>Request Information</h3>
                   {[
                     ["Sector", selectedRequest.workflow.sector],
                     ["Request Address", `${selectedRequest.workflow.street || ""}, ${selectedRequest.workflow.addressBarangay || ""}, Bulan, Sorsogon`],
@@ -4264,6 +4276,7 @@ function AdminDecisionModal({
 
 export function ParticipantSeedlingRequest({ currentUser }) {
   const navigate = useNavigate();
+  const { success: showSuccess } = useToast();
   const [searchParams] = useSearchParams();
   const editRequestId = searchParams.get("edit")?.trim() || "";
   const [participantProfile, setParticipantProfile] = useState(currentUser || {});
@@ -4273,7 +4286,6 @@ export function ParticipantSeedlingRequest({ currentUser }) {
   const [editingRequest, setEditingRequest] = useState(null);
 
   const [formErrors, setFormErrors] = useState({});
-  const [successMessage, setSuccessMessage] = useState("");
   const [apiError, setApiError] = useState("");
   const [availableInventory, setAvailableInventory] = useState([]);
   const [loadingParticipantData, setLoadingParticipantData] = useState(true);
@@ -4751,7 +4763,7 @@ useEffect(() => {
         }
       );
 
-      setSuccessMessage(
+      showSuccess(
         editingRequest
           ? "Your corrected request was resubmitted for MENRO Staff review."
           : "You successfully submitted your sapling request."
@@ -4766,9 +4778,6 @@ useEffect(() => {
         await loadParticipantData();
       }
 
-      window.setTimeout(() => {
-        setSuccessMessage("");
-      }, 3500);
     } catch (error) {
       console.error(error);
       const message = error.message || "";
@@ -4832,31 +4841,6 @@ useEffect(() => {
           </div>
         </div>
       </section>
-
-      {successMessage && (
-        <div
-          role="status"
-          aria-live="polite"
-          style={{
-            position: "fixed",
-            top: "18px",
-            left: "50%",
-            transform: "translateX(-50%)",
-            zIndex: 9999,
-            padding: "11px 16px",
-            border: "1px solid #b8dcc8",
-            borderRadius: "8px",
-            background: "#ffffff",
-            color: "#087443",
-            fontSize: "13px",
-            fontWeight: 700,
-            boxShadow: "0 6px 18px rgba(0, 0, 0, 0.12)",
-            textAlign: "center",
-          }}
-        >
-          {successMessage}
-        </div>
-      )}
 
       <section className="sr-record-card participant-request-card">
         <div className="participant-form-header">

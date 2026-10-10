@@ -199,29 +199,14 @@
   border-radius: 50%;
 }
 
-.sr-kpi-icon.green {
-  background: #e2f3e6;
-  color: #14823d;
-}
-
-.sr-kpi-icon.orange {
-  background: #fff0df;
-  color: #f39818;
-}
-
-.sr-kpi-icon.blue {
-  background: #e5effe;
-  color: #2472e7;
-}
-
-.sr-kpi-icon.red {
-  background: #fde7e7;
-  color: #e93a3a;
-}
-
-.sr-kpi-icon.purple {
-  background: #f2e8ff;
-  color: #8039e9;
+.sr-kpi-icon.green,
+.sr-kpi-icon.orange,
+.sr-kpi-icon.blue,
+.sr-kpi-icon.red,
+.sr-kpi-icon.purple,
+.sr-kpi-icon {
+  background: #e8f6ed;
+  color: #168a45;
 }
 
 .sr-kpi-card > div:last-child {
@@ -1864,6 +1849,14 @@
 
 .participant-request-form {
   padding: 22px;
+  --participant-section-gap: 26px;
+  --participant-content-gap: 20px;
+}
+
+.participant-request-form .sr-form-grid {
+  column-gap: 20px;
+  row-gap: 18px;
+  align-items: start;
 }
 
 /* ---------- Section titles ---------- */
@@ -1873,7 +1866,40 @@
 }
 
 .participant-section-title:not(:first-child) {
-  margin-top: 26px;
+  margin-top: var(--participant-section-gap, 26px);
+}
+
+.participant-coordinate-grid + .sr-coverage-summary {
+  margin-top: var(--participant-content-gap, 20px);
+}
+
+.sr-coverage-summary + .sr-form-field,
+.sr-coverage-summary + .sr-field-error + .sr-form-field {
+  margin-top: var(--participant-content-gap, 20px);
+}
+
+.participant-care-section,
+.participant-supporting-section,
+.participant-review-section {
+  margin-top: var(--participant-section-gap, 26px);
+}
+
+.participant-request-form > .participant-supporting-section:first-child {
+  margin-top: 0;
+}
+
+.participant-care-section > .participant-section-title,
+.participant-supporting-section > .participant-section-title,
+.participant-review-section > .participant-section-title {
+  margin-top: 0;
+}
+
+.participant-care-grid > .sr-form-field:nth-child(-n + 2) > span {
+  min-height: 40px;
+}
+
+.participant-review-section .participant-confirmation-row {
+  margin-top: 22px;
 }
 
 .participant-section-title h3 {
@@ -2733,6 +2759,10 @@
 
   .participant-confirmation span {
     font-size: 14px;
+  }
+
+  .participant-care-grid > .sr-form-field:nth-child(-n + 2) > span {
+    min-height: 0;
   }
 
   .participant-form-footer {

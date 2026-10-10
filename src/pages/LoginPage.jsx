@@ -8,6 +8,7 @@ import {
 } from "firebase/auth";
 import { auth } from "../firebase/config";
 import { useAuth } from "../context/AuthContext";
+import { useToast } from "../context/ToastContext";
 import { dashboardPathForRole } from "../utils/roleRoutes";
 import { authenticatedFetch, verifyMenroSession } from "../services/authenticatedApi";
 import { startGooglePopup } from "../services/googleRedirectAuth";
@@ -54,13 +55,12 @@ export default function LoginPage() {
     useState(false);
   const [error, setError] =
     useState("");
-  const [success, setSuccess] =
-    useState(() => location.state?.message || "");
   const [loading, setLoading] =
     useState(false);
   const [loginStage, setLoginStage] = useState("");
   const [resetLoading, setResetLoading] = useState(false);
   const { login, verificationRequired } = useAuth();
+  const { success: showSuccess } = useToast();
 
   const [verificationSending, setVerificationSending] = useState(false);
   const [resendCooldown, setResendCooldown] = useState(0);
@@ -72,6 +72,13 @@ export default function LoginPage() {
       googleAttempt.current += 1;
     };
   }, []);
+
+  useEffect(() => {
+    const message = location.state?.message;
+    if (!message) return;
+    showSuccess(message, { dedupeKey: `login-route:${message}` });
+    navigate(`${location.pathname}${location.search}`, { replace: true, state: null });
+  }, [location.pathname, location.search, location.state, navigate, showSuccess]);
 
   useEffect(() => {
     if (resendCooldown <= 0) return undefined;
@@ -87,7 +94,6 @@ export default function LoginPage() {
     if (signInInProgress.current) return;
 
     setError("");
-    setSuccess("");
 
     const normalizedEmail = email.trim().toLowerCase();
 
@@ -113,13 +119,12 @@ export default function LoginPage() {
         password
       );
 
-      setLoginStage("Verifying with MENRO...");
+      setLoginStage("Continuing...");
       const userData = await verifyMenroSession(credential.user);
 
       login(userData, userData.role);
       navigate(dashboardPathForRole(userData.role), { replace: true });
     } catch (err) {
-      setSuccess("");
       console.error("Email sign in failed:", err?.code || err?.message);
       setError(getAuthErrorMessage(err, { online: navigator.onLine !== false }));
     } finally {
@@ -137,7 +142,7 @@ export default function LoginPage() {
       const payload = await response.json().catch(() => null);
       if (!response.ok) throw new Error(payload?.message || "Unable to resend verification email.");
       setError("");
-      setSuccess("A new verification email was sent. Verify your address, then sign in again.");
+      showSuccess("A new verification email was sent. Verify your address, then sign in again.");
       setResendCooldown(60);
     } catch (resendError) {
       setError(resendError.message || "Unable to resend the verification email right now. Please try again later.");
@@ -155,9 +160,8 @@ export default function LoginPage() {
       const userBeforePopup = auth.currentUser;
       signInInProgress.current = true;
       setError("");
-      setSuccess("");
       setLoading(true);
-      setLoginStage("Waiting for Google...");
+      setLoginStage("Continuing...");
 
       try {
         let firebaseUser = auth.currentUser;
@@ -184,12 +188,11 @@ export default function LoginPage() {
         }
 
         if (!isCurrentAttempt()) return;
-        setLoginStage("Verifying with MENRO...");
+        setLoginStage("Continuing...");
         const userData = await verifyMenroSession(firebaseUser);
         if (!isCurrentAttempt()) return;
 
         setError("");
-        setSuccess("");
         login(userData, userData.role);
         navigate(
           userData.role === "participant" && userData.profileComplete === false
@@ -200,7 +203,6 @@ export default function LoginPage() {
       } catch (err) {
         if (!isCurrentAttempt()) return;
         console.error("Google sign in failed:", err?.code || err?.message);
-        setSuccess("");
         setError(getAuthErrorMessage(err, {
           provider: "google",
           online: navigator.onLine !== false,
@@ -216,7 +218,6 @@ export default function LoginPage() {
 
   const handleForgotPassword = async () => {
     setError("");
-    setSuccess("");
     const normalizedEmail = email.trim().toLowerCase();
     if (!normalizedEmail) { setError("Please enter your email address first."); return; }
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
@@ -226,7 +227,7 @@ export default function LoginPage() {
     setResetLoading(true);
     try {
       await sendPasswordResetEmail(auth, normalizedEmail);
-      setSuccess("If this email uses a MENRO email/password account, Firebase sent a reset link. Google accounts should continue with Google.");
+      showSuccess("If this email uses a MENRO email/password account, Firebase sent a reset link. Google accounts should continue with Google.");
     } catch (resetError) {
       setError(resetError.code === "auth/invalid-email"
         ? "Please enter a valid email address."
@@ -272,25 +273,6 @@ export default function LoginPage() {
           </div>
 
           <div className="login-divider" />
-
-          {success && (
-            <div
-              role="status"
-              aria-live="polite"
-              style={{
-                marginBottom:
-                  "14px",
-                textAlign:
-                  "center",
-                fontSize:
-                  "13px",
-                fontWeight: 600,
-                color: "#087443",
-              }}
-            >
-              {success}
-            </div>
-          )}
 
           {error && (
             <div className="login-error">

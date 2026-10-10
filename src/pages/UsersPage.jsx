@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 
 import { useAuth } from "../context/AuthContext";
+import { useToast } from "../context/ToastContext";
 import { auth } from "../firebase/config";
 import { formatDisplayId } from "../utils/displayId";
 import { BULAN_BARANGAYS } from "../utils/userTypes";
@@ -115,6 +116,7 @@ function getRoleLabel(role) {
 }
 
 export default function UsersPage() {
+  const { success: showSuccess, error: showError } = useToast();
   const { userRole } = useAuth();
 
   const [users, setUsers] = useState([]);
@@ -136,9 +138,6 @@ export default function UsersPage() {
   const [openRowMenuId, setOpenRowMenuId] = useState(null);
 
   const [selectedRole, setSelectedRole] = useState("participant");
-
-  const [successMessage, setSuccessMessage] = useState("");
-  const [errorMessage, setErrorMessage] = useState("");
 
   const moreMenuRef = useRef(null);
 
@@ -403,24 +402,6 @@ export default function UsersPage() {
     filteredUsers.length
   );
 
-  const showSuccess = (message) => {
-    setSuccessMessage(message);
-    setErrorMessage("");
-
-    window.setTimeout(() => {
-      setSuccessMessage("");
-    }, 3000);
-  };
-
-  const showError = (message) => {
-    setErrorMessage(message);
-    setSuccessMessage("");
-
-    window.setTimeout(() => {
-      setErrorMessage("");
-    }, 3500);
-  };
-
   const resetFilters = () => {
     setSearch("");
     setRoleFilter("");
@@ -558,20 +539,6 @@ export default function UsersPage() {
 
   return (
     <div className="ru-page">
-      {successMessage && (
-        <div className="ru-toast ru-toast-success">
-          <CheckCircle2 size={16} />
-          <span>{successMessage}</span>
-        </div>
-      )}
-
-      {errorMessage && (
-        <div className="ru-toast ru-toast-error">
-          <X size={16} />
-          <span>{errorMessage}</span>
-        </div>
-      )}
-
       <section className="ru-page-header">
         <div className="ru-title-wrap">
           <div className="ru-title-icon">

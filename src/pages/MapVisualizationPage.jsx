@@ -52,6 +52,14 @@ function getReportStatus(report) {
 }
 
 function getReportQuantity(report) {
+  if (report?.reportType === "parent" || report?.acceptedQuantity != null) {
+    return Number(report?.acceptedQuantity || 0);
+  }
+  if (report?.staffApprovalRequired === true &&
+      !["Accepted", "Approved"].includes(report?.staffReviewStatus) &&
+      report?.verificationStatus !== "Approved") {
+    return 0;
+  }
   return (
     Number(report?.quantityPlanted) ||
     Number(report?.quantity) ||

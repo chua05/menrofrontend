@@ -24,6 +24,7 @@ import {
 } from "lucide-react";
 
 import { useAuth } from "../context/AuthContext";
+import { useToast } from "../context/ToastContext";
 import { auth } from "../firebase/config";
 import { formatDisplayId } from "../utils/displayId";
 import { BULAN_BARANGAYS } from "../utils/userTypes";
@@ -229,6 +230,7 @@ function formatDate(value) {
 }
 
 export default function SitesPage() {
+  const { success: showSuccess } = useToast();
   const { userRole } = useAuth();
   const [pageSearchParams] = useSearchParams();
 
@@ -285,9 +287,6 @@ export default function SitesPage() {
 
   const [conditionFilter, setConditionFilter] =
     useState("all");
-
-  const [successMessage, setSuccessMessage] =
-    useState("");
 
   const filteredSites = useMemo(() => {
     const query = search.trim().toLowerCase();
@@ -996,14 +995,6 @@ export default function SitesPage() {
   };
 }, [mapReady, filteredSites]);
 
-  function showSuccess(message) {
-    setSuccessMessage(message);
-
-    window.setTimeout(() => {
-      setSuccessMessage("");
-    }, 3000);
-  }
-
   function updateForm(field, value) {
     setForm((previous) => ({
       ...previous,
@@ -1442,17 +1433,6 @@ export default function SitesPage() {
           )}
         </div>
       </section>
-
-      {successMessage && (
-        <div className="ps-success-message">
-          <Circle
-            size={9}
-            fill="currentColor"
-          />
-
-          {successMessage}
-        </div>
-      )}
 
       {pageError && (
         <div className="ps-success-message" role="alert">

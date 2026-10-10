@@ -13,13 +13,14 @@ import {
   X,
   ChevronLeft,
   ChevronRight,
+  ChevronDown,
   MoreVertical,
   RotateCcw,
-  CircleCheckBig,
   Boxes,
 } from "lucide-react";
 
 import { useAuth } from "../context/AuthContext";
+import { useToast } from "../context/ToastContext";
 import { auth } from "../firebase/config";
 
 import "../styles/seedlings.css";
@@ -293,6 +294,7 @@ function StatusBadge({ status }) {
 }
 
 export default function SeedlingsPage() {
+  const { success: showSuccess, error: showError } = useToast();
   const { userRole } = useAuth();
   const [pageSearchParams] = useSearchParams();
 
@@ -353,11 +355,6 @@ export default function SeedlingsPage() {
       description: "",
     });
 
-  const [successMessage, setSuccessMessage] =
-    useState("");
-
-  const [errorMessage, setErrorMessage] =
-    useState("");
   const [loadError, setLoadError] = useState("");
   const [retryKey, setRetryKey] = useState(0);
 
@@ -790,24 +787,6 @@ export default function SeedlingsPage() {
     resetForm();
   };
 
-  const showSuccess = (message) => {
-    setErrorMessage("");
-    setSuccessMessage(message);
-
-    window.setTimeout(() => {
-      setSuccessMessage("");
-    }, 3000);
-  };
-
-  const showError = (message) => {
-    setSuccessMessage("");
-    setErrorMessage(message);
-
-    window.setTimeout(() => {
-      setErrorMessage("");
-    }, 4500);
-  };
-
   const handleAddSeedling = async (event) => {
     event.preventDefault();
     if (!canManage || actionLoading) return;
@@ -827,7 +806,6 @@ export default function SeedlingsPage() {
     }
 
     setActionLoading(true);
-    setErrorMessage("");
 
     try {
       const quantity =
@@ -898,7 +876,6 @@ export default function SeedlingsPage() {
     });
 
     setEditErrors({});
-    setErrorMessage("");
     setShowEditModal(true);
   };
 
@@ -992,7 +969,6 @@ export default function SeedlingsPage() {
     }
 
     setActionLoading(true);
-    setErrorMessage("");
 
     try {
       const response =
@@ -1090,11 +1066,6 @@ export default function SeedlingsPage() {
 
           <div>
             <h1>Saplings</h1>
-
-            <p>
-              Manage all saplings and
-              distribution records.
-            </p>
           </div>
         </div>
 
@@ -1114,29 +1085,6 @@ export default function SeedlingsPage() {
 
         </div>
       </section>
-
-      {/* SUCCESS */}
-      {successMessage && (
-        <div className="sd-success-message">
-          <CircleCheckBig size={16} />
-
-          {successMessage}
-        </div>
-      )}
-
-      {errorMessage && (
-        <div
-          role="alert"
-          style={{
-            marginBottom: "12px",
-            color: "#a12a2a",
-            fontSize: "13px",
-            fontWeight: 600,
-          }}
-        >
-          {errorMessage}
-        </div>
-      )}
 
       {/* KPI */}
       <section className="sd-kpi-grid">
@@ -1776,21 +1724,16 @@ export default function SeedlingsPage() {
           label="Tree Name *"
           error={formErrors.treeName}
         >
-          <input
-            type="search"
-            list="menro-sapling-species"
+          <SpeciesCombobox
             value={form.treeName}
-            placeholder="Select tree name"
-            onChange={(event) =>
+            options={speciesOptions}
+            onChange={(value) =>
               updateForm(
                 "treeName",
-                event.target.value
+                value
               )
             }
           />
-          <datalist id="menro-sapling-species">
-            {speciesOptions.map((species) => <option key={species.treeName} value={species.treeName} />)}
-          </datalist>
         </FormField>
 
         <FormField label="Scientific Name" hint="Automatically filled when a tree is selected.">
@@ -2331,6 +2274,133 @@ function FormField({
         </small>
       )}
     </label>
+  );
+}
+
+function SpeciesCombobox({ value, options, onChange }) {
+  const wrapperRef = useRef(null);
+  const inputRef = useRef(null);
+  const [open, setOpen] = useState(false);
+  const [opensUpward, setOpensUpward] = useState(false);
+  const [activeIndex, setActiveIndex] = useState(-1);
+
+  const filteredOptions = useMemo(() => {
+    const query = String(value || "").trim().toLowerCase();
+    if (!query) return options;
+    return options.filter((species) =>
+      String(species.treeName || "").toLowerCase().includes(query));
+  }, [options, value]);
+
+  const openList = () => {
+    const rect = inputRef.current?.getBoundingClientRect();
+    if (rect) {
+      const spaceBelow = window.innerHeight - rect.bottom;
+      setOpensUpward(spaceBelow < 220 && rect.top > spaceBelow);
+    }
+    setOpen(true);
+    setActiveIndex(-1);
+  };
+
+  useEffect(() => {
+    if (!open) return undefined;
+    const closeOnOutsideInteraction = (event) => {
+      if (!wrapperRef.current?.contains(event.target)) setOpen(false);
+    };
+    document.addEventListener("pointerdown", closeOnOutsideInteraction);
+    return () => document.removeEventListener("pointerdown", closeOnOutsideInteraction);
+  }, [open]);
+
+  const selectOption = (species) => {
+    onChange(species.treeName);
+    setOpen(false);
+    setActiveIndex(-1);
+    inputRef.current?.focus();
+  };
+
+  const handleKeyDown = (event) => {
+    if (event.key === "Escape") {
+      setOpen(false);
+      setActiveIndex(-1);
+      return;
+    }
+    if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+      event.preventDefault();
+      if (!open) {
+        openList();
+        return;
+      }
+      const direction = event.key === "ArrowDown" ? 1 : -1;
+      setActiveIndex((current) => {
+        if (filteredOptions.length === 0) return -1;
+        if (current < 0) return direction > 0 ? 0 : filteredOptions.length - 1;
+        return (current + direction + filteredOptions.length) % filteredOptions.length;
+      });
+      return;
+    }
+    if (event.key === "Enter" && open && activeIndex >= 0) {
+      event.preventDefault();
+      selectOption(filteredOptions[activeIndex]);
+    }
+  };
+
+  return (
+    <div className={`sd-species-combobox${opensUpward ? " opens-upward" : ""}`} ref={wrapperRef}>
+      <input
+        ref={inputRef}
+        type="search"
+        value={value}
+        placeholder="Select tree name"
+        autoComplete="off"
+        role="combobox"
+        aria-label="Tree Name"
+        aria-autocomplete="list"
+        aria-expanded={open}
+        aria-controls="menro-sapling-species-listbox"
+        aria-activedescendant={activeIndex >= 0 ? `menro-species-option-${activeIndex}` : undefined}
+        onFocus={openList}
+        onClick={openList}
+        onChange={(event) => {
+          onChange(event.target.value);
+          if (!open) openList();
+        }}
+        onKeyDown={handleKeyDown}
+      />
+      <button
+        type="button"
+        className="sd-combobox-toggle"
+        aria-label={open ? "Close tree name options" : "Open tree name options"}
+        tabIndex={-1}
+        onClick={() => {
+          if (open) setOpen(false);
+          else {
+            openList();
+            inputRef.current?.focus();
+          }
+        }}
+      >
+        <ChevronDown size={18} />
+      </button>
+      {open && (
+        <div className="sd-combobox-list" id="menro-sapling-species-listbox" role="listbox">
+          {filteredOptions.length > 0 ? filteredOptions.map((species, index) => (
+            <div
+              id={`menro-species-option-${index}`}
+              key={species.treeName}
+              className={`sd-combobox-option${index === activeIndex ? " is-active" : ""}${species.treeName === value ? " is-selected" : ""}`}
+              role="option"
+              aria-selected={species.treeName === value}
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={() => selectOption(species)}
+              onMouseEnter={() => setActiveIndex(index)}
+            >
+              {species.treeName}
+            </div>
+          )) : (
+            <div className="sd-combobox-empty">No matching tree names.</div>
+          )}
+        </div>
+      )}
+    </div>
   );
 }
 

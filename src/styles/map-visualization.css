@@ -110,8 +110,8 @@
   display: grid;
   place-items: center;
   flex-shrink: 0;
-  background: #eaf6ee;
-  color: #238b45;
+  background: #e8f6ed;
+  color: #168a45;
 }
 
 .mv-kpi-card strong {

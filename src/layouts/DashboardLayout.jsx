@@ -55,6 +55,8 @@ export default function DashboardLayout() {
       <div className="dashboard-main">
         <Topbar onOpenSidebar={() => setSidebarOpen(true)} />
 
+        <div className="menro-toast-page-anchor" data-menro-toast-page-anchor />
+
         <main className="dashboard-page-content">
           <div
             key={location.pathname}

@@ -426,6 +426,14 @@ function getDistributedQuantity(record) {
 }
 
 function getPlantedQuantity(record) {
+  if (record?.reportType === "parent" || record?.acceptedQuantity != null) {
+    return Number(record?.acceptedQuantity || 0);
+  }
+  if (record?.staffApprovalRequired === true &&
+      !["Accepted", "Approved"].includes(record?.staffReviewStatus) &&
+      record?.verificationStatus !== "Approved") {
+    return 0;
+  }
   return Number(
     record?.quantityPlanted ??
       record?.quantity ??
@@ -798,6 +806,26 @@ function EmptyState({ icon: Icon, title, text }) {
       <strong>{title}</strong>
       <span>{text}</span>
     </div>
+  );
+}
+
+function QuickActionsCard({ actions, onNavigate }) {
+  return (
+    <section className="dash-card quick-card">
+      <div className="dash-card-header"><h2>Quick Actions</h2></div>
+      <div className="quick-list">
+        {actions.map((action) => {
+          const Icon = action.icon;
+          return (
+            <button type="button" key={action.id} onClick={() => onNavigate(action.route)}>
+              <span className="quick-icon"><Icon size={15} /></span>
+              <span>{action.label}</span>
+              <span className="quick-arrow">›</span>
+            </button>
+          );
+        })}
+      </div>
+    </section>
   );
 }
 
@@ -1202,6 +1230,25 @@ function DashboardSitesMap({
       bulanBoundsRef.current = null;
       panControlRef.current = null;
       siteLayersRef.current = [];
+    };
+  }, []);
+
+  useEffect(() => {
+    const container = mapContainerRef.current;
+    if (!container || typeof ResizeObserver === "undefined") return undefined;
+
+    let frameId = 0;
+    const observer = new ResizeObserver(() => {
+      window.cancelAnimationFrame(frameId);
+      frameId = window.requestAnimationFrame(() => {
+        mapRef.current?.invalidateSize({ pan: false });
+      });
+    });
+
+    observer.observe(container);
+    return () => {
+      observer.disconnect();
+      window.cancelAnimationFrame(frameId);
     };
   }, []);
 
@@ -2576,7 +2623,7 @@ export default function DashboardPage() {
               </div>
 
               <div className="activity-chart">
-                <ResponsiveContainer
+                  <ResponsiveContainer
                   width="100%"
                   height="100%"
                   initialDimension={ACTIVITY_CHART_INITIAL_SIZE}
@@ -2985,6 +3032,7 @@ export default function DashboardPage() {
             )}
           </section>
 
+          {isParticipant && (
           <section className="dash-card quick-card">
             <div className="dash-card-header">
               <h2>
@@ -3033,6 +3081,7 @@ export default function DashboardPage() {
               )}
             </div>
           </section>
+          )}
         </div>
       </section>
 
@@ -3047,7 +3096,7 @@ export default function DashboardPage() {
             </div>
 
               <div className="survival-content">
-                <div className="survival-chart-wrap">
+                  <div className="survival-chart-wrap">
                   <ResponsiveContainer
                     width="100%"
                     height="100%"
@@ -3291,6 +3340,7 @@ export default function DashboardPage() {
               <span>›</span>
             </button>
           </section>
+          <QuickActionsCard actions={quickActions} onNavigate={navigate} />
         </section>
       )}
     </div>

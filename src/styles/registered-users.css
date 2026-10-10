@@ -154,29 +154,14 @@
   place-items: center;
 }
 
-.ru-kpi-icon.green {
-  background: #e2f3e6;
-  color: #14823d;
-}
-
-.ru-kpi-icon.orange {
-  background: #fff0df;
-  color: #f39818;
-}
-
-.ru-kpi-icon.blue {
-  background: #e5effe;
-  color: #2472e7;
-}
-
-.ru-kpi-icon.purple {
-  background: #f2e8ff;
-  color: #8039e9;
-}
-
-.ru-kpi-icon.red {
-  background: #fde7e7;
-  color: #e93a3a;
+.ru-kpi-icon.green,
+.ru-kpi-icon.orange,
+.ru-kpi-icon.blue,
+.ru-kpi-icon.purple,
+.ru-kpi-icon.red,
+.ru-kpi-icon {
+  background: #e8f6ed;
+  color: #168a45;
 }
 
 .ru-kpi-card > div:last-child {

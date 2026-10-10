@@ -2,11 +2,12 @@
 /* Planting Reports page styles. Dynamic status colors remain inline in JSX. */
 
 .pr-page {
+  box-sizing: border-box;
   width: 100%;
   max-width: 100%;
+  min-width: 0;
   padding: 28px 30px 40px;
   min-height: 100%;
-  overflow-x: clip;
   background: #f8faf9;
   color: #1f2937;
   font-size: 15px;
@@ -128,16 +129,20 @@
   box-shadow: 0 1px 2px rgba(15, 23, 42, 0.02);
 }
 
+.pr-card > div:last-child {
+  min-width: 0;
+}
+
 .pr-card-icon {
   width: 44px;
   height: 44px;
-  border-radius: 10px;
+  border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  background: #edf7f0;
-  color: #17643a;
+  background: #e8f6ed;
+  color: #168a45;
 }
 
 .pr-card-value {
@@ -152,9 +157,13 @@
   color: #66736b;
   font-size: 14px;
   line-height: 1.4;
+  overflow-wrap: anywhere;
 }
 
 .pr-panel {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
   background: #ffffff;
   border: 1px solid #e3e8e5;
   border-radius: 12px;
@@ -163,6 +172,8 @@
 }
 
 .pr-toolbar {
+  width: 100%;
+  min-width: 0;
   padding: 16px 18px;
   border-bottom: 1px solid #e8ece9;
   display: flex;
@@ -173,6 +184,7 @@
 }
 
 .pr-toolbar-left {
+  min-width: 0;
   display: flex;
   align-items: center;
   gap: 10px;
@@ -184,6 +196,7 @@
   position: relative;
   display: flex;
   align-items: center;
+  max-width: 100%;
 }
 
 .pr-filter-wrap > svg {
@@ -201,6 +214,7 @@
 
 .pr-search-wrap {
   position: relative;
+  min-width: 0;
   flex: 1 1 280px;
   max-width: 420px;
 }
@@ -248,9 +262,50 @@
 
 .pr-table-wrap {
   width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  display: block;
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
   overscroll-behavior-inline: contain;
+}
+
+@media (max-width: 768px) {
+  .pr-toolbar {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    align-items: stretch;
+    justify-content: stretch;
+    gap: 12px;
+    height: auto;
+    min-height: 0;
+    padding: 14px;
+  }
+
+  .pr-toolbar-left {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    align-items: stretch;
+    gap: 12px;
+    flex: none;
+    width: 100%;
+    min-height: 0;
+  }
+
+  .pr-search-wrap,
+  .pr-filter-wrap,
+  .pr-toolbar > .pr-secondary-button {
+    width: 100%;
+    max-width: none;
+    min-width: 0;
+    margin: 0;
+  }
+
+  .pr-search-input,
+  .pr-filter-wrap .pr-select {
+    width: 100%;
+    min-width: 0;
+  }
 }
 
 .pr-table {

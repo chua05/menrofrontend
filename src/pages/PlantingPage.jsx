@@ -31,7 +31,7 @@ import { useAuth } from "../context/AuthContext";
 import ProtectedEvidenceImage from "../components/ProtectedEvidenceImage";
 import { auth } from "../firebase/config";
 import { formatDisplayId } from "../utils/displayId";
-import { BULAN_BARANGAYS, userTypeField } from "../utils/userTypes";
+import { BULAN_BARANGAYS, USER_TYPES } from "../utils/userTypes";
 import "../styles/planting-reports.css";
 
 const API_BASE_URL =
@@ -221,16 +221,6 @@ function getReportEventStatus(event, now = new Date()) {
   return startsAt && startsAt <= now ? "Completed" : "Upcoming";
 }
 
-function getProfileAffiliation(profile) {
-  return profile?.affiliationName || profile?.userTypeDetail ||
-    profile?.organization || profile?.barangay || "";
-}
-
-function getProfileAffiliationLabel(profile) {
-  const field = userTypeField(profile?.userType);
-  return field?.label?.replace(" *", "") || "Affiliation";
-}
-
 function getFeatureBarangayName(feature) {
   const properties = feature?.properties || {};
   return (
@@ -344,20 +334,8 @@ function isPointInPolygon(latitude, longitude, polygon) {
   return inside;
 }
 
-function getCurrentUserIdentity(currentUser) {
-  const id = currentUser?.uid || currentUser?.id || currentUser?.email || "";
-  const name =
-    currentUser?.displayName ||
-    currentUser?.fullName ||
-    currentUser?.name ||
-    currentUser?.email ||
-    "Current User";
-
-  return { id, name };
-}
-
 export default function PlantingPage() {
-  const { userRole, currentUser } = useAuth();
+  const { userRole } = useAuth();
   const [pageSearchParams] = useSearchParams();
 
   const isParticipant = userRole === "participant";
@@ -377,16 +355,10 @@ export default function PlantingPage() {
   const eventsRequestSequenceRef = useRef(0);
   const noEventsAlertTimerRef = useRef(null);
 
-  const currentIdentity = useMemo(
-    () => getCurrentUserIdentity(currentUser),
-    [currentUser]
-  );
-
   const [records, setRecords] = useState([]);
   const [sites, setSites] = useState([]);
   const [distributions, setDistributions] = useState([]);
   const [events, setEvents] = useState([]);
-  const [participantProfile, setParticipantProfile] = useState(currentUser || null);
   const [bulanGeoJson, setBulanGeoJson] = useState(null);
 
   const [loading, setLoading] = useState(true);
@@ -416,6 +388,9 @@ export default function PlantingPage() {
   const [locationPhotoSignature, setLocationPhotoSignature] = useState("");
 
   const [form, setForm] = useState({
+    submittedByName: "",
+    submittedBySector: "",
+    submittedByContactNumber: "",
     participantType: "",
     organizationAffiliation: "",
     barangay: "",
@@ -578,25 +553,6 @@ export default function PlantingPage() {
     }
   }
 
-  async function loadParticipantProfile() {
-    if (!isParticipant) return;
-    try {
-      const response = await apiRequest("/auth/profile");
-      if (response.data) {
-        setParticipantProfile(response.data);
-        setForm((previous) => ({
-          ...previous,
-          participantType: response.data.userType || "",
-          organizationAffiliation: getProfileAffiliation(response.data),
-        }));
-      }
-    } catch (error) {
-      if (!isSessionError(error)) {
-        showPopup("Unable to load your saved participant profile. Please try again.", "error");
-      }
-    }
-  }
-
   async function loadEvents() {
     const requestSequence = ++eventsRequestSequenceRef.current;
     setEventsLoadStatus("loading");
@@ -671,7 +627,6 @@ export default function PlantingPage() {
 
     try {
       await Promise.all([
-        isParticipant ? loadParticipantProfile() : Promise.resolve(),
         loadSites(),
         loadEvents(),
         isParticipant ? loadMyDistributions() : Promise.resolve(),
@@ -1062,7 +1017,7 @@ export default function PlantingPage() {
       validRecordStatus &&
       !isUnavailable &&
       startsAt && startsAt <= new Date() &&
-      (!isParticipant || event.isMyEvent === true)
+      true
     );
   }).sort((left, right) => {
     const statusRank = { Ongoing: 0, Completed: 1 };
@@ -1075,7 +1030,6 @@ export default function PlantingPage() {
 }, [
   events,
   form.siteId,
-  isParticipant,
 ]);
 
   useEffect(() => {
@@ -1147,6 +1101,7 @@ export default function PlantingPage() {
     const selectedEvent = events.find((event) =>
       String(getEventId(event)) === String(form.eventId));
     const recorded = selectedEvent?.recordedSeedlingsByInventory || {};
+    const pendingReservations = selectedEvent?.pendingSeedlingsByInventory || {};
     const items = Array.isArray(distribution.items) && distribution.items.length > 0
       ? distribution.items
       : [{
@@ -1162,10 +1117,19 @@ export default function PlantingPage() {
         distributionId: distribution.id,
         optionId: String(item.inventoryId || item.species),
         releasedQuantity,
-        remainingQuantity: Math.max(0, releasedQuantity - Number(recorded[item.inventoryId] || 0)),
+        remainingQuantity: Math.max(0, releasedQuantity - Number(recorded[item.inventoryId] || 0) -
+          Number(pendingReservations[item.inventoryId] || 0)),
       };
     });
   }, [eligibleDistributions, events, form.distributionId, form.eventId]);
+
+  const responsibleDistribution = useMemo(() =>
+    eligibleDistributions.find((entry) => String(entry.id) === String(form.distributionId)) || null,
+  [eligibleDistributions, form.distributionId]);
+
+  const responsibleEvent = useMemo(() =>
+    events.find((entry) => String(getEventId(entry)) === String(form.eventId)) || null,
+  [events, form.eventId]);
 
   const filteredRecords = useMemo(() => {
     const search = searchTerm.trim().toLowerCase();
@@ -1375,8 +1339,11 @@ export default function PlantingPage() {
     clearNoEventsAlert();
     stopCamera();
     setForm({
-      participantType: participantProfile?.userType || "",
-      organizationAffiliation: getProfileAffiliation(participantProfile),
+      submittedByName: "",
+      submittedBySector: "",
+      submittedByContactNumber: "",
+      participantType: "",
+      organizationAffiliation: "",
       barangay: "",
       distributionId: "",
       distributionItemKey: "",
@@ -1498,7 +1465,8 @@ export default function PlantingPage() {
       ? Number(item.releasedQuantity ?? item.quantity ?? 0)
       : "";
     const remainingQuantity = item
-      ? Math.max(0, releasedQuantity - Number(selectedEvent?.recordedSeedlingsByInventory?.[item.inventoryId] || 0))
+      ? Math.max(0, releasedQuantity - Number(selectedEvent?.recordedSeedlingsByInventory?.[item.inventoryId] || 0) -
+        Number(selectedEvent?.pendingSeedlingsByInventory?.[item.inventoryId] || 0))
       : "";
 
     setForm((previous) => ({
@@ -2018,8 +1986,13 @@ export default function PlantingPage() {
   async function handleSubmit(event) {
     event.preventDefault();
 
-    if (!participantProfile?.userType) {
-      showPopup("Your saved Sector is missing. Please complete your profile before submitting a planting report.", "error");
+    if (!form.submittedByName.trim() || !form.submittedBySector || !form.submittedByContactNumber.trim()) {
+      showPopup("Please complete your name, sector, and contact number.", "error");
+      return;
+    }
+
+    if (!/^(?:\+63|0)9\d{9}$/.test(form.submittedByContactNumber.replace(/[\s-]/g, ""))) {
+      showPopup("Please enter a valid Philippine mobile number.", "error");
       return;
     }
 
@@ -2122,6 +2095,9 @@ export default function PlantingPage() {
     const payload = new FormData();
 
     payload.append("distributionId", form.distributionId);
+    payload.append("submittedByName", form.submittedByName.trim());
+    payload.append("submittedBySector", form.submittedBySector);
+    payload.append("submittedByContactNumber", form.submittedByContactNumber.trim());
     if (form.inventoryId) payload.append("inventoryId", form.inventoryId);
     payload.append("siteId", form.siteId);
     payload.append("barangay", form.barangay);
@@ -2146,7 +2122,8 @@ export default function PlantingPage() {
       });
 
       resetForm();
-      showPopup(response.message || "Planting report submitted successfully.");
+      showPopup(`Planting Report Submitted Successfully — ${response.message ||
+        "Your planting report has been submitted and is awaiting MENRO Staff verification."} Status: Pending Review.`);
 
       await Promise.all([loadReports(), loadMyDistributions(), loadEvents()]);
     } catch (error) {
@@ -2288,9 +2265,8 @@ export default function PlantingPage() {
       reportPhotoIndex: nextSubmissionPhotoIndex++,
     })),
   }));
-  const staffCanReviewSelected = canReview &&
-    selectedSubmission?.verificationStatus === "Needs Review" &&
-    selectedSubmission?.staffReviewStatus === "Pending Review";
+  const staffCanReviewSelected = selectedSubmission?.staffReviewStatus === "Pending Review" &&
+    (selectedSubmission?.staffApprovalRequired === true ? userRole === "staff" : canReview);
 
   if (loading) {
     return <div className="pr-page"><div style={{ minHeight: "420px", display: "grid", placeItems: "center", color: "#526159", fontSize: "13px", fontWeight: 600 }}>Loading planting reports...</div></div>;
@@ -2558,28 +2534,31 @@ export default function PlantingPage() {
                 <section className="pr-section pr-report-information-section">
                   <div className="pr-section-header">
                     <FiFileText size={15} />
-                    Participant Information
+                    Report Submitted By
                   </div>
 
                   <div className="pr-grid2">
                     <div>
-                      <label className="pr-label">Full Name</label>
-                      <div className="pr-readonly-value">{participantProfile?.fullName || currentIdentity.name}</div>
+                      <label className="pr-label">Full Name <span className="pr-required">*</span></label>
+                      <input className="pr-input" value={form.submittedByName}
+                        onChange={(event) => updateFormField("submittedByName", event.target.value)}
+                        placeholder="Enter full name" />
                     </div>
 
                     <div>
-                      <label className="pr-label">Sector</label>
-                      <div className="pr-readonly-value">{participantProfile?.userType || "—"}</div>
+                      <label className="pr-label">Sector <span className="pr-required">*</span></label>
+                      <select className="pr-input" value={form.submittedBySector}
+                        onChange={(event) => updateFormField("submittedBySector", event.target.value)}>
+                        <option value="">Select sector</option>
+                        {USER_TYPES.map((type) => <option key={type} value={type}>{type}</option>)}
+                      </select>
                     </div>
 
                     <div>
-                      <label className="pr-label">{getProfileAffiliationLabel(participantProfile)}</label>
-                      <div className="pr-readonly-value">{getProfileAffiliation(participantProfile) || "—"}</div>
-                    </div>
-
-                    <div>
-                      <label className="pr-label">Contact Number</label>
-                      <div className="pr-readonly-value">{participantProfile?.contactNumber || "—"}</div>
+                      <label className="pr-label">Contact Number <span className="pr-required">*</span></label>
+                      <input className="pr-input" type="tel" value={form.submittedByContactNumber}
+                        onChange={(event) => updateFormField("submittedByContactNumber", event.target.value)}
+                        placeholder="09XXXXXXXXX" />
                     </div>
                   </div>
                 </section>
@@ -2735,11 +2714,44 @@ export default function PlantingPage() {
                     </div>
 
                     <div>
+                      <label className="pr-label">Remaining Reportable Quantity</label>
+                      <input className="pr-input pr-readonly" value={form.remainingQuantity} readOnly />
+                    </div>
+
+                    <div>
                       <label className="pr-label">Quantity Planted <span className="pr-required">*</span></label>
                       <input type="number" min="1" step="1" max={form.remainingQuantity || undefined}
                         className="pr-input" value={form.quantity}
                         onChange={(event) => updateFormField("quantity", event.target.value)}
                         placeholder="Enter quantity" />
+                    </div>
+
+                    <div className="pr-full-width">
+                      <div className="pr-site-preview">
+                        <div className="pr-site-preview-icon"><FiInfo size={17} /></div>
+                        <div className="pr-site-preview-content">
+                          <div className="pr-site-preview-title">Responsible Planting Participant / Organization</div>
+                          {!responsibleDistribution ? (
+                            <div className="pr-site-preview-meta">Select planting details to view participant information.</div>
+                          ) : (
+                            <>
+                              <div className="pr-site-preview-name">
+                                {responsibleDistribution.participantName || responsibleDistribution.organization || "Not Yet Identified"}
+                              </div>
+                              <div className="pr-site-preview-meta">
+                                Sector: {responsibleDistribution.participantType || responsibleDistribution.userType || "Not Yet Identified"}
+                                {responsibleDistribution.organization ? ` • Organization: ${responsibleDistribution.organization}` : ""}
+                                {responsibleDistribution.barangay ? ` • Barangay ${responsibleDistribution.barangay}` : ""}
+                              </div>
+                              <div className="pr-site-preview-meta">
+                                Request: {responsibleDistribution.requestNumber || responsibleDistribution.requestId || "Not Yet Identified"}
+                                {` • Distribution: ${getDistributionReference(responsibleDistribution)}`}
+                                {` • Registered event participants: ${responsibleEvent?.actualParticipants ?? responsibleEvent?.participantCount ?? responsibleEvent?.registeredParticipantCount ?? "Not Yet Identified"}`}
+                              </div>
+                            </>
+                          )}
+                        </div>
+                      </div>
                     </div>
 
                     {selectedSite && (
@@ -3423,8 +3435,9 @@ export default function PlantingPage() {
                             <span>{formatDateTime(submission.recordedAt || submission.submittedAt)}</span>
                           </div>
                           <div className="pr-info-grid">
-                            <div className="pr-info-block"><div className="pr-info-label">Submitted By</div><div className="pr-info-value">{submission.contributorName || submission.participantName || "—"}</div></div>
-                            <div className="pr-info-block"><div className="pr-info-label">Participant Name</div><div className="pr-info-value">{submission.contributorName || submission.participantName || "—"}</div></div>
+                            <div className="pr-info-block"><div className="pr-info-label">Submitted By</div><div className="pr-info-value">{submission.submittedByName || submission.contributorName || submission.participantName || "—"}</div></div>
+                            <div className="pr-info-block"><div className="pr-info-label">Submitter Sector</div><div className="pr-info-value">{submission.submittedBySector || submission.participantUserType || "—"}</div></div>
+                            <div className="pr-info-block"><div className="pr-info-label">Submitter Contact</div><div className="pr-info-value">{submission.submittedByContactNumber || "—"}</div></div>
                             <div className="pr-info-block"><div className="pr-info-label">User ID</div><div className="pr-info-value">{submission.contributorId || submission.participantId || "—"}</div></div>
                             <div className="pr-info-block"><div className="pr-info-label">Quantity Planted</div><div className="pr-info-value">{submission.quantity ?? "—"}</div></div>
                             <div className="pr-info-block"><div className="pr-info-label">Site / Event / Distribution</div><div className="pr-info-value">{selectedRecord.siteName || "—"} / {selectedRecord.eventName || submission.eventId || "—"} / {submission.requestId || selectedRecord.distributionId || "—"}</div></div>
@@ -3451,7 +3464,8 @@ export default function PlantingPage() {
                               ))}
                             </div>
                           )}
-                          {canReview && submission.verificationStatus === "Needs Review" && submission.staffReviewStatus === "Pending Review" && (
+                          {submission.staffReviewStatus === "Pending Review" &&
+                            (submission.staffApprovalRequired === true ? userRole === "staff" : canReview) && (
                             <div className="pr-drawer-verification-actions">
                               <button type="button" className="pr-secondary-button" onClick={() => { setSelectedSubmission(submission); setDecision("approve"); }}>Review</button>
                               <button type="button" className="pr-danger-button" onClick={() => { setSelectedSubmission(submission); setDecision("reject"); }}>Reject</button>
@@ -3538,7 +3552,7 @@ export default function PlantingPage() {
             <div className="pr-modal-header">
               <div>
                 <h2 className="pr-modal-title">{decision === "approve" ? "Accept Planting Report?" : "Reject Planting Report"}</h2>
-                <p className="pr-modal-subtitle">{decision === "approve" ? "This submission contains verification concern(s). Confirm that you have reviewed the submitted evidence and accept this planting report." : "Provide the reason the submitted planting evidence is unacceptable."}</p>
+                <p className="pr-modal-subtitle">{decision === "approve" ? "Confirm that you have reviewed the submitted evidence and accept this planting report." : "Provide the reason the submitted planting evidence is unacceptable."}</p>
               </div>
               <button type="button" className="pr-close-button" onClick={() => setDecision("")} disabled={actionLoading} aria-label="Close decision"><FiX size={17} /></button>
             </div>

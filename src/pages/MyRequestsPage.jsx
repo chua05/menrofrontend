@@ -1,6 +1,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
+import { useToast } from "../context/ToastContext";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 
@@ -776,6 +777,7 @@ function MyRequestLocationPreview({ request }) {
 export default function MyRequestsPage() {
   const navigate = useNavigate();
   const location = useLocation();
+  const { success: showSuccess, error: showError } = useToast();
   const [searchParams, setSearchParams] = useSearchParams();
   const relatedRequestId = searchParams.get("request")?.trim() || "";
 
@@ -785,11 +787,26 @@ export default function MyRequestsPage() {
   const [retryKey, setRetryKey] = useState(0);
   const [selectedRequest, setSelectedRequest] = useState(null);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
-  const [invitationFeedback, setInvitationFeedback] = useState("");
   const [invitationToken, setInvitationToken] = useState("");
   const [invitationError, setInvitationError] = useState("");
   const [linkedEvent, setLinkedEvent] = useState(null);
   const [currentPage, setCurrentPage] = useState(1);
+
+  useEffect(() => {
+    const message = location.state?.submissionMessage;
+    const submittedReference = location.state?.submittedRequestReference;
+    if (!message || loading || loadError) return;
+
+    const normalizedReference = String(submittedReference || "").trim().toUpperCase();
+    const submittedRequestIsLoaded = normalizedReference
+      ? requests.some((request) => [request.id, request.requestNumber, request.requestId, request.requestCode]
+          .some((value) => String(value || "").trim().toUpperCase() === normalizedReference))
+      : true;
+
+    if (!submittedRequestIsLoaded) return;
+    showSuccess(message, { dedupeKey: `request-submission:${message}` });
+    navigate(`${location.pathname}${location.search}`, { replace: true, state: null });
+  }, [loadError, loading, location.pathname, location.search, location.state, navigate, requests, showSuccess]);
 
   useEffect(() => {
     let cancelled = false;
@@ -890,7 +907,6 @@ export default function MyRequestsPage() {
   const handleCloseDetails = () => {
     setShowDetailsModal(false);
     setSelectedRequest(null);
-    setInvitationFeedback("");
     if (relatedRequestId) {
       const nextParams = new URLSearchParams(searchParams);
       nextParams.delete("request");
@@ -963,9 +979,9 @@ export default function MyRequestsPage() {
   const copyInvitation = async () => {
     try {
       await navigator.clipboard.writeText(invitationUrl);
-      setInvitationFeedback("Event link copied.");
+      showSuccess("Event link copied.");
     } catch {
-      setInvitationFeedback("Unable to copy the event link. Please try again.");
+      showError("Unable to copy the event link. Please try again.");
     }
   };
 
@@ -974,7 +990,7 @@ export default function MyRequestsPage() {
       try {
         await navigator.share({ url: invitationUrl });
       } catch (error) {
-        if (error.name !== "AbortError") setInvitationFeedback("Unable to share the event link.");
+        if (error.name !== "AbortError") showError("Unable to share the event link.");
       }
     } else {
       await copyInvitation();
@@ -991,11 +1007,6 @@ export default function MyRequestsPage() {
 
   return (
     <div className="myr-page">
-      {location.state?.submissionMessage && (
-        <div className="myr-submission-success" role="status">
-          {location.state.submissionMessage}
-        </div>
-      )}
       <div className="myr-page-header">
         <div className="myr-title-group">
           <div className="myr-title-icon">
@@ -1004,10 +1015,6 @@ export default function MyRequestsPage() {
 
           <div>
             <h1>My Sapling Requests</h1>
-            <p>
-              Track the status and details of your sapling requests submitted
-              to MENRO.
-            </p>
           </div>
         </div>
 
@@ -1568,7 +1575,6 @@ export default function MyRequestsPage() {
                     <button type="button" className="myr-close-button" onClick={copyInvitation}>Copy Event Link</button>
                     <button type="button" className="myr-close-button" onClick={shareInvitation}>Share</button>
                   </div>
-                  {invitationFeedback && <p role="status">{invitationFeedback}</p>}
                 </section>
               )}
               {invitationError && Number(selectedRequest.expectedParticipants) > 0 && (

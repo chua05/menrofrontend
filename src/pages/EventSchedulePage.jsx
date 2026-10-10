@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 
 import { useAuth } from "../context/AuthContext";
+import { useToast } from "../context/ToastContext";
 import { auth } from "../firebase/config";
 import { formatDisplayId } from "../utils/displayId";
 import { getEventStatus, getEventStatusClass } from "../utils/eventStatus";
@@ -222,6 +223,7 @@ function StatusBadge({ status }) {
 }
 
 export default function EventSchedulePage() {
+  const { success: showSuccess } = useToast();
   const { userRole } = useAuth();
   const [searchParams] = useSearchParams();
 
@@ -303,11 +305,6 @@ export default function EventSchedulePage() {
     formErrors,
     setFormErrors,
   ] = useState({});
-
-  const [
-    successMessage,
-    setSuccessMessage,
-  ] = useState("");
 
   const menuRef = useRef(null);
 
@@ -523,20 +520,6 @@ export default function EventSchedulePage() {
       );
     };
   }, []);
-
-  useEffect(() => {
-    if (!successMessage) {
-      return undefined;
-    }
-
-    const timer =
-      window.setTimeout(() => {
-        setSuccessMessage("");
-      }, 3000);
-
-    return () =>
-      window.clearTimeout(timer);
-  }, [successMessage]);
 
   const normalizedEvents =
     useMemo(
@@ -828,12 +811,6 @@ export default function EventSchedulePage() {
 
     setShowAddModal(false);
     resetForm();
-  };
-
-  const showSuccess = (
-    message
-  ) => {
-    setSuccessMessage(message);
   };
 
   const getSelectedSite = (
@@ -1328,11 +1305,7 @@ export default function EventSchedulePage() {
           <div>
             <h1>Event Calendar</h1>
 
-            <p>
-              {canManage
-                ? "Manage planting events, schedules, and MENRO environmental activities."
-                : ""}
-            </p>
+            
           </div>
         </div>
 
@@ -1364,15 +1337,6 @@ export default function EventSchedulePage() {
           </div>
         )}
       </section>
-
-      {successMessage && (
-        <div className="ec-success-message">
-          <CircleCheckBig
-            size={16}
-          />
-          {successMessage}
-        </div>
-      )}
 
       {pageError && (
         <div
@@ -1994,6 +1958,8 @@ export default function EventSchedulePage() {
                   </button>
                 </div>
               </div>
+
+              <div className="menro-toast-anchor" data-menro-toast-anchor />
 
               <div className="ec-modal-body">
                 <div className="ec-detail-status-row">

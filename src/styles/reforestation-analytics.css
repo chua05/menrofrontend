@@ -131,24 +131,13 @@
   flex-shrink: 0;
 }
 
-.ra-kpi-green {
-  background: #e7f6ec;
-  color: #16894a;
-}
-
-.ra-kpi-blue {
-  background: #edf3ff;
-  color: #4274d8;
-}
-
-.ra-kpi-purple {
-  background: #f3edff;
-  color: #8652d8;
-}
-
-.ra-kpi-orange {
-  background: #fff1e3;
-  color: #e78a10;
+.ra-kpi-green,
+.ra-kpi-blue,
+.ra-kpi-purple,
+.ra-kpi-orange,
+.ra-kpi-icon {
+  background: #e8f6ed;
+  color: #168a45;
 }
 
 .ra-kpi-card span {

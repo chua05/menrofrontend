@@ -166,9 +166,14 @@
   border-radius: 50%;
 }
 
-.myr-summary-icon-total {
-  background: #eaf5ee;
-  color: #168347;
+.myr-summary-icon-total,
+.myr-summary-icon-pending,
+.myr-summary-icon-reviewed,
+.myr-summary-icon-approved,
+.myr-summary-icon-rejected,
+.myr-summary-icon {
+  background: #e8f6ed;
+  color: #168a45;
 }
 
 .myr-summary-card-pending {
@@ -176,19 +181,9 @@
   background: #fffdf8;
 }
 
-.myr-summary-icon-pending {
-  background: #fff1d7;
-  color: #e18a00;
-}
-
 .myr-summary-card-reviewed {
   border-color: #d7e4f6;
   background: #fbfdff;
-}
-
-.myr-summary-icon-reviewed {
-  background: #e7f0ff;
-  color: #287bd8;
 }
 
 .myr-summary-card-approved {
@@ -196,19 +191,9 @@
   background: #fbfefc;
 }
 
-.myr-summary-icon-approved {
-  background: #e6f5eb;
-  color: #179454;
-}
-
 .myr-summary-card-rejected {
   border-color: #f1d9dc;
   background: #fffdfd;
-}
-
-.myr-summary-icon-rejected {
-  background: #fde9eb;
-  color: #df424d;
 }
 
 /* =========================================================
