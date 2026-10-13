@@ -89,6 +89,35 @@ function getBarangayDisplayName(feature) {
     .trim();
 }
 
+function createBarangayBoundaryLayer(geoJson) {
+  return L.geoJSON(geoJson, {
+    style: {
+      color: "#17643a",
+      weight: 1.7,
+      opacity: 0.96,
+      fillColor: "#dff2e5",
+      fillOpacity: 0.32,
+    },
+    interactive: false,
+    onEachFeature: (feature, layer) => {
+      const barangayName = getBarangayDisplayName(feature);
+
+      if (!barangayName || !layer.getBounds) return;
+
+      const bounds = layer.getBounds();
+      if (!bounds.isValid()) return;
+
+      layer.bindTooltip(String(barangayName), {
+        permanent: true,
+        direction: "center",
+        className: "ps-barangay-label",
+        interactive: false,
+        opacity: 1,
+      });
+    },
+  });
+}
+
 const COVERAGE_RADIUS_PRESETS = [20, 50, 100, 200, 500];
 
 function getInitialSiteForm() {
@@ -230,7 +259,7 @@ function formatDate(value) {
 }
 
 export default function SitesPage() {
-  const { success: showSuccess } = useToast();
+  const { success: showSuccess, error: showError } = useToast();
   const { userRole } = useAuth();
   const [pageSearchParams] = useSearchParams();
 
@@ -240,6 +269,8 @@ export default function SitesPage() {
   const mapContainerRef = useRef(null);
   const mapRef = useRef(null);
   const bulanBoundsRef = useRef(null);
+  const siteFormRef = useRef(null);
+  const siteSubmissionInProgressRef = useRef(false);
 
   const sitePolygonsRef = useRef([]);
   const siteMarkersRef = useRef([]);
@@ -258,6 +289,7 @@ export default function SitesPage() {
 
   const [mapReady, setMapReady] = useState(false);
   const [mapError, setMapError] = useState("");
+  const [barangayBoundaries, setBarangayBoundaries] = useState(null);
 
   const [selectedSite, setSelectedSite] = useState(null);
   const [detailsSite, setDetailsSite] = useState(null);
@@ -397,9 +429,11 @@ export default function SitesPage() {
     }
 
     if (!response.ok) {
-      throw new Error(
+      const requestError = new Error(
         payload.message || "The request could not be completed."
       );
+      requestError.status = response.status;
+      throw requestError;
     }
 
     return payload;
@@ -518,32 +552,9 @@ export default function SitesPage() {
         return null;
       }
 
-      const boundaryLayer = L.geoJSON(geoJson, {
-        style: {
-          color: "#17643a",
-          weight: 1.7,
-          opacity: 0.96,
-          fillColor: "#dff2e5",
-          fillOpacity: 0.32,
-        },
-        interactive: false,
-        onEachFeature: (feature, layer) => {
-          const barangayName = getBarangayDisplayName(feature);
+      setBarangayBoundaries(geoJson);
 
-          if (!barangayName || !layer.getBounds) return;
-
-          const bounds = layer.getBounds();
-          if (!bounds.isValid()) return;
-
-          layer.bindTooltip(String(barangayName), {
-            permanent: true,
-            direction: "center",
-            className: "ps-barangay-label",
-            interactive: false,
-            opacity: 1,
-          });
-        },
-      });
+      const boundaryLayer = createBarangayBoundaryLayer(geoJson);
 
       boundaryLayer.addTo(map);
 
@@ -1001,10 +1012,18 @@ export default function SitesPage() {
       [field]: value,
     }));
 
-    setFormErrors((previous) => ({
-      ...previous,
-      [field]: "",
-    }));
+    setFormErrors((previous) => {
+      const next = {
+        ...previous,
+        [field]: "",
+      };
+
+      if (field === "latitude" || field === "longitude") {
+        next.mapLocation = "";
+      }
+
+      return next;
+    });
   }
 
   function validateForm() {
@@ -1027,6 +1046,7 @@ export default function SitesPage() {
 
     if (
       !form.areaHectares ||
+      !Number.isFinite(Number(form.areaHectares)) ||
       Number(form.areaHectares) <= 0
     ) {
       errors.areaHectares =
@@ -1035,10 +1055,11 @@ export default function SitesPage() {
 
     if (
       !form.maximumCapacity ||
+      !Number.isInteger(Number(form.maximumCapacity)) ||
       Number(form.maximumCapacity) <= 0
     ) {
       errors.maximumCapacity =
-        "Enter the maximum seedling capacity.";
+        "Enter a whole number greater than 0.";
     }
 
     const latitude =
@@ -1079,6 +1100,10 @@ export default function SitesPage() {
         "Longitude must be between -180 and 180.";
     }
 
+    if (errors.latitude || errors.longitude) {
+      errors.mapLocation = "Select a valid planting site location on the map.";
+    }
+
     if (!form.locationDescription.trim()) {
       errors.locationDescription = "Location / address is required.";
     }
@@ -1101,16 +1126,30 @@ export default function SitesPage() {
     return errors;
   }
 
+  function focusFirstInvalidSiteField() {
+    window.requestAnimationFrame(() => {
+      const firstInvalidControl = siteFormRef.current?.querySelector(
+        ".ps-form-field.is-invalid input, .ps-form-field.is-invalid select, .ps-form-field.is-invalid textarea, .ps-site-coverage-map-field.is-invalid .ps-site-coverage-map"
+      );
+      firstInvalidControl?.scrollIntoView({ behavior: "smooth", block: "center" });
+      firstInvalidControl?.focus({ preventScroll: true });
+    });
+  }
+
   async function handleAddSite(event) {
     event.preventDefault();
+
+    if (siteSubmissionInProgressRef.current) return;
 
     const errors = validateForm();
 
     if (Object.keys(errors).length > 0) {
       setFormErrors(errors);
+      focusFirstInvalidSiteField();
       return;
     }
 
+    siteSubmissionInProgressRef.current = true;
     setActionLoading(true);
     setPageError("");
 
@@ -1177,20 +1216,40 @@ export default function SitesPage() {
       setForm(getInitialSiteForm());
       setFormErrors({});
 
-      showSuccess(
-        `${createdSiteId} was ${editingSite ? "updated" : "added"} successfully.`
-      );
+      showSuccess(editingSite
+        ? `${createdSiteId} was updated successfully.`
+        : "Planting site added successfully.");
     } catch (error) {
       console.error(
         "Failed to save planting site:",
         error
       );
 
-      setPageError(
-        error.message ||
-          "Failed to save planting site."
-      );
+      const isNetworkError =
+        error instanceof TypeError ||
+        /failed to fetch|network|load failed/i.test(String(error?.message || ""));
+      const isOutsideMunicipality =
+        error?.status === 400 &&
+        /within the municipality/i.test(String(error?.message || ""));
+
+      if (isOutsideMunicipality) {
+        setFormErrors((previous) => ({
+          ...previous,
+          mapLocation: "Select a location within the Municipality of Bulan.",
+        }));
+        focusFirstInvalidSiteField();
+        return;
+      }
+
+      const message = isNetworkError
+        ? "Unable to connect to the server. Please try again."
+        : error?.status === 401 || error?.status === 403
+          ? "You do not have permission to add a planting site."
+          : "Unable to add planting site. Please try again.";
+
+      showError(message);
     } finally {
+      siteSubmissionInProgressRef.current = false;
       setActionLoading(false);
     }
   }
@@ -1806,6 +1865,7 @@ export default function SitesPage() {
             </div>
 
             <form
+              ref={siteFormRef}
               className="ps-modal-body"
               onSubmit={
                 handleAddSite
@@ -2079,11 +2139,12 @@ export default function SitesPage() {
                     </FormField>
                   )}
 
-                  <div className="ps-site-coverage-map-field">
+                  <div className={`ps-site-coverage-map-field ${formErrors.mapLocation ? "is-invalid" : ""}`}>
                     <SiteCoverageMap
                       latitude={form.latitude}
                       longitude={form.longitude}
                       radius={getCoverageRadiusMeters(form)}
+                      barangayBoundaries={barangayBoundaries}
                       onSelect={(latitude, longitude) => {
                         setForm((previous) => ({
                           ...previous,
@@ -2094,6 +2155,7 @@ export default function SitesPage() {
                           ...previous,
                           latitude: "",
                           longitude: "",
+                           mapLocation: "",
                         }));
                       }}
                     />
@@ -2105,6 +2167,11 @@ export default function SitesPage() {
                           : "Not set"}
                       </strong>
                     </p>
+                    {formErrors.mapLocation && (
+                      <small className="ps-site-coverage-map-validation" role="alert">
+                        {formErrors.mapLocation}
+                      </small>
+                    )}
                   </div>
                 </div>
               </section>
@@ -2342,12 +2409,14 @@ function SiteCoverageMap({
   latitude,
   longitude,
   radius,
+  barangayBoundaries = null,
   onSelect,
   readOnly = false,
 }) {
   const containerRef = useRef(null);
   const mapRef = useRef(null);
   const coverageLayerRef = useRef(null);
+  const boundaryLayerRef = useRef(null);
   const onSelectRef = useRef(onSelect);
   const mapTilerKey = import.meta.env.VITE_MAPTILER_API_KEY;
 
@@ -2402,8 +2471,27 @@ function SiteCoverageMap({
       map.remove();
       mapRef.current = null;
       coverageLayerRef.current = null;
+      boundaryLayerRef.current = null;
     };
   }, [mapTilerKey, readOnly]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !barangayBoundaries) return undefined;
+
+    const boundaryLayer = createBarangayBoundaryLayer(barangayBoundaries);
+    boundaryLayer.addTo(map);
+    boundaryLayer.bringToBack();
+    boundaryLayerRef.current = boundaryLayer;
+    window.setTimeout(() => map.invalidateSize(), 0);
+
+    return () => {
+      if (mapRef.current && boundaryLayerRef.current === boundaryLayer) {
+        mapRef.current.removeLayer(boundaryLayer);
+        boundaryLayerRef.current = null;
+      }
+    };
+  }, [barangayBoundaries]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -2829,7 +2917,7 @@ function FormField({
     <label
       className={`ps-form-field ${
         full ? "full" : ""
-      }`}
+      } ${error ? "is-invalid" : ""}`}
     >
       <span>{label}</span>
 

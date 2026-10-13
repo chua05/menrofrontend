@@ -281,7 +281,11 @@ function StatusBadge({ status }) {
         classMap[normalizedStatus] || "myr-status myr-status-pending"
       }
     >
-      {normalizedStatus === "Reviewed" ? "Awaiting Approval" : normalizedStatus}
+      {normalizedStatus === "Reviewed"
+        ? "Awaiting Approval"
+        : normalizedStatus === "Saplings Released"
+          ? "Seedlings Released"
+          : normalizedStatus}
     </span>
   );
 }
@@ -828,7 +832,7 @@ export default function MyRequestsPage() {
       } catch (error) {
         console.error("Unable to load your seedling requests:", error);
         if (!cancelled) setLoadError(error.message === "Your session has expired. Please sign in again."
-          ? error.message : "Unable to load your sapling requests. Please try again.");
+          ? error.message : "Unable to load your seedling requests. Please try again.");
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -1014,7 +1018,7 @@ export default function MyRequestsPage() {
           </div>
 
           <div>
-            <h1>My Sapling Requests</h1>
+            <h1>My Seedling Requests</h1>
           </div>
         </div>
 
@@ -1024,7 +1028,7 @@ export default function MyRequestsPage() {
           onClick={handleRequestSeedlings}
         >
           <Plus size={19} />
-          <span>Request Saplings</span>
+          <span>Request Seedlings</span>
         </button>
       </div>
 
@@ -1089,7 +1093,7 @@ export default function MyRequestsPage() {
                 <th>Request ID</th>
                 <th>Purpose of Request</th>
                 <th>Barangay</th>
-                <th>Saplings Requested</th>
+                <th>Seedlings Requested</th>
                 <th>Date Submitted</th>
                 <th>Status</th>
                 <th className="myr-action-column">Action</th>
@@ -1147,10 +1151,10 @@ export default function MyRequestsPage() {
                         </span>
                       </div>
 
-                      <h2>No sapling requests yet</h2>
+                      <h2>No seedling requests yet</h2>
                       <p>
-                        You haven't submitted any sapling requests. Click the
-                        "Request Saplings" button above to create your first
+                        You haven't submitted any seedling requests. Click the
+                        "Request Seedlings" button above to create your first
                         request.
                       </p>
                     </div>
@@ -1218,7 +1222,7 @@ export default function MyRequestsPage() {
           >
             <div className="myr-modal-header">
               <div>
-                <span className="myr-modal-label">Sapling Request</span>
+                <span className="myr-modal-label">Seedling Request</span>
                 <h2 id="myr-details-title">Request Details</h2>
                 <p>{getRequestDisplayId(selectedRequest)}</p>
               </div>
@@ -1296,7 +1300,7 @@ export default function MyRequestsPage() {
                 <div className="myr-section-title">
                   <Trees size={18} />
                   <div>
-                    <h3>Saplings Requested</h3>
+                    <h3>Seedlings Requested</h3>
                     <p>Requested tree species and quantity.</p>
                   </div>
                 </div>
@@ -1311,7 +1315,7 @@ export default function MyRequestsPage() {
                             seedling.treeName ||
                             seedling.name ||
                             seedling.species ||
-                            "sapling"
+                            "seedling"
                           }-${index}`}
                         >
                           <div>
@@ -1350,7 +1354,7 @@ export default function MyRequestsPage() {
                 </div>
 
                 <div className="myr-total-seedlings">
-                  <span>Total Saplings</span>
+                  <span>Total Seedlings</span>
                   <strong>{getTotalSeedlings(selectedRequest)}</strong>
                 </div>
               </section>
@@ -1544,12 +1548,12 @@ export default function MyRequestsPage() {
 
               {(["Approved", "Saplings Released"].includes(selectedRequest.status)) && (
                 <section className="myr-detail-section">
-                  <div className="myr-section-title"><Trees size={18} /><div><h3>Sapling Release</h3><p>Actual release details appear when MENRO records them.</p></div></div>
+                  <div className="myr-section-title"><Trees size={18} /><div><h3>Seedling Release</h3><p>Actual release details appear when MENRO records them.</p></div></div>
                   {Array.isArray(selectedRequest.releasedItems) && selectedRequest.releasedItems.length > 0 ? (
                     <div className="myr-seedling-list">
                       {selectedRequest.releasedItems.map((item, index) => (
                         <div className="myr-seedling-item" key={`${item.inventoryId || index}-release`}>
-                          <div><span>Sapling</span><strong>{item.species || item.treeName || "—"}</strong></div>
+                          <div><span>Seedling</span><strong>{item.species || item.treeName || "—"}</strong></div>
                           <div><span>Released / Requested</span><strong>{item.releasedQuantity} / {item.requestedQuantity}</strong></div>
                           {Number.isFinite(Number(item.requestedQuantity)) && Number.isFinite(Number(item.releasedQuantity)) && (
                             <div><span>Difference</span><strong>{Number(item.requestedQuantity) - Number(item.releasedQuantity)}</strong></div>
@@ -1558,7 +1562,7 @@ export default function MyRequestsPage() {
                         </div>
                       ))}
                     </div>
-                  ) : <p>Awaiting Sapling Release</p>}
+                  ) : <p>Awaiting Seedling Release</p>}
                   {(selectedRequest.releasedBy || selectedRequest.releasedAt) && (
                     <div className="myr-form-grid">
                       {selectedRequest.releasedBy && <div className="myr-readonly-field"><label>Released By</label><div><UserRound size={16} /><span>{selectedRequest.releasedBy}</span></div></div>}

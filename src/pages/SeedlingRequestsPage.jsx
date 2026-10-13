@@ -72,7 +72,7 @@ const TABS = [
   },
   {
     id: "released",
-    label: "Saplings Released",
+    label: "Seedlings Released",
     status: "Saplings Released",
   },
   {
@@ -219,7 +219,7 @@ function normalizeRequestForUi(request = {}) {
     trees: items.map((item) => ({
       ...item,
       inventoryId: item.inventoryId || "",
-      treeName: item.species || item.treeName || "Sapling",
+      treeName: item.species || item.treeName || "Seedling",
       scientificName: item.scientificName || "",
       quantity: Number(item.quantity || 0),
     })),
@@ -510,7 +510,11 @@ function StatusBadge({ status }) {
     <span
       className={`sr-status sr-status-${className}`}
     >
-      {status === "Reviewed" ? "Awaiting Approval" : status}
+      {status === "Reviewed"
+        ? "Awaiting Approval"
+        : status === "Saplings Released"
+          ? "Seedlings Released"
+          : status}
     </span>
   );
 }
@@ -712,7 +716,7 @@ export default function SeedlingRequestsPage() {
     console.error("Failed to load seedling requests:", error);
 
     if (!background) {
-      setLoadError("Unable to load sapling requests. Please try again.");
+      setLoadError("Unable to load seedling requests. Please try again.");
     }
     return null;
   } finally {
@@ -1705,7 +1709,7 @@ useEffect(() => {
 }
 
   if (loadingRequests) {
-    return <div className="seedling-requests-page"><div style={{ minHeight: "420px", display: "grid", placeItems: "center", color: "#526159", fontSize: "13px", fontWeight: 600 }}>Loading sapling requests...</div></div>;
+    return <div className="seedling-requests-page"><div style={{ minHeight: "420px", display: "grid", placeItems: "center", color: "#526159", fontSize: "13px", fontWeight: 600 }}>Loading seedling requests...</div></div>;
   }
 
   if (loadError) {
@@ -1724,7 +1728,7 @@ useEffect(() => {
           </div>
 
           <div>
-            <h1>Sapling Requests</h1>
+            <h1>Seedling Requests</h1>
           </div>
         </div>
 
@@ -1739,7 +1743,7 @@ useEffect(() => {
       )}
 
       {loadingRequests && (
-        <div className="sr-api-loading">Loading sapling requests...</div>
+        <div className="sr-api-loading">Loading seedling requests...</div>
       )}
 
       <section className="sr-kpi-grid">
@@ -2321,13 +2325,13 @@ useEffect(() => {
 
             <h2>
               {requests.length === 0
-                ? "No sapling requests yet"
+                ? "No seedling requests yet"
                 : "No matching requests"}
             </h2>
 
             <p>
               {requests.length === 0
-                ? "There are no active sapling requests."
+                ? "There are no active seedling requests."
                 : "Try changing your search or filter settings."}
             </p>
           </div>
@@ -2434,9 +2438,9 @@ useEffect(() => {
         <div className="sr-modal-backdrop sr-review-backdrop" onMouseDown={(event) => {
           if (event.target === event.currentTarget && !actionLoading) setReleaseModal(null);
         }}>
-          <div className="sr-modal sr-decision-modal" role="dialog" aria-modal="true" aria-label="Release saplings">
+          <div className="sr-modal sr-decision-modal" role="dialog" aria-modal="true" aria-label="Release seedlings">
             <div className="sr-modal-header">
-              <div><h2>Release Saplings</h2><p>Confirm actual quantities against current inventory.</p></div>
+              <div><h2>Release Seedlings</h2><p>Confirm actual quantities against current inventory.</p></div>
               <button type="button" className="sr-modal-close" onClick={() => setReleaseModal(null)} disabled={actionLoading} aria-label="Close"><X size={18} /></button>
             </div>
             <div className="sr-modal-body">
@@ -2502,7 +2506,7 @@ useEffect(() => {
           <div className="sr-modal sr-new-modal">
             <div className="sr-modal-header">
               <div>
-                <h2>New Sapling Request</h2>
+                <h2>New Seedling Request</h2>
                 <p>Complete the requester and proposed planting event information.</p>
               </div>
 
@@ -2567,7 +2571,7 @@ useEffect(() => {
                 <div className="sr-tree-section">
                   <div className="sr-tree-heading">
                     <div>
-                      <h3>Saplings Requested</h3>
+                      <h3>Seedlings Requested</h3>
                       <p>Add one or more tree names and quantities.</p>
                     </div>
                   </div>
@@ -2813,7 +2817,7 @@ useEffect(() => {
 
                 <p>
                   Complete information for
-                  this sapling request.
+                  this seedling request.
                 </p>
               </div>
 
@@ -2895,7 +2899,7 @@ useEffect(() => {
               )}
 
               <div className="sr-detail-seedlings">
-                <h3>Saplings Requested</h3>
+                <h3>Seedlings Requested</h3>
                 {(selectedRequest.trees || []).map((tree) => (
                   <div className="sr-detail-tree-row" key={`${selectedRequest.id}-${tree.treeName}`}>
                     <span>{tree.treeName}</span>
@@ -2903,7 +2907,7 @@ useEffect(() => {
                   </div>
                 ))}
                 <div className="sr-detail-tree-total">
-                  <span>Total Saplings</span>
+                  <span>Total Seedlings</span>
                   <strong>{getTotalSeedlings(selectedRequest.trees)}</strong>
                 </div>
               </div>
@@ -2949,7 +2953,7 @@ useEffect(() => {
 
               {Array.isArray(selectedRequest.releasedItems) && selectedRequest.releasedItems.length > 0 && (
                 <div className="sr-detail-seedlings">
-                  <h3>Recorded Sapling Release</h3>
+                  <h3>Recorded Seedling Release</h3>
                   {selectedRequest.releasedItems.map((item, index) => (
                     <div className="sr-detail-tree-row" key={`${item.inventoryId}-${index}-released`}>
                       <span>{item.species} — {item.releasedQuantity} released of {item.requestedQuantity} requested; difference {item.difference}</span>
@@ -3064,7 +3068,7 @@ useEffect(() => {
                       onClick={() => openReleaseModal(selectedRequest)}
                       disabled={actionLoading}
                     >
-                      Release Saplings
+                      Release Seedlings
                     </button>
                   )}
               </div>
@@ -3083,7 +3087,7 @@ useEffect(() => {
                 </h2>
 
                 <p>
-                  Archived sapling requests
+                  Archived seedling requests
                   can be restored to the
                   active records.
                 </p>
@@ -4185,12 +4189,12 @@ function AdminDecisionModal({
           <div>
             <h2 id="sr-admin-decision-title">
               {isApprove
-                ? "Approve Sapling Request"
-                : "Reject Sapling Request"}
+                ? "Approve Seedling Request"
+                : "Reject Seedling Request"}
             </h2>
             <p>
               {isApprove
-                ? "Confirm approval of this sapling request. No approval reason is required."
+                ? "Confirm approval of this seedling request. No approval reason is required."
                 : "Provide the reason that will be shown to the participant."}
             </p>
           </div>
@@ -4213,7 +4217,7 @@ function AdminDecisionModal({
 
           {isApprove ? (
             <p className="sr-decision-confirm-text">
-              Are you sure you want to approve this sapling request?
+              Are you sure you want to approve this seedling request?
             </p>
           ) : (
             <label className="sr-form-field">
@@ -4399,7 +4403,7 @@ export function ParticipantSeedlingRequest({ currentUser }) {
         ? error.message
         : editRequestId
           ? "Unable to load the returned request for editing. Please try again."
-          : "Unable to load available saplings. Please try again."
+          : "Unable to load available seedlings. Please try again."
     );
   } finally {
     setLoadingParticipantData(false);
@@ -4544,7 +4548,7 @@ useEffect(() => {
       .filter(Boolean);
 
     if (new Set(selectedInventoryIds).size !== selectedInventoryIds.length) {
-      errors.trees = "The same sapling cannot be selected more than once.";
+      errors.trees = "The same seedling cannot be selected more than once.";
     }
 
     const missingSapling = form.trees.some((tree) => !tree.inventoryId);
@@ -4564,7 +4568,7 @@ useEffect(() => {
     });
 
     if (missingSapling && !errors.trees) {
-      errors.trees = "Please select a sapling.";
+      errors.trees = "Please select a seedling.";
     } else if (missingQuantity && !errors.trees) {
       errors.trees = "Please enter the requested quantity.";
     } else if (invalidTree && !errors.trees) {
@@ -4766,7 +4770,7 @@ useEffect(() => {
       showSuccess(
         editingRequest
           ? "Your corrected request was resubmitted for MENRO Staff review."
-          : "You successfully submitted your sapling request."
+          : "You successfully submitted your seedling request."
       );
 
       if (editingRequest) {
@@ -4786,7 +4790,7 @@ useEffect(() => {
           ? message
           : editingRequest
             ? message || "Unable to resubmit the request. Please try again."
-            : message || "Unable to submit the sapling request."
+            : message || "Unable to submit the seedling request."
       );
     } finally {
       setSubmitting(false);
@@ -4794,7 +4798,7 @@ useEffect(() => {
   };
 
   if (loadingParticipantData) {
-    return <div className="seedling-requests-page participant-seedling-page"><div style={{ minHeight: "420px", display: "grid", placeItems: "center", color: "#526159", fontSize: "13px", fontWeight: 600 }}>Loading available saplings...</div></div>;
+    return <div className="seedling-requests-page participant-seedling-page"><div style={{ minHeight: "420px", display: "grid", placeItems: "center", color: "#526159", fontSize: "13px", fontWeight: 600 }}>Loading available seedlings...</div></div>;
   }
 
   if (participantLoadError) {
@@ -4831,12 +4835,12 @@ useEffect(() => {
           </div>
 
           <div>
-            <h1>{editingRequest ? "Edit Sapling Request" : "Request Saplings"}</h1>
+            <h1>{editingRequest ? "Edit Seedling Request" : "Request Seedlings"}</h1>
 
             <p>
               {editingRequest
                 ? `Correct and resubmit ${getRequestDisplayId(editingRequest)}.`
-                : "Submit a sapling request for your planting activity."}
+                : "Submit a seedling request for your planting activity."}
             </p>
           </div>
         </div>
@@ -4845,12 +4849,12 @@ useEffect(() => {
       <section className="sr-record-card participant-request-card">
         <div className="participant-form-header">
           <div>
-            <h2>{editingRequest ? "Edit Returned Request" : "Sapling Request Form"}</h2>
+            <h2>{editingRequest ? "Edit Returned Request" : "Seedling Request Form"}</h2>
 
             <p>
               {editingRequest
                 ? "Update the information identified by MENRO Staff, then resubmit the same request."
-                : "Fill out the form below to submit your sapling request."}
+                : "Fill out the form below to submit your seedling request."}
             </p>
           </div>
         </div>
@@ -4909,7 +4913,7 @@ useEffect(() => {
 
           <div className="participant-section-title">
             <div>
-              <h3>Saplings Requested</h3>
+              <h3>Seedlings Requested</h3>
               <p>
                 Add the tree species and quantity you
                 are requesting.
@@ -4943,10 +4947,10 @@ useEffect(() => {
                 >
                   <option value="">
                     {loadingParticipantData
-                      ? "Loading available saplings..."
+                      ? "Loading available seedlings..."
                       : availableInventory.length > 0
                         ? "Select tree"
-                        : "No saplings currently available"}
+                        : "No seedlings currently available"}
                   </option>
 
                   {availableInventory.map((item) => {

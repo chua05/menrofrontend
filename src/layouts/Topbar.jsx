@@ -65,6 +65,12 @@ const SEARCH_ICONS = {
   "Inventory Sapling": Package,
 };
 
+function getSearchTypeLabel(type) {
+  if (type === "Sapling Request") return "Seedling Request";
+  if (type === "Inventory Sapling") return "Inventory Seedling";
+  return type;
+}
+
 function timestampText(value) {
   const seconds = value?.seconds ?? value?._seconds;
   return seconds != null ? new Date(seconds * 1000).toLocaleString("en-PH") : "—";
@@ -425,7 +431,7 @@ export default function Topbar({ onOpenSidebar }) {
                     <span className="topbar-search-result-icon"><ResultIcon size={17} /></span>
                     <span className="topbar-search-result-copy">
                       <strong>{item.title}</strong>
-                      <span>{item.type}{item.subtitle ? ` · ${item.subtitle}` : ""}</span>
+                      <span>{getSearchTypeLabel(item.type)}{item.subtitle ? ` · ${item.subtitle}` : ""}</span>
                     </span>
                   </button>
                 );
@@ -747,17 +753,17 @@ export default function Topbar({ onOpenSidebar }) {
                     {selectedNotification.details?.approvedAt && <div><dt>Approved</dt><dd>{timestampText(selectedNotification.details.approvedAt)}</dd></div>}
                     {selectedNotification.details?.rejectedAt && <div><dt>Decision Date</dt><dd>{timestampText(selectedNotification.details.rejectedAt)}</dd></div>}
                     {selectedNotification.details?.releasedAt && <div><dt>Released</dt><dd>{timestampText(selectedNotification.details.releasedAt)}</dd></div>}
-                    {selectedNotification.details?.availableQuantity !== undefined && <div><dt>Available Stock</dt><dd>{selectedNotification.details.availableQuantity} saplings</dd></div>}
-                    {selectedNotification.details?.lowStockThreshold !== undefined && <div><dt>Low-stock Threshold</dt><dd>{selectedNotification.details.lowStockThreshold} saplings</dd></div>}
+                    {selectedNotification.details?.availableQuantity !== undefined && <div><dt>Available Stock</dt><dd>{selectedNotification.details.availableQuantity} seedlings</dd></div>}
+                    {selectedNotification.details?.lowStockThreshold !== undefined && <div><dt>Low-stock Threshold</dt><dd>{selectedNotification.details.lowStockThreshold} seedlings</dd></div>}
                     {selectedNotification.event && <div><dt>Event</dt><dd>{selectedNotification.event.name || selectedNotification.event.id}<br />{selectedNotification.event.date || ""}{selectedNotification.event.location ? ` · ${selectedNotification.event.location}` : ""}</dd></div>}
                   </dl>
                   {selectedNotification.details?.releasedItems?.length > 0 && (
                     <div className="notification-released-items">
-                      <strong>Saplings Released</strong>
+                      <strong>Seedlings Released</strong>
                       {selectedNotification.details.releasedItems.map((item) => (
                         <div key={item.inventoryId || item.species}>
-                          <span>{item.species || "Sapling"}</span>
-                          <strong>{item.releasedQuantity} saplings</strong>
+                          <span>{item.species || "Seedling"}</span>
+                          <strong>{item.releasedQuantity} seedlings</strong>
                           {item.shortReleaseReason && <small>{item.shortReleaseReason}</small>}
                         </div>
                       ))}

@@ -1281,6 +1281,13 @@
   box-shadow: 0 0 0 3px rgba(8, 116, 67, 0.06);
 }
 
+.ps-form-field.is-invalid input,
+.ps-form-field.is-invalid select,
+.ps-form-field.is-invalid textarea,
+.ps-site-coverage-map-field.is-invalid .ps-site-coverage-map-wrap {
+  border-color: #d93c3c;
+}
+
 .ps-form-field small {
   color: #d93c3c;
 
@@ -1302,6 +1309,14 @@
 
 .ps-site-coverage-map-field > p strong {
   color: #087443;
+}
+
+.ps-site-coverage-map-validation {
+  display: block;
+  margin-top: 7px;
+  color: #d93c3c;
+  font-size: 12px;
+  line-height: 1.4;
 }
 
 .ps-site-coverage-map-wrap {

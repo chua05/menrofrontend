@@ -11,14 +11,14 @@ const PROGRAM_ITEMS = [
   {
     id: "seedling-request",
     label: "Seedling Request Management",
-    purpose: "Supports the organized submission and processing of requests for seedlings or saplings.",
+    purpose: "Supports the organized submission and processing of seedling requests.",
     problem: "Helps reduce reliance on scattered or manual request records and makes requests easier to organize and monitor.",
   },
   {
     id: "sapling-distribution",
-    label: "Sapling Distribution",
-    purpose: "Supports the recording of approved saplings released for planting activities.",
-    problem: "Helps MENRO maintain organized distribution records and distinguish requested quantities from saplings actually released.",
+    label: "Seedling Distribution",
+    purpose: "Supports the recording of approved seedlings released for planting activities.",
+    problem: "Helps MENRO maintain organized distribution records and distinguish requested quantities from seedlings actually released.",
   },
   {
     id: "planting-activity",
@@ -164,7 +164,7 @@ export default function LandingPage() {
             <h1>GEO-TAGGED REFORESTATION MONITORING SYSTEM</h1>
             <h2>Municipality of Bulan, Sorsogon</h2>
             <p className="landing-hero-description">
-              A digital platform that supports MENRO in managing sapling requests, distribution, planting activities,
+              A digital platform that supports MENRO in managing seedling requests, distribution, planting activities,
               geo-tagged planting records, and tree survival monitoring in the Municipality of Bulan.
             </p>
             <div className="landing-hero-actions">
@@ -185,7 +185,7 @@ export default function LandingPage() {
                 reforestation-related activities.
               </p>
               <p>
-                The system brings together sapling requests, distribution records, planting activities, planting-site
+                The system brings together seedling requests, distribution records, planting activities, planting-site
                 information, geo-tagged planting reports, survival monitoring, and reporting in one platform.
               </p>
               <p>
@@ -206,7 +206,7 @@ export default function LandingPage() {
               <h2>Reforestation Program</h2>
               <p>
                 The Reforestation Program supports the management and monitoring of tree-planting activities in the
-                Municipality of Bulan. The system helps organize sapling requests, distribution, planting records, site
+                Municipality of Bulan. The system helps organize seedling requests, distribution, planting records, site
                 information, and survival monitoring to improve record management and coordination.
               </p>
             </div>
@@ -248,7 +248,7 @@ export default function LandingPage() {
             <div className="landing-resource-grid">
               <button type="button" className="landing-resource-card" onClick={() => goTo("guidelines-details")}>
                 <strong>Guidelines &amp; Requirements →</strong>
-                <span>View general information and requirements related to sapling requests, tree planting records, geo-tagged evidence, and survival monitoring.</span>
+                <span>View general information and requirements related to seedling requests, tree planting records, geo-tagged evidence, and survival monitoring.</span>
               </button>
               <button type="button" className="landing-resource-card" onClick={() => openProgram("overview")}>
                 <strong>Reforestation Program →</strong>
@@ -265,7 +265,7 @@ export default function LandingPage() {
                 </p>
               </div>
               <div className="landing-guideline-list">
-                <article><h4>Sapling Request Information</h4><p>Provide complete and accurate requester, planting activity, and requested sapling information.</p></article>
+                <article><h4>Seedling Request Information</h4><p>Provide complete and accurate requester, planting activity, and requested seedling information.</p></article>
                 <article><h4>Planting Report Requirements</h4><p>Submit records that accurately describe the completed planting activity and its related planting site.</p></article>
                 <article><h4>Geo-Tagged Photo Information</h4><p>Use original location-enabled photo evidence related to the reported planting activity. Location data supports record review but does not by itself guarantee legitimacy.</p></article>
                 <article><h4>Survival Monitoring Information</h4><p>Record current tree conditions accurately when a planting record becomes available for monitoring in the system.</p></article>

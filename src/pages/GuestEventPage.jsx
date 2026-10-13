@@ -209,7 +209,7 @@ export default function GuestEventPage() {
     setPlantingMessage({ type: "", text: "" });
     const quantity = Number(plantingForm.quantity);
     if (!selectedAllocation) {
-      setPlantingMessage({ type: "error", text: "Select a tree or sapling from this event allocation." });
+      setPlantingMessage({ type: "error", text: "Select a tree or seedling from this event allocation." });
       return;
     }
     if (!Number.isInteger(quantity) || quantity <= 0 || quantity > Number(selectedAllocation.remaining)) {
@@ -306,7 +306,7 @@ export default function GuestEventPage() {
               <h2>Planting Record</h2>
               {plantingMessage.text && <div className={`guest-event-alert guest-event-alert-${plantingMessage.type}`} role="alert">{plantingMessage.text}</div>}
               <form className="guest-event-form" onSubmit={submitPlanting}>
-                <label className="guest-event-field">Tree / Sapling *<select required value={plantingForm.inventoryId} disabled={!allocations.length || allRecorded} onChange={(change) => setPlantingForm({ inventoryId: change.target.value, quantity: "" })}><option value="">Select from event allocation</option>{allocations.map((item) => <option key={item.inventoryId} value={item.inventoryId} disabled={item.remaining <= 0}>{item.species} ({item.remaining} remaining)</option>)}</select></label>
+                <label className="guest-event-field">Tree / Seedling *<select required value={plantingForm.inventoryId} disabled={!allocations.length || allRecorded} onChange={(change) => setPlantingForm({ inventoryId: change.target.value, quantity: "" })}><option value="">Select from event allocation</option>{allocations.map((item) => <option key={item.inventoryId} value={item.inventoryId} disabled={item.remaining <= 0}>{item.species} ({item.remaining} remaining)</option>)}</select></label>
                 <div className="guest-event-quantity-grid">
                   <label className="guest-event-field">Allocated Quantity<input readOnly value={selectedAllocation?.allocated ?? "—"} /></label>
                   <label className="guest-event-field">Remaining Quantity<input readOnly value={selectedAllocation?.remaining ?? "—"} /></label>

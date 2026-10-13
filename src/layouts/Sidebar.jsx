@@ -41,12 +41,12 @@ const NAVIGATION = {
       section: "Management",
       items: [
         {
-          label: "Sapling Requests",
+          label: "Seedling Requests",
           icon: ClipboardList,
           to: "/admin/requests",
         },
         {
-          label: "Saplings",
+          label: "Seedling Inventory",
           icon: Sprout,
           to: "/admin/seedlings",
         },
@@ -129,12 +129,12 @@ const NAVIGATION = {
       section: "Management",
       items: [
         {
-          label: "Sapling Requests",
+          label: "Seedling Requests",
           icon: ClipboardList,
           to: "/staff/requests",
         },
         {
-          label: "Saplings",
+          label: "Seedling Inventory",
           icon: Sprout,
           to: "/staff/seedlings",
         },
@@ -214,10 +214,10 @@ const NAVIGATION = {
       ],
     },
     {
-      section: "Saplings",
+      section: "Seedlings",
       items: [
         {
-          label: "Request Saplings",
+          label: "Request Seedlings",
           icon: Sprout,
           to: "/participant/request-seedlings",
         },

@@ -55,7 +55,7 @@ const UNSUPPORTED_PHOTO_MESSAGE =
 const UNREADABLE_PHOTO_MESSAGE =
   "This photo could not be processed. Please upload a valid JPG, PNG, or WEBP image.";
 const NO_DISTRIBUTION_MESSAGE =
-  "No released sapling distributions are available for this planting event.";
+  "No released seedling distributions are available for this planting event.";
 const PHOTO_EXIF_LOCATION_SOURCE = "Photo Metadata";
 const BARANGAY_GEOJSON_URL = `${API_BASE_URL}/sites/barangay-boundaries`;
 const BULAN_FALLBACK_CENTER = { lat: 12.6598, lng: 123.918 };
@@ -615,7 +615,7 @@ export default function PlantingPage() {
 
       if (!isSessionError(error)) {
         showPopup(
-          "Unable to load released sapling distributions. Please try again.",
+          "Unable to load released seedling distributions. Please try again.",
           "error"
         );
       }
@@ -1106,7 +1106,7 @@ export default function PlantingPage() {
       ? distribution.items
       : [{
           inventoryId: distribution.inventoryId || "",
-          species: distribution.species || "Sapling",
+          species: distribution.species || "Seedling",
           requestedQuantity: distribution.requestedQuantity,
           releasedQuantity: distribution.quantityReleased,
         }];
@@ -1454,7 +1454,7 @@ export default function PlantingPage() {
       ? distribution.items
       : [{
           inventoryId: distribution.inventoryId || "",
-          species: distribution.species || "Sapling",
+          species: distribution.species || "Seedling",
           requestedQuantity: distribution.requestedQuantity,
           releasedQuantity: distribution.quantityReleased,
         }];
@@ -2017,7 +2017,7 @@ export default function PlantingPage() {
     }
 
     if (!form.inventoryId) {
-      showPopup("Please select a sapling tree.", "error");
+      showPopup("Please select a seedling tree.", "error");
       return;
     }
 
@@ -2036,7 +2036,7 @@ export default function PlantingPage() {
     const remainingQuantity = Number(form.remainingQuantity);
 
     if (!Number.isInteger(quantity) || quantity <= 0) {
-      showPopup("Please enter a valid quantity of planted saplings.", "error");
+      showPopup("Please enter a valid quantity of planted seedlings.", "error");
       return;
     }
 
@@ -2436,7 +2436,7 @@ export default function PlantingPage() {
                   {!isParticipant && <th className="pr-th">Participant</th>}
                   <th className="pr-th">Planting Site</th>
                   {isParticipant && <th className="pr-th">Barangay</th>}
-                  <th className="pr-th">Sapling Tree</th>
+                  <th className="pr-th">Seedling Tree</th>
                   <th className="pr-th">Quantity</th>
                   <th className="pr-th">Date Planted</th>
                   <th className="pr-th">Reporting Progress</th>
@@ -2665,7 +2665,7 @@ export default function PlantingPage() {
 
                     <div className="pr-full-width">
                       <label className="pr-label">
-                        Released Sapling Distribution <span className="pr-required">*</span>
+                        Released Seedling Distribution <span className="pr-required">*</span>
                       </label>
                       <select
                         className="pr-input"
@@ -2674,23 +2674,23 @@ export default function PlantingPage() {
                         disabled={!form.eventId}
                       >
                         <option value="">
-                          {!form.eventId ? "Select planting event first" : "Select released sapling distribution"}
+                          {!form.eventId ? "Select planting event first" : "Select released seedling distribution"}
                         </option>
                         {eligibleDistributions.map((distribution) => (
                           <option key={distribution.id} value={distribution.id}>
-                            {(distribution.items || []).map((item) => item.species).filter(Boolean).join(", ") || distribution.species || "Saplings"} — {distribution.totalQuantityReleased ?? distribution.quantityReleased ?? "—"} released — {formatDate(distribution.releasedAt)} — {getDistributionReference(distribution)} — {distribution.participantName || distribution.organization || "Recipient"}
+                            {(distribution.items || []).map((item) => item.species).filter(Boolean).join(", ") || distribution.species || "Seedlings"} — {distribution.totalQuantityReleased ?? distribution.quantityReleased ?? "—"} released — {formatDate(distribution.releasedAt)} — {getDistributionReference(distribution)} — {distribution.participantName || distribution.organization || "Recipient"}
                           </option>
                         ))}
                       </select>
                       {form.eventId && eligibleDistributions.length === 0 && (
                         <div className="pr-helper-text" role="status">
-                          No released sapling distributions are available for this planting event.
+                          No released seedling distributions are available for this planting event.
                         </div>
                       )}
                     </div>
 
                     <div>
-                      <label className="pr-label">Sapling Tree <span className="pr-required">*</span></label>
+                      <label className="pr-label">Seedling Tree <span className="pr-required">*</span></label>
                       <select
                         className="pr-input"
                         value={form.distributionItemKey}
@@ -2698,11 +2698,11 @@ export default function PlantingPage() {
                         disabled={!form.distributionId || eligibleDistributionItems.length <= 1}
                       >
                         <option value="">
-                          {!form.distributionId ? "Select released distribution first" : "Select sapling tree"}
+                          {!form.distributionId ? "Select released distribution first" : "Select seedling tree"}
                         </option>
                         {eligibleDistributionItems.map((item) => (
                           <option key={item.optionId} value={item.optionId} disabled={item.remainingQuantity <= 0}>
-                            {item.species || "Sapling"} — {item.remainingQuantity} remaining
+                            {item.species || "Seedling"} — {item.remainingQuantity} remaining
                           </option>
                         ))}
                       </select>

@@ -576,7 +576,7 @@ export default function ParticipantSaplingRequestWizard({ currentUser }) {
       )
         e.trees = "Select each tree and enter a positive whole quantity.";
       else if (new Set(ids).size !== ids.length)
-        e.trees = "The same sapling cannot be selected more than once.";
+        e.trees = "The same seedling cannot be selected more than once.";
       need("preferredReleaseDate", "Select a preferred release date.");
       if (
         form.preferredReleaseDate &&
@@ -799,8 +799,8 @@ export default function ParticipantSaplingRequestWizard({ currentUser }) {
         state: {
           submittedRequestReference: requestReference,
           submissionMessage: editing
-            ? `Your sapling request ${requestReference} was resubmitted successfully. Status: Pending Review.`
-            : `Your sapling request has been submitted successfully. Request Reference: ${requestReference}. Status: Pending Review.`,
+            ? `Your seedling request ${requestReference} was resubmitted successfully. Status: Pending Review.`
+            : `Your seedling request has been submitted successfully. Request Reference: ${requestReference}. Status: Pending Review.`,
         },
       });
     } catch (e) {
@@ -830,7 +830,7 @@ export default function ParticipantSaplingRequestWizard({ currentUser }) {
             <Sprout size={21} />
           </div>
           <div>
-            <h1>{editing ? "Edit Sapling Request" : "Request Saplings"}</h1>
+            <h1>{editing ? "Edit Seedling Request" : "Request Seedlings"}</h1>
             <p>Complete the four steps to submit your request.</p>
           </div>
         </div>
@@ -996,7 +996,7 @@ export default function ParticipantSaplingRequestWizard({ currentUser }) {
                 )}
               </div>
               <Title help="Add the tree species and quantity you are requesting.">
-                Saplings Requested
+                Seedlings Requested
               </Title>
               <div className={`sr-tree-section participant-tree-section ${errors.trees ? "sr-invalid-field" : ""}`}>
                 {form.trees.map((tree) => (
@@ -1082,7 +1082,7 @@ export default function ParticipantSaplingRequestWizard({ currentUser }) {
                   <Plus size={14} /> Add Another Tree
                 </button>
               </div>
-              <Title help="Select your preferred date for the release of the saplings.">
+              <Title help="Select your preferred date for the release of the seedlings.">
                 Preferred Release Date
               </Title>
               <Field
@@ -1100,7 +1100,7 @@ export default function ParticipantSaplingRequestWizard({ currentUser }) {
           )}
           {step === 3 && (
             <>
-              <Title help="Provide information about where the requested saplings will be planted.">
+              <Title help="Provide information about where the requested seedlings will be planted.">
                 Planting Information
               </Title>
               <Field label="Planting Site *">
@@ -1442,7 +1442,7 @@ export default function ParticipantSaplingRequestWizard({ currentUser }) {
                 <Title>Planting Care Information</Title>
                 <div className="sr-form-grid participant-care-grid">
                   <Field
-                    label="Who will be responsible for caring for the planted saplings? *"
+                    label="Who will be responsible for caring for the planted seedlings? *"
                     error={errors.caretaker}
                   >
                     <input
@@ -1452,7 +1452,7 @@ export default function ParticipantSaplingRequestWizard({ currentUser }) {
                     />
                   </Field>
                   <Field
-                    label="How often do you plan to check the planted saplings? *"
+                    label="How often do you plan to check the planted seedlings? *"
                     error={errors.monitoringFrequency}
                   >
                     <select
@@ -1480,19 +1480,19 @@ export default function ParticipantSaplingRequestWizard({ currentUser }) {
                       <input
                         value={form.monitoringOther}
                         onChange={(e) => put("monitoringOther", e.target.value)}
-                        placeholder="Specify how often the saplings will be checked"
+                        placeholder="Specify how often the seedlings will be checked"
                       />
                     </Field>
                   )}
                   <Field
-                    label="How will you care for and maintain the saplings after planting? *"
+                    label="How will you care for and maintain the seedlings after planting? *"
                     error={errors.carePlan}
                     wide
                   >
                     <textarea
                       value={form.carePlan}
                       onChange={(e) => put("carePlan", e.target.value)}
-                      placeholder="Describe how the saplings will be watered, protected, checked, and maintained after planting."
+                      placeholder="Describe how the seedlings will be watered, protected, checked, and maintained after planting."
                     />
                   </Field>
                 </div>
@@ -1575,11 +1575,11 @@ export default function ParticipantSaplingRequestWizard({ currentUser }) {
                   {form.purpose === "Other" ? form.purposeOther : form.purpose}
                 </p>
                 <p>
-                  <strong>Saplings:</strong>{" "}
+                  <strong>Seedlings:</strong>{" "}
                   {form.trees
                     .map(
                       (t) =>
-                        `${inventory.find((x) => x.id === t.inventoryId)?.species || "Sapling"} — ${t.quantity}`,
+                        `${inventory.find((x) => x.id === t.inventoryId)?.species || "Seedling"} — ${t.quantity}`,
                     )
                     .join(", ")}
                 </p>
