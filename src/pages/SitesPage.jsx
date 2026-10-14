@@ -44,6 +44,8 @@ const SITE_TYPES = [
   "Other",
 ];
 
+const CUSTOM_SITE_TYPE_MAX_LENGTH = 120;
+
 const OWNERSHIP_TYPES = [
   "Municipal Government",
   "Barangay / Community",
@@ -125,6 +127,7 @@ function getInitialSiteForm() {
     siteName: "",
     barangay: "",
     siteType: "",
+    customSiteType: "",
     areaHectares: "",
     maximumCapacity: "",
 
@@ -146,10 +149,16 @@ function getSiteForm(site) {
   const hasSavedRadius = Number.isFinite(savedRadius) && savedRadius > 0;
   const usesPreset = hasSavedRadius && COVERAGE_RADIUS_PRESETS.includes(savedRadius);
 
+  const savedSiteType = String(site?.siteType || "");
+  const isKnownSiteType = SITE_TYPES.includes(savedSiteType);
+
   return {
     siteName: String(site?.siteName || ""),
     barangay: String(site?.barangay || ""),
-    siteType: String(site?.siteType || ""),
+    siteType: isKnownSiteType ? savedSiteType : savedSiteType ? "Other" : "",
+    customSiteType: String(
+      site?.customSiteType || (!isKnownSiteType ? savedSiteType : "")
+    ),
     areaHectares: String(site?.areaHectares ?? ""),
     maximumCapacity: String(site?.maximumCapacity ?? ""),
     latitude: String(site?.latitude ?? ""),
@@ -1010,6 +1019,9 @@ export default function SitesPage() {
     setForm((previous) => ({
       ...previous,
       [field]: value,
+      ...(field === "siteType" && value !== "Other"
+        ? { customSiteType: "" }
+        : {}),
     }));
 
     setFormErrors((previous) => {
@@ -1017,6 +1029,10 @@ export default function SitesPage() {
         ...previous,
         [field]: "",
       };
+
+      if (field === "siteType") {
+        next.customSiteType = "";
+      }
 
       if (field === "latitude" || field === "longitude") {
         next.mapLocation = "";
@@ -1042,6 +1058,15 @@ export default function SitesPage() {
     if (!form.siteType) {
       errors.siteType =
         "Site type is required.";
+    }
+
+    if (form.siteType === "Other") {
+      const customSiteType = form.customSiteType.trim();
+      if (!customSiteType) {
+        errors.customSiteType = "Specify the site type.";
+      } else if (customSiteType.length > CUSTOM_SITE_TYPE_MAX_LENGTH) {
+        errors.customSiteType = `Site type must be ${CUSTOM_SITE_TYPE_MAX_LENGTH} characters or fewer.`;
+      }
     }
 
     if (
@@ -1163,6 +1188,8 @@ export default function SitesPage() {
             siteName: form.siteName.trim(),
             barangay: form.barangay,
             siteType: form.siteType,
+            customSiteType:
+              form.siteType === "Other" ? form.customSiteType.trim() : "",
             areaHectares: Number(form.areaHectares),
             maximumCapacity: Number(form.maximumCapacity),
 
@@ -1972,6 +1999,24 @@ export default function SitesPage() {
                       )}
                     </select>
                   </FormField>
+
+                  {form.siteType === "Other" && (
+                    <FormField
+                      label="Specify Site Type *"
+                      error={formErrors.customSiteType}
+                      full
+                    >
+                      <input
+                        type="text"
+                        maxLength={CUSTOM_SITE_TYPE_MAX_LENGTH}
+                        value={form.customSiteType}
+                        placeholder="e.g. Private Backyard Planting Site"
+                        onChange={(event) =>
+                          updateForm("customSiteType", event.target.value)
+                        }
+                      />
+                    </FormField>
+                  )}
                 </div>
               </section>
 
@@ -2483,15 +2528,29 @@ function SiteCoverageMap({
     boundaryLayer.addTo(map);
     boundaryLayer.bringToBack();
     boundaryLayerRef.current = boundaryLayer;
-    window.setTimeout(() => map.invalidateSize(), 0);
+    const resizeTimer = window.setTimeout(() => {
+      map.invalidateSize();
+      const hasSelectedLocation =
+        String(latitude ?? "").trim() !== "" &&
+        String(longitude ?? "").trim() !== "";
+      const bounds = boundaryLayer.getBounds();
+      if (!hasSelectedLocation && bounds.isValid()) {
+        map.fitBounds(bounds.pad(0.08), {
+          padding: [16, 16],
+          maxZoom: 13,
+          animate: false,
+        });
+      }
+    }, 0);
 
     return () => {
+      window.clearTimeout(resizeTimer);
       if (mapRef.current && boundaryLayerRef.current === boundaryLayer) {
         mapRef.current.removeLayer(boundaryLayer);
         boundaryLayerRef.current = null;
       }
     };
-  }, [barangayBoundaries]);
+  }, [barangayBoundaries, latitude, longitude]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -2603,7 +2662,9 @@ function SiteInformation({
         <InfoRow
           label="Site Type"
           value={
-            site.siteType || "—"
+            site.siteType === "Other" && site.customSiteType
+              ? `Other — ${site.customSiteType}`
+              : site.siteType || "—"
           }
         />
 
