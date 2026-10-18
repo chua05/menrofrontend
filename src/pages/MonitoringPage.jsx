@@ -1,13 +1,16 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import L from "leaflet";
+import {
+  CONDITION_SUM_ERROR, EMPTY_MONITORING_EVIDENCE, clearSharedCountError, monitoringPreview,
+  isOfficialMonitoringObservation, isFullMonitoringObservation, monitoringScheduleLabel,
+} from "../utils/monitoringForm";
 import "leaflet/dist/leaflet.css";
 import {
   FiActivity,
   FiArchive,
   FiCalendar,
   FiCamera,
-  FiCheckCircle,
   FiEye,
   FiFileText,
   FiHeart,
@@ -194,6 +197,22 @@ function getRangeStart(range) {
   return date;
 }
 
+function earlyMonitoringLabel(record) {
+  const policy = record?.earlyMonitoring;
+  if (!policy?.enabled || !policy.applicable) return "Early: Not Applicable";
+  if ((record.history || []).some((entry) => entry.observationType === "early")) return "Early: Submitted";
+  const today = todayInManila();
+  if (today >= policy.officialOpeningDate) return "Early: Closed";
+  if (today < policy.openingDate) return "Early: Scheduled";
+  if (today > policy.deadlineDate) return "Early: Overdue";
+  const twoDays = new Date(`${today}T12:00:00+08:00`);
+  twoDays.setDate(twoDays.getDate() + 2);
+  const dueSoonDate = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Manila", year: "numeric", month: "2-digit", day: "2-digit",
+  }).format(twoDays);
+  return dueSoonDate >= policy.deadlineDate ? "Early: Due Soon" : "Early: Available";
+}
+
 
 function getRecordId(record) {
   return record?.id || record?.monitoringId || "";
@@ -203,15 +222,18 @@ function getPlantingReportId(report) {
   return report?.id || report?.reportId || "";
 }
 
+function todayInManila() {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Manila",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date());
+}
+
 function normalizeMonitoringRecord(record) {
   const history = Array.isArray(record?.history) ? record.history : [];
   const latest = history.length > 0 ? history[history.length - 1] : null;
-  const totalChecked = Number(
-    latest?.totalMonitored ?? record?.totalMonitored ??
-      record?.quantityPlanted ??
-      0
-  );
-
   const healthy = Number(
     latest?.healthyCount ?? record?.healthyCount ??
       record?.healthy ??
@@ -228,6 +250,10 @@ function normalizeMonitoringRecord(record) {
     latest?.deadCount ?? record?.deadCount ??
       record?.dead ??
       0
+  );
+  const totalChecked = Number(
+    latest?.totalMonitored ?? record?.totalMonitored ??
+      ((healthy + damaged + dead) || record?.quantityPlanted || 0)
   );
 
   return {
@@ -257,6 +283,13 @@ function normalizeMonitoringRecord(record) {
     healthy,
     damaged,
     dead,
+    cohortQuantityAtObservation: Number(
+      latest?.cohortQuantityAtObservation ?? record?.quantityPlanted ?? 0
+    ),
+    isFullCohortAssessment:
+      latest?.isFullCohortAssessment ??
+      (totalChecked > 0 && totalChecked === Number(record?.quantityPlanted)),
+    monitoredBy: latest?.monitoredBy || record?.monitoredBy || "",
     survivalRate:
       latest?.survivalRate ?? record?.survivalRate ??
       getSurvivalRate(
@@ -372,22 +405,27 @@ async function apiRequest(
   }
 
   if (!response.ok) {
-    throw new Error(
+    const error = new Error(
       payload.message ||
         "The request could not be completed."
     );
+    error.status = response.status;
+    error.code = payload.code;
+    throw error;
   }
 
   return payload;
 }
 
 export default function MonitoringPage() {
+  const [observationType, setObservationType] = useState("official");
   const { userRole, currentUser } = useAuth();
   const { success: showSuccess } = useToast();
   const [pageSearchParams] = useSearchParams();
 
   const isParticipant = userRole === "participant";
-  const canReview = ["admin", "staff"].includes(userRole);
+  const isStaff = userRole === "staff";
+  const isAdmin = userRole === "admin";
 
   const cameraInputRef = useRef(null);
   const uploadInputRef = useRef(null);
@@ -421,9 +459,12 @@ export default function MonitoringPage() {
   const [showForm, setShowForm] = useState(false);
   const [showDetails, setShowDetails] = useState(false);
   const [selectedRecord, setSelectedRecord] = useState(null);
+  const [editingObservation, setEditingObservation] = useState(null);
+  const [retainEvidenceRevision, setRetainEvidenceRevision] = useState("");
   const [openActionMenuId, setOpenActionMenuId] = useState(null);
 
   const [formError, setFormError] = useState("");
+  const [fieldErrors, setFieldErrors] = useState({});
   const [locationLoading, setLocationLoading] = useState(false);
 
   const [photoFile, setPhotoFile] = useState(null);
@@ -435,7 +476,7 @@ export default function MonitoringPage() {
     siteName: "",
     barangay: "",
     species: "",
-    monitoredDate: new Date().toISOString().slice(0, 10),
+    monitoredDate: todayInManila(),
     totalChecked: "",
     healthy: "",
     damaged: "",
@@ -463,6 +504,19 @@ export default function MonitoringPage() {
     }, 0);
     return () => window.clearTimeout(openTimer);
   }, [loading, pageSearchParams, records]);
+
+  useEffect(() => {
+    const observationId = pageSearchParams.get("observation") || "";
+    if (!showDetails || !observationId || !selectedRecord?.history?.some(
+      (entry) => String(entry.id || "") === observationId,
+    )) return undefined;
+    const focusTimer = window.setTimeout(() => {
+      document.getElementById(
+        `monitoring-observation-${encodeURIComponent(observationId)}`,
+      )?.scrollIntoView({ block: "center" });
+    }, 0);
+    return () => window.clearTimeout(focusTimer);
+  }, [pageSearchParams, selectedRecord, showDetails]);
 
   useEffect(() => {
     let cancelled = false;
@@ -511,13 +565,8 @@ export default function MonitoringPage() {
           reports.filter(
             (report) =>
               report?.archived !== true &&
-              String(
-                report?.verificationStatus ||
-                  ""
-              )
-                .trim()
-                .toLowerCase() ===
-                "approved"
+              (["approved", "verified"].includes(String(report?.verificationStatus || "").trim().toLowerCase()) ||
+                String(report?.reportingProgress || "").trim().toLowerCase() === "completed")
           )
         );
         setSites(Array.isArray(sitesResponse.data) ? sitesResponse.data : []);
@@ -594,7 +643,7 @@ export default function MonitoringPage() {
             : "/monitoring"
         ),
         apiRequest(
-          "/planting-reports"
+          isParticipant ? "/planting-reports/my-reports" : "/planting-reports"
         ),
       ]);
 
@@ -620,13 +669,8 @@ export default function MonitoringPage() {
         ).filter(
           (report) =>
             report?.archived !== true &&
-            String(
-              report?.verificationStatus ||
-                ""
-            )
-              .trim()
-              .toLowerCase() ===
-              "approved"
+            (["approved", "verified"].includes(String(report?.verificationStatus || "").trim().toLowerCase()) ||
+              String(report?.reportingProgress || "").trim().toLowerCase() === "completed")
         )
       );
 
@@ -654,9 +698,16 @@ export default function MonitoringPage() {
     );
   }, [plantingReports, isParticipant, currentIdentity.id]);
 
+  const selectedReport = useMemo(() => eligiblePlantingReports.find(
+    (report) => String(getPlantingReportId(report)) === String(form.plantingReportId)
+  ) || null, [eligiblePlantingReports, form.plantingReportId]);
+  const preview = useMemo(() => monitoringPreview(form, selectedReport?.quantityPlanted),
+    [form, selectedReport?.quantityPlanted]);
+
   const selectedLifecycle = useMemo(() => records.find((record) =>
     String(record.plantingReportId) === String(form.plantingReportId)
   ) || null, [records, form.plantingReportId]);
+  const selectedEarlyPolicy = selectedLifecycle?.earlyMonitoring || selectedReport?.earlyMonitoring || null;
 
   const selectedSite = useMemo(() => sites.find((site) =>
     String(site.id || site.siteId) === String(form.siteId)
@@ -770,33 +821,35 @@ export default function MonitoringPage() {
     dateTo,
   ]);
 
+  const officialEntries = useMemo(() => visibleRecords.flatMap((record) => {
+    const approved = (record.history || []).filter((entry) =>
+      isOfficialMonitoringObservation(entry, record));
+    if (!approved.length) return [];
+    const latest = approved.map((entry, index) => ({ entry, index }))
+      .sort((a, b) => String(a.entry.monitoredDate || "").localeCompare(String(b.entry.monitoredDate || "")) ||
+        Number(a.entry.monitoredAt?.seconds || a.entry.monitoredAt?._seconds || 0) -
+        Number(b.entry.monitoredAt?.seconds || b.entry.monitoredAt?._seconds || 0) || a.index - b.index)
+      .at(-1)?.entry;
+    return latest && isFullMonitoringObservation(latest, record)
+      ? [{ ...latest, lifecycleId: record.id }]
+      : [];
+  }), [visibleRecords]);
+
   const summary = useMemo(() => {
-    const totalRecords = visibleRecords.length;
-
-    const totalTreesMonitored = visibleRecords.reduce(
-      (sum, record) => sum + (Number(record.totalChecked) || 0),
-      0
-    );
-
-    const healthy = visibleRecords.reduce(
-      (sum, record) => sum + (Number(record.healthy) || 0),
-      0
-    );
-
-    const damaged = visibleRecords.reduce(
-      (sum, record) => sum + (Number(record.damaged) || 0),
-      0
-    );
-
-    const dead = visibleRecords.reduce(
-      (sum, record) => sum + (Number(record.dead) || 0),
-      0
-    );
+    const totalRecords = officialEntries.length;
+    const totalTreesMonitored = officialEntries.reduce(
+      (sum, record) => sum + (Number(record.totalMonitored) || 0), 0);
+    const healthy = officialEntries.reduce(
+      (sum, record) => sum + (Number(record.healthyCount) || 0), 0);
+    const damaged = officialEntries.reduce(
+      (sum, record) => sum + (Number(record.damagedCount) || 0), 0);
+    const dead = officialEntries.reduce(
+      (sum, record) => sum + (Number(record.deadCount) || 0), 0);
 
     const survivalRate =
       totalTreesMonitored > 0
         ? Math.round(((healthy + damaged) / totalTreesMonitored) * 100)
-        : 0;
+        : null;
 
     const healthyPercent =
       totalTreesMonitored > 0
@@ -824,15 +877,25 @@ export default function MonitoringPage() {
       damagedPercent,
       deadPercent,
     };
-  }, [visibleRecords]);
+  }, [officialEntries]);
 
   const trendData = useMemo(() => {
     const start = getRangeStart(trendRange);
     const grouped = new Map();
 
-    const entries = visibleRecords.flatMap((record) =>
-      (record.history || []).map((entry) => ({ ...entry, lifecycleId: record.id }))
-    );
+    const latestByLifecycleMonth = new Map();
+    visibleRecords.flatMap((record) =>
+      (record.history || []).filter((entry) => isOfficialMonitoringObservation(entry, record))
+        .map((entry, index) => ({ ...entry, lifecycleId: record.id, lifecycle: record, __index: index })))
+      .sort((a, b) => String(a.monitoredDate || "").localeCompare(String(b.monitoredDate || "")) ||
+        Number(a.monitoredAt?.seconds || a.monitoredAt?._seconds || 0) -
+        Number(b.monitoredAt?.seconds || b.monitoredAt?._seconds || 0) || a.__index - b.__index)
+      .forEach((entry) => {
+        const month = String(entry.monitoredDate || "").slice(0, 7);
+        if (month) latestByLifecycleMonth.set(`${entry.lifecycleId}|${month}`, entry);
+      });
+    const entries = [...latestByLifecycleMonth.values()]
+      .filter((entry) => isFullMonitoringObservation(entry, entry.lifecycle));
     entries.forEach((record) => {
       const dateValue = record.monitoredDate || record.monitoringDate || record.monitoredAt || record.createdAt;
       if (!dateValue) return;
@@ -899,13 +962,16 @@ export default function MonitoringPage() {
   }
 
   function resetForm() {
+    setObservationType("official");
+    setEditingObservation(null);
+    setRetainEvidenceRevision("");
     setForm({
       plantingReportId: "",
       siteId: "",
       siteName: "",
       barangay: "",
       species: "",
-      monitoredDate: new Date().toISOString().slice(0, 10),
+      monitoredDate: todayInManila(),
       totalChecked: "",
       healthy: "",
       damaged: "",
@@ -921,6 +987,7 @@ export default function MonitoringPage() {
     });
 
     setFormError("");
+    setFieldErrors({});
     setLocationLoading(false);
     clearPreview();
   }
@@ -943,6 +1010,13 @@ export default function MonitoringPage() {
     }));
 
     if (formError) setFormError("");
+    setFieldErrors((previous) => {
+      const cleared = clearSharedCountError(previous, field);
+      if (!cleared[field]) return cleared;
+      const next = { ...cleared };
+      delete next[field];
+      return next;
+    });
   }
 
   function handlePlantingReportChange(event) {
@@ -954,6 +1028,8 @@ export default function MonitoringPage() {
           getPlantingReportId(item)
         ) === String(reportId)
     );
+    clearPreview();
+    setLocationLoading(false);
 
     if (!report) {
       setForm((previous) => ({
@@ -963,6 +1039,11 @@ export default function MonitoringPage() {
         siteName: "",
         barangay: "",
         species: "",
+        totalChecked: "",
+        healthy: "",
+        damaged: "",
+        dead: "",
+        ...EMPTY_MONITORING_EVIDENCE,
       }));
       return;
     }
@@ -983,15 +1064,15 @@ export default function MonitoringPage() {
         report.barangay || "",
       species:
         report.species || "",
-      totalChecked:
-        report.quantityPlanted != null
-          ? String(
-              report.quantityPlanted
-            )
-          : "",
+      totalChecked: "",
+      healthy: "",
+      damaged: "",
+      dead: "",
+      ...EMPTY_MONITORING_EVIDENCE,
     }));
 
     setFormError("");
+    setFieldErrors({});
   }
 
   async function verifyPhotoLocation(file = photoFile) {
@@ -1059,23 +1140,18 @@ export default function MonitoringPage() {
   async function handleSubmit(event) {
     event.preventDefault();
     setFormError("");
+    const errors = {};
+    if (!form.plantingReportId) errors.plantingReportId = "Select an approved planting report to monitor.";
 
-    if (!form.plantingReportId) {
-      setFormError(
-        "Select an approved planting report to monitor."
-      );
-      return;
-    }
-
-    if (selectedLifecycle?.status === "Not Yet Available") {
+    if (observationType === "official" && selectedLifecycle?.status === "Not Yet Available") {
       setFormError(`Monitoring is not available yet. You can submit the first monitoring record starting on ${selectedLifecycle.startMonitoringDate}.`);
       return;
     }
-    if (selectedLifecycle?.status === "Next Monitoring Scheduled") {
+    if (observationType === "official" && selectedLifecycle?.status === "Next Monitoring Scheduled") {
       setFormError(`Monitoring is not due yet. You can submit the next monitoring record starting on ${selectedLifecycle.nextMonitoringDate}.`);
       return;
     }
-    if (selectedLifecycle?.status === "Monitoring Completed") {
+    if (observationType === "official" && selectedLifecycle?.status === "Monitoring Completed") {
       setFormError("The two-year monitoring period for this planting record has been completed. No additional monitoring record can be submitted.");
       return;
     }
@@ -1088,75 +1164,43 @@ export default function MonitoringPage() {
       Number(form.damaged);
     const dead =
       Number(form.dead);
+    const quantityPlanted = Number(selectedReport?.quantityPlanted);
 
-    if (
-      !Number.isInteger(totalChecked) ||
-      totalChecked <= 0 ||
-      !Number.isInteger(healthy) ||
-      healthy < 0 ||
-      !Number.isInteger(damaged) ||
-      damaged < 0 ||
-      !Number.isInteger(dead) ||
-      dead < 0
-    ) {
-      setFormError(
-        "Trees checked, healthy, damaged, and dead must use whole numbers. Trees checked must be at least 1."
-      );
-      return;
+    if (!Number.isInteger(totalChecked) || totalChecked <= 0) {
+      errors.totalChecked = "Enter a positive whole number of trees checked.";
+    } else if (Number.isInteger(quantityPlanted) && quantityPlanted > 0 && totalChecked > quantityPlanted) {
+      errors.totalChecked = `Trees checked cannot exceed the verified planted quantity (${quantityPlanted}).`;
+    }
+    if (!Number.isInteger(healthy) || healthy < 0) errors.healthy = "Enter a whole number of zero or more.";
+    if (!Number.isInteger(damaged) || damaged < 0) errors.damaged = "Enter a whole number of zero or more.";
+    if (!Number.isInteger(dead) || dead < 0) errors.dead = "Enter a whole number of zero or more.";
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(form.monitoredDate) || form.monitoredDate > todayInManila()) {
+      errors.monitoredDate = "Select a valid monitoring date that is not in the future.";
     }
 
-    if (
+    if (Object.keys(errors).length === 0 &&
       healthy +
         damaged +
         dead !==
       totalChecked
     ) {
-      setFormError(
-        "Healthy + Damaged + Dead must exactly equal Total Trees Checked."
-      );
+      errors.totalChecked = CONDITION_SUM_ERROR;
+    }
+    if (Object.keys(errors).length > 0) {
+      setFieldErrors(errors);
+      const firstField = Object.keys(errors)[0];
+      window.setTimeout(() => document.querySelector(`[data-monitoring-field="${firstField}"]`)?.focus(), 0);
       return;
     }
 
-    const selectedReport =
-      eligiblePlantingReports.find(
-        (report) =>
-          String(
-            getPlantingReportId(
-              report
-            )
-          ) ===
-          String(
-            form.plantingReportId
-          )
-      );
-
-    const quantityPlanted =
-      Number(
-        selectedReport?.quantityPlanted
-      );
-
-    if (
-      Number.isInteger(
-        quantityPlanted
-      ) &&
-      quantityPlanted > 0 &&
-      totalChecked !==
-        quantityPlanted
-    ) {
-      setFormError(
-        `Total Trees Checked must equal the planted quantity (${quantityPlanted}) for this monitoring round.`
-      );
-      return;
-    }
-
-    if (!photoFile) {
+    if (!photoFile && !editingObservation) {
       setFormError(
         "A monitoring photo is required."
       );
       return;
     }
 
-    if (!hasGps) {
+    if (!hasGps && (!editingObservation || photoFile)) {
       setFormError("This photo does not contain GPS location metadata. Please upload an original geotagged photo with location information.");
       return;
     }
@@ -1171,6 +1215,14 @@ export default function MonitoringPage() {
         "plantingReportId",
         form.plantingReportId
       );
+      payload.append("totalMonitored", String(totalChecked));
+      payload.append("monitoredDate", form.monitoredDate);
+      if (editingObservation && !photoFile) {
+        payload.append("retainEvidenceRevision", retainEvidenceRevision);
+        payload.append("expectedVersion", String(editingObservation.expectedVersion));
+      } else if (editingObservation) {
+        payload.append("expectedVersion", String(editingObservation.expectedVersion));
+      }
       payload.append(
         "healthyCount",
         String(healthy)
@@ -1191,16 +1243,17 @@ export default function MonitoringPage() {
         "remarks",
         form.remarks.trim()
       );
-      payload.append(
-        "photo",
-        photoFile
-      );
+      if (photoFile) {
+        payload.append("photo", photoFile);
+      }
 
       const response =
         await apiRequest(
-          "/monitoring",
+          editingObservation
+            ? `/monitoring/${encodeURIComponent(editingObservation.monitoringId)}/observations/${encodeURIComponent(editingObservation.observationId)}/resubmit`
+            : observationType === "early" ? "/monitoring/early" : "/monitoring",
           {
-            method: "POST",
+            method: editingObservation ? "PATCH" : "POST",
             body: payload,
           }
         );
@@ -1213,7 +1266,9 @@ export default function MonitoringPage() {
       setRecords((previous) => [newRecord, ...previous.filter((item) => item.id !== newRecord.id)]);
 
       resetForm();
-      showSuccess("Your monitoring record was submitted successfully.");
+      showSuccess(editingObservation
+        ? "Monitoring observation resubmitted for review."
+        : "Your monitoring record was submitted successfully.");
     } catch (error) {
       console.error(
         "Failed to submit monitoring record:",
@@ -1241,58 +1296,67 @@ export default function MonitoringPage() {
     setShowDetails(false);
   }
 
-  async function markReviewed() {
-    if (
-      !selectedRecord ||
-      !canReview
-    ) {
-      return;
-    }
+  function applyUpdatedRecord(response) {
+    const updated = normalizeMonitoringRecord(response.data || {});
+    setRecords((previous) => previous.map((record) => record.id === updated.id ? updated : record));
+    setSelectedRecord(updated);
+  }
 
+  async function runObservationAction(entry, action) {
+    if (!selectedRecord || !entry?.id) return;
+    let body = { expectedVersion: Number(entry.reviewVersion || 0) };
+    if (action === "return" || action === "reject") {
+      const reason = window.prompt(action === "return"
+        ? "Reason for returning this observation for rechecking:"
+        : "Reason for rejecting this observation:");
+      if (reason === null) return;
+      if (!reason.trim()) {
+        setFormError(action === "return" ? "A return reason is required." : "A rejection reason is required.");
+        return;
+      }
+      body = { ...body, reason: reason.trim() };
+    } else if (!window.confirm(action === "review"
+      ? "Mark this observation as reviewed and send it for Admin decision?"
+      : "Approve this monitoring observation?")) return;
     setActionLoading(true);
-
     try {
-      const response =
-        await apiRequest(
-          `/monitoring/${selectedRecord.id}/review`,
-          {
-            method: "PATCH",
-            body: JSON.stringify({}),
-          }
-        );
-
-      const updated =
-        normalizeMonitoringRecord(
-          response.data || {}
-        );
-
-      setRecords(
-        (previous) =>
-          previous.map(
-            (record) =>
-              record.id ===
-              updated.id
-                ? updated
-                : record
-          )
-      );
-
-      setSelectedRecord(
-        updated
-      );
-
-      showSuccess(
-        "Monitoring record marked as reviewed."
-      );
+      const response = await apiRequest(
+        `/monitoring/${encodeURIComponent(selectedRecord.id)}/observations/${encodeURIComponent(entry.id)}/${action}`,
+        { method: "PATCH", body: JSON.stringify(body) });
+      applyUpdatedRecord(response);
+      showSuccess(action === "review" ? "Monitoring observation reviewed."
+        : action === "return" ? "Observation returned for rechecking."
+          : action === "approve" ? "Monitoring observation approved."
+            : "Monitoring observation rejected.");
     } catch (error) {
       console.error(error);
-      setFormError(
-        error.message ||
-          "Unable to review monitoring record."
-      );
+      if (error.status === 409) {
+        setRetryKey((current) => current + 1);
+        setFormError("This observation changed while you were reviewing it. The latest information has been loaded.");
+      } else setFormError(error.message || "Unable to update monitoring observation.");
     } finally {
       setActionLoading(false);
     }
+  }
+
+  function openCorrection(record, entry) {
+    if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current);
+    previewUrlRef.current = null;
+    setPhotoFile(null);
+    setPhotoPreview("");
+    setEditingObservation({ monitoringId: record.id, observationId: entry.id,
+      expectedVersion: Number(entry.reviewVersion || 0) });
+    setObservationType(entry.observationType === "early" ? "early" : "official");
+    setRetainEvidenceRevision(String(entry.currentEvidenceRevision || entry.revisionNumber || 1));
+    setForm({ plantingReportId: record.plantingReportId, siteId: record.siteId,
+      siteName: record.siteName, barangay: record.barangay, species: record.species,
+      monitoredDate: entry.monitoredDate || todayInManila(), totalChecked: String(entry.totalMonitored || ""),
+      healthy: String(entry.healthyCount ?? ""), damaged: String(entry.damagedCount ?? ""),
+      dead: String(entry.deadCount ?? ""), nextMonitoringDate: record.nextMonitoringDate || "",
+      latitude: String(entry.latitude ?? ""), longitude: String(entry.longitude ?? ""), accuracy: "",
+      locationCapturedAt: "", maturityStatus: entry.maturityStatus || "Immature",
+      endOfMonitoring: false, remarks: entry.remarks || "" });
+    setFormError(""); setFieldErrors({}); setShowDetails(false); setShowForm(true);
   }
 
   async function archiveRecord(record) {
@@ -1409,9 +1473,9 @@ export default function MonitoringPage() {
             <FiFileText size={20} />
           </div>
           <div>
-            <div className="sm-kpi-label">Monitoring Lifecycles</div>
+            <div className="sm-kpi-label">Approved Full Cohorts</div>
             <div className="sm-kpi-value">{loadError ? "—" : summary.totalRecords}</div>
-            <div className="sm-kpi-note">Active records</div>
+            <div className="sm-kpi-note">Official observations</div>
           </div>
         </div>
 
@@ -1422,7 +1486,7 @@ export default function MonitoringPage() {
           <div>
             <div className="sm-kpi-label">Total Trees Monitored</div>
             <div className="sm-kpi-value">{loadError ? "—" : summary.totalTreesMonitored}</div>
-            <div className="sm-kpi-note">From verified reports</div>
+            <div className="sm-kpi-note">Admin-approved full cohorts</div>
           </div>
         </div>
 
@@ -1431,9 +1495,9 @@ export default function MonitoringPage() {
             <FiTrendingUp size={20} />
           </div>
           <div>
-            <div className="sm-kpi-label">Average Survival Rate</div>
-            <div className="sm-kpi-value">{loadError ? "—" : `${summary.survivalRate}%`}</div>
-            <div className="sm-kpi-note">Across all records</div>
+            <div className="sm-kpi-label">Official Survival Rate</div>
+            <div className="sm-kpi-value">{loadError || summary.survivalRate == null ? "—" : `${summary.survivalRate}%`}</div>
+            <div className="sm-kpi-note">Admin-approved full cohorts</div>
           </div>
         </div>
 
@@ -1444,7 +1508,7 @@ export default function MonitoringPage() {
           <div>
             <div className="sm-kpi-label">Total Trees Lost</div>
             <div className="sm-kpi-value">{loadError ? "—" : summary.dead}</div>
-            <div className="sm-kpi-note">Dead trees recorded</div>
+            <div className="sm-kpi-note">Approved full-cohort records</div>
           </div>
         </div>
       </div>
@@ -1713,13 +1777,13 @@ export default function MonitoringPage() {
 
               <div className="sm-volume-progress">
                 <div className="sm-volume-top">
-                  <span>{summary.survivalRate}%</span>
-                  <strong>{summary.survivalRate}%</strong>
+                  <span>{summary.survivalRate == null ? "—" : `${summary.survivalRate}%`}</span>
+                  <strong>{summary.survivalRate == null ? "—" : `${summary.survivalRate}%`}</strong>
                 </div>
                 <div className="sm-progress-track">
                   <div
                     className="sm-progress-fill sm-fill-survival"
-                    style={{ width: `${summary.survivalRate}%` }}
+                    style={{ width: `${summary.survivalRate ?? 0}%` }}
                   />
                 </div>
               </div>
@@ -1772,8 +1836,8 @@ export default function MonitoringPage() {
                         )}
                       </td>
                       <td>{formatDate(record.startMonitoringDate)}</td>
-                      <td>{record.nextMonitoringDate ? formatDate(record.nextMonitoringDate) : record.history?.length ? "No further monitoring required" : "Available after first monitoring submission"}</td>
-                      <td>{record.status}</td>
+                      <td>{record.nextMonitoringDate ? formatDate(record.nextMonitoringDate) : monitoringScheduleLabel(record)}</td>
+                      <td>{record.status}<span className="sm-site-sub">{earlyMonitoringLabel(record)}</span></td>
                       <td>
                         <span
                           className="sm-condition-badge"
@@ -1799,7 +1863,7 @@ export default function MonitoringPage() {
                             <FiEye size={14} />
                           </button>
 
-                          {canReview && (
+                          {(isStaff || isAdmin) && (
                             <>
                               <button
                                 type="button"
@@ -1890,7 +1954,7 @@ export default function MonitoringPage() {
           <div className="sm-modal">
             <div className="sm-modal-header">
               <div>
-                <h2>Monitor Planted Trees</h2>
+                <h2>{editingObservation ? "Edit Returned Monitoring Observation" : "Monitor Planted Trees"}</h2>
                 <p>
                   Monitor a verified planting report and document the current
                   survival condition.
@@ -1909,13 +1973,26 @@ export default function MonitoringPage() {
             <form onSubmit={handleSubmit}>
               <div className="sm-modal-body">
                 <FormAlert type="error">{formError}</FormAlert>
-                {!formError && selectedLifecycle?.status === "Not Yet Available" && (
+                {!editingObservation && selectedEarlyPolicy?.enabled && (
+                  <div className="sm-form-section">
+                    <label className="sm-label">Monitoring Type</label>
+                    <select className="sm-input" value={observationType}
+                      onChange={(event) => setObservationType(event.target.value)}>
+                      <option value="official">Official Survival Monitoring</option>
+                      <option value="early">Early Survival Monitoring</option>
+                    </select>
+                    {observationType === "early" && <div className="sm-helper">
+                      Opens {formatDate(selectedEarlyPolicy.openingDate)}; on-time deadline {formatDate(selectedEarlyPolicy.deadlineDate)}. New early submissions close when official monitoring opens on {formatDate(selectedEarlyPolicy.officialOpeningDate)}.
+                    </div>}
+                  </div>
+                )}
+                {!formError && observationType === "official" && selectedLifecycle?.status === "Not Yet Available" && (
                   <FormAlert type="info">Monitoring is not available yet. You can submit the first monitoring record starting on {formatDate(selectedLifecycle.startMonitoringDate)}, which is two weeks after the planting event.</FormAlert>
                 )}
-                {!formError && selectedLifecycle?.status === "Next Monitoring Scheduled" && (
+                {!formError && observationType === "official" && selectedLifecycle?.status === "Next Monitoring Scheduled" && (
                   <FormAlert type="info">Monitoring is not due yet. You can submit the next monitoring record starting on {formatDate(selectedLifecycle.nextMonitoringDate)}.</FormAlert>
                 )}
-                {!formError && selectedLifecycle?.status === "Monitoring Completed" && (
+                {!formError && observationType === "official" && selectedLifecycle?.status === "Monitoring Completed" && (
                   <FormAlert type="info">The two-year monitoring period for this planting record has been completed. No additional monitoring record can be submitted.</FormAlert>
                 )}
 
@@ -1930,7 +2007,8 @@ export default function MonitoringPage() {
                   </label>
 
                   <select
-                    className="sm-input"
+                    className={`sm-input ${fieldErrors.plantingReportId ? "is-invalid" : ""}`}
+                    data-monitoring-field="plantingReportId"
                     value={form.plantingReportId}
                     onChange={handlePlantingReportChange}
                   >
@@ -1944,6 +2022,7 @@ export default function MonitoringPage() {
                       </option>
                     ))}
                   </select>
+                  {fieldErrors.plantingReportId && <div className="sm-field-error">{fieldErrors.plantingReportId}</div>}
 
                   {eligiblePlantingReports.length === 0 && (
                     <div className="sm-helper">
@@ -1967,6 +2046,14 @@ export default function MonitoringPage() {
                           <span>Species</span>
                           <strong>{form.species || "—"}</strong>
                         </div>
+                        <div>
+                          <span>Planting Event / Group</span>
+                          <strong>{selectedReport?.eventName || selectedReport?.organizationName || selectedReport?.participantName || "—"}</strong>
+                        </div>
+                        <div>
+                          <span>Verified Planted Quantity</span>
+                          <strong>{selectedReport?.quantityPlanted ?? "—"}</strong>
+                        </div>
                       </div>
                     </>
                   )}
@@ -1981,6 +2068,13 @@ export default function MonitoringPage() {
                   <div className="sm-form-grid">
                     <div><label className="sm-label">Start Monitoring Date</label><div className="sm-input">{selectedLifecycle?.startMonitoringDate ? formatDate(selectedLifecycle.startMonitoringDate) : "Select a planting report"}</div></div>
                     <div><label className="sm-label">Next Monitoring Date</label><div className="sm-input">{selectedLifecycle?.nextMonitoringDate ? formatDate(selectedLifecycle.nextMonitoringDate) : "Available after first monitoring submission"}</div></div>
+                    <div>
+                      <label className="sm-label">Date Monitored <span>*</span></label>
+                      <input type="date" max={todayInManila()} data-monitoring-field="monitoredDate"
+                        className={`sm-input ${fieldErrors.monitoredDate ? "is-invalid" : ""}`}
+                        value={form.monitoredDate} onChange={(event) => updateFormField("monitoredDate", event.target.value)} />
+                      {fieldErrors.monitoredDate && <div className="sm-field-error">{fieldErrors.monitoredDate}</div>}
+                    </div>
 
                     <div>
                       <label className="sm-label">
@@ -1989,15 +2083,17 @@ export default function MonitoringPage() {
                       <input
                         type="number"
                         min="1"
+                        max={selectedReport?.quantityPlanted || undefined}
                         step="1"
-                        className="sm-input"
+                        data-monitoring-field="totalChecked"
+                        className={`sm-input ${fieldErrors.totalChecked ? "is-invalid" : ""}`}
                         value={form.totalChecked}
                         onChange={(event) =>
                           updateFormField("totalChecked", event.target.value)
                         }
                         placeholder="0"
-                        readOnly={Boolean(form.plantingReportId)}
                       />
+                      {fieldErrors.totalChecked && <div className="sm-field-error">{fieldErrors.totalChecked}</div>}
                     </div>
 
                     <div>
@@ -2008,13 +2104,15 @@ export default function MonitoringPage() {
                         type="number"
                         min="0"
                         step="1"
-                        className="sm-input"
+                        data-monitoring-field="healthy"
+                        className={`sm-input ${fieldErrors.healthy ? "is-invalid" : ""}`}
                         value={form.healthy}
                         onChange={(event) =>
                           updateFormField("healthy", event.target.value)
                         }
                         placeholder="0"
                       />
+                      {fieldErrors.healthy && <div className="sm-field-error">{fieldErrors.healthy}</div>}
                     </div>
 
                     <div>
@@ -2025,13 +2123,15 @@ export default function MonitoringPage() {
                         type="number"
                         min="0"
                         step="1"
-                        className="sm-input"
+                        data-monitoring-field="damaged"
+                        className={`sm-input ${fieldErrors.damaged ? "is-invalid" : ""}`}
                         value={form.damaged}
                         onChange={(event) =>
                           updateFormField("damaged", event.target.value)
                         }
                         placeholder="0"
                       />
+                      {fieldErrors.damaged && <div className="sm-field-error">{fieldErrors.damaged}</div>}
                     </div>
 
                     <div>
@@ -2042,13 +2142,15 @@ export default function MonitoringPage() {
                         type="number"
                         min="0"
                         step="1"
-                        className="sm-input"
+                        data-monitoring-field="dead"
+                        className={`sm-input ${fieldErrors.dead ? "is-invalid" : ""}`}
                         value={form.dead}
                         onChange={(event) =>
                           updateFormField("dead", event.target.value)
                         }
                         placeholder="0"
                       />
+                      {fieldErrors.dead && <div className="sm-field-error">{fieldErrors.dead}</div>}
                     </div>
 
                     <div>
@@ -2076,6 +2178,22 @@ export default function MonitoringPage() {
                     Healthy + Damaged + Dead must equal Total Trees Checked.
                     Survival rate counts Healthy and Damaged trees as surviving.
                   </div>
+                  {editingObservation && !photoFile && (
+                    <div className="sm-helper">
+                      Validated evidence revision {retainEvidenceRevision} will be reused unless you select a replacement photo.
+                    </div>
+                  )}
+                  {preview.validTotal && (
+                    <div className="sm-selected-report">
+                      <div><span>Verified Planted Trees</span><strong>{preview.verifiedQuantity}</strong></div>
+                      <div><span>Total Trees Checked</span><strong>{preview.totalChecked}</strong></div>
+                      <div><span>Unassessed Trees</span><strong>{preview.unassessed}</strong></div>
+                      <div><span>Observation Coverage</span><strong>{Math.round(preview.coverageRate * 100) / 100}%</strong></div>
+                      <div><span>Observation Survival Rate</span><strong>{preview.validCounts ? `${Math.round(preview.survivalRate * 100) / 100}%` : "Complete valid tree counts"}</strong></div>
+                      <div><span>Observation Mortality Rate</span><strong>{preview.validCounts ? `${Math.round(preview.mortalityRate * 100) / 100}%` : "Complete valid tree counts"}</strong></div>
+                      <div><span>Assessment Type</span><strong>{preview.assessmentType}</strong></div>
+                    </div>
+                  )}
                 </div>
 
                 <div className="sm-form-section sm-location-section">
@@ -2310,7 +2428,7 @@ export default function MonitoringPage() {
                   </div>
                   <div>
                     <span>Next Monitoring Date</span>
-                    <strong>{selectedRecord.nextMonitoringDate ? formatDate(selectedRecord.nextMonitoringDate) : "No further monitoring required"}</strong>
+                    <strong>{selectedRecord.nextMonitoringDate ? formatDate(selectedRecord.nextMonitoringDate) : monitoringScheduleLabel(selectedRecord)}</strong>
                   </div>
                   <div>
                     <span>Lifecycle Status</span>
@@ -2347,7 +2465,7 @@ export default function MonitoringPage() {
               {selectedRecord.history?.length > 0 && <section className="sm-detail-section">
                 <h3>Monitoring Photo</h3>
 
-                {selectedRecord.photoPreview || selectedRecord.photoUrl ? (
+                {selectedRecord.photoPreview || selectedRecord.hasEvidence ? (
                   selectedRecord.photoPreview ? (
                     <img
                       className="sm-detail-photo"
@@ -2357,7 +2475,9 @@ export default function MonitoringPage() {
                   ) : (
                     <ProtectedEvidenceImage
                       className="sm-detail-photo"
-                      endpoint={`/evidence/monitoring/${encodeURIComponent(selectedRecord.id)}/photos/${selectedRecord.history.length - 1}`}
+                      endpoint={selectedRecord.history.at(-1)?.workflowVersion >= 2
+                        ? `/evidence/monitoring/${encodeURIComponent(selectedRecord.id)}/observations/${encodeURIComponent(selectedRecord.history.at(-1).id)}/revisions/${encodeURIComponent(selectedRecord.history.at(-1).currentEvidenceRevision || selectedRecord.history.at(-1).revisionNumber || 1)}`
+                        : `/evidence/monitoring/${encodeURIComponent(selectedRecord.id)}/photos/${selectedRecord.history.length - 1}`}
                       alt="Monitoring evidence"
                     />
                   )
@@ -2415,26 +2535,58 @@ export default function MonitoringPage() {
                 {selectedRecord.history?.length ? (
                   <div className="sm-history-entry-list">
                     {selectedRecord.history.map((entry, index) => (
-                      <article className="sm-history-entry" key={entry.id || `${entry.monitoredDate}-${index}`}>
+                      <article
+                        className="sm-history-entry"
+                        id={entry.id ? `monitoring-observation-${encodeURIComponent(entry.id)}` : undefined}
+                        key={entry.id || `${entry.monitoredDate}-${index}`}
+                      >
                         <div className="sm-history-entry-header">
-                          <strong>Monitoring Entry {index + 1}</strong>
+                          <strong>{entry.observationType === "early" ? "Early" : "Official"} Monitoring Entry {index + 1}</strong>
                           <span>{formatDateTime(entry.monitoredAt || entry.createdAt)}</span>
                         </div>
                         <div className="sm-detail-grid">
                           <div><span>Condition</span><strong>{entry.condition || "—"}</strong></div>
                           <div><span>Date Monitored</span><strong>{formatDate(entry.monitoredDate)}</strong></div>
                           <div><span>Healthy / Damaged / Dead</span><strong>{entry.healthyCount || 0} / {entry.damagedCount || 0} / {entry.deadCount || 0}</strong></div>
+                          <div><span>Total Trees Checked</span><strong>{entry.totalMonitored ?? ((entry.healthyCount || 0) + (entry.damagedCount || 0) + (entry.deadCount || 0))}</strong></div>
                           <div><span>Survival Rate</span><strong>{entry.survivalRate ?? 0}%</strong></div>
+                          <div><span>Mortality Rate</span><strong>{entry.mortalityRate ?? 0}%</strong></div>
+                          <div><span>Coverage</span><strong>{entry.isFullCohortAssessment === true ? "Full cohort" : entry.isFullCohortAssessment === false ? "Partial observation" : "Legacy observation"}</strong></div>
+                          <div><span>Workflow Status</span><strong>{entry.reviewStatus || "Legacy observation"}</strong></div>
+                          <div><span>Observation ID</span><strong>{entry.id || "Legacy observation"}</strong></div>
+                          <div><span>Revision</span><strong>{entry.revisionNumber || 1}</strong></div>
+                          <div><span>Reporter ID</span><strong>{entry.monitoredBy || selectedRecord.participantId || "—"}</strong></div>
                           <div><span>Photo Coordinates</span><strong>{entry.latitude ?? "—"}, {entry.longitude ?? "—"}</strong></div>
                           <div><span>Site Verification</span><strong>{entry.automatedVerificationStatus || "—"}</strong></div>
                           <div><span>Remarks</span><strong>{entry.remarks || "—"}</strong></div>
                         </div>
-                        {entry.photoUrl && (
+                        {entry.hasEvidence && entry.id && (
                           <ProtectedEvidenceImage
                             className="sm-detail-photo"
-                            endpoint={`/evidence/monitoring/${encodeURIComponent(selectedRecord.id)}/photos/${index}`}
+                            endpoint={`/evidence/monitoring/${encodeURIComponent(selectedRecord.id)}/observations/${encodeURIComponent(entry.id)}/revisions/${encodeURIComponent(entry.currentEvidenceRevision || entry.revisionNumber || 1)}`}
                             alt={`Monitoring evidence ${index + 1}`}
                           />
+                        )}
+                        {entry.returnReason && <div className="sm-field-error">Returned for rechecking: {entry.returnReason}</div>}
+                        {Array.isArray(entry.revisionHistory) && entry.revisionHistory.length > 1 && (
+                          <div className="sm-helper">Revision history: {entry.revisionHistory.map((revision) => `Revision ${revision.revisionNumber}`).join(", ")}</div>
+                        )}
+                        {isStaff && entry.workflowVersion >= 2 && entry.reviewStatus === "Pending Review" && (
+                          <div className="sm-review-actions">
+                            <button type="button" className="sm-primary-button" onClick={() => runObservationAction(entry, "review")} disabled={actionLoading}>Review</button>
+                            <button type="button" className="sm-secondary-button" onClick={() => runObservationAction(entry, "return")} disabled={actionLoading}>Return for Rechecking</button>
+                          </div>
+                        )}
+                        {isAdmin && entry.workflowVersion >= 2 && entry.reviewStatus === "Reviewed" && (
+                          <div className="sm-review-actions">
+                            <button type="button" className="sm-primary-button" onClick={() => runObservationAction(entry, "approve")} disabled={actionLoading}>Approve</button>
+                            <button type="button" className="sm-secondary-button" onClick={() => runObservationAction(entry, "reject")} disabled={actionLoading}>Reject</button>
+                          </div>
+                        )}
+                        {isParticipant && entry.workflowVersion >= 2 && entry.reviewStatus === "Returned for Rechecking" && entry.originalReporterId === currentIdentity.id && (
+                          <div className="sm-review-actions">
+                            <button type="button" className="sm-primary-button" onClick={() => openCorrection(selectedRecord, entry)}>Edit and Resubmit</button>
+                          </div>
                         )}
                       </article>
                     ))}
@@ -2443,20 +2595,6 @@ export default function MonitoringPage() {
                   <p className="sm-helper">No monitoring entries have been submitted for this planting record.</p>
                 )}
 
-                {canReview &&
-                  selectedRecord.reviewStatus !== "Reviewed" && (
-                    <div className="sm-review-actions">
-                      <button
-                        type="button"
-                        className="sm-primary-button"
-                        onClick={markReviewed}
-                        disabled={actionLoading}
-                      >
-                        <FiCheckCircle size={14} />
-                        Mark as Reviewed
-                      </button>
-                    </div>
-                  )}
               </section>
             </div>
           </aside>

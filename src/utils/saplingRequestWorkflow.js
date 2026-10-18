@@ -119,6 +119,22 @@ export function isValidDateOnly(value) {
     date.getUTCDate() === day;
 }
 
+export function formatScheduleTime(value, missingLabel = "") {
+  if (!value) return missingLabel;
+  const timeOnly = /^(\d{1,2}):(\d{2})(?::\d{2})?$/.exec(String(value).trim());
+  if (timeOnly) {
+    const hour = Number(timeOnly[1]);
+    const minute = Number(timeOnly[2]);
+    if (hour >= 0 && hour <= 23 && minute >= 0 && minute <= 59) {
+      return new Intl.DateTimeFormat("en-US", { hour: "2-digit", minute: "2-digit", timeZone: "UTC" })
+        .format(new Date(Date.UTC(2000, 0, 1, hour, minute)));
+    }
+  }
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return missingLabel || "Not specified";
+  return date.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+}
+
 function dateOnlyValue(value) {
   const [year, month, day] = String(value).split("-").map(Number);
   return Date.UTC(year, month - 1, day);

@@ -7,7 +7,9 @@
     "dev": "vite",
     "build": "vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test:integration:safety": "node --test --test-isolation=none tests/integrationEnvironment.test.mjs",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
     "@aivangogh/ph-address": "^2026.2.4",
@@ -38,6 +40,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
+    "@playwright/test": "^1.64.1",
     "@types/node": "^26.4.1",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",

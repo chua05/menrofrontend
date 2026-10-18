@@ -7,9 +7,16 @@ import {
   getStepState,
   invalidateCompletedSteps,
   isGroupRequester,
+  formatScheduleTime,
   validatePlantingSchedule,
   validateRequestLetterFile,
 } from "../src/utils/saplingRequestWorkflow.js";
+
+test("formats stored time-only schedule values without Invalid Date", () => {
+  assert.equal(formatScheduleTime("06:00"), "06:00 AM");
+  assert.equal(formatScheduleTime("", "Not specified"), "Not specified");
+  assert.equal(formatScheduleTime("invalid", "Not specified"), "Not specified");
+});
 
 test("classifies individual and group requesters from sector/requesting-as", () => {
   assert.equal(isGroupRequester("Resident / Individual", ""), false);

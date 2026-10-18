@@ -38,6 +38,7 @@ import {
 import { auth } from "../firebase/config";
 import { formatDisplayId } from "../utils/displayId";
 import { BULAN_BARANGAYS } from "../utils/userTypes";
+import { formatScheduleTime } from "../utils/saplingRequestWorkflow";
 
 import "../styles/seedling-requests.css";
 import ParticipantSaplingRequestWizard from "./ParticipantSaplingRequestWizard";
@@ -419,14 +420,30 @@ function formatDate(dateString) {
 }
 
 function formatTime(dateString) {
-  if (!dateString) return "";
+  return formatScheduleTime(dateString);
+}
 
-  const date = new Date(dateString);
-
-  return date.toLocaleTimeString("en-US", {
-    hour: "numeric",
-    minute: "2-digit",
-  });
+function getScheduleValidationWarning(schedule = {}, now = new Date()) {
+  const today = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Manila", year: "numeric", month: "2-digit", day: "2-digit",
+  }).format(now);
+  if (!schedule.preferredReleaseDate || schedule.preferredReleaseDate < today) {
+    return "The proposed release date has passed. Enter and save a valid replacement release date.";
+  }
+  if (!schedule.plantingDate || schedule.plantingDate < schedule.preferredReleaseDate) {
+    return "The planting date must be on or after the proposed release date.";
+  }
+  if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(schedule.startTime || "")) {
+    return "Enter a valid planting start time.";
+  }
+  const start = new Date(`${schedule.plantingDate}T${schedule.startTime}:00+08:00`);
+  if (Number.isNaN(start.getTime()) || start.getTime() <= now.getTime()) {
+    return "The proposed planting date and time have passed. Coordinate and save a future planting schedule.";
+  }
+  if (schedule.endTime && schedule.endTime <= schedule.startTime) {
+    return "The planting end time must be later than the start time.";
+  }
+  return "";
 }
 
 function getLocalDateString(date = new Date()) {
@@ -552,6 +569,9 @@ export default function SeedlingRequestsPage() {
   const [releaseEntries, setReleaseEntries] = useState([]);
   const [releaseLoading, setReleaseLoading] = useState(false);
   const [releaseError, setReleaseError] = useState("");
+  const [availableReleaseDate, setAvailableReleaseDate] = useState("");
+  const [lateReleaseReason, setLateReleaseReason] = useState("");
+  const [lateReleaseReturnReason, setLateReleaseReturnReason] = useState("");
 
   const [plantingSites, setPlantingSites] = useState([]);
   const [loadingSites, setLoadingSites] = useState(false);
@@ -1196,6 +1216,30 @@ useEffect(() => {
     setReviewError("");
   };
 
+  const saveReviewSchedule = async (schedule) => {
+    if (!reviewModal?.request?.id) return null;
+    setActionLoading(true);
+    setReviewError("");
+    try {
+      const updated = await apiRequest(`/seedling-requests/${reviewModal.request.id}/pre-approval-schedule`, {
+        method: "PATCH",
+        body: JSON.stringify({ ...schedule, expectedVersion: Number(reviewModal.request.requestVersion || 0) }),
+      });
+      const normalized = normalizeRequestForUi(updated);
+      refreshSelectedRequest(updated);
+      setReviewModal({ request: normalized });
+      showSuccess(normalized.preApprovalSchedule?.status === "AwaitingRequesterConfirmation"
+        ? "The requester was notified to confirm the coordinated planting schedule."
+        : "The coordinated release schedule was saved.");
+      return normalized;
+    } catch (error) {
+      setReviewError(error.message || "Unable to save the coordinated schedule.");
+      return null;
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
   const submitReview = async () => {
     if (!reviewModal?.request?.id) return;
 
@@ -1218,6 +1262,7 @@ useEffect(() => {
           request.eventLocation ||
           "",
         preferredReleaseDate: request.preferredReleaseDate || "",
+        expectedVersion: Number(request.requestVersion || 0),
       };
 
       const updated = await apiRequest(
@@ -1280,7 +1325,7 @@ useEffect(() => {
         `/seedling-requests/${request.id}/return`,
         {
           method: "PATCH",
-          body: JSON.stringify({ reason }),
+          body: JSON.stringify({ reason, expectedVersion: Number(request.requestVersion || 0) }),
         }
       );
 
@@ -1308,7 +1353,7 @@ useEffect(() => {
     try {
       const updated = await apiRequest(
         `/seedling-requests/${request.id}/release`,
-        { method: "PATCH", body: JSON.stringify({ items }) }
+        { method: "PATCH", body: JSON.stringify({ items, availableReleaseDate, expectedVersion: Number(request.requestVersion || 0) }) }
       );
 
       refreshSelectedRequest(updated);
@@ -1339,6 +1384,9 @@ useEffect(() => {
     setReleaseInventory([]);
     setReleaseEntries((request.trees || []).map(() => ({ quantity: "", reason: "" })));
     setReleaseError("");
+    setAvailableReleaseDate(request.lateReleaseRescheduling?.availableReleaseDate || "");
+    setLateReleaseReason(request.lateReleaseRescheduling?.conflictReason || "");
+    setLateReleaseReturnReason("");
     setReleaseLoading(true);
     try {
       const inventory = await apiRequest("/inventory");
@@ -1350,6 +1398,32 @@ useEffect(() => {
     } finally {
       setReleaseLoading(false);
     }
+  };
+
+  const runLateReleaseAction = async (action) => {
+    if (!releaseModal?.id || actionLoading) return;
+    const state = releaseModal.lateReleaseRescheduling || {};
+    const paths = {
+      conflict: "late-release-conflict",
+      approve: "late-release-rescheduling/approve",
+      return: "late-release-rescheduling/return",
+    };
+    const payload = action === "conflict"
+      ? { availableReleaseDate, reason: lateReleaseReason }
+      : { reschedulingVersion: state.version, proposalVersion: state.requesterProposal?.proposalVersion,
+          ...(action === "return" ? { reason: lateReleaseReturnReason } : {}) };
+    setActionLoading(true); setReleaseError("");
+    try {
+      const updated = await apiRequest(`/seedling-requests/${releaseModal.id}/${paths[action]}`, {
+        method: "PATCH", body: JSON.stringify({ ...payload, expectedVersion: Number(releaseModal.requestVersion || 0) }),
+      });
+      const normalized = normalizeRequestForUi(updated);
+      refreshSelectedRequest(updated); setReleaseModal(normalized);
+      showSuccess(action === "conflict" ? "The requester was notified to submit a replacement planting date."
+        : action === "approve" ? "The replacement schedule was approved and the calendar was updated."
+          : "The replacement schedule was returned for revision.");
+    } catch (error) { setReleaseError(error.message || "Unable to update the late-release schedule."); }
+    finally { setActionLoading(false); }
   };
 
   const confirmRelease = async () => {
@@ -1412,7 +1486,7 @@ useEffect(() => {
     if (actionLoading || !decisionModal?.request?.id) return;
 
     const { request, action } = decisionModal;
-    let payload = {};
+    let payload;
 
     if (action === "reject") {
       const reason = rejectionChoice.trim();
@@ -1427,7 +1501,9 @@ useEffect(() => {
         return;
       }
 
-      payload = { reason };
+      payload = { reason, expectedVersion: Number(request.requestVersion || 0) };
+    } else {
+      payload = { expectedVersion: Number(request.requestVersion || 0) };
     }
 
     setActionLoading(true);
@@ -1439,7 +1515,7 @@ useEffect(() => {
         `/seedling-requests/${request.id}/${action}`,
         {
           method: "PATCH",
-          ...(action === "reject" ? { body: JSON.stringify(payload) } : {}),
+          body: JSON.stringify(payload),
         }
       );
 
@@ -2414,11 +2490,13 @@ useEffect(() => {
       </section>
 
       <ReviewRequestModal
+        key={`${reviewModal?.request?.id || "closed"}:${reviewModal?.request?.requestVersion || 0}`}
         modal={reviewModal}
         error={reviewError}
         loading={actionLoading}
         onClose={closeReviewModal}
         onSubmit={submitReview}
+        onSaveSchedule={saveReviewSchedule}
       />
 
       <ReturnRequestModal
@@ -2451,6 +2529,24 @@ useEffect(() => {
                 <DetailItem label="Planting Site" value={releaseModal.plantingSiteName} />
                 <DetailItem label="Proposed Event" value={releaseModal.eventName} fullWidth />
               </div>
+              <section className="sr-release-item">
+                <h3>Release and Planting Schedule</h3>
+                <div className="sr-details-grid">
+                  <DetailItem label="Approved Planting Date" value={formatDate(releaseModal.approvedSchedule?.plantingDate || releaseModal.proposedDate)} />
+                  <DetailItem label="Rescheduling Status" value={releaseModal.lateReleaseRescheduling?.status || "No conflict recorded"} />
+                </div>
+                {!releaseModal.lateReleaseRescheduling?.status && <>
+                  <label className="sr-form-field"><span>Available Release Date</span><input type="date" value={availableReleaseDate} onChange={(event) => setAvailableReleaseDate(event.target.value)} /></label>
+                  <label className="sr-form-field"><span>Delay Reason</span><textarea value={lateReleaseReason} onChange={(event) => setLateReleaseReason(event.target.value)} placeholder="Required only when release is later than planting" /></label>
+                  {availableReleaseDate && availableReleaseDate > (releaseModal.approvedSchedule?.plantingDate || releaseModal.proposedDate || "") &&
+                    <button type="button" className="sr-secondary-btn" disabled={actionLoading || !lateReleaseReason.trim()} onClick={() => runLateReleaseAction("conflict")}>Request New Planting Date</button>}
+                </>}
+                {releaseModal.lateReleaseRescheduling?.status === "PendingStaffReview" && <>
+                  <DetailItem label="Requester Proposal" value={`${formatDate(releaseModal.lateReleaseRescheduling.requesterProposal?.plantingDate)} ${formatTime(releaseModal.lateReleaseRescheduling.requesterProposal?.startTime)}`} />
+                  <label className="sr-form-field"><span>Return Reason</span><textarea value={lateReleaseReturnReason} onChange={(event) => setLateReleaseReturnReason(event.target.value)} /></label>
+                  <div className="sr-modal-footer"><button type="button" className="sr-secondary-btn" disabled={actionLoading || !lateReleaseReturnReason.trim()} onClick={() => runLateReleaseAction("return")}>Return for Revision</button><button type="button" className="sr-approve-btn" disabled={actionLoading} onClick={() => runLateReleaseAction("approve")}>Approve Rescheduling</button></div>
+                </>}
+              </section>
               {releaseLoading ? <p>Loading current inventory...</p> : (releaseModal.trees || []).map((tree, index) => {
                 const stock = releaseInventory.find((item) => item.id === tree.inventoryId);
                 const entered = releaseEntries[index]?.quantity ?? "";
@@ -2483,7 +2579,7 @@ useEffect(() => {
             </div>
             <div className="sr-modal-footer">
               <button type="button" className="sr-secondary-btn" onClick={() => setReleaseModal(null)} disabled={actionLoading}>Cancel</button>
-              <button type="button" className="sr-approve-btn sr-large-action" onClick={confirmRelease} disabled={releaseLoading || actionLoading || releaseInventory.length === 0}>
+              <button type="button" className="sr-approve-btn sr-large-action" onClick={confirmRelease} disabled={!availableReleaseDate || releaseLoading || actionLoading || releaseInventory.length === 0 || availableReleaseDate > (releaseModal.approvedSchedule?.plantingDate || releaseModal.proposedDate || "") && releaseModal.lateReleaseRescheduling?.status !== "Approved" || ["AwaitingRequester", "PendingStaffReview", "ReturnedForRevision"].includes(releaseModal.lateReleaseRescheduling?.status)}>
                 {actionLoading ? "Releasing..." : "Confirm Release"}
               </button>
             </div>
@@ -4104,7 +4200,27 @@ function ReviewRequestModal({
   loading,
   onClose,
   onSubmit,
+  onSaveSchedule,
 }) {
+  const request = modal?.request || {};
+  const original = request.originalSchedule || {
+    preferredReleaseDate: request.preferredReleaseDate || "",
+    plantingDate: request.proposedDate || "",
+    startTime: request.startTime || "",
+    endTime: request.endTime || "",
+  };
+  const coordinated = request.preApprovalSchedule || original;
+  const [schedule, setSchedule] = useState({
+    preferredReleaseDate: coordinated.preferredReleaseDate || "",
+    plantingDate: coordinated.plantingDate || "",
+    startTime: coordinated.startTime || "",
+    endTime: coordinated.endTime || "",
+    adjustmentReason: coordinated.adjustmentReason || "",
+  });
+  const update = (field) => (event) => setSchedule((value) => ({ ...value, [field]: event.target.value }));
+  const confirmationRequired = request.preApprovalSchedule?.status === "AwaitingRequesterConfirmation";
+  const scheduleWarning = getScheduleValidationWarning(schedule);
+
   if (!modal) return null;
 
   return createPortal(
@@ -4118,7 +4234,7 @@ function ReviewRequestModal({
       >
         <div className="sr-modal-header">
           <div>
-            <h2>Confirm Review</h2>
+            <h2>Review Seedling Request</h2>
             <p>
               Mark this request as reviewed and forward it to the MENRO Administrator for final decision?
             </p>
@@ -4140,10 +4256,34 @@ function ReviewRequestModal({
             <strong>{getRequestDisplayId(modal.request)}</strong>
           </div>
 
+          <div className="sr-details-grid">
+            <DetailItem label="Original Preferred Release" value={formatDate(original.preferredReleaseDate)} />
+            <DetailItem label="Original Planting Date" value={formatDate(original.plantingDate)} />
+            <DetailItem label="Original Time" value={original.startTime ? `${formatTime(original.startTime)}${original.endTime ? ` - ${formatTime(original.endTime)}` : " - Not specified"}` : "Not specified"} />
+            <DetailItem label="Requester Confirmation" value={confirmationRequired ? "Awaiting requester" : request.preApprovalSchedule?.status === "Confirmed" ? "Confirmed" : "Not required"} />
+          </div>
+          {request.processingEstimate && <p className="sr-decision-confirm-text">Estimated processing window: {formatDate(request.processingEstimate.earliestDate)} to {formatDate(request.processingEstimate.latestDate)} (advisory).</p>}
+          {scheduleWarning && <p className="sr-field-error" role="alert">{scheduleWarning}</p>}
+          <div className="sr-form-grid">
+            <label className="sr-form-field"><span>Proposed Release Date *</span><input type="date" value={schedule.preferredReleaseDate} onChange={update("preferredReleaseDate")} /></label>
+            <label className="sr-form-field"><span>Proposed Planting Date *</span><input type="date" value={schedule.plantingDate} onChange={update("plantingDate")} /></label>
+            <label className="sr-form-field"><span>Start Time *</span><input type="time" value={schedule.startTime} onChange={update("startTime")} /></label>
+            <label className="sr-form-field"><span>End Time</span><input type="time" value={schedule.endTime} onChange={update("endTime")} /></label>
+            <label className="sr-form-field sr-form-field-full"><span>Adjustment Reason</span><textarea value={schedule.adjustmentReason} onChange={update("adjustmentReason")} placeholder="Required when changing the schedule" /></label>
+          </div>
+
           {error && <small className="sr-field-error">{error}</small>}
         </div>
 
         <div className="sr-modal-footer">
+          <button
+            type="button"
+            className="sr-secondary-btn"
+            onClick={() => onSaveSchedule(schedule)}
+            disabled={loading}
+          >
+            {confirmationRequired ? "Update Proposal" : "Save / Request Confirmation"}
+          </button>
           <button
             type="button"
             className="sr-secondary-btn"
@@ -4156,9 +4296,9 @@ function ReviewRequestModal({
             type="button"
             className="sr-approve-btn sr-large-action"
             onClick={onSubmit}
-            disabled={loading}
+            disabled={loading || confirmationRequired || Boolean(scheduleWarning)}
           >
-            {loading ? "Reviewing..." : "Confirm Review"}
+            {loading ? "Reviewing..." : "Complete Review"}
           </button>
         </div>
       </div>
@@ -4216,9 +4356,15 @@ function AdminDecisionModal({
           </div>
 
           {isApprove ? (
-            <p className="sr-decision-confirm-text">
-              Are you sure you want to approve this seedling request?
-            </p>
+            <>
+              <p className="sr-decision-confirm-text">Are you sure you want to approve this seedling request?</p>
+              <div className="sr-details-grid">
+                <DetailItem label="Original Planting Date" value={formatDate(modal.request.originalSchedule?.plantingDate || modal.request.proposedDate)} />
+                <DetailItem label="Confirmed Planting Date" value={formatDate(modal.request.preApprovalSchedule?.plantingDate || modal.request.proposedDate)} />
+                <DetailItem label="Requester Confirmation" value={modal.request.preApprovalSchedule?.status === "Confirmed" ? "Confirmed" : "Original schedule unchanged"} />
+                <DetailItem label="Schedule Status" value={(modal.request.preApprovalSchedule?.plantingDate || modal.request.proposedDate) >= new Date().toLocaleDateString("en-CA") ? "Valid" : "Needs coordination"} />
+              </div>
+            </>
           ) : (
             <label className="sr-form-field">
               <span>Reason for Rejection *</span>
@@ -4718,6 +4864,7 @@ useEffect(() => {
     }
 
     const payload = {
+      ...(editingRequest ? { expectedVersion: Number(editingRequest.requestVersion || 0) } : {}),
       participantName: form.requesterName.trim(),
       organization: form.organization.trim(),
       contactNumber: form.contactNumber.replace(/\s/g, ""),

@@ -1440,6 +1440,11 @@
   min-width: 1120px;
 }
 
+.sd-distribution-table tr.sd-distribution-highlight > td {
+  background: #eaf7ef;
+  box-shadow: inset 0 1px #99d0aa, inset 0 -1px #99d0aa;
+}
+
 .sd-distribution-items {
   display: flex;
   flex-direction: column;

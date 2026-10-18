@@ -662,12 +662,19 @@ export default function PlantingPage() {
 
   useEffect(() => {
     const reportId = pageSearchParams.get("report") || "";
-    if (!reportId || loading || openedReportFromSearchRef.current === reportId) return;
+    const contributionId = pageSearchParams.get("contribution") || "";
+    const deepLinkKey = `${reportId}:${contributionId}`;
+    if (!reportId || loading || openedReportFromSearchRef.current === deepLinkKey) return;
     const record = records.find((item) => String(item.id || item.reportId || "") === reportId);
     if (!record) return;
     const openTimer = window.setTimeout(() => {
-      openedReportFromSearchRef.current = reportId;
+      openedReportFromSearchRef.current = deepLinkKey;
       setSelectedRecord(record);
+      setSelectedSubmission(
+        contributionId
+          ? (record.submissions || []).find((item) => String(item.id || "") === contributionId) || null
+          : null,
+      );
       setVerificationRemarks("");
       setShowViewModal(true);
     }, 0);

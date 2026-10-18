@@ -2,7 +2,6 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import {
   CalendarDays,
-  Check,
   ChevronLeft,
   ChevronRight,
   CircleCheckBig,
@@ -1121,63 +1120,6 @@ export default function EventSchedulePage() {
       }
     };
 
-  const markCompleted =
-    async () => {
-      if (!selectedEvent) {
-        return;
-      }
-
-      setActionLoading(true);
-      setPageError("");
-
-      try {
-        const eventId =
-          selectedEvent.id ||
-          selectedEvent.eventId;
-
-        const response =
-          await apiRequest(
-            `/events/${eventId}/complete`,
-            {
-              method: "PATCH",
-              body: JSON.stringify(
-                {}
-              ),
-            }
-          );
-
-        const updated =
-          response.data;
-
-        setEvents(
-          (previous) =>
-            previous.map(
-              (item) =>
-                (item.id ||
-                  item.eventId) ===
-                eventId
-                  ? updated
-                  : item
-            )
-        );
-
-        setSelectedEvent(
-          updated
-        );
-
-        showSuccess(
-          `${eventId} was marked as completed.`
-        );
-      } catch (error) {
-        setPageError(
-          error.message ||
-            "Failed to complete event."
-        );
-      } finally {
-        setActionLoading(false);
-      }
-    };
-
   const deleteEvent =
     async () => {
       if (!selectedEvent) {
@@ -2124,33 +2066,6 @@ export default function EventSchedulePage() {
 
               <div className="ec-modal-footer ec-details-footer">
                 <div className="ec-detail-footer-actions">
-                  {canManage &&
-                    getEventStatus(
-                      selectedEvent
-                    ) !==
-                      "Completed" && (
-                      <button
-                        type="button"
-                        className="ec-complete-btn"
-                        onClick={
-                          markCompleted
-                        }
-                        disabled={
-                          actionLoading
-                        }
-                      >
-                        <Check
-                          size={
-                            15
-                          }
-                        />
-
-                        {actionLoading
-                          ? "Saving..."
-                          : "Mark Completed"}
-                      </button>
-                    )}
-
                   {canManage && (
                     <button
                       type="button"

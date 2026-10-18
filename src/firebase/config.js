@@ -1,5 +1,8 @@
 import { initializeApp, getApps, getApp } from "firebase/app";
-import { getAuth, GoogleAuthProvider } from "firebase/auth";
+import { connectAuthEmulator, getAuth, GoogleAuthProvider } from "firebase/auth";
+import { validateFrontendIntegrationEnvironment } from "../config/integrationEnvironment";
+
+const integration = validateFrontendIntegrationEnvironment(import.meta.env);
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
@@ -36,6 +39,10 @@ const app = getApps().length
   : initializeApp(firebaseConfig);
 
 export const auth = getAuth(app);
+
+if (integration.integration) {
+  connectAuthEmulator(auth, integration.authEmulatorUrl, { disableWarnings: true });
+}
 
 export const googleProvider = new GoogleAuthProvider();
 googleProvider.setCustomParameters({ prompt: "select_account" });

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import {
   Activity, Bell, CalendarDays, ChevronDown, Copy, FileText,
@@ -8,7 +8,11 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { auth } from "../firebase/config";
 import { authenticatedFetch } from "../services/authenticatedApi";
-import { publishNotifications } from "../utils/notificationRoutes";
+import { getNotificationPath, publishNotifications } from "../utils/notificationRoutes";
+import {
+  mergeNotificationPages,
+  notificationEmptyMessage,
+} from "../utils/notificationList";
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
 
@@ -84,6 +88,12 @@ export default function Topbar({ onOpenSidebar }) {
   const [notifications, setNotifications] = useState([]);
   const [notificationLoading, setNotificationLoading] = useState(false);
   const [notificationError, setNotificationError] = useState("");
+  const [notificationReadFilter, setNotificationReadFilter] = useState("all");
+  const [notificationCursor, setNotificationCursor] = useState(null);
+  const [notificationHasMore, setNotificationHasMore] = useState(false);
+  const [notificationLoadingMore, setNotificationLoadingMore] = useState(false);
+  const [notificationUnreadCount, setNotificationUnreadCount] = useState(0);
+  const [markingAllRead, setMarkingAllRead] = useState(false);
   const [selectedNotification, setSelectedNotification] = useState(null);
   const [guestLink, setGuestLink] = useState("");
   const [copyMessage, setCopyMessage] = useState("");
@@ -101,6 +111,7 @@ export default function Topbar({ onOpenSidebar }) {
   const profileRef = useRef(null);
   const searchRef = useRef(null);
   const notificationCloseRef = useRef(null);
+  const notificationRequestRef = useRef({ inFlight: false, controller: null });
 
   useEffect(() => {
     const handleOutsideClick = (event) => {
@@ -191,55 +202,73 @@ export default function Topbar({ onOpenSidebar }) {
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, [selectedNotification]);
 
+  const loadNotifications = useCallback(async ({ cursor = null, append = false, background = false } = {}) => {
+    if (!currentUser?.uid || notificationRequestRef.current.inFlight) return;
+    notificationRequestRef.current.inFlight = true;
+    const controller = new AbortController();
+    notificationRequestRef.current.controller = controller;
+    if (append) setNotificationLoadingMore(true);
+    else if (!background) setNotificationLoading(true);
+    if (!background) setNotificationError("");
+    try {
+      const query = new URLSearchParams({
+        readState: notificationReadFilter,
+        limit: "20",
+      });
+      if (cursor) query.set("cursor", cursor);
+      const response = await authenticatedFetch(`/notifications?${query}`, { signal: controller.signal });
+      const payload = await response.json().catch(() => null);
+      if (!response.ok) throw new Error(payload?.message || "Unable to load notifications.");
+      const data = payload?.data || {};
+      setNotificationUnreadCount(Number(data.unreadCount || 0));
+      setNotifications((previous) => {
+        const next = mergeNotificationPages(previous, data.notifications || [], {
+          replace: !append && !background,
+        });
+        publishNotifications(next);
+        return next;
+      });
+      if (!background || append) {
+        setNotificationCursor(data.nextCursor || null);
+        setNotificationHasMore(Boolean(data.hasMore));
+      }
+    } catch (error) {
+      if (!background && error.name !== "AbortError") {
+        setNotificationError(error.message || "Unable to load notifications.");
+      }
+    } finally {
+      if (notificationRequestRef.current.controller === controller) {
+        notificationRequestRef.current = { inFlight: false, controller: null };
+      }
+      if (append) setNotificationLoadingMore(false);
+      else if (!background) setNotificationLoading(false);
+    }
+  }, [currentUser?.uid, notificationReadFilter]);
+
   useEffect(() => {
     if (!currentUser?.uid) return undefined;
-
-    let cancelled = false;
-    let requestInFlight = false;
-    let requestController = null;
-
-    async function loadNotifications() {
-      if (requestInFlight || document.visibilityState !== "visible") return;
-      requestInFlight = true;
-      requestController = new AbortController();
-      setNotificationLoading(true);
-      setNotificationError("");
-      try {
-        const response = await authenticatedFetch("/notifications", {
-          signal: requestController.signal,
-        });
-        const payload = await response.json().catch(() => null);
-        if (!response.ok) throw new Error(payload?.message || "Unable to load notifications.");
-        if (!cancelled) {
-          const nextNotifications = payload?.data?.notifications || [];
-          setNotifications(nextNotifications);
-          publishNotifications(nextNotifications);
-        }
-      } catch (error) {
-        if (!cancelled && error.name !== "AbortError") {
-          setNotificationError(error.message || "Unable to load notifications.");
-        }
-      } finally {
-        requestInFlight = false;
-        requestController = null;
-        if (!cancelled) setNotificationLoading(false);
-      }
-    }
-
-    void loadNotifications();
-    const refreshTimer = window.setInterval(loadNotifications, 60_000);
+    const initialLoadTimer = window.setTimeout(() => {
+      setNotifications([]);
+      setNotificationCursor(null);
+      setNotificationHasMore(false);
+      void loadNotifications();
+    }, 0);
+    const refreshTimer = window.setInterval(() => {
+      if (document.visibilityState === "visible") void loadNotifications({ background: true });
+    }, 60_000);
     const handleVisibilityChange = () => {
-      if (document.visibilityState === "visible") void loadNotifications();
+      if (document.visibilityState === "visible") void loadNotifications({ background: true });
     };
     document.addEventListener("visibilitychange", handleVisibilityChange);
 
     return () => {
-      cancelled = true;
-      requestController?.abort();
+      notificationRequestRef.current.controller?.abort();
+      notificationRequestRef.current = { inFlight: false, controller: null };
+      window.clearTimeout(initialLoadTimer);
       window.clearInterval(refreshTimer);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
-  }, [currentUser?.uid]);
+  }, [currentUser?.uid, loadNotifications]);
 
   function clearSearch() {
     setSearchQuery("");
@@ -281,10 +310,13 @@ export default function Topbar({ onOpenSidebar }) {
         });
         if (!response.ok) throw new Error("Unable to mark notification as read.");
         setNotifications((previous) => {
-          const nextNotifications = previous.map((entry) => entry.id === item.id ? { ...entry, isRead: true } : entry);
+          const nextNotifications = previous
+            .map((entry) => entry.id === item.id ? { ...entry, isRead: true } : entry)
+            .filter((entry) => notificationReadFilter !== "unread" || !entry.isRead);
           publishNotifications(nextNotifications);
           return nextNotifications;
         });
+        setNotificationUnreadCount((count) => Math.max(0, count - 1));
       } catch (error) {
         setNotificationError(error.message);
         return;
@@ -307,6 +339,34 @@ export default function Topbar({ onOpenSidebar }) {
       } catch {
         // Notification details remain usable when an invitation has expired.
       }
+    }
+  }
+
+  async function markAllNotificationsRead() {
+    if (markingAllRead || notificationUnreadCount === 0) return;
+    setMarkingAllRead(true);
+    setNotificationError("");
+    try {
+      const response = await authenticatedFetch("/notifications/read-all", { method: "PATCH" });
+      const payload = await response.json().catch(() => null);
+      if (!response.ok) throw new Error(payload?.message || "Unable to mark all notifications as read.");
+      setNotificationUnreadCount(Number(payload?.data?.unreadCount || 0));
+      setNotifications((previous) => {
+        const next = notificationReadFilter === "unread"
+          ? []
+          : previous.map((item) => ({ ...item, isRead: true }));
+        publishNotifications(next);
+        return next;
+      });
+      if (notificationReadFilter === "unread") {
+        setNotificationCursor(null);
+        setNotificationHasMore(false);
+      }
+      void loadNotifications();
+    } catch (error) {
+      setNotificationError(error.message || "Unable to mark all notifications as read.");
+    } finally {
+      setMarkingAllRead(false);
     }
   }
 
@@ -358,7 +418,7 @@ export default function Topbar({ onOpenSidebar }) {
     displayName,
     userRole
   );
-  const unreadCount = notifications.filter((item) => !item.isRead).length;
+  const unreadCount = notificationUnreadCount;
 
   return (
     <header className="topbar">
@@ -476,17 +536,34 @@ export default function Topbar({ onOpenSidebar }) {
           {showNotifications && (
             <div className="notification-panel">
               <div className="notification-head">
-                <div className="notification-title">
-                  Notifications
+                <div className="notification-heading-row">
+                  <div className="notification-title">Notifications</div>
                 </div>
-
+                <div className="notification-tabs" role="tablist" aria-label="Notification read status">
+                  {["all", "unread", "read"].map((filter) => (
+                    <button
+                      type="button"
+                      role="tab"
+                      aria-selected={notificationReadFilter === filter}
+                      className={`notification-tab${notificationReadFilter === filter ? " active" : ""}`}
+                      key={filter}
+                      onClick={() => setNotificationReadFilter(filter)}
+                    >
+                      {filter.charAt(0).toUpperCase() + filter.slice(1)}
+                    </button>
+                  ))}
+                </div>
               </div>
 
               <div className="notification-list">
                 {notificationLoading && <div className="notification-empty">Loading notifications...</div>}
                 {notificationError && <div className="notification-empty" role="alert">{notificationError}</div>}
-                {!notificationLoading && !notificationError && notifications.length === 0 && <div className="notification-empty">No notifications yet.</div>}
-                {!notificationLoading && notifications.map((item) => (
+                {!notificationLoading && !notificationError && notifications.length === 0 && (
+                  <div className="notification-empty">
+                    {notificationEmptyMessage(notificationReadFilter)}
+                  </div>
+                )}
+                {!notificationLoading && !notificationError && notifications.map((item) => (
                   <button type="button" key={item.id} className={`notification-item notification-${item.type || "info"}${item.isRead ? "" : " unread"}`} onClick={() => void openNotification(item)}>
                     <span className={`notification-dot${item.isRead ? " read" : ""}`} />
                     <span className="notification-item-content">
@@ -496,6 +573,16 @@ export default function Topbar({ onOpenSidebar }) {
                     </span>
                   </button>
                 ))}
+                {!notificationLoading && !notificationError && notificationHasMore && (
+                  <button
+                    type="button"
+                    className="notification-load-more"
+                    disabled={notificationLoadingMore}
+                    onClick={() => void loadNotifications({ cursor: notificationCursor, append: true })}
+                  >
+                    {notificationLoadingMore ? "Loading..." : "Load more"}
+                  </button>
+                )}
               </div>
 
               <div className="notification-footer">
@@ -508,7 +595,14 @@ export default function Topbar({ onOpenSidebar }) {
                 >
                   Close
                 </button>
-
+                <button
+                  type="button"
+                  className="notification-read-all"
+                  onClick={() => void markAllNotificationsRead()}
+                  disabled={markingAllRead || unreadCount === 0}
+                >
+                  {markingAllRead ? "Marking..." : "Mark all as read"}
+                </button>
               </div>
             </div>
           )}
@@ -776,13 +870,10 @@ export default function Topbar({ onOpenSidebar }) {
               {copyMessage && <p className="notification-copy-message" role="status">{copyMessage}</p>}
             </div>
             <div className="notification-detail-actions">
-              {(selectedNotification.relatedRecordType || selectedNotification.relatedEventId) && <button type="button" onClick={() => {
-                const item = selectedNotification;
+              {getNotificationPath(selectedNotification, userRole) && <button type="button" onClick={() => {
+                const path = getNotificationPath(selectedNotification, userRole);
                 setSelectedNotification(null);
-                if (item.relatedRecordType === "seedlingRequest") navigate(userRole === "participant" ? `/participant/my-requests?request=${encodeURIComponent(item.relatedRecordId)}` : `/${userRole}/requests`);
-                else if (item.relatedRecordType === "plantingReport") navigate(userRole === "participant" ? "/participant/my-planting-reports" : `/${userRole}/planting-reports`);
-                else if (item.relatedRecordType === "inventory") navigate(`/${userRole}/seedlings?inventory=${encodeURIComponent(item.relatedRecordId)}`);
-                else if (item.relatedEventId) navigate(`/${userRole}/event-calendar`);
+                navigate(path);
               }}>Open Related Record</button>}
               <button type="button" onClick={() => setSelectedNotification(null)}>Close</button>
             </div>

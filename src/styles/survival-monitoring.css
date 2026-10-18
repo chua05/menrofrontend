@@ -1002,6 +1002,17 @@
   box-shadow: 0 0 0 3px rgba(23, 100, 58, 0.08);
 }
 
+.sm-input.is-invalid {
+  border-color: #b42318;
+}
+
+.sm-field-error {
+  margin-top: 0.35rem;
+  color: #b42318;
+  font-size: 0.8rem;
+  line-height: 1.35;
+}
+
 .sm-helper {
   margin-top: 7px;
   color: #7c8881;

@@ -12,13 +12,13 @@ const CONDITION_COLORS = { Healthy: "#2f9e57", Damaged: "#f3a62f", Dead: "#e5484
 const EMPTY_ANALYTICS = { summary: {}, plantingTrend: [], survivalTrend: [], monitoringConditions: [], speciesDistribution: [], barangaySurvival: [], siteMap: [], verificationAnalytics: {}, accountability: {}, decisionSupport: {}, options: { barangays: [], species: [], sites: [] }, meta: {} };
 const EMPTY_FILTERS = { dateFrom: "", dateTo: "", barangay: "All", species: "All", site: "All" };
 const formatNumber = (value) => new Intl.NumberFormat("en-PH").format(Number(value) || 0);
-const displayRate = (value) => value == null ? "" : `${formatNumber(value)}%`;
+const displayRate = (value) => value == null ? "—" : `${formatNumber(value)}%`;
 
 function EmptyRing({ label }) {
   return <div className="ra-donut-chart ra-zero-ring-wrap"><ResponsiveContainer width="100%" height="100%"><PieChart><Pie data={[{ value: 1 }]} dataKey="value" innerRadius={55} outerRadius={82} isAnimationActive={false}><Cell fill="#e5e9e7" /></Pie></PieChart></ResponsiveContainer><div className="ra-zero-ring-center"><strong>0</strong><span>{label}</span></div></div>;
 }
 function Kpi({ icon: Icon, iconClass, label, value, note, percent = false }) {
-  const displayed = value == null ? "" : `${formatNumber(value)}${percent ? "%" : ""}`;
+  const displayed = value == null ? "—" : `${formatNumber(value)}${percent ? "%" : ""}`;
   return <div className="ra-kpi-card"><div className={`ra-kpi-icon ${iconClass}`}><Icon size={20} /></div><div><span>{label}</span><strong>{displayed}</strong><small>{note}</small></div></div>;
 }
 function StatusBadge({ status }) {

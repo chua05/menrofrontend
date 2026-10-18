@@ -1028,6 +1028,13 @@ input[type="search"]::-webkit-search-results-decoration {
   background: var(--menro-green);
 }
 
+.notification-heading-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
 .notification-title {
   margin-bottom: 10px;
 
@@ -1137,6 +1144,7 @@ input[type="search"]::-webkit-search-results-decoration {
 
   font-size: 12px;
   line-height: 1.45;
+  overflow-wrap: anywhere;
 }
 
 .notification-time {
@@ -1156,6 +1164,21 @@ input[type="search"]::-webkit-search-results-decoration {
 
   font-size: 11px;
 }
+
+.notification-load-more {
+  width: calc(100% - 28px);
+  min-height: 36px;
+  margin: 10px 14px;
+  border: 1px solid #cee0d4;
+  border-radius: 7px;
+  background: #f5faf7;
+  color: var(--menro-green);
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 650;
+}
+
+.notification-load-more:disabled { cursor: wait; opacity: 0.65; }
 
 .notification-footer {
   padding: 10px 14px;
@@ -1184,6 +1207,11 @@ input[type="search"]::-webkit-search-results-decoration {
 
 .notification-read-all {
   color: #68736c;
+}
+
+.notification-read-all:disabled {
+  cursor: default;
+  opacity: 0.55;
 }
 
 /* =====================================================
@@ -1262,6 +1290,8 @@ input[type="search"]::-webkit-search-results-decoration {
 ===================================================== */
 
 @media (max-width: 520px) {
+  .notification-panel { position: fixed; top: 68px; left: 10px; right: 10px; width: auto; max-height: calc(100vh - 78px); }
+  .notification-list { max-height: calc(100vh - 250px); }
   .dashboard-page-content {
     padding: 12px;
   }
