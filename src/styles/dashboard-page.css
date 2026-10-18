@@ -768,8 +768,25 @@
    RECENT ACTIVITIES
 ===================================================== */
 
+.recent-card {
+  height: clamp(220px, 24vh, 260px);
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  align-self: start;
+}
+
+.recent-card .dash-card-header {
+  flex: 0 0 auto;
+}
+
 .recent-list {
+  min-height: 0;
+  flex: 1 1 auto;
   border-top: 1px solid #edf1ee;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
 }
 
 .recent-item {
@@ -848,6 +865,11 @@
 .recent-card .dashboard-empty {
   min-height: 171px;
   padding: 24px 18px;
+}
+
+.recent-card .dashboard-empty {
+  min-height: 0;
+  flex: 1 1 auto;
 }
 
 .upcoming-card .dashboard-empty-icon,
@@ -1468,6 +1490,10 @@
   .recent-item time {
     grid-column: 2;
     margin-top: -3px;
+  }
+
+  .recent-card {
+    height: clamp(240px, 42vh, 300px);
   }
 
   .dashboard-pan-control {

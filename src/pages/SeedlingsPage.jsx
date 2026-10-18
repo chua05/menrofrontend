@@ -314,6 +314,25 @@ export default function SeedlingsPage() {
   const [activeTab, setActiveTab] =
     useState("seedlings");
 
+  useEffect(() => {
+    if (pageSearchParams.get("tab") !== "distribution") return undefined;
+    const tabTimer = window.setTimeout(() => setActiveTab("distribution"), 0);
+    return () => window.clearTimeout(tabTimer);
+  }, [pageSearchParams]);
+
+  const highlightedDistributionId = pageSearchParams.get("distribution") || "";
+
+  useEffect(() => {
+    if (activeTab !== "distribution" || distributionLoading || !highlightedDistributionId) return undefined;
+    const highlightTimer = window.setTimeout(() => {
+      document.getElementById(`distribution-${highlightedDistributionId}`)?.scrollIntoView({
+        behavior: "smooth",
+        block: "center",
+      });
+    }, 0);
+    return () => window.clearTimeout(highlightTimer);
+  }, [activeTab, distributionLoading, highlightedDistributionId, distributions]);
+
   const [searchTerm, setSearchTerm] =
     useState("");
 
@@ -1601,7 +1620,11 @@ export default function SeedlingsPage() {
                   const released = formatDateTime(distribution.releasedAt);
 
                   return (
-                    <tr key={distribution.id}>
+                    <tr
+                      key={distribution.id}
+                      id={`distribution-${distribution.id}`}
+                      className={distribution.id === highlightedDistributionId ? "sd-distribution-highlight" : ""}
+                    >
                       <td className="sd-primary-text">
                         {distribution.distributionNumber || "—"}
                       </td>

@@ -42,6 +42,14 @@ test("administrator dashboard places quick actions in the three-card lower row",
   assert.match(dashboardCss, /@media \(max-width: 620px\)[\s\S]*\.dashboard-bottom-grid\s*\{\s*grid-template-columns: 1fr/);
 });
 
+test("recent activities keeps its heading fixed and scrolls only its list", () => {
+  assert.match(dashboard, /className="dash-card recent-card"/);
+  assert.match(dashboard, /className="recent-list"/);
+  assert.match(dashboardCss, /\.recent-card\s*\{[\s\S]*height: clamp\([\s\S]*display: flex;[\s\S]*flex-direction: column/);
+  assert.match(dashboardCss, /\.recent-card \.dash-card-header\s*\{[\s\S]*flex: 0 0 auto/);
+  assert.match(dashboardCss, /\.recent-list\s*\{[\s\S]*min-height: 0;[\s\S]*flex: 1 1 auto;[\s\S]*overflow-y: auto/);
+});
+
 test("analytics trend charts retain their existing data and chart configuration", () => {
   assert.match(analytics, /<BarChart data=\{analytics\.plantingTrend\}>/);
   assert.match(analytics, /<LineChart data=\{analytics\.survivalTrend\}>/);

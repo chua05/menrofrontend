@@ -631,6 +631,9 @@ export default function ParticipantSaplingRequestWizard({ currentUser }) {
         group,
         participants: form.participants,
       }));
+      if (form.activityDate && form.preferredReleaseDate && form.activityDate < form.preferredReleaseDate) {
+        e.activityDate = "Planting date cannot be earlier than the preferred release date.";
+      }
       if (group) {
         need("eventName", "Enter an event name.");
       }

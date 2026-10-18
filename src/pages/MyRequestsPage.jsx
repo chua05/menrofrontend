@@ -795,6 +795,43 @@ export default function MyRequestsPage() {
   const [invitationError, setInvitationError] = useState("");
   const [linkedEvent, setLinkedEvent] = useState(null);
   const [currentPage, setCurrentPage] = useState(1);
+  const [scheduleActionLoading, setScheduleActionLoading] = useState(false);
+  const [scheduleActionError, setScheduleActionError] = useState("");
+  const [replacementSchedule, setReplacementSchedule] = useState({ plantingDate: "", startTime: "", endTime: "", remarks: "" });
+
+  const resetScheduleForm = (request) => {
+    const pre = request?.preApprovalSchedule;
+    const late = request?.lateReleaseRescheduling?.requesterProposal;
+    setReplacementSchedule({ plantingDate: late?.plantingDate || pre?.plantingDate || "", startTime: late?.startTime || pre?.startTime || "", endTime: late?.endTime || pre?.endTime || "", remarks: late?.remarks || "" });
+    setScheduleActionError("");
+  };
+
+  const submitScheduleAction = async (kind) => {
+    if (!selectedRequest?.id || scheduleActionLoading) return;
+    const late = selectedRequest.lateReleaseRescheduling || {};
+    const endpoint = kind === "pre"
+      ? "pre-approval-schedule/confirm"
+      : "late-release-rescheduling/proposal";
+    const payload = kind === "pre"
+      ? { ...replacementSchedule, proposalVersion: selectedRequest.preApprovalSchedule?.proposalVersion }
+      : { ...replacementSchedule, reschedulingVersion: late.version };
+    setScheduleActionLoading(true); setScheduleActionError("");
+    try {
+      const token = await auth.currentUser?.getIdToken();
+      if (!token) throw new Error("Your session has expired. Please sign in again.");
+      const response = await fetch(`${API_BASE_URL}/seedling-requests/${encodeURIComponent(selectedRequest.id)}/${endpoint}`, {
+        method: "PATCH", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ ...payload, expectedVersion: Number(selectedRequest.requestVersion || 0) }),
+      });
+      const result = await response.json().catch(() => null);
+      if (!response.ok) throw new Error(result?.message || "Unable to submit the planting schedule.");
+      const normalized = normalizeMyRequest(result?.data ?? result);
+      setSelectedRequest(normalized);
+      setRequests((items) => items.map((item) => item.id === normalized.id ? normalized : item));
+      showSuccess(kind === "pre" ? "Your coordinated planting schedule was confirmed." : "Your replacement planting schedule was submitted.");
+    } catch (error) { setScheduleActionError(error.message || "Unable to submit the planting schedule."); }
+    finally { setScheduleActionLoading(false); }
+  };
 
   useEffect(() => {
     const message = location.state?.submissionMessage;
@@ -904,6 +941,7 @@ export default function MyRequestsPage() {
     setInvitationToken("");
     setInvitationError("");
     setLinkedEvent(null);
+    resetScheduleForm(request);
     setSelectedRequest(request);
     setShowDetailsModal(true);
   };
@@ -925,6 +963,7 @@ export default function MyRequestsPage() {
 
     // Open the exact request associated with a backend notification.
     // eslint-disable-next-line react-hooks/set-state-in-effect
+    resetScheduleForm(request);
     setSelectedRequest(request);
     setShowDetailsModal(true);
   }, [loading, relatedRequestId, requests, showDetailsModal]);
@@ -1583,6 +1622,37 @@ export default function MyRequestsPage() {
               )}
               {invitationError && Number(selectedRequest.expectedParticipants) > 0 && (
                 <p role="status">{invitationError}</p>
+              )}
+
+              {selectedRequest.preApprovalSchedule?.status === "AwaitingRequesterConfirmation" && (
+                <section className="myr-details-section">
+                  <h3>Confirm Coordinated Planting Schedule</h3>
+                  <p>MENRO Staff proposed a schedule adjustment. Review or change the planting schedule before confirming it.</p>
+                  <div className="myr-details-grid">
+                    <label className="myr-readonly-field"><span>Planting Date *</span><input type="date" value={replacementSchedule.plantingDate} onChange={(event) => setReplacementSchedule((value) => ({ ...value, plantingDate: event.target.value }))} /></label>
+                    <label className="myr-readonly-field"><span>Start Time *</span><input type="time" value={replacementSchedule.startTime} onChange={(event) => setReplacementSchedule((value) => ({ ...value, startTime: event.target.value }))} /></label>
+                    <label className="myr-readonly-field"><span>End Time</span><input type="time" value={replacementSchedule.endTime} onChange={(event) => setReplacementSchedule((value) => ({ ...value, endTime: event.target.value }))} /></label>
+                  </div>
+                  {scheduleActionError && <p role="alert">{scheduleActionError}</p>}
+                  <button type="button" className="myr-primary-btn" disabled={scheduleActionLoading || !replacementSchedule.plantingDate || !replacementSchedule.startTime} onClick={() => submitScheduleAction("pre")}>{scheduleActionLoading ? "Submitting..." : "Confirm Planting Schedule"}</button>
+                </section>
+              )}
+
+              {["AwaitingRequester", "ReturnedForRevision"].includes(selectedRequest.lateReleaseRescheduling?.status) && (
+                <section className="myr-details-section">
+                  <h3>Replacement Planting Schedule Required</h3>
+                  <p>{selectedRequest.lateReleaseRescheduling.conflictReason}</p>
+                  <div className="myr-details-grid">
+                    <div className="myr-readonly-field"><label>Original Approved Planting Date</label><div><span>{formatDate(selectedRequest.lateReleaseRescheduling.originalEventSchedule?.date)}</span></div></div>
+                    <div className="myr-readonly-field"><label>Available Release Date</label><div><span>{formatDate(selectedRequest.lateReleaseRescheduling.availableReleaseDate)}</span></div></div>
+                    <label className="myr-readonly-field"><span>New Planting Date *</span><input type="date" min={selectedRequest.lateReleaseRescheduling.availableReleaseDate} value={replacementSchedule.plantingDate} onChange={(event) => setReplacementSchedule((value) => ({ ...value, plantingDate: event.target.value }))} /></label>
+                    <label className="myr-readonly-field"><span>Start Time *</span><input type="time" value={replacementSchedule.startTime} onChange={(event) => setReplacementSchedule((value) => ({ ...value, startTime: event.target.value }))} /></label>
+                    <label className="myr-readonly-field"><span>End Time</span><input type="time" value={replacementSchedule.endTime} onChange={(event) => setReplacementSchedule((value) => ({ ...value, endTime: event.target.value }))} /></label>
+                    <label className="myr-readonly-field"><span>Optional Remarks</span><textarea value={replacementSchedule.remarks} onChange={(event) => setReplacementSchedule((value) => ({ ...value, remarks: event.target.value }))} /></label>
+                  </div>
+                  {scheduleActionError && <p role="alert">{scheduleActionError}</p>}
+                  <button type="button" className="myr-primary-btn" disabled={scheduleActionLoading || !replacementSchedule.plantingDate || !replacementSchedule.startTime} onClick={() => submitScheduleAction("late")}>{scheduleActionLoading ? "Submitting..." : "Submit Proposed Schedule"}</button>
+                </section>
               )}
 
               {selectedRequest.status === "Request Returned" && (

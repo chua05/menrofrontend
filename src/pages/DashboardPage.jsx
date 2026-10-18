@@ -37,6 +37,7 @@ import { useAuth } from "../context/AuthContext";
 import { auth } from "../firebase/config";
 import { API_BASE_URL } from "../services/authenticatedApi";
 import { formatDisplayId } from "../utils/displayId";
+import { monthlySurvivalRates, officialMonitoringHistoryEntries, weightedOfficialSurvivalRate } from "../utils/monitoringForm";
 import { BULAN_BARANGAYS } from "../utils/userTypes";
 import "../styles/dashboard-page.css";
 
@@ -214,8 +215,10 @@ function directBarangay(record) {
 
 function getDate(record) {
   const candidates = [
-    record?.monitoredAt,
     record?.monitoredDate,
+    record?.monitoringDate,
+    record?.dateMonitored,
+    record?.monitoredAt,
     record?.releasedAt,
     record?.recordedAt,
     record?.plantingDate,
@@ -228,8 +231,6 @@ function getDate(record) {
     record?.distribution_date,
     record?.date,
     record?.verifiedAt,
-    record?.monitoringDate,
-    record?.dateMonitored,
     record?.eventDate,
     record?.proposedDate,
     record?.scheduledDate,
@@ -254,6 +255,16 @@ function getDate(record) {
   }
 
   return null;
+}
+
+function timestampMillis(value) {
+  if (!value) return 0;
+  const date = typeof value?.toDate === "function"
+    ? value.toDate()
+    : Number.isFinite(value?._seconds ?? value?.seconds)
+      ? new Date(Number(value._seconds ?? value.seconds) * 1000)
+      : new Date(value);
+  return Number.isNaN(date.getTime()) ? 0 : date.getTime();
 }
 
 function formatDate(date) {
@@ -446,9 +457,102 @@ function getPlantedQuantity(record) {
   );
 }
 
+const VALIDATED_MONITORING_STATUSES = new Set([
+  "accepted",
+  "approved",
+  "reviewed",
+  "validated",
+  "verified",
+]);
+
+const EXCLUDED_MONITORING_STATUSES = new Set([
+  "invalid",
+  "pending",
+  "pending review",
+  "rejected",
+]);
+
+function monitoringStatus(value) {
+  return String(value || "").trim().toLowerCase();
+}
+
+function isValidatedMonitoringObservation(observation = {}, lifecycle = {}) {
+  if (observation.observationType === "early") return false;
+  if (Number(observation.workflowVersion) >= 2) {
+    return observation.reviewStatus === "Approved" &&
+      observation.adminDecision === "Approve" &&
+      Boolean(observation.adminDecidedBy) && Boolean(observation.adminDecidedAt);
+  }
+  const explicitStatus = [
+    observation.reviewStatus,
+    observation.staffReviewStatus,
+    observation.verificationStatus,
+  ].map(monitoringStatus).find(Boolean);
+
+  if (explicitStatus) {
+    if (EXCLUDED_MONITORING_STATUSES.has(explicitStatus)) return false;
+    return VALIDATED_MONITORING_STATUSES.has(explicitStatus);
+  }
+
+  const lifecycleStatus = [
+    lifecycle.reviewStatus,
+    lifecycle.staffReviewStatus,
+    lifecycle.verificationStatus,
+  ].map(monitoringStatus).find(Boolean);
+
+  return VALIDATED_MONITORING_STATUSES.has(lifecycleStatus);
+}
+
+function validatedMonitoringHistory(record) {
+  const history = Array.isArray(record?.history)
+    ? record.history
+    : [record];
+
+  return history.filter((entry) =>
+    isValidatedMonitoringObservation(entry, record));
+}
+
+function latestValidatedMonitoringObservation(record) {
+  return validatedMonitoringHistory(record)
+    .map((entry, index) => ({
+      entry,
+      index,
+      date: getDate(entry)?.getTime() || 0,
+      submittedAt: timestampMillis(entry.monitoredAt || entry.createdAt),
+    }))
+    .sort((a, b) => a.date - b.date || a.submittedAt - b.submittedAt || a.index - b.index)
+    .at(-1)?.entry || null;
+}
+
+function monitoringObservationTotal(observation = {}) {
+  const explicit = Number(observation.totalMonitored ?? observation.totalChecked);
+  if (Number.isInteger(explicit) && explicit > 0) return explicit;
+  const healthy = Number(observation.healthyCount ?? observation.healthy ?? 0);
+  const damaged = Number(observation.damagedCount ?? observation.damaged ?? 0);
+  const dead = Number(observation.deadCount ?? observation.dead ?? 0);
+  return [healthy, damaged, dead].every((value) => Number.isInteger(value) && value >= 0)
+    ? healthy + damaged + dead
+    : 0;
+}
+
+function isFullCohortMonitoringObservation(observation = {}, record = {}) {
+  if (typeof observation.isFullCohortAssessment === "boolean") {
+    return observation.isFullCohortAssessment;
+  }
+  const total = monitoringObservationTotal(observation);
+  const cohort = Number(observation.cohortQuantityAtObservation ?? record.quantityPlanted);
+  return total > 0 && Number.isInteger(cohort) && cohort > 0 && total === cohort;
+}
+
 function getSurvivalRate(record) {
-  const history = Array.isArray(record?.history) ? record.history : [];
-  if (history.length > 0) return getSurvivalRate(history[history.length - 1]);
+  if (Array.isArray(record?.history)) {
+    const latest = latestValidatedMonitoringObservation(record);
+    return latest && isFullCohortMonitoringObservation(latest, record)
+      ? getSurvivalRate({ ...latest, __validatedMonitoringObservation: true })
+      : null;
+  }
+  if (!record?.__validatedMonitoringObservation &&
+      !isValidatedMonitoringObservation(record, record)) return null;
   const direct = Number(
     record?.survivalRate ??
       record?.survival_rate ??
@@ -473,20 +577,21 @@ function getSurvivalRate(record) {
 }
 
 function getMonitoringCounts(record) {
-  const history = Array.isArray(record?.history) ? record.history : [];
-  if (history.length > 0) return getMonitoringCounts(history[history.length - 1]);
+  if (Array.isArray(record?.history)) {
+    const latest = latestValidatedMonitoringObservation(record);
+    return latest && isFullCohortMonitoringObservation(latest, record)
+      ? getMonitoringCounts({ ...latest, __validatedMonitoringObservation: true })
+      : { surviving: 0, total: 0 };
+  }
+  if (!record?.__validatedMonitoringObservation &&
+      !isValidatedMonitoringObservation(record, record)) {
+    return { surviving: 0, total: 0 };
+  }
   const healthy = Number(record?.healthyCount ?? record?.healthy ?? 0) || 0;
   const damaged = Number(record?.damagedCount ?? record?.damaged ?? 0) || 0;
   const dead = Number(record?.deadCount ?? record?.dead ?? 0) || 0;
   const total = Number(record?.totalMonitored ?? record?.totalChecked) || healthy + damaged + dead;
   return { surviving: healthy + damaged, total };
-}
-
-function monitoringHistoryEntries(records) {
-  return records.flatMap((record) => {
-    if (!Array.isArray(record?.history)) return [record];
-    return record.history.map((entry) => ({ ...entry, barangay: record.barangay, siteId: record.siteId }));
-  });
 }
 
 function getRequestStatus(record) {
@@ -549,10 +654,13 @@ function getSiteCondition(site, monitoring) {
   if (!siteId) return "Not Yet Monitored";
 
   const latest = monitoring
-    .filter(
-      (record) =>
-        String(record?.siteId || record?.plantingSiteId || "") === siteId
-    )
+    .filter((record) =>
+      String(record?.siteId || record?.plantingSiteId || "") === siteId)
+    .map((record) => {
+      const latest = latestValidatedMonitoringObservation(record);
+      return latest && isFullCohortMonitoringObservation(latest, record) ? latest : null;
+    })
+    .filter(Boolean)
     .sort(
       (a, b) =>
         (getDate(b)?.getTime() || 0) -
@@ -593,7 +701,6 @@ function buildMonthlyActivity(distributions, reports, monitoring) {
       }),
       allocated: 0,
       planted: 0,
-      survivalRates: [],
     });
   }
 
@@ -617,28 +724,14 @@ function buildMonthlyActivity(distributions, reports, monitoring) {
     }
   });
 
-  monitoringHistoryEntries(monitoring).forEach((record) => {
-    const bucket = buckets.get(monthKey(getDate(record)));
-    const rate = getSurvivalRate(record);
-
-    if (bucket && rate !== null) {
-      bucket.survivalRates.push(rate);
-    }
-  });
+  const monitoringRates = monthlySurvivalRates(officialMonitoringHistoryEntries(monitoring));
 
   return months.map((item) => ({
     month: item.month,
     allocated: item.allocated,
     planted: item.planted,
     survivalRate:
-      item.survivalRates.length > 0
-        ? Math.round(
-            item.survivalRates.reduce(
-              (sum, value) => sum + value,
-              0
-            ) / item.survivalRates.length
-          )
-        : null,
+      monitoringRates.get(item.key) ?? null,
   }));
 }
 
@@ -2156,17 +2249,7 @@ export default function DashboardPage() {
           null
     );
 
-  const overallSurvival =
-    survivalBarangays.length > 0
-      ? Math.round(
-          survivalBarangays.reduce(
-            (sum, item) =>
-              sum + item.rate,
-            0
-          ) /
-            survivalBarangays.length
-        )
-      : null;
+  const overallSurvival = weightedOfficialSurvivalRate(dashboardMonitoring);
 
   const managementKpis = [
     {

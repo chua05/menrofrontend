@@ -1,13 +1,17 @@
 import { auth } from "../firebase/config";
 import { createAuthSessionRequest } from "./authSessionRequest";
+import { validateFrontendIntegrationEnvironment } from "../config/integrationEnvironment";
 
 const configuredApiUrl = import.meta.env.VITE_API_URL?.trim().replace(/\/$/, "");
+const integration = validateFrontendIntegrationEnvironment(import.meta.env);
 const localApiUrl = /^https?:\/\/(localhost|127\.0\.0\.1)(?::|\/|$)/i.test(
   configuredApiUrl || "",
 );
 
 export const API_BASE_URL =
-  import.meta.env.PROD && (!configuredApiUrl || localApiUrl)
+  integration.integration
+    ? integration.apiUrl
+    : import.meta.env.PROD && (!configuredApiUrl || localApiUrl)
     ? "https://menrobk-1.onrender.com/api"
     : configuredApiUrl || "http://localhost:5000/api";
 
