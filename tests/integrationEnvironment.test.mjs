@@ -14,3 +14,9 @@ test("frontend emulator mode accepts only the demo project and local API", () =>
 test("normal frontend mode remains unchanged", () => {
   assert.deepEqual(validateFrontendIntegrationEnvironment({}), { integration: false });
 });
+
+test("GCS development rejects production Auth before Firebase client initialization", () => {
+  assert.throws(() => validateFrontendIntegrationEnvironment({ VITE_GCS_DEVELOPMENT: "true", DEV: true }));
+  assert.throws(() => validateFrontendIntegrationEnvironment({ ...valid(), VITE_GCS_DEVELOPMENT: "true", DEV: false }));
+  assert.equal(validateFrontendIntegrationEnvironment({ ...valid(), VITE_GCS_DEVELOPMENT: "true", DEV: true }).integration, true);
+});

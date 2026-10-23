@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { createEvidenceAttempt, assertEvidenceComplete } from "../utils/evidenceAttempt";
 import { useSearchParams } from "react-router-dom";
 import L from "leaflet";
 import {
@@ -404,6 +405,7 @@ async function apiRequest(
     payload = {};
   }
 
+  assertEvidenceComplete(response, payload, options.headers);
   if (!response.ok) {
     const error = new Error(
       payload.message ||
@@ -418,6 +420,7 @@ async function apiRequest(
 }
 
 export default function MonitoringPage() {
+  const evidenceAttempt = useRef(createEvidenceAttempt());
   const [observationType, setObservationType] = useState("official");
   const { userRole, currentUser } = useAuth();
   const { success: showSuccess } = useToast();
@@ -962,6 +965,7 @@ export default function MonitoringPage() {
   }
 
   function resetForm() {
+    evidenceAttempt.current.reset();
     setObservationType("official");
     setEditingObservation(null);
     setRetainEvidenceRevision("");
@@ -1255,6 +1259,7 @@ export default function MonitoringPage() {
           {
             method: editingObservation ? "PATCH" : "POST",
             body: payload,
+            headers: evidenceAttempt.current.headers(),
           }
         );
 
@@ -1340,6 +1345,7 @@ export default function MonitoringPage() {
   }
 
   function openCorrection(record, entry) {
+    evidenceAttempt.current.reset();
     if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current);
     previewUrlRef.current = null;
     setPhotoFile(null);
