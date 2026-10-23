@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import L from "leaflet";
+import { boundaryLayerOptions } from "../utils/barangayMap";
 import { auth } from "../firebase/config";
 import { formatDisplayId } from "../utils/displayId";
 
@@ -744,6 +745,7 @@ export default function MapVisualizationPage() {
     const layer = L.geoJSON(
       geoJsonData,
       {
+        ...boundaryLayerOptions(map),
         style: {
           color: "#49685a",
           weight: 1.2,

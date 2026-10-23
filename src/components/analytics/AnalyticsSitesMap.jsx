@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import L from "leaflet";
+import { boundaryLayerOptions } from "../../utils/barangayMap";
 import "leaflet/dist/leaflet.css";
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
@@ -65,6 +66,7 @@ export default function AnalyticsSitesMap({ sites = [], onViewFullMap }) {
       .then((geoJson) => {
         if (cancelled) return;
         const boundary = L.geoJSON(geoJson, {
+          ...boundaryLayerOptions(map),
           style: { color: "#17643a", weight: 1.7, opacity: 0.96, fillColor: "#dff2e5", fillOpacity: 0.32 },
           interactive: false,
           onEachFeature(feature, layer) {

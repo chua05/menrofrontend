@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { useToast } from "../context/ToastContext";
 import L from "leaflet";
+import { boundaryLayerOptions } from "../utils/barangayMap";
 import "leaflet/dist/leaflet.css";
 
 import {
@@ -447,6 +448,7 @@ function MyRequestLocationPreview({ request }) {
         const boundaryLayer = L.geoJSON(
           geoJson,
           {
+            ...boundaryLayerOptions(map),
             style: (feature) => {
               const featureBarangay =
                 normalizeName(
