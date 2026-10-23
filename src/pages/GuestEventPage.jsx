@@ -5,6 +5,7 @@ import "leaflet/dist/leaflet.css";
 import * as exifr from "exifr";
 import logo from "../assets/menro-logo.png";
 import { formatDisplayId } from "../utils/displayId";
+import { createEvidenceAttempt, assertEvidenceComplete } from "../utils/evidenceAttempt";
 import "../styles/guest-event.css";
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
@@ -26,6 +27,7 @@ export default function GuestEventPage() {
   const { token } = useParams();
   const mapContainerRef = useRef(null);
   const submissionKeyRef = useRef("");
+  const evidenceAttempt = useRef(createEvidenceAttempt());
   const [event, setEvent] = useState(null);
   const [session, setSession] = useState(null);
   const [contributions, setContributions] = useState([]);
@@ -40,6 +42,7 @@ export default function GuestEventPage() {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [plantingSubmitting, setPlantingSubmitting] = useState(false);
+  const [evidenceRecovery, setEvidenceRecovery] = useState(false);
   const [error, setError] = useState("");
   const [plantingMessage, setPlantingMessage] = useState({ type: "", text: "" });
   const [retryKey, setRetryKey] = useState(0);
@@ -58,6 +61,7 @@ export default function GuestEventPage() {
       },
     });
     const payload = await response.json().catch(() => null);
+    assertEvidenceComplete(response, payload, options.headers);
     if (!response.ok) throw new Error(payload?.message || "Unable to complete the request.");
     return payload?.data;
   }
@@ -212,7 +216,8 @@ export default function GuestEventPage() {
       setPlantingMessage({ type: "error", text: "Select a tree or seedling from this event allocation." });
       return;
     }
-    if (!Number.isInteger(quantity) || quantity <= 0 || quantity > Number(selectedAllocation.remaining)) {
+    const recovering = evidenceAttempt.current.enabled && Boolean(submissionKeyRef.current);
+    if (!Number.isInteger(quantity) || quantity <= 0 || (!recovering && quantity > Number(selectedAllocation.remaining))) {
       setPlantingMessage({ type: "error", text: `Enter a positive whole number not greater than the current remaining quantity (${selectedAllocation.remaining}).` });
       return;
     }
@@ -227,10 +232,11 @@ export default function GuestEventPage() {
       const latestAllocation = latestSession?.event?.allocation?.find(
         (item) => item.inventoryId === selectedAllocation.inventoryId
       );
-      if (!latestAllocation || quantity > Number(latestAllocation.remaining)) {
+      if (!latestAllocation || (!recovering && quantity > Number(latestAllocation.remaining))) {
         throw new Error("The available planting quantity has changed. Please review the updated remaining quantity and try again.");
       }
       if (!submissionKeyRef.current) submissionKeyRef.current = newSubmissionKey();
+      if (evidenceAttempt.current.enabled) setEvidenceRecovery(true);
       const contribution = await guestFetch("/guest-events/session/contributions", {
         method: "POST",
         body: JSON.stringify({ inventoryId: selectedAllocation.inventoryId, quantity, submissionKey: submissionKeyRef.current }),
@@ -238,7 +244,7 @@ export default function GuestEventPage() {
       const photoData = new FormData();
       photos.forEach((photo) => photoData.append("photos", photo));
       await guestFetch(`/guest-events/session/contributions/${encodeURIComponent(contribution.id)}/evidence`, {
-        method: "POST", body: photoData,
+        method: "POST", body: photoData, headers: evidenceAttempt.current.headers(submissionKeyRef.current),
       });
       await refreshGuestData();
       setPlantingForm({ inventoryId: "", quantity: "" });
@@ -247,6 +253,8 @@ export default function GuestEventPage() {
       setPhotoPreviews([]);
       setPhotoGps(null);
       submissionKeyRef.current = "";
+      evidenceAttempt.current.reset();
+      setEvidenceRecovery(false);
       setPlantingMessage({
         type: "success",
         text: "Your planting report was submitted successfully.",
@@ -306,12 +314,12 @@ export default function GuestEventPage() {
               <h2>Planting Record</h2>
               {plantingMessage.text && <div className={`guest-event-alert guest-event-alert-${plantingMessage.type}`} role="alert">{plantingMessage.text}</div>}
               <form className="guest-event-form" onSubmit={submitPlanting}>
-                <label className="guest-event-field">Tree / Seedling *<select required value={plantingForm.inventoryId} disabled={!allocations.length || allRecorded} onChange={(change) => setPlantingForm({ inventoryId: change.target.value, quantity: "" })}><option value="">Select from event allocation</option>{allocations.map((item) => <option key={item.inventoryId} value={item.inventoryId} disabled={item.remaining <= 0}>{item.species} ({item.remaining} remaining)</option>)}</select></label>
+                <label className="guest-event-field">Tree / Seedling *<select required value={plantingForm.inventoryId} disabled={evidenceRecovery || !allocations.length || allRecorded} onChange={(change) => setPlantingForm({ inventoryId: change.target.value, quantity: "" })}><option value="">Select from event allocation</option>{allocations.map((item) => <option key={item.inventoryId} value={item.inventoryId} disabled={item.remaining <= 0}>{item.species} ({item.remaining} remaining)</option>)}</select></label>
                 <div className="guest-event-quantity-grid">
                   <label className="guest-event-field">Allocated Quantity<input readOnly value={selectedAllocation?.allocated ?? "—"} /></label>
                   <label className="guest-event-field">Remaining Quantity<input readOnly value={selectedAllocation?.remaining ?? "—"} /></label>
                 </div>
-                <label className="guest-event-field">Quantity of Planted Trees *<input required type="number" min="1" step="1" max={selectedAllocation?.remaining || undefined} value={plantingForm.quantity} disabled={!selectedAllocation || selectedAllocation.remaining <= 0} onChange={(change) => setPlantingForm((previous) => ({ ...previous, quantity: change.target.value }))} /></label>
+                <label className="guest-event-field">Quantity of Planted Trees *<input required type="number" min="1" step="1" max={evidenceRecovery ? undefined : selectedAllocation?.remaining || undefined} value={plantingForm.quantity} disabled={evidenceRecovery || !selectedAllocation || selectedAllocation.remaining <= 0} onChange={(change) => setPlantingForm((previous) => ({ ...previous, quantity: change.target.value }))} /></label>
                 <div className="guest-event-evidence">
                   <div><strong>Photo Evidence — Required</strong><span>Submit the original photo with embedded GPS metadata.</span></div>
                   <div className="guest-event-photo-actions">
@@ -325,7 +333,7 @@ export default function GuestEventPage() {
                     Number.isFinite(Number(event.latitude)) && Number.isFinite(Number(event.longitude))) || photoGps) &&
                     <div ref={mapContainerRef} className="guest-event-map" aria-label="Planting site and optional photo location map" />}
                 </div>
-                <button className="guest-event-button" type="submit" disabled={plantingSubmitting || !selectedAllocation || selectedAllocation.remaining <= 0 || allRecorded}>{plantingSubmitting ? "Submitting..." : "Submit Planting Record"}</button>
+                <button className="guest-event-button" type="submit" disabled={plantingSubmitting || !selectedAllocation || (!evidenceRecovery && (selectedAllocation.remaining <= 0 || allRecorded))}>{plantingSubmitting ? "Submitting..." : "Submit Planting Record"}</button>
               </form>
             </section>
 
