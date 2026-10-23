@@ -53,5 +53,7 @@ test("recent activities keeps its heading fixed and scrolls only its list", () =
 test("analytics trend charts retain their existing data and chart configuration", () => {
   assert.match(analytics, /<BarChart data=\{analytics\.plantingTrend\}>/);
   assert.match(analytics, /<LineChart data=\{analytics\.survivalTrend\}>/);
+  assert.equal((analytics.match(/initialDimension=\{TREND_CHART_INITIAL_SIZE\}/g) || []).length, 2);
+  assert.equal((analytics.match(/initialDimension=\{DONUT_CHART_INITIAL_SIZE\}/g) || []).length, 2);
   assert.doesNotMatch(analytics, /<ChartEmpty/);
 });
