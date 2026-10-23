@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import L from "leaflet";
+import { boundaryLayerOptions } from "../utils/barangayMap";
 import "leaflet/dist/leaflet.css";
 
 import {
@@ -1197,6 +1198,7 @@ function DashboardSitesMap({
         }
 
         const boundaryLayer = L.geoJSON(geoJson, {
+          ...boundaryLayerOptions(map),
           style: {
             color: "#17643a",
             weight: 1.7,

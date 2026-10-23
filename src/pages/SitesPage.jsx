@@ -28,6 +28,7 @@ import { useToast } from "../context/ToastContext";
 import { auth } from "../firebase/config";
 import { formatDisplayId } from "../utils/displayId";
 import { BULAN_BARANGAYS } from "../utils/userTypes";
+import { boundaryLayerOptions, siteBoundaryDiagnostic } from "../utils/barangayMap";
 import "../styles/planting-sites.css";
 
 const API_BASE_URL =
@@ -91,8 +92,9 @@ function getBarangayDisplayName(feature) {
     .trim();
 }
 
-function createBarangayBoundaryLayer(geoJson) {
+function createBarangayBoundaryLayer(geoJson, map) {
   return L.geoJSON(geoJson, {
+    ...boundaryLayerOptions(map),
     style: {
       color: "#17643a",
       weight: 1.7,
@@ -563,7 +565,7 @@ export default function SitesPage() {
 
       setBarangayBoundaries(geoJson);
 
-      const boundaryLayer = createBarangayBoundaryLayer(geoJson);
+      const boundaryLayer = createBarangayBoundaryLayer(geoJson, map);
 
       boundaryLayer.addTo(map);
 
@@ -1849,6 +1851,8 @@ export default function SitesPage() {
                 latitude={detailsSite.latitude}
                 longitude={detailsSite.longitude}
                 radius={detailsSite.coverageRadiusMeters}
+                barangay={detailsSite.barangay}
+                barangayBoundaries={barangayBoundaries}
                 readOnly
               />
             </div>
@@ -2189,6 +2193,7 @@ export default function SitesPage() {
                       latitude={form.latitude}
                       longitude={form.longitude}
                       radius={getCoverageRadiusMeters(form)}
+                      barangay={form.barangay}
                       barangayBoundaries={barangayBoundaries}
                       onSelect={(latitude, longitude) => {
                         setForm((previous) => ({
@@ -2454,6 +2459,7 @@ function SiteCoverageMap({
   latitude,
   longitude,
   radius,
+  barangay,
   barangayBoundaries = null,
   onSelect,
   readOnly = false,
@@ -2524,7 +2530,7 @@ function SiteCoverageMap({
     const map = mapRef.current;
     if (!map || !barangayBoundaries) return undefined;
 
-    const boundaryLayer = createBarangayBoundaryLayer(barangayBoundaries);
+    const boundaryLayer = createBarangayBoundaryLayer(barangayBoundaries, map);
     boundaryLayer.addTo(map);
     boundaryLayer.bringToBack();
     boundaryLayerRef.current = boundaryLayer;
@@ -2616,8 +2622,13 @@ function SiteCoverageMap({
     window.setTimeout(() => map.invalidateSize(), 0);
   }, [latitude, longitude, radius]);
 
+  const boundaryWarning = siteBoundaryDiagnostic(barangayBoundaries, barangay, latitude, longitude);
+
   return (
     <div className="ps-site-coverage-map-wrap">
+      {boundaryWarning && (
+        <p role="status">{boundaryWarning}</p>
+      )}
       <div
         ref={containerRef}
         className="ps-site-coverage-map"

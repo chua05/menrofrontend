@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import L from "leaflet";
+import { boundaryLayerOptions } from "../utils/barangayMap";
+import { createEvidenceAttempt, assertEvidenceComplete } from "../utils/evidenceAttempt";
 import "leaflet/dist/leaflet.css";
 import * as exifr from "exifr";
 import { extractGpsCoordinates } from "../utils/exifGps";
@@ -354,6 +356,7 @@ export default function PlantingPage() {
   const openedReportFromSearchRef = useRef("");
   const eventsRequestSequenceRef = useRef(0);
   const noEventsAlertTimerRef = useRef(null);
+  const evidenceAttempt = useRef(createEvidenceAttempt());
 
   const [records, setRecords] = useState([]);
   const [sites, setSites] = useState([]);
@@ -490,6 +493,7 @@ export default function PlantingPage() {
       payload = {};
     }
 
+    assertEvidenceComplete(response, payload, options.headers);
     if (!response.ok) {
       if (response.status === 401) {
         throw new Error("Your session has expired. Please sign in again.");
@@ -740,6 +744,7 @@ export default function PlantingPage() {
         setBulanGeoJson(geoJson);
 
         const barangayLayer = L.geoJSON(geoJson, {
+          ...boundaryLayerOptions(map),
           style: (feature) => {
             const featureBarangay = getFeatureBarangayName(feature);
             const selected =
@@ -1343,6 +1348,7 @@ export default function PlantingPage() {
     selectedSite, form.latitude, form.longitude]);
 
   function resetForm() {
+    evidenceAttempt.current.reset();
     clearNoEventsAlert();
     stopCamera();
     setForm({
@@ -2126,6 +2132,7 @@ export default function PlantingPage() {
       const response = await apiRequest("/planting-reports", {
         method: "POST",
         body: payload,
+        headers: evidenceAttempt.current.headers(),
       });
 
       resetForm();

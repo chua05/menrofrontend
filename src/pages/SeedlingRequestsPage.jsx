@@ -2,6 +2,7 @@ import {  useCallback, useEffect, useMemo, useRef, useState, } from "react";
 import { createPortal } from "react-dom";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import L from "leaflet";
+import { boundaryLayerOptions } from "../utils/barangayMap";
 import "leaflet/dist/leaflet.css";
 import {
   Sprout,
@@ -3564,6 +3565,7 @@ function ParticipantLocationPreview({ barangay, site }) {
         const boundaryLayer = L.geoJSON(
           geoJson,
           {
+            ...boundaryLayerOptions(map),
             style: (feature) => {
               const featureBarangayName =
                 normalizeBarangayName(

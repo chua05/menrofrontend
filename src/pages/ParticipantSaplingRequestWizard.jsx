@@ -1,5 +1,6 @@
 import { cloneElement, isValidElement, useEffect, useId, useMemo, useRef, useState } from "react";
 import L from "leaflet";
+import { boundaryLayerOptions } from "../utils/barangayMap";
 import "leaflet/dist/leaflet.css";
 import {
   ArrowLeft,
@@ -1767,6 +1768,7 @@ function LocationMap({ barangay, site, editable = false, areaHectares = 0, onPic
         const selected = selectedBarangay;
         selectedFeature.current = null;
         boundaries.current = L.geoJSON(data, {
+          ...boundaryLayerOptions(instance),
           interactive: false,
           style: (feature) => {
             const name = String(
