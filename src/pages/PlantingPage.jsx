@@ -34,6 +34,11 @@ import ProtectedEvidenceImage from "../components/ProtectedEvidenceImage";
 import { auth } from "../firebase/config";
 import { formatDisplayId } from "../utils/displayId";
 import { BULAN_BARANGAYS, USER_TYPES } from "../utils/userTypes";
+import {
+  formatTimestampDate,
+  normalizeTimestamp,
+  timestampToDateInput,
+} from "../utils/timestampValues";
 import "../styles/planting-reports.css";
 
 const API_BASE_URL =
@@ -120,30 +125,7 @@ function displayReportStatus(status) {
 }
 
 function formatDate(value) {
-  if (!value) return "—";
-
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
-
-  return new Intl.DateTimeFormat("en-PH", {
-    year: "numeric",
-    month: "short",
-    day: "2-digit",
-  }).format(date);
-}
-
-function normalizeTimestamp(value) {
-  if (!value) return null;
-
-  if (typeof value?.toDate === "function") return value.toDate();
-
-  if (typeof value === "object") {
-    const seconds = value._seconds ?? value.seconds;
-    if (Number.isFinite(seconds)) return new Date(seconds * 1000);
-  }
-
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? null : date;
+  return formatTimestampDate(value);
 }
 
 function formatDateTime(value) {
@@ -192,13 +174,7 @@ function getParticipantTypeLabel(value) {
 
 function getEventDateValue(event) {
   const value = event?.date || event?.eventDate || event?.startDate || "";
-  if (!value) return "";
-  if (typeof value === "string" && /^\d{4}-\d{2}-\d{2}/.test(value)) {
-    return value.slice(0, 10);
-  }
-  const seconds = value?._seconds ?? value?.seconds;
-  const date = Number.isFinite(seconds) ? new Date(seconds * 1000) : new Date(value);
-  return Number.isNaN(date.getTime()) ? "" : date.toISOString().slice(0, 10);
+  return timestampToDateInput(value);
 }
 
 function getEventStartTime(event) {
