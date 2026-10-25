@@ -1,0 +1,7 @@
+.secure-camera-backdrop{position:fixed;inset:0;z-index:10000;display:grid;place-items:center;padding:1rem;background:rgba(15,23,42,.78)}
+.secure-camera-panel{width:min(44rem,100%);max-height:94vh;overflow:auto;border-radius:1rem;background:#fff;padding:1rem;box-shadow:0 24px 70px rgba(0,0,0,.35)}
+.secure-camera-panel h3{margin:.25rem 0}.secure-camera-status{color:#475569}.secure-camera-error{margin:.75rem 0;border-radius:.5rem;background:#fee2e2;color:#991b1b;padding:.75rem}
+.secure-camera-permission-explanation{margin:.75rem 0;border:1px solid #bfdbfe;border-radius:.75rem;background:#eff6ff;color:#1e3a8a;padding:.85rem}.secure-camera-permission-explanation p{margin:.25rem 0}.secure-camera-help{color:#475569;font-size:.9rem}
+.secure-camera-preview{display:block;width:100%;max-height:65vh;min-height:16rem;object-fit:contain;border-radius:.75rem;background:#0f172a}
+.secure-camera-actions{display:flex;flex-wrap:wrap;gap:.65rem;margin-top:1rem}.secure-camera-actions button{min-height:2.75rem;border:0;border-radius:.55rem;padding:.65rem 1rem;font-weight:700;cursor:pointer}
+.secure-camera-actions button:nth-last-child(1){margin-left:auto;background:#e2e8f0;color:#0f172a}
