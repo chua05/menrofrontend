@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { boundaryLayerOptions, siteBoundaryDiagnostic } from "../src/utils/barangayMap.js";
+import { boundaryLayerOptions, geometryCoversPoint, siteBoundaryDiagnostic } from "../src/utils/barangayMap.js";
 
 const square = (name, x = 123, y = 12) => ({ type: "Feature", properties: { brgy_name: name },
   geometry: { type: "Polygon", coordinates: [[[x, y], [x + 1, y], [x + 1, y + 1], [x, y + 1], [x, y]]] } });
@@ -31,6 +31,14 @@ test("shared edges and overlapping polygons report ambiguity, never first-match 
   assert.match(siteBoundaryDiagnostic(collection(square("a"), square("b")), "a", 12.5, 123.5), /multiple/);
 });
 
+test("shared frontend containment covers edges and vertices consistently", () => {
+  const feature = square("a");
+  assert.equal(geometryCoversPoint(feature.geometry, [123.5, 12.5]), true);
+  assert.equal(geometryCoversPoint(feature.geometry, [123, 12.5]), true);
+  assert.equal(geometryCoversPoint(feature.geometry, [123, 12]), true);
+  assert.equal(geometryCoversPoint(feature.geometry, [122.9, 12.5]), false);
+});
+
 test("holes, multipolygons, outside coordinates and missing inputs", () => {
   const f = square("a");
   f.geometry.coordinates.push([[123.2, 12.2], [123.8, 12.2], [123.8, 12.8], [123.2, 12.8], [123.2, 12.2]]);
@@ -49,4 +57,10 @@ test("every boundary-rendering module uses the same noninteractive pane", () => 
     assert.match(source, /\.\.\.boundaryLayerOptions\((map|instance)\)/, file);
     assert.match(source, /sites\/barangay-boundaries/, file);
   }
+});
+
+test("participant request validation uses the shared boundary containment implementation", () => {
+  const source = readFileSync(new URL("../src/pages/ParticipantSaplingRequestWizard.jsx", import.meta.url), "utf8");
+  assert.match(source, /geometryCoversPoint/);
+  assert.doesNotMatch(source, /const pointInRing/);
 });

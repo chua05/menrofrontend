@@ -16,7 +16,7 @@ export function barangayName(feature) {
 
 const normalize = (name) => String(name ?? "").normalize("NFC").toLowerCase().replace(/[^\p{L}\p{N}]/gu, "");
 
-function ringLocation(ring, x, y) {
+export function ringLocation(ring, x, y) {
   let inside = false;
   for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
     const [ax, ay] = ring[j];
@@ -30,7 +30,9 @@ function ringLocation(ring, x, y) {
   return inside ? "inside" : "outside";
 }
 
-function covers(geometry, x, y) {
+export function geometryCoversPoint(geometry, point) {
+  const [x, y] = point || [];
+  if (!Number.isFinite(Number(x)) || !Number.isFinite(Number(y))) return false;
   const polygons = geometry?.type === "Polygon" ? [geometry.coordinates] :
     geometry?.type === "MultiPolygon" ? geometry.coordinates : [];
   return polygons.some((rings) => {
@@ -47,7 +49,7 @@ export function siteBoundaryDiagnostic(data, selectedBarangay, latitude, longitu
       String(longitude).trim() === "") return null;
   const lat = Number(latitude), lng = Number(longitude);
   if (!Number.isFinite(lat) || !Number.isFinite(lng) || Math.abs(lat) > 90 || Math.abs(lng) > 180) return null;
-  const matches = data.features.filter((feature) => covers(feature.geometry, lng, lat)).map(barangayName);
+  const matches = data.features.filter((feature) => geometryCoversPoint(feature.geometry, [lng, lat])).map(barangayName);
   const suffix = "Displayed boundaries are unverified. Confirm GPS and barangay with MENRO/LGU; no location or barangay has been changed.";
   if (!matches.length) return `This location is outside the displayed barangay dataset. ${suffix}`;
   if (matches.length > 1) return `This location touches or overlaps multiple displayed barangays (${matches.join(", ")}). ${suffix}`;

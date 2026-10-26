@@ -11,6 +11,24 @@ test("frontend emulator mode accepts only the demo project and local API", () =>
   assert.throws(() => validateFrontendIntegrationEnvironment({ ...valid(), VITE_API_URL: "https://menrobk-1.onrender.com/api" }), /requires API URL/);
 });
 
+test("MPDO acceptance API port requires the explicit candidate gate", () => {
+  const mpdo = {
+    ...valid(),
+    VITE_API_URL: "http://127.0.0.1:5001/api",
+    VITE_MENRO_MPDO_BOUNDARY_ACCEPTANCE: "true",
+    VITE_MENRO_TEST_BOUNDARY_SOURCE: "mpdo-candidate",
+  };
+  assert.equal(validateFrontendIntegrationEnvironment(mpdo).mpdoAcceptance, true);
+  assert.throws(
+    () => validateFrontendIntegrationEnvironment({ ...mpdo, VITE_MENRO_MPDO_BOUNDARY_ACCEPTANCE: "false" }),
+    /requires API URL/,
+  );
+  assert.throws(
+    () => validateFrontendIntegrationEnvironment({ ...mpdo, VITE_MENRO_TEST_BOUNDARY_SOURCE: "runtime" }),
+    /requires API URL/,
+  );
+});
+
 test("normal frontend mode remains unchanged", () => {
   assert.deepEqual(validateFrontendIntegrationEnvironment({}), { integration: false });
 });
