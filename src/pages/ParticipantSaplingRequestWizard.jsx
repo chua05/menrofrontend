@@ -1,6 +1,6 @@
 import { cloneElement, isValidElement, useEffect, useId, useMemo, useRef, useState } from "react";
 import L from "leaflet";
-import { boundaryLayerOptions } from "../utils/barangayMap";
+import { boundaryLayerOptions, geometryCoversPoint } from "../utils/barangayMap";
 import "leaflet/dist/leaflet.css";
 import {
   ArrowLeft,
@@ -102,31 +102,6 @@ const LOCATION_SOURCE = "participant_map_selection";
 const SITE_VERIFICATION_STATUS = "pending_review";
 const hectaresFromForm = (form) =>
   getPlantingAreaHectares(form.areaChoice, form.exactArea);
-const pointInRing = ([lng, lat], ring = []) => {
-  let inside = false;
-  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
-    const [xi, yi] = ring[i],
-      [xj, yj] = ring[j];
-    if (
-      yi > lat !== yj > lat &&
-      lng < ((xj - xi) * (lat - yi)) / (yj - yi) + xi
-    )
-      inside = !inside;
-  }
-  return inside;
-};
-const pointInPolygon = (point, coordinates = []) =>
-  Boolean(
-    coordinates[0] &&
-      pointInRing(point, coordinates[0]) &&
-      !coordinates.slice(1).some((ring) => pointInRing(point, ring)),
-  );
-const geometryContainsPoint = (geometry, point) =>
-  geometry?.type === "Polygon"
-    ? pointInPolygon(point, geometry.coordinates)
-    : geometry?.type === "MultiPolygon"
-      ? geometry.coordinates.some((polygon) => pointInPolygon(point, polygon))
-      : false;
 const destinationPoint = (lat, lng, distanceMeters, bearingDegrees) => {
   const radius = 6371008.8,
     angular = distanceMeters / radius,
@@ -153,11 +128,11 @@ const validateCoverage = (feature, lat, lng, hectares) => {
     !(hectares > 0)
   )
     return "pending";
-  if (!geometryContainsPoint(feature.geometry, [lng, lat])) return "outside";
+  if (!geometryCoversPoint(feature.geometry, [lng, lat])) return "outside";
   const radius = Math.sqrt((hectares * 10000) / Math.PI);
   for (let bearing = 0; bearing < 360; bearing += 5) {
     if (
-      !geometryContainsPoint(
+      !geometryCoversPoint(
         feature.geometry,
         destinationPoint(lat, lng, radius, bearing),
       )
