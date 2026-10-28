@@ -2256,6 +2256,26 @@
   margin-top: 24px;
 }
 
+.sr-validation-summary {
+  margin-top: 20px;
+  padding: 12px 14px;
+  border: 1px solid #d94b4b;
+  border-radius: 8px;
+  background: #fff5f5;
+  color: #8b1e1e;
+  display: grid;
+  gap: 3px;
+  scroll-margin-top: 96px;
+}
+
+.sr-processing-advisory {
+  margin: 8px 0 0;
+  padding: 10px 12px;
+  border-left: 4px solid #b7791f;
+  background: #fffaf0;
+  color: #744210;
+}
+
 .participant-confirmation input {
   width: 19px;
   height: 19px;

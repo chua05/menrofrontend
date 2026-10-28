@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
+  addWorkingDays,
   canNavigateToStep,
   getPlantingAreaError,
   getPlantingAreaHectares,
@@ -8,6 +9,8 @@ import {
   invalidateCompletedSteps,
   isGroupRequester,
   formatScheduleTime,
+  getProcessingWindowAdvisory,
+  normalizeBarangayName,
   validatePlantingSchedule,
   validateRequestLetterFile,
 } from "../src/utils/saplingRequestWorkflow.js";
@@ -104,7 +107,7 @@ test("validates request-letter type and ten-megabyte limit", () => {
   );
   assert.equal(
     validateRequestLetterFile({ name: "request-letter.exe", size: 100 }),
-    "Please upload a PDF, JPG, JPEG, or PNG file.",
+    "Please upload a PDF, JPG, JPEG, PNG, or DOCX file.",
   );
   assert.equal(
     validateRequestLetterFile({
@@ -128,4 +131,46 @@ test("validates group event end time separately", () => {
   assert.deepEqual(validatePlantingSchedule({ date: "2026-10-11", startTime: "08:00", endTime: "11:00", group: true, participants: "10" }, now), {});
   assert.equal(validatePlantingSchedule({ date: "2026-10-11", startTime: "08:00", endTime: "08:00", group: true, participants: "10" }, now).endTime, "Event end time must be later than the start time.");
   assert.equal(validatePlantingSchedule({ date: "2026-10-11", startTime: "08:00", endTime: "", group: true, participants: "10" }, now).endTime, "Please select an event end time.");
+});
+
+test("accepts the reported future group schedule at 11:49 PM Manila time", () => {
+  const now = new Date("2026-10-26T23:49:00+08:00");
+  assert.deepEqual(validatePlantingSchedule({
+    date: "2026-10-27", startTime: "04:34", endTime: "05:34",
+    group: true, participants: "30",
+  }, now), {});
+  assert.equal(validatePlantingSchedule({
+    date: "2026-10-27", startTime: "04:34", endTime: "",
+    group: true, participants: "30",
+  }, now).endTime, "Please select an event end time.");
+});
+
+test("keeps the 3–7 working-day period advisory only", () => {
+  const now = new Date("2026-10-26T23:49:00+08:00");
+  assert.equal(addWorkingDays("2026-10-26", 3), "2026-10-29");
+  assert.deepEqual(getProcessingWindowAdvisory("2026-10-27", now), {
+    earliestDate: "2026-10-29", latestDate: "2026-11-04",
+  });
+  assert.equal(getProcessingWindowAdvisory("2026-10-29", now), null);
+});
+
+test("allows same-day release and planting while the planting start remains in the future", () => {
+  const beforeStart = new Date("2026-10-28T08:00:00.000Z"); // 4:00 PM Asia/Manila
+  assert.deepEqual(validatePlantingSchedule({
+    date: "2026-10-28", startTime: "17:00", endTime: "18:00",
+    group: true, participants: "40",
+  }, beforeStart), {});
+
+  const afterStart = new Date("2026-10-28T09:01:00.000Z"); // 5:01 PM Asia/Manila
+  assert.equal(validatePlantingSchedule({
+    date: "2026-10-28", startTime: "17:00", endTime: "18:00",
+    group: true, participants: "40",
+  }, afterStart).startTime, "The event start time must be in the future.");
+});
+
+test("normalizes Arabic and Roman Zone barangay aliases", () => {
+  assert.equal(normalizeBarangayName("Zone 8"), "zone viii");
+  assert.equal(normalizeBarangayName(" Zone VIII "), "zone viii");
+  assert.equal(normalizeBarangayName("ZoneVIIIPoblacion"), "zone viii");
+  assert.equal(normalizeBarangayName("Zone VIII Poblacion"), "zone viii");
 });

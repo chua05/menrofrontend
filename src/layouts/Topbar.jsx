@@ -222,11 +222,9 @@ export default function Topbar({ onOpenSidebar }) {
       const data = payload?.data || {};
       setNotificationUnreadCount(Number(data.unreadCount || 0));
       setNotifications((previous) => {
-        const next = mergeNotificationPages(previous, data.notifications || [], {
+        return mergeNotificationPages(previous, data.notifications || [], {
           replace: !append && !background,
         });
-        publishNotifications(next);
-        return next;
       });
       if (!background || append) {
         setNotificationCursor(data.nextCursor || null);
@@ -244,6 +242,10 @@ export default function Topbar({ onOpenSidebar }) {
       else if (!background) setNotificationLoading(false);
     }
   }, [currentUser?.uid, notificationReadFilter]);
+
+  useEffect(() => {
+    publishNotifications(notifications);
+  }, [notifications]);
 
   useEffect(() => {
     if (!currentUser?.uid) return undefined;
@@ -313,7 +315,6 @@ export default function Topbar({ onOpenSidebar }) {
           const nextNotifications = previous
             .map((entry) => entry.id === item.id ? { ...entry, isRead: true } : entry)
             .filter((entry) => notificationReadFilter !== "unread" || !entry.isRead);
-          publishNotifications(nextNotifications);
           return nextNotifications;
         });
         setNotificationUnreadCount((count) => Math.max(0, count - 1));
@@ -355,7 +356,6 @@ export default function Topbar({ onOpenSidebar }) {
         const next = notificationReadFilter === "unread"
           ? []
           : previous.map((item) => ({ ...item, isRead: true }));
-        publishNotifications(next);
         return next;
       });
       if (notificationReadFilter === "unread") {
