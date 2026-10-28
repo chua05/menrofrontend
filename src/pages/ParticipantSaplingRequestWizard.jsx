@@ -15,6 +15,11 @@ import {
 } from "lucide-react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { authenticatedFetch, API_BASE_URL } from "../services/authenticatedApi";
+import {
+  legacyRequestLetterMetadata,
+  requestLetterClientGateEnabled,
+  resolveSecureRequestLetterCapability,
+} from "../utils/requestLetterCapabilities";
 import { useToast } from "../context/ToastContext";
 import { BULAN_BARANGAYS } from "../utils/userTypes";
 import { IDENTIFICATION_DOCUMENTS } from "../utils/identificationDocuments";
@@ -31,6 +36,9 @@ import {
   getStepState,
   invalidateCompletedSteps,
   isGroupRequester,
+  getProcessingWindowAdvisory,
+  MAX_SEEDLING_TYPES,
+  normalizeBarangayName,
   validatePlantingSchedule,
   validateRequestLetterFile,
 } from "../utils/saplingRequestWorkflow";
@@ -191,6 +199,8 @@ async function api(path, options = {}) {
   return body?.data ?? body;
 }
 
+const requestLetterClientEnabled = requestLetterClientGateEnabled();
+
 function submissionErrorMessage(error) {
   if (error?.name === "AbortError") {
     return "The request is taking longer than expected. Its status is uncertain; check My Requests before trying again.";
@@ -203,7 +213,7 @@ function submissionErrorMessage(error) {
   }
   return error?.message || "An unexpected error prevented the request from being submitted.";
 }
-function Field({ label, error, children, wide }) {
+function Field({ label, error, children, wide, fieldKey }) {
   const errorId = useId();
   const control = isValidElement(children)
     ? cloneElement(children, {
@@ -212,7 +222,7 @@ function Field({ label, error, children, wide }) {
       })
     : children;
   return (
-    <label className={`sr-form-field ${wide ? "full-width" : ""} ${error ? "has-error sr-invalid-field" : ""}`}>
+    <label data-validation-field={fieldKey} className={`sr-form-field ${wide ? "full-width" : ""} ${error ? "has-error sr-invalid-field" : ""}`}>
       <span>{label}</span>
       {control}
       {error && <small id={errorId} className="sr-field-error">{error}</small>}
@@ -250,7 +260,7 @@ function RequestLetterUpload({ file, error, onSelect, onRemove }) {
       ref={input}
       className="sr-request-letter-input"
       type="file"
-      accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png"
+      accept=".pdf,.jpg,.jpeg,.png,.docx,application/pdf,image/jpeg,image/png,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
       onClick={(event) => {
         event.currentTarget.value = "";
       }}
@@ -258,7 +268,10 @@ function RequestLetterUpload({ file, error, onSelect, onRemove }) {
     />
   );
   return (
-    <div className={`sr-request-letter-field ${error ? "sr-invalid-field" : ""}`}>
+    <div
+      data-validation-field="requestLetter"
+      className={`sr-request-letter-field ${error ? "sr-invalid-field" : ""}`}
+    >
       <span className="sr-request-letter-label">Request Letter *</span>
       {file ? (
         <div className="sr-request-letter-selected">
@@ -285,7 +298,7 @@ function RequestLetterUpload({ file, error, onSelect, onRemove }) {
           <button type="button" className="sr-request-letter-picker" onClick={choose}>
             <Upload size={25} aria-hidden="true" />
             <strong>Click to upload or drag and drop</strong>
-            <span>PDF, JPG, JPEG or PNG</span>
+            <span>PDF, JPG, JPEG, PNG or DOCX</span>
             <small>Max 10 MB</small>
           </button>
         </div>
@@ -357,8 +370,16 @@ export default function ParticipantSaplingRequestWizard({ currentUser }) {
     [errors, setErrors] = useState({}),
     [loading, setLoading] = useState(true),
     [submitting, setSubmitting] = useState(false),
-    [mapValidation, setMapValidation] = useState("pending");
+    [letterUploadState, setLetterUploadState] = useState("idle"),
+    [requestLetterCapability, setRequestLetterCapability] = useState(false),
+    [mapValidation, setMapValidation] = useState("pending"),
+    [validationSummary, setValidationSummary] = useState(null);
+  const formElement = useRef(null);
+  const showErrorRef = useRef(showError);
   const submissionId = useRef(crypto.randomUUID());
+  useEffect(() => {
+    showErrorRef.current = showError;
+  }, [showError]);
   const group = isGroupRequester(form.sector, form.requestingAs);
   const chosenSite = sites.find((x) => x.id === form.existingSiteId);
   const addressMunicipalities = useMemo(
@@ -369,8 +390,8 @@ export default function ParticipantSaplingRequestWizard({ currentUser }) {
     () =>
       sites.filter(
         (x) =>
-          String(x.barangay || "").toLowerCase() ===
-            form.siteBarangay.toLowerCase() &&
+          normalizeBarangayName(x.barangay) ===
+            normalizeBarangayName(form.siteBarangay) &&
           String(x.status || "active").toLowerCase() === "active",
       ),
     [sites, form.siteBarangay],
@@ -416,6 +437,12 @@ export default function ParticipantSaplingRequestWizard({ currentUser }) {
               currentCondition: "",
             }
           : {}),
+        ...(key === "siteBarangay" &&
+          normalizeBarangayName(
+            sites.find((site) => site.id === old.existingSiteId)?.barangay,
+          ) !== normalizeBarangayName(value)
+          ? { existingSiteId: "" }
+          : {}),
         ...(["latitude", "longitude"].includes(key)
           ? {
               niyogan: "",
@@ -459,15 +486,25 @@ export default function ParticipantSaplingRequestWizard({ currentUser }) {
         ? { niyogan: "", landType: "", currentCondition: "" }
         : {}),
     }));
+    setValidationSummary(null);
   };
   useEffect(() => {
+    let cancelled = false;
     Promise.all([
       api("/inventory/available"),
       api("/sites"),
       api("/auth/profile"),
       editId ? api(`/seedling-requests/${encodeURIComponent(editId)}`) : null,
+      requestLetterClientEnabled
+        ? api("/seedling-requests/capabilities").catch(() => null)
+        : null,
     ])
-      .then(([stock, allSites, profile, request]) => {
+      .then(([stock, allSites, profile, request, capabilities]) => {
+        if (cancelled) return;
+        setRequestLetterCapability(resolveSecureRequestLetterCapability({
+          clientEnabled: requestLetterClientEnabled,
+          backendCapabilities: capabilities,
+        }));
         setInventory(stock || []);
         setSites(allSites?.data || allSites || []);
         setEditing(request);
@@ -479,6 +516,10 @@ export default function ParticipantSaplingRequestWizard({ currentUser }) {
             addressMunicipality: request.workflow?.addressMunicipality || "Bulan",
             fullName: request.participantName || profile.fullName,
             contactNumber: request.contactNumber || profile.contactNumber,
+            requestLetter: request.requestLetter?.storageStatus
+              ? { stored: true, name: request.requestLetter.originalName || "Stored request letter",
+                  type: request.requestLetter.contentType || "", size: request.requestLetter.sizeBytes || 0 }
+              : request.workflow?.requestLetter || null,
             trees: (request.items || []).map((x) => ({
               id: crypto.randomUUID(),
               inventoryId: x.inventoryId,
@@ -489,25 +530,32 @@ export default function ParticipantSaplingRequestWizard({ currentUser }) {
           });
         else setForm(fresh(profile));
       })
-      .catch((e) => showError(e.message))
-      .finally(() => setLoading(false));
-  }, [editId, showError]);
+      .catch((e) => { if (!cancelled) showErrorRef.current(e.message); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [editId]);
   const handleMapValidation = (status) => {
     setMapValidation(status);
     if (status === "valid") {
       setErrors((current) => ({ ...current, location: "" }));
     }
   };
-  const focusFirstInvalidField = () => {
+  const focusFirstInvalidField = (fieldKey) => {
     window.requestAnimationFrame(() => {
       window.requestAnimationFrame(() => {
-        const invalid = document.querySelector(".participant-request-form .sr-invalid-field");
+        const targeted = fieldKey
+          ? formElement.current?.querySelector(`[data-validation-field="${fieldKey}"]`)
+          : null;
+        const invalid = targeted || formElement.current?.querySelector(".sr-invalid-field");
         if (!invalid) return;
         const bounds = invalid.getBoundingClientRect();
         if (bounds.top < 90 || bounds.bottom > window.innerHeight) {
           invalid.scrollIntoView({ behavior: "smooth", block: "center", inline: "nearest" });
         }
-        invalid.querySelector("input, select, textarea, button")?.focus({ preventScroll: true });
+        const control =
+          invalid.querySelector('input:not([type="file"]), select, textarea, button') ||
+          invalid.querySelector('input[type="file"]');
+        control?.focus({ preventScroll: true });
       });
     });
   };
@@ -551,6 +599,8 @@ export default function ParticipantSaplingRequestWizard({ currentUser }) {
         )
       )
         e.trees = "Select each tree and enter a positive whole quantity.";
+      else if (form.trees.length > MAX_SEEDLING_TYPES)
+        e.trees = "A maximum of 10 seedling types may be requested.";
       else if (new Set(ids).size !== ids.length)
         e.trees = "The same seedling cannot be selected more than once.";
       need("preferredReleaseDate", "Select a preferred release date.");
@@ -634,7 +684,11 @@ export default function ParticipantSaplingRequestWizard({ currentUser }) {
   const validate = (s, { focus = true } = {}) => {
     const stepErrors = validateStep(s);
     setErrors((current) => ({ ...current, ...stepErrors }));
-    if (Object.keys(stepErrors).length && focus) focusFirstInvalidField();
+    const keys = Object.keys(stepErrors);
+    if (keys.length) {
+      setValidationSummary({ count: keys.length, firstKey: keys[0], firstMessage: stepErrors[keys[0]] });
+      if (focus) focusFirstInvalidField(keys[0]);
+    } else setValidationSummary(null);
     return !Object.keys(stepErrors).length;
   };
   const next = () => {
@@ -673,7 +727,9 @@ export default function ParticipantSaplingRequestWizard({ currentUser }) {
     if (firstInvalid) {
       setErrors(Object.assign({}, ...allErrors.map((entry) => entry.errors)));
       setStep(firstInvalid.step);
-      focusFirstInvalidField();
+      const keys = Object.keys(firstInvalid.errors);
+      setValidationSummary({ count: keys.length, firstKey: keys[0], firstMessage: firstInvalid.errors[keys[0]] });
+      focusFirstInvalidField(keys[0]);
       return;
     }
     setSubmitting(true);
@@ -697,12 +753,8 @@ export default function ParticipantSaplingRequestWizard({ currentUser }) {
             siteVerificationStatus: SITE_VERIFICATION_STATUS,
           }
         : {}),
-      requestLetter: form.requestLetter
-        ? {
-            name: form.requestLetter.name,
-            type: form.requestLetter.type,
-            size: form.requestLetter.size,
-          }
+      requestLetter: group && !requestLetterCapability
+        ? legacyRequestLetterMetadata(form.requestLetter)
         : null,
     };
     if (!group) {
@@ -758,21 +810,34 @@ export default function ParticipantSaplingRequestWizard({ currentUser }) {
             },
           }
         : {}),
+      ...(editing ? { expectedVersion: editing.requestVersion } : {}),
     };
     const controller = new AbortController();
     const timeoutId = window.setTimeout(() => controller.abort(), 30000);
     try {
+      const submissionBody = group && requestLetterCapability
+        ? (() => {
+            const data = new FormData();
+            data.append("request", JSON.stringify(payload));
+            if (form.requestLetter instanceof File) {
+              data.append("requestLetter", form.requestLetter, form.requestLetter.name);
+            }
+            return data;
+          })()
+        : JSON.stringify(payload);
+      if (group && requestLetterCapability) setLetterUploadState("uploading");
       const savedRequest = await api(
         editing
           ? `/seedling-requests/${encodeURIComponent(editing.id)}/resubmit`
           : "/seedling-requests",
         {
           method: editing ? "PATCH" : "POST",
-          body: JSON.stringify(payload),
+          body: submissionBody,
           signal: controller.signal,
         },
       );
       const requestReference = savedRequest?.requestNumber || savedRequest?.id;
+      if (group && requestLetterCapability) setLetterUploadState("stored");
       navigate("/participant/my-requests", {
         replace: true,
         state: {
@@ -783,9 +848,15 @@ export default function ParticipantSaplingRequestWizard({ currentUser }) {
         },
       });
     } catch (e) {
+      if (group && requestLetterCapability) setLetterUploadState("error");
       if (e.fieldErrors && Object.keys(e.fieldErrors).length) {
         const fieldStep = { identificationType: 4, idNumber: 4, schoolInstitutionName: 4,
+          requestLetter: 4, confirmed: 4,
           activityDate: 3, startTime: 3, endTime: 3, participants: 3,
+          siteBarangay: 3, areaChoice: 3, exactArea: 3, existingSiteId: 3,
+          siteName: 3, specificLocation: 3, latitude: 3, longitude: 3, niyogan: 3,
+          landType: 3, landTypeOther: 3, currentCondition: 3, releaseMethod: 3,
+          eventName: 3, caretaker: 3, carePlan: 3, monitoringFrequency: 3, monitoringOther: 3,
           preferredReleaseDate: 2, trees: 2, purpose: 2 };
         const targetStep = Math.min(...Object.keys(e.fieldErrors).map((key) => fieldStep[key] || 1));
         setErrors((current) => ({ ...current, ...e.fieldErrors }));
@@ -797,7 +868,7 @@ export default function ParticipantSaplingRequestWizard({ currentUser }) {
       setSubmitting(false);
     }
   };
-  if (loading && !form.fullName)
+  if (loading)
     return (
       <div className="seedling-requests-page">Loading request form...</div>
     );
@@ -851,6 +922,7 @@ export default function ParticipantSaplingRequestWizard({ currentUser }) {
           })}
         </ol>
         <form
+          ref={formElement}
           className="sr-modal-body participant-request-form"
           onSubmit={(e) => e.preventDefault()}
         >
@@ -1044,6 +1116,8 @@ export default function ParticipantSaplingRequestWizard({ currentUser }) {
                 <button
                   type="button"
                   className="sr-add-tree"
+                  disabled={form.trees.length >= MAX_SEEDLING_TYPES}
+                  aria-describedby={form.trees.length >= MAX_SEEDLING_TYPES ? "seedling-limit-message" : undefined}
                   onClick={() =>
                     setForm((p) => ({
                       ...p,
@@ -1060,11 +1134,15 @@ export default function ParticipantSaplingRequestWizard({ currentUser }) {
                 >
                   <Plus size={14} /> Add Another Tree
                 </button>
+                {form.trees.length >= MAX_SEEDLING_TYPES && (
+                  <small id="seedling-limit-message">A maximum of 10 seedling types may be requested.</small>
+                )}
               </div>
               <Title help="Select your preferred date for the release of the seedlings.">
                 Preferred Release Date
               </Title>
               <Field
+                fieldKey="preferredReleaseDate"
                 label="Preferred Release Date *"
                 error={errors.preferredReleaseDate}
               >
@@ -1075,6 +1153,11 @@ export default function ParticipantSaplingRequestWizard({ currentUser }) {
                   onChange={(e) => put("preferredReleaseDate", e.target.value)}
                 />
               </Field>
+              {getProcessingWindowAdvisory(form.preferredReleaseDate) && (
+                <p className="sr-processing-advisory" role="status">
+                  Your preferred date is earlier than MENRO's estimated 3–7 working-day processing window. You may continue, but release on that date is not guaranteed.
+                </p>
+              )}
             </>
           )}
           {step === 3 && (
@@ -1188,17 +1271,48 @@ export default function ParticipantSaplingRequestWizard({ currentUser }) {
                     )}
                   </>
                 ) : (
-                  <Field label="Planting Area *" error={errors.areaChoice}>
-                    <select
-                      value={form.areaChoice}
-                      onChange={(e) => put("areaChoice", e.target.value)}
-                    >
-                      <option value="">Select area</option>
-                      {AREAS.map((x) => (
-                        <option key={x}>{x}</option>
-                      ))}
-                    </select>
-                  </Field>
+                  <>
+                    <Field label="Planting Area *" error={errors.areaChoice}>
+                      <select
+                        value={form.areaChoice}
+                        onChange={(e) => put("areaChoice", e.target.value)}
+                      >
+                        <option value="">Select area</option>
+                        {AREAS.map((x) => (
+                          <option key={x}>{x}</option>
+                        ))}
+                      </select>
+                    </Field>
+                    {EXACT_AREA_CHOICES.has(form.areaChoice) && (
+                      <Field
+                        label="Exact Planting Area (hectares) *"
+                        error={errors.exactArea}
+                        wide
+                      >
+                        <input
+                          type="number"
+                          min={
+                            form.areaChoice.includes("6")
+                              ? "6"
+                              : form.areaChoice === "More than 10 hectares"
+                                ? "10.01"
+                                : "0.01"
+                          }
+                          max={
+                            form.areaChoice === "Less than 1 hectare"
+                              ? "0.99"
+                              : form.areaChoice.includes("6")
+                                ? "10"
+                                : undefined
+                          }
+                          step="0.01"
+                          value={form.exactArea}
+                          onChange={(e) => put("exactArea", e.target.value)}
+                          placeholder="Enter exact hectares"
+                        />
+                      </Field>
+                    )}
+                  </>
                 )}
               </div>
               <Title
@@ -1243,7 +1357,9 @@ export default function ParticipantSaplingRequestWizard({ currentUser }) {
                     status={mapValidation}
                   />
                   {errors.location && (
-                    <small className="sr-field-error">{errors.location}</small>
+                    <div data-validation-field="location" className="sr-invalid-field">
+                      <small className="sr-field-error">{errors.location}</small>
+                    </div>
                   )}
                   {mapValidation === "valid" && (
                     <>
@@ -1490,6 +1606,8 @@ export default function ParticipantSaplingRequestWizard({ currentUser }) {
                       onSelect={handleRequestLetter}
                       onRemove={() => put("requestLetter", null)}
                     />
+                    {letterUploadState === "uploading" && <p role="status">Securely uploading request letter…</p>}
+                    {letterUploadState === "error" && <p className="sr-field-error" role="alert">The request letter was not stored. Correct the error and retry with the same submission.</p>}
                   </div>
                 </>
               )}
@@ -1590,6 +1708,12 @@ export default function ParticipantSaplingRequestWizard({ currentUser }) {
               </div>
             </>
           )}
+          {validationSummary && (
+            <div className="sr-validation-summary" role="alert" aria-live="assertive">
+              <strong>{validationSummary.count} field{validationSummary.count === 1 ? "" : "s"} need attention.</strong>
+              <span>{validationSummary.firstMessage}</span>
+            </div>
+          )}
           <div className="sr-wizard-actions">
             {step > 1 && (
               <button
@@ -1672,12 +1796,18 @@ function LocationMap({ barangay, site, editable = false, areaHectares = 0, onPic
     boundaries = useRef(null),
     selectedFeature = useRef(null),
     siteRef = useRef(site),
+    onPickRef = useRef(onPick),
+    onValidationChangeRef = useRef(onValidationChange),
     resizeScheduler = useRef(null);
   const [boundaryRevision, setBoundaryRevision] = useState(0);
   const selectedBarangay = String(barangay || site?.barangay || "").trim().toLowerCase();
   useEffect(() => {
     siteRef.current = site;
   }, [site]);
+  useEffect(() => {
+    onPickRef.current = onPick;
+    onValidationChangeRef.current = onValidationChange;
+  }, [onPick, onValidationChange]);
   useEffect(() => {
     if (!node.current || map.current) return;
     const scheduler = createLeafletResizeScheduler();
@@ -1859,7 +1989,7 @@ function LocationMap({ barangay, site, editable = false, areaHectares = 0, onPic
       const status = editable
         ? validateCoverage(selectedFeature.current, lat, lng, Number(areaHectares))
         : "valid";
-      onValidationChange?.(status);
+      onValidationChangeRef.current?.(status);
       if (editable && status !== "outside" && Number(areaHectares) > 0) {
         coverage.current = L.circle([lat, lng], {
           radius: Math.sqrt(Number(areaHectares) * 10000 / Math.PI),
@@ -1883,22 +2013,22 @@ function LocationMap({ barangay, site, editable = false, areaHectares = 0, onPic
       }).addTo(instance);
       if (editable) marker.current.on("dragend", (event) => {
         const point = event.target.getLatLng();
-        onPick?.(point.lat, point.lng);
+        onPickRef.current?.(point.lat, point.lng);
       });
       instance.setView([lat, lng], 16, { animate: false });
-    } else if (editable) onValidationChange?.("pending");
+    } else if (editable) onValidationChangeRef.current?.("pending");
     resizeScheduler.current?.schedule(
       instance,
       () => map.current === instance,
     );
-  }, [site?.latitude, site?.longitude, editable, areaHectares, boundaryRevision, onPick, onValidationChange]);
+  }, [site?.latitude, site?.longitude, editable, areaHectares, boundaryRevision]);
   useEffect(() => {
     const instance = map.current;
     if (!instance || !editable) return;
-    const click = (event) => onPick?.(event.latlng.lat, event.latlng.lng);
+    const click = (event) => onPickRef.current?.(event.latlng.lat, event.latlng.lng);
     instance.on("click", click);
     return () => instance.off("click", click);
-  }, [editable, onPick]);
+  }, [editable]);
   return (
     <div
       id={editable ? "proposed-planting-map" : undefined}

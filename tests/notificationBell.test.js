@@ -28,6 +28,15 @@ test("notification bell supports loading, error, empty, mark-all, and pagination
   assert.match(source, /Load more/);
 });
 
+test("notification publication occurs only after notification state commits", async () => {
+  const source = await readFile(topbarPath, "utf8");
+  assert.match(source, /useEffect\(\(\) => \{\s*publishNotifications\(notifications\);\s*\}, \[notifications\]\)/);
+  const updaterBodies = [...source.matchAll(/setNotifications\(\(previous\) => \{([\s\S]*?)\n\s*\}\);/g)]
+    .map((match) => match[1]);
+  assert.ok(updaterBodies.length >= 2);
+  updaterBodies.forEach((body) => assert.doesNotMatch(body, /publishNotifications/));
+});
+
 test("polling avoids overlap, pauses while hidden, aborts, and clears its timer", async () => {
   const source = await readFile(topbarPath, "utf8");
   assert.match(source, /notificationRequestRef\.current\.inFlight/);

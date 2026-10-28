@@ -28,6 +28,7 @@ import {
   ArchiveRestore,
   History,
   Check,
+  Download,
 } from "lucide-react";
 
 import { useAuth } from "../context/AuthContext";
@@ -40,6 +41,7 @@ import { auth } from "../firebase/config";
 import { formatDisplayId } from "../utils/displayId";
 import { BULAN_BARANGAYS } from "../utils/userTypes";
 import { formatScheduleTime } from "../utils/saplingRequestWorkflow";
+import { downloadPrivateRequestLetter, hasPrivateRequestLetter } from "../utils/requestLetterDownload";
 
 import "../styles/seedling-requests.css";
 import ParticipantSaplingRequestWizard from "./ParticipantSaplingRequestWizard";
@@ -609,6 +611,7 @@ export default function SeedlingRequestsPage() {
   const [revealedIdentification, setRevealedIdentification] = useState({ requestId: "", idNumber: "" });
   const [identificationLoading, setIdentificationLoading] = useState(false);
   const [identificationError, setIdentificationError] = useState({ requestId: "", message: "" });
+  const [letterDownloadLoading, setLetterDownloadLoading] = useState(false);
   const revealedIdNumber = revealedIdentification.requestId === selectedRequest?.id
     ? revealedIdentification.idNumber
     : "";
@@ -619,6 +622,13 @@ export default function SeedlingRequestsPage() {
     setRevealedIdentification({ requestId: "", idNumber: "" });
     setIdentificationError({ requestId: "", message: "" });
     setSelectedRequest(null);
+  };
+  const downloadRequestLetter = async () => {
+    if (letterDownloadLoading) return;
+    setLetterDownloadLoading(true);
+    try { await downloadPrivateRequestLetter(selectedRequest); }
+    catch (error) { showWarning(error.message || "Request letter could not be downloaded."); }
+    finally { setLetterDownloadLoading(false); }
   };
 
   useEffect(() => {
@@ -2988,10 +2998,19 @@ useEffect(() => {
                     ["Responsible Caretaker", selectedRequest.workflow.caretaker],
                     ["Care / Maintenance Plan", selectedRequest.workflow.carePlan],
                     ["Monitoring Frequency", selectedRequest.workflow.monitoringFrequency],
-                    ["Supporting Document", selectedRequest.workflow.requestLetter?.name],
+                    ["Supporting Document", selectedRequest.requestLetter?.originalName || selectedRequest.workflow.requestLetter?.name],
                   ].filter(([, value]) => value).map(([label, value]) => (
                     <div className="sr-detail-tree-row" key={label}><span>{label}</span><strong>{value}</strong></div>
                   ))}
+                  {hasPrivateRequestLetter(selectedRequest) && (
+                    <div className="sr-detail-tree-row">
+                      <span>Private Request Letter</span>
+                      <button type="button" className="sr-secondary-btn" onClick={downloadRequestLetter}
+                        disabled={letterDownloadLoading}>
+                        <Download size={15} /> {letterDownloadLoading ? "Downloading..." : "Download"}
+                      </button>
+                    </div>
+                  )}
                 </div>
               )}
 

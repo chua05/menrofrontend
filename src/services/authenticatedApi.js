@@ -1,6 +1,9 @@
 import { auth } from "../firebase/config";
 import { createAuthSessionRequest } from "./authSessionRequest";
-import { validateFrontendIntegrationEnvironment } from "../config/integrationEnvironment";
+import {
+  assertFrontendIntegrationTokenAudience,
+  validateFrontendIntegrationEnvironment,
+} from "../config/integrationEnvironment";
 
 const configuredApiUrl = import.meta.env.VITE_API_URL?.trim().replace(/\/$/, "");
 const integration = validateFrontendIntegrationEnvironment(import.meta.env);
@@ -37,6 +40,7 @@ const backendErrorCode = (status) => {
 
 async function requestBackendSession(firebaseUser) {
   const token = await firebaseUser.getIdToken();
+  assertFrontendIntegrationTokenAudience(token, integration);
   let response;
 
   for (let attempt = 0; attempt < 2; attempt += 1) {
@@ -100,7 +104,9 @@ export async function getAuthToken(forceRefresh = false) {
   if (!firebaseUser) {
     throw new Error("Your session has expired. Please sign in again.");
   }
-  return firebaseUser.getIdToken(forceRefresh);
+  const token = await firebaseUser.getIdToken(forceRefresh);
+  assertFrontendIntegrationTokenAudience(token, integration);
+  return token;
 }
 
 export async function authenticatedFetch(path, options = {}, forceRefresh = false) {

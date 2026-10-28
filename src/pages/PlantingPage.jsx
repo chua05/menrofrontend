@@ -6,6 +6,8 @@ import { createEvidenceAttempt, assertEvidenceComplete } from "../utils/evidence
 import "leaflet/dist/leaflet.css";
 import * as exifr from "exifr";
 import { extractGpsCoordinates } from "../utils/exifGps";
+import SecureCameraCapture from "../components/SecureCameraCapture";
+import { buildEvidenceLocationView } from "../utils/evidenceLocationView";
 
 import {
   FiCamera,
@@ -319,7 +321,6 @@ export default function PlantingPage() {
   const isParticipant = userRole === "participant";
   const canReview = ["staff", "admin"].includes(userRole);
 
-  const cameraInputRef = useRef(null);
   const uploadInputRef = useRef(null);
   const previewUrlsRef = useRef([]);
   const activePhotoPreviewIdsRef = useRef(new Set());
@@ -362,8 +363,12 @@ export default function PlantingPage() {
   const [noEventsAlertSiteId, setNoEventsAlertSiteId] = useState("");
 
   const [photoFiles, setPhotoFiles] = useState([]);
+  const [evidenceDescriptors, setEvidenceDescriptors] = useState([]);
+  const [cameraOpen, setCameraOpen] = useState(false);
+  const [selectedLocationPreviewId, setSelectedLocationPreviewId] = useState("");
   const [showPhotoRequirements, setShowPhotoRequirements] = useState(false);
   const [photoPreviews, setPhotoPreviews] = useState([]);
+  const [cameraLocationDiagnostic, setCameraLocationDiagnostic] = useState(null);
   const [locationPhotoSignature, setLocationPhotoSignature] = useState("");
 
   const [form, setForm] = useState({
@@ -475,7 +480,10 @@ export default function PlantingPage() {
         throw new Error("Your session has expired. Please sign in again.");
       }
 
-      throw new Error(payload.message || "The request could not be completed.");
+      const requestError = new Error(payload.message || "The request could not be completed.");
+      requestError.code = payload.code || "";
+      requestError.status = response.status;
+      throw requestError;
     }
 
     return payload;
@@ -626,6 +634,18 @@ export default function PlantingPage() {
   const hasGps =
     form.latitude !== "" &&
     form.longitude !== "";
+
+  const primaryLocationPreview = selectedLocationPreviewId === "camera-diagnostic"
+    ? cameraLocationDiagnostic
+    : photoPreviews.find((preview) => preview.id === selectedLocationPreviewId) ||
+      cameraLocationDiagnostic || photoPreviews[0];
+  const evidenceMapLatitude = Number(primaryLocationPreview?.latitude);
+  const evidenceMapLongitude = Number(primaryLocationPreview?.longitude);
+  const evidenceMapAccuracy = Number(primaryLocationPreview?.accuracy);
+  const evidenceMapHasGps = Number.isFinite(evidenceMapLatitude) &&
+    evidenceMapLatitude >= -90 && evidenceMapLatitude <= 90 &&
+    Number.isFinite(evidenceMapLongitude) &&
+    evidenceMapLongitude >= -180 && evidenceMapLongitude <= 180;
 
   useEffect(() => {
   const initializationTimer =
@@ -884,10 +904,10 @@ export default function PlantingPage() {
       }
     }
 
-    if (hasGps) {
-      const latitude = Number(form.latitude);
-      const longitude = Number(form.longitude);
-      const accuracy = Number(form.accuracy);
+    if (evidenceMapHasGps) {
+      const latitude = evidenceMapLatitude;
+      const longitude = evidenceMapLongitude;
+      const accuracy = evidenceMapAccuracy;
 
       if (Number.isFinite(latitude) && Number.isFinite(longitude)) {
         L.circleMarker([latitude, longitude], {
@@ -897,7 +917,7 @@ export default function PlantingPage() {
           fillColor: "#2563eb",
           fillOpacity: 1,
         })
-          .bindTooltip("Verified Evidence Location", {
+          .bindTooltip("Detected Evidence Location", {
             permanent: false,
             direction: "top",
             offset: [0, -8],
@@ -935,7 +955,8 @@ export default function PlantingPage() {
     }
 
     window.setTimeout(() => map.invalidateSize(), 0);
-  }, [selectedSite, hasGps, form.latitude, form.longitude, form.accuracy]);
+  }, [selectedSite, evidenceMapHasGps, evidenceMapLatitude,
+    evidenceMapLongitude, evidenceMapAccuracy]);
 
   useEffect(() => {
     return () => {
@@ -1163,12 +1184,12 @@ export default function PlantingPage() {
   }, [visibleRecords]);
 
   const capturedSiteDistance = useMemo(() => {
-    if (!hasGps || !selectedSite) return null;
+    if (!evidenceMapHasGps || !selectedSite) return null;
 
     const siteLatitude = Number(selectedSite.latitude);
     const siteLongitude = Number(selectedSite.longitude);
-    const capturedLatitude = Number(form.latitude);
-    const capturedLongitude = Number(form.longitude);
+    const capturedLatitude = evidenceMapLatitude;
+    const capturedLongitude = evidenceMapLongitude;
 
     if (
       !Number.isFinite(siteLatitude) ||
@@ -1185,7 +1206,7 @@ export default function PlantingPage() {
       siteLatitude,
       siteLongitude
     );
-  }, [hasGps, selectedSite, form.latitude, form.longitude]);
+  }, [evidenceMapHasGps, evidenceMapLatitude, evidenceMapLongitude, selectedSite]);
 
   const siteCoverageRadiusMeters = useMemo(() => {
     const radius = Number(selectedSite?.coverageRadiusMeters);
@@ -1194,32 +1215,33 @@ export default function PlantingPage() {
 
   const capturedInsideSitePolygon = useMemo(() => {
     if (
-      !hasGps ||
+      !evidenceMapHasGps ||
       siteCoverageRadiusMeters !== null ||
       !Array.isArray(selectedSite?.polygon) ||
       selectedSite.polygon.length < 3
     ) return null;
     return isPointInPolygon(
-      Number(form.latitude),
-      Number(form.longitude),
+      evidenceMapLatitude,
+      evidenceMapLongitude,
       selectedSite.polygon
     );
-  }, [hasGps, selectedSite, siteCoverageRadiusMeters, form.latitude, form.longitude]);
+  }, [evidenceMapHasGps, evidenceMapLatitude, evidenceMapLongitude,
+    selectedSite, siteCoverageRadiusMeters]);
 
   const municipalityScopeStatus = useMemo(() => {
-    if (!hasGps) return "unverified";
+    if (!evidenceMapHasGps) return "unverified";
     if (!bulanGeoJson) return "checking";
     return isPointInBulanBoundary(
-      Number(form.latitude),
-      Number(form.longitude),
+      evidenceMapLatitude,
+      evidenceMapLongitude,
       bulanGeoJson
     ) ? "inside" : "outside";
-  }, [hasGps, bulanGeoJson, form.latitude, form.longitude]);
+  }, [evidenceMapHasGps, evidenceMapLatitude, evidenceMapLongitude, bulanGeoJson]);
 
   const activeSiteRadiusMeters =
     siteCoverageRadiusMeters ?? SITE_GPS_TOLERANCE_METERS;
 
-  const isInsideSelectedSite = hasGps && (
+  const isInsideSelectedSite = evidenceMapHasGps && (
     siteCoverageRadiusMeters !== null
       ? capturedSiteDistance !== null &&
         capturedSiteDistance <= siteCoverageRadiusMeters
@@ -1236,12 +1258,19 @@ export default function PlantingPage() {
       };
     }
 
-    if (!hasGps) {
+    if (!evidenceMapHasGps) {
       return {
         type: "waiting",
-        label: photoFiles.length === 0
+        label: primaryLocationPreview?.verificationLabel || (photoFiles.length === 0
           ? "Upload or take a photo first."
-          : "Photo GPS metadata is unavailable.",
+          : "Photo GPS metadata is unavailable."),
+      };
+    }
+
+    if (primaryLocationPreview?.gpsStatus === "low_accuracy") {
+      return {
+        type: "flagged",
+        label: `Low GPS Accuracy — ${Math.round(evidenceMapAccuracy)} m reported; 50 m or better is required.`,
       };
     }
 
@@ -1294,10 +1323,11 @@ export default function PlantingPage() {
           ? "Photo location is outside the legacy registered site boundary."
           : `Photo location is ${capturedSiteDistance.toFixed(1)} m from the registered site.`,
     };
-  }, [form.siteId, hasGps, municipalityScopeStatus, capturedSiteDistance,
-    capturedInsideSitePolygon, siteCoverageRadiusMeters, photoFiles.length]);
+  }, [form.siteId, evidenceMapHasGps, evidenceMapAccuracy, municipalityScopeStatus,
+    capturedSiteDistance, capturedInsideSitePolygon, siteCoverageRadiusMeters,
+    photoFiles.length, primaryLocationPreview]);
 
-  const isOutsideAssignedSite = hasGps && (
+  const isOutsideAssignedSite = evidenceMapHasGps && (
     siteCoverageRadiusMeters !== null
       ? capturedSiteDistance !== null &&
         capturedSiteDistance > activeSiteRadiusMeters
@@ -1305,6 +1335,17 @@ export default function PlantingPage() {
         (capturedInsideSitePolygon === null && capturedSiteDistance !== null &&
           capturedSiteDistance > activeSiteRadiusMeters)
   );
+
+  const verificationMapResult = buildEvidenceLocationView({
+    gpsStatus: primaryLocationPreview?.gpsStatus || (evidenceMapHasGps ? "valid" : "missing"),
+    latitude: evidenceMapLatitude,
+    longitude: evidenceMapLongitude,
+    accuracy: evidenceMapAccuracy,
+    evidenceSource: primaryLocationPreview?.locationSource === "Browser Capture Session"
+      ? "browser-camera" : "original-exif",
+    outsideMunicipality: municipalityScopeStatus === "outside",
+    outsideSite: isOutsideAssignedSite,
+  });
 
   const locationBlocksSubmission = hasGps && municipalityScopeStatus !== "inside";
 
@@ -1362,10 +1403,11 @@ export default function PlantingPage() {
     previewUrlsRef.current = [];
     activePhotoPreviewIdsRef.current.clear();
     setPhotoFiles([]);
+    setEvidenceDescriptors([]);
     setPhotoPreviews([]);
+    setCameraLocationDiagnostic(null);
     setLocationPhotoSignature("");
 
-    if (cameraInputRef.current) cameraInputRef.current.value = "";
     if (uploadInputRef.current) uploadInputRef.current.value = "";
   }
 
@@ -1384,13 +1426,82 @@ export default function PlantingPage() {
   }
 
   function stopCamera() {
+    setCameraOpen(false);
     setShowPhotoRequirements(false);
   }
 
   function startCamera() {
     setShowPhotoRequirements(false);
-    window.setTimeout(() => cameraInputRef.current?.click(), 0);
+    if (!form.siteId || !form.eventId || !form.distributionId) {
+      showPopup("Select a planting site, event, and released seedling distribution before taking a verified photo.", "error");
+      return;
+    }
+    setCameraLocationDiagnostic(null);
+    setCameraOpen(true);
   }
+
+  function handleVerifiedCameraCapture({ file, descriptor, location }) {
+    if (photoFiles.length >= MAX_EVIDENCE_PHOTOS) {
+      setCameraOpen(false);
+      showPopup("A maximum of 10 planting evidence photos is allowed.", "error");
+      return;
+    }
+    const url = URL.createObjectURL(file);
+    const preview = {
+      id: `planting-photo-${photoPreviewSequenceRef.current += 1}`,
+      url,
+      signature: getPhotoSignature(file),
+      latitude: location.latitude,
+      longitude: location.longitude,
+      accuracy: location.accuracy,
+      distanceMeters: location.distanceMeters,
+      boundaryRule: location.boundaryRule,
+      boundaryLimitMeters: location.boundaryLimitMeters,
+      locationSource: "Browser Capture Session",
+      verificationStatus: "verified",
+      verificationTone: "success",
+      verificationLabel: "Verified Browser Camera Evidence",
+      verificationMessage: "The backend verified this capture's image integrity, location, and assigned site.",
+      submissionBlocked: false,
+      gpsAvailable: true,
+      gpsStatus: "valid",
+      backendValidated: true,
+    };
+    previewUrlsRef.current.push(url);
+    activePhotoPreviewIdsRef.current.add(preview.id);
+    setPhotoFiles(previous => [...previous, file]);
+    setPhotoPreviews(previous => [...previous, preview]);
+    setSelectedLocationPreviewId(preview.id);
+    setEvidenceDescriptors(previous => [...previous, descriptor]);
+    setCameraLocationDiagnostic(null);
+    if (photoFiles.length === 0) applyPhotoLocation(file, preview);
+    setCameraOpen(false);
+    showPopup("Verified camera evidence was attached successfully.", "success");
+  }
+
+  function handleCameraDiagnostic({ status, location, message }) {
+    setCameraLocationDiagnostic({
+      latitude: location?.latitude,
+      longitude: location?.longitude,
+      accuracy: location?.accuracy,
+      locationSource: "Browser Capture Session",
+      gpsStatus: status,
+      verificationStatus: "failed",
+      verificationTone: "error",
+      verificationLabel: status === "low_accuracy" ? "Low GPS Accuracy" : "Camera Location Rejected",
+      verificationMessage: message,
+      submissionBlocked: true,
+      backendValidated: false,
+    });
+    setSelectedLocationPreviewId("camera-diagnostic");
+  }
+
+  const cameraBinding = useMemo(() => ({
+    workflow: "planting-report",
+    siteId: form.siteId,
+    eventId: form.eventId,
+    distributionId: form.distributionId,
+  }), [form.siteId, form.eventId, form.distributionId]);
 
   function updateFormField(field, value) {
     if (field === "barangay") clearNoEventsAlert();
@@ -1626,14 +1737,18 @@ export default function PlantingPage() {
           verificationMessage: SITE_MATCH_MESSAGE,
           submissionBlocked: false,
           distanceMeters,
+          boundaryRule: hasCoverageRadius ? "configured-radius" : hasLegacyPolygon ? "site-polygon" : "50m-fallback",
+          boundaryLimitMeters: hasCoverageRadius ? coverageRadius : hasLegacyPolygon ? null : SITE_GPS_TOLERANCE_METERS,
         }
       : {
           verificationStatus: "needs_review",
           verificationTone: "warning",
-          verificationLabel: "Needs Review — Site Mismatch",
+          verificationLabel: "Outside Planting Site",
           verificationMessage: OUTSIDE_SITE_WARNING,
           submissionBlocked: false,
           distanceMeters,
+          boundaryRule: hasCoverageRadius ? "configured-radius" : hasLegacyPolygon ? "site-polygon" : "50m-fallback",
+          boundaryLimitMeters: hasCoverageRadius ? coverageRadius : hasLegacyPolygon ? null : SITE_GPS_TOLERANCE_METERS,
         };
   }
 
@@ -1664,6 +1779,7 @@ export default function PlantingPage() {
   }
 
   async function verifyUploadedPhoto(file, preview, options = {}) {
+    setSelectedLocationPreviewId(preview.id);
     const applyToForm = options.applyToForm === true;
     const announce = options.announce !== false;
     updatePhotoPreview(preview.id, {
@@ -1726,6 +1842,8 @@ export default function PlantingPage() {
             : "Verification Failed — Invalid GPS Coordinates",
         verificationMessage: message,
         submissionBlocked: true,
+        gpsStatus: gps.status,
+        locationSource: PHOTO_EXIF_LOCATION_SOURCE,
       });
       if (applyToForm) clearPhotoLocation();
       if (announce) showPopup(message, "error");
@@ -1770,6 +1888,8 @@ export default function PlantingPage() {
         capturedAt: capturedAtIso,
         gpsAvailable: true,
       },
+      gpsStatus: "valid",
+      backendValidated: false,
     });
     if (applyToForm) applyPhotoLocation(file, location);
     if (announce) {
@@ -1789,8 +1909,7 @@ export default function PlantingPage() {
     };
   }
 
-  async function processPhotoMetadata(file, announce = true) {
-    const preview = photoPreviews[0];
+  async function processPhotoMetadata(file, preview, announce = true) {
     if (!file || !preview) {
       showPopup("Please upload or take a photo first.", "error");
       return false;
@@ -1809,7 +1928,15 @@ export default function PlantingPage() {
   }
 
   function verifyPhotoLocation() {
-    void processPhotoMetadata(photoFiles[0]);
+    if (selectedLocationPreviewId === "camera-diagnostic") return;
+    const index = Math.max(0, photoPreviews.findIndex((preview) =>
+      preview.id === selectedLocationPreviewId));
+    const preview = photoPreviews[index];
+    if (preview?.locationSource === "Browser Capture Session") {
+      setSelectedLocationPreviewId(preview.id);
+      return;
+    }
+    void processPhotoMetadata(photoFiles[index], preview);
   }
 
   function isAllowedImageFile(file) {
@@ -1830,6 +1957,7 @@ export default function PlantingPage() {
   async function handlePhotoChange(event) {
     const selectedFiles = Array.from(event.target.files || []);
     if (selectedFiles.length === 0) return;
+    setCameraLocationDiagnostic(null);
 
     const remainingSlots = MAX_EVIDENCE_PHOTOS - photoFiles.length;
 
@@ -1902,7 +2030,10 @@ export default function PlantingPage() {
     newPreviews.forEach((preview) => activePhotoPreviewIdsRef.current.add(preview.id));
 
     setPhotoFiles((previous) => [...previous, ...selectedFiles]);
+    setEvidenceDescriptors((previous) => [...previous,
+      ...selectedFiles.map(() => ({ source: "uploaded-original" }))]);
     setPhotoPreviews((previous) => [...previous, ...newPreviews]);
+    setSelectedLocationPreviewId(newPreviews[0]?.id || "");
 
     event.target.value = "";
 
@@ -1952,7 +2083,11 @@ export default function PlantingPage() {
     if (preview?.id) activePhotoPreviewIdsRef.current.delete(preview.id);
 
     setPhotoFiles(remainingFiles);
+    setEvidenceDescriptors((previous) => previous.filter((_, itemIndex) => itemIndex !== index));
     setPhotoPreviews(remainingPreviews);
+    if (selectedLocationPreviewId === preview?.id) {
+      setSelectedLocationPreviewId(remainingPreviews[0]?.id || "");
+    }
 
     if (removedLocationPhoto) {
       const nextPreview = remainingPreviews[0];
@@ -1968,7 +2103,6 @@ export default function PlantingPage() {
       }
     }
 
-    if (cameraInputRef.current) cameraInputRef.current.value = "";
     if (uploadInputRef.current) uploadInputRef.current.value = "";
   }
 
@@ -2101,6 +2235,7 @@ export default function PlantingPage() {
     photoFiles.forEach((file) => {
       payload.append("photos", file);
     });
+    payload.append("evidenceManifest", JSON.stringify(evidenceDescriptors));
 
     setSubmitting(true);
 
@@ -2794,26 +2929,47 @@ export default function PlantingPage() {
                       </button>
                     </div>
 
-                    {hasGps && (
+                    {evidenceMapHasGps && (
                       <div className="pr-gps-captured">
                         <div>
                           <div className="pr-gps-value-label">Latitude</div>
-                          <div className="pr-gps-value">{form.latitude}</div>
+                          <div className="pr-gps-value">{evidenceMapLatitude.toFixed(6)}</div>
                         </div>
                         <div>
                           <div className="pr-gps-value-label">Longitude</div>
-                          <div className="pr-gps-value">{form.longitude}</div>
+                          <div className="pr-gps-value">{evidenceMapLongitude.toFixed(6)}</div>
                         </div>
                         <div>
                           <div className="pr-gps-value-label">Source</div>
-                          <div className="pr-gps-value">{form.locationSource || "—"}</div>
+                          <div className="pr-gps-value">{primaryLocationPreview?.locationSource || "—"}</div>
+                        </div>
+                        <div>
+                          <div className="pr-gps-value-label">GPS Accuracy</div>
+                          <div className="pr-gps-value">
+                            {Number.isFinite(evidenceMapAccuracy) && evidenceMapAccuracy >= 0
+                              ? `${evidenceMapAccuracy.toFixed(1)} m` : "Not provided by EXIF"}
+                          </div>
+                        </div>
+                        <div>
+                          <div className="pr-gps-value-label">Distance from Site</div>
+                          <div className="pr-gps-value">
+                            {capturedSiteDistance !== null ? `${capturedSiteDistance.toFixed(1)} m` : "Unable to calculate"}
+                          </div>
+                        </div>
+                        <div>
+                          <div className="pr-gps-value-label">Boundary Rule</div>
+                          <div className="pr-gps-value">
+                            {primaryLocationPreview?.boundaryRule === "configured-radius"
+                              ? `Configured radius (${primaryLocationPreview.boundaryLimitMeters ?? siteCoverageRadiusMeters} m)`
+                              : primaryLocationPreview?.boundaryRule === "site-polygon" || capturedInsideSitePolygon !== null
+                                ? "Authoritative site polygon"
+                                : "50 m site-distance fallback where applicable"}
+                          </div>
                         </div>
                         <div>
                           <div className="pr-gps-value-label">Location Status</div>
                           <div className="pr-gps-value">
-                            {municipalityScopeStatus === "outside" ? "Outside Municipality of Bulan" :
-                              isOutsideAssignedSite ? "Outside Assigned Site" :
-                              locationPreviewStatus.type === "valid" ? "Within Assigned Site" : "Unable to Compare"}
+                            {verificationMapResult.label}
                           </div>
                         </div>
                       </div>
@@ -2847,14 +3003,16 @@ export default function PlantingPage() {
                               <div className="pr-location-map-legend">
                                 <span><i className="pr-map-legend-line" /> Barangay Boundary</span>
                                 <span><i className="pr-map-legend-site" /> Registered Site</span>
-                                <span><i className="pr-map-legend-captured" /> Photo GPS</span>
+                                <span><i className="pr-map-legend-captured" /> Evidence GPS</span>
                               </div>
                             </div>
                           </div>
 
-                          {hasGps && (
+                          {evidenceMapHasGps && (
                             <div className="pr-helper-text">
-                              Photo captured: {form.photoCapturedAt ? formatDateTime(form.photoCapturedAt) : "Timestamp unavailable"}
+                              Evidence captured: {primaryLocationPreview?.metadata?.capturedAt || form.photoCapturedAt
+                                ? formatDateTime(primaryLocationPreview?.metadata?.capturedAt || form.photoCapturedAt)
+                                : "Timestamp unavailable"}
                             </div>
                           )}
                         </section>
@@ -2878,16 +3036,6 @@ export default function PlantingPage() {
                           )}
 
                           <div className="pr-upload-box">
-                            <input
-                              ref={cameraInputRef}
-                              type="file"
-                              accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp"
-                              capture="environment"
-                              disabled={photoFiles.length >= MAX_EVIDENCE_PHOTOS}
-                              onChange={handlePhotoChange}
-                              className="pr-file-input"
-                            />
-
                             <input
                               ref={uploadInputRef}
                               type="file"
@@ -2984,7 +3132,27 @@ export default function PlantingPage() {
                               {Number.isFinite(Number(preview.distanceMeters)) && (
                                 <span>Distance from Site: {Number(preview.distanceMeters).toFixed(1)} meters</span>
                               )}
+                              {Number.isFinite(Number(preview.accuracy)) && Number(preview.accuracy) >= 0 && (
+                                <span>GPS Accuracy: {Number(preview.accuracy).toFixed(1)} meters</span>
+                              )}
+                              {preview.boundaryRule && (
+                                <span>Boundary Rule: {preview.boundaryRule === "configured-radius"
+                                  ? `Configured radius (${preview.boundaryLimitMeters} m)`
+                                  : preview.boundaryRule === "site-polygon"
+                                    ? "Authoritative site polygon"
+                                    : "50 m site-distance fallback"}</span>
+                              )}
                             </div>
+
+                            <button
+                              type="button"
+                              className="pr-secondary-button"
+                              onClick={() => setSelectedLocationPreviewId(preview.id)}
+                              style={{ marginTop: "8px", marginRight: "8px" }}
+                            >
+                              <FiMapPin size={13} />
+                              Verify Photo Location
+                            </button>
 
                             <button
                               type="button"
@@ -3534,6 +3702,15 @@ export default function PlantingPage() {
           </aside>
         </div>
       )}
+      <SecureCameraCapture
+        open={cameraOpen}
+        request={apiRequest}
+        binding={cameraBinding}
+        onVerified={handleVerifiedCameraCapture}
+        onDiagnostic={handleCameraDiagnostic}
+        onViewLocation={() => setCameraOpen(false)}
+        onCancel={() => setCameraOpen(false)}
+      />
       {decision && selectedRecord && (
         <div className="pr-overlay pr-decision-overlay" onMouseDown={(event) => {
           if (event.target === event.currentTarget && !actionLoading) setDecision("");

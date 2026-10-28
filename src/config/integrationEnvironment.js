@@ -16,8 +16,29 @@ export function validateFrontendIntegrationEnvironment(env) {
   const mpdoAcceptance =
     env.VITE_MENRO_MPDO_BOUNDARY_ACCEPTANCE === "true" &&
     env.VITE_MENRO_TEST_BOUNDARY_SOURCE === "mpdo-candidate";
-  if (apiUrl !== LOCAL_API_URL && !(mpdoAcceptance && apiUrl === MPDO_ACCEPTANCE_API_URL)) {
+  const requestLetterAcceptance = env.VITE_MENRO_REQUEST_LETTER_ACCEPTANCE === "true";
+  if (mpdoAcceptance && requestLetterAcceptance) {
+    throw new Error("Frontend integration acceptance gates cannot be combined.");
+  }
+  const alternateAcceptanceApi =
+    (mpdoAcceptance || requestLetterAcceptance) && apiUrl === MPDO_ACCEPTANCE_API_URL;
+  if (apiUrl !== LOCAL_API_URL && !alternateAcceptanceApi) {
     throw new Error(`Firebase emulator mode requires API URL ${LOCAL_API_URL}.`);
   }
-  return { integration: true, apiUrl, authEmulatorUrl: AUTH_EMULATOR_URL, mpdoAcceptance };
+  return { integration: true, apiUrl, authEmulatorUrl: AUTH_EMULATOR_URL,
+    mpdoAcceptance, requestLetterAcceptance };
+}
+
+export function assertFrontendIntegrationTokenAudience(token, state) {
+  if (!state?.integration) return;
+  try {
+    const parts = String(token || "").split(".");
+    if (parts.length !== 3) throw new Error();
+    const normalized = parts[1].replace(/-/g, "+").replace(/_/g, "/");
+    const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, "=");
+    const claims = JSON.parse(globalThis.atob(padded));
+    if (claims?.aud !== DEMO_PROJECT_ID) throw new Error();
+  } catch {
+    throw new Error("Firebase emulator token project mismatch. Sign out and retry in the isolated test environment.");
+  }
 }

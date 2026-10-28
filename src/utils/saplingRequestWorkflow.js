@@ -14,11 +14,13 @@ export const EXACT_AREA_CHOICES = new Set([
 ]);
 
 export const REQUEST_LETTER_MAX_BYTES = 10 * 1024 * 1024;
-const REQUEST_LETTER_EXTENSIONS = new Set(["pdf", "jpg", "jpeg", "png"]);
+export const MAX_SEEDLING_TYPES = 10;
+const REQUEST_LETTER_EXTENSIONS = new Set(["pdf", "jpg", "jpeg", "png", "docx"]);
 const REQUEST_LETTER_TYPES = new Set([
   "application/pdf",
   "image/jpeg",
   "image/png",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
 ]);
 
 export function isGroupRequester(sector, requestingAs) {
@@ -26,6 +28,14 @@ export function isGroupRequester(sector, requestingAs) {
     GROUP_SECTORS.has(sector) ||
     (sector === "Other (please specify)" && requestingAs === "group")
   );
+}
+
+export function normalizeBarangayName(value) {
+  const cleaned = String(value || "").trim().toLowerCase().replace(/\s+/g, " ");
+  const zoneMatch = /^zone\s*(1|2|3|4|5|6|7|8|i|ii|iii|iv|v|vi|vii|viii)(?:\s*poblacion)?$/.exec(cleaned);
+  if (!zoneMatch) return cleaned;
+  const zones = { "1": "i", "2": "ii", "3": "iii", "4": "iv", "5": "v", "6": "vi", "7": "vii", "8": "viii" };
+  return `zone ${zones[zoneMatch[1]] || zoneMatch[1]}`;
 }
 
 export function getPlantingAreaHectares(areaChoice, exactArea) {
@@ -95,7 +105,7 @@ export function validateRequestLetterFile(file) {
     !REQUEST_LETTER_EXTENSIONS.has(extension) ||
     (file?.type && !REQUEST_LETTER_TYPES.has(file.type))
   ) {
-    return "Please upload a PDF, JPG, JPEG, or PNG file.";
+    return "Please upload a PDF, JPG, JPEG, PNG, or DOCX file.";
   }
   if (Number(file?.size) > REQUEST_LETTER_MAX_BYTES)
     return "File size must not exceed 10 MB.";
@@ -108,6 +118,27 @@ export function dateOnlyInManila(date = new Date()) {
   }).formatToParts(date).filter((part) => part.type !== "literal")
     .map((part) => [part.type, part.value]));
   return `${parts.year}-${parts.month}-${parts.day}`;
+}
+
+export function addWorkingDays(dateOnly, count) {
+  const date = new Date(`${dateOnly}T12:00:00+08:00`);
+  let added = 0;
+  while (added < count) {
+    date.setUTCDate(date.getUTCDate() + 1);
+    const weekday = new Intl.DateTimeFormat("en-US", {
+      timeZone: "Asia/Manila", weekday: "short",
+    }).format(date);
+    if (weekday !== "Sat" && weekday !== "Sun") added += 1;
+  }
+  return dateOnlyInManila(date);
+}
+
+export function getProcessingWindowAdvisory(preferredReleaseDate, now = new Date()) {
+  if (!isValidDateOnly(preferredReleaseDate)) return null;
+  const submittedDate = dateOnlyInManila(now);
+  const earliestDate = addWorkingDays(submittedDate, 3);
+  const latestDate = addWorkingDays(submittedDate, 7);
+  return preferredReleaseDate < earliestDate ? { earliestDate, latestDate } : null;
 }
 
 export function isValidDateOnly(value) {

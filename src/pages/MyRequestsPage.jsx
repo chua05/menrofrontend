@@ -29,9 +29,11 @@ import {
   FileText,
   Users,
   Clock,
+  Download,
 } from "lucide-react";
 
 import { auth } from "../firebase/config";
+import { downloadPrivateRequestLetter, hasPrivateRequestLetter } from "../utils/requestLetterDownload";
 import "../styles/my-requests.css";
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
@@ -798,8 +800,17 @@ export default function MyRequestsPage() {
   const [linkedEvent, setLinkedEvent] = useState(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [scheduleActionLoading, setScheduleActionLoading] = useState(false);
+  const [letterDownloadLoading, setLetterDownloadLoading] = useState(false);
   const [scheduleActionError, setScheduleActionError] = useState("");
   const [replacementSchedule, setReplacementSchedule] = useState({ plantingDate: "", startTime: "", endTime: "", remarks: "" });
+
+  const downloadRequestLetter = async () => {
+    if (letterDownloadLoading) return;
+    setLetterDownloadLoading(true);
+    try { await downloadPrivateRequestLetter(selectedRequest); }
+    catch (error) { showError(error.message || "Request letter could not be downloaded."); }
+    finally { setLetterDownloadLoading(false); }
+  };
 
   const resetScheduleForm = (request) => {
     const pre = request?.preApprovalSchedule;
@@ -1336,6 +1347,19 @@ export default function MyRequestsPage() {
                   </div>
                 </div>
               </section>
+
+              {hasPrivateRequestLetter(selectedRequest) && (
+                <section className="myr-detail-section">
+                  <div className="myr-section-title">
+                    <FileText size={18} />
+                    <div><h3>Request Letter</h3><p>Private supporting document submitted with this request.</p></div>
+                  </div>
+                  <button type="button" className="myr-primary-btn" onClick={downloadRequestLetter}
+                    disabled={letterDownloadLoading}>
+                    <Download size={16} /> {letterDownloadLoading ? "Downloading..." : "Download Request Letter"}
+                  </button>
+                </section>
+              )}
 
               <section className="myr-detail-section">
                 <div className="myr-section-title">

@@ -38,6 +38,7 @@ import { useAuth } from "../context/AuthContext";
 import { useToast } from "../context/ToastContext";
 import FormAlert from "../components/FormAlert";
 import ProtectedEvidenceImage from "../components/ProtectedEvidenceImage";
+import SecureCameraCapture from "../components/SecureCameraCapture";
 import { auth } from "../firebase/config";
 import { formatDisplayId } from "../utils/displayId";
 import * as exifr from "exifr";
@@ -47,6 +48,7 @@ const API_BASE_URL =
   import.meta.env.VITE_API_URL || "http://localhost:5000/api";
 
 const MAX_PHOTO_SIZE = 10 * 1024 * 1024;
+const MONITORING_CHART_INITIAL_SIZE = { width: 640, height: 260 };
 
 const CONDITION_META = {
   "Not Yet Monitored": {
@@ -430,7 +432,6 @@ export default function MonitoringPage() {
   const isStaff = userRole === "staff";
   const isAdmin = userRole === "admin";
 
-  const cameraInputRef = useRef(null);
   const uploadInputRef = useRef(null);
   const previewUrlRef = useRef(null);
   const locationMapContainerRef = useRef(null);
@@ -472,6 +473,8 @@ export default function MonitoringPage() {
 
   const [photoFile, setPhotoFile] = useState(null);
   const [photoPreview, setPhotoPreview] = useState("");
+  const [evidenceDescriptor, setEvidenceDescriptor] = useState(null);
+  const [cameraOpen, setCameraOpen] = useState(false);
 
   const [form, setForm] = useState({
     plantingReportId: "",
@@ -946,6 +949,7 @@ export default function MonitoringPage() {
 
   function clearPreview() {
     setPhotoFile(null);
+    setEvidenceDescriptor(null);
 
     if (previewUrlRef.current) {
       URL.revokeObjectURL(previewUrlRef.current);
@@ -954,10 +958,6 @@ export default function MonitoringPage() {
 
     setPhotoPreview("");
     setForm((previous) => ({ ...previous, latitude: "", longitude: "", accuracy: "", locationCapturedAt: "" }));
-
-    if (cameraInputRef.current) {
-      cameraInputRef.current.value = "";
-    }
 
     if (uploadInputRef.current) {
       uploadInputRef.current.value = "";
@@ -993,6 +993,7 @@ export default function MonitoringPage() {
     setFormError("");
     setFieldErrors({});
     setLocationLoading(false);
+    setCameraOpen(false);
     clearPreview();
   }
 
@@ -1003,6 +1004,7 @@ export default function MonitoringPage() {
   }
 
   function closeForm() {
+    setCameraOpen(false);
     setShowForm(false);
     resetForm();
   }
@@ -1137,9 +1139,45 @@ export default function MonitoringPage() {
     previewUrlRef.current = preview;
 
     setPhotoFile(file);
+    setEvidenceDescriptor({ source: "uploaded-original" });
     setPhotoPreview(preview);
     await verifyPhotoLocation(file);
   }
+
+  function startSecureCamera() {
+    if (!form.plantingReportId || !form.siteId) {
+      setFormError("Select an approved planting report before taking a verified photo.");
+      return;
+    }
+    setCameraOpen(true);
+  }
+
+  function handleVerifiedCameraCapture({ file, descriptor, location }) {
+    if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current);
+    const url = URL.createObjectURL(file);
+    previewUrlRef.current = url;
+    setPhotoFile(file);
+    setPhotoPreview(url);
+    setEvidenceDescriptor(descriptor);
+    setForm(previous => ({ ...previous, latitude: String(location.latitude),
+      longitude: String(location.longitude), accuracy: String(location.accuracy),
+      locationCapturedAt: new Date().toISOString() }));
+    setFormError("");
+    setCameraOpen(false);
+  }
+
+  const cameraBinding = useMemo(() => editingObservation ? {
+    workflow: "monitoring-resubmit",
+    plantingReportId: form.plantingReportId,
+    siteId: form.siteId,
+    monitoringId: editingObservation.monitoringId,
+    observationId: editingObservation.observationId,
+    expectedVersion: editingObservation.expectedVersion,
+  } : {
+    workflow: observationType === "early" ? "monitoring-early" : "monitoring-official",
+    plantingReportId: form.plantingReportId,
+    siteId: form.siteId,
+  }, [editingObservation, form.plantingReportId, form.siteId, observationType]);
 
   async function handleSubmit(event) {
     event.preventDefault();
@@ -1219,6 +1257,7 @@ export default function MonitoringPage() {
         "plantingReportId",
         form.plantingReportId
       );
+      payload.append("siteId", form.siteId);
       payload.append("totalMonitored", String(totalChecked));
       payload.append("monitoredDate", form.monitoredDate);
       if (editingObservation && !photoFile) {
@@ -1249,6 +1288,7 @@ export default function MonitoringPage() {
       );
       if (photoFile) {
         payload.append("photo", photoFile);
+        payload.append("evidenceManifest", JSON.stringify([evidenceDescriptor || { source: "uploaded-original" }]));
       }
 
       const response =
@@ -1646,7 +1686,11 @@ export default function MonitoringPage() {
           </div>
 
           <div className="sm-chart-area">
-              <ResponsiveContainer width="100%" height="100%">
+              <ResponsiveContainer
+                width="100%"
+                height="100%"
+                initialDimension={MONITORING_CHART_INITIAL_SIZE}
+              >
                 <LineChart data={trendData} margin={{ top: 12, right: 16, left: 0, bottom: 8 }}>
                   <CartesianGrid strokeDasharray="4 4" vertical={false} />
                   <XAxis dataKey="month" tickLine={false} axisLine={false} minTickGap={20} />
@@ -2244,7 +2288,7 @@ export default function MonitoringPage() {
                         </div>
                         <div>
                           <span>Source</span>
-                          <strong>Photo EXIF metadata</strong>
+                          <strong>{evidenceDescriptor?.source === "browser-camera" ? "Verified browser camera session" : "Photo EXIF metadata"}</strong>
                         </div>
                       </div>
                       {selectedSite && <div ref={locationMapContainerRef} className="sm-location-map" aria-label="Photo and planting site location map" />}
@@ -2257,15 +2301,6 @@ export default function MonitoringPage() {
                     <FiCamera size={15} />
                     Monitoring Photo
                   </div>
-
-                  <input
-                    ref={cameraInputRef}
-                    type="file"
-                    accept="image/jpeg,image/png,image/webp"
-                    capture="environment"
-                    className="sm-hidden-input"
-                    onChange={handlePhotoChange}
-                  />
 
                   <input
                     ref={uploadInputRef}
@@ -2314,7 +2349,7 @@ export default function MonitoringPage() {
                         <button
                           type="button"
                           className="sm-primary-button"
-                          onClick={() => cameraInputRef.current?.click()}
+                          onClick={startSecureCamera}
                         >
                           <FiCamera size={14} />
                           Take Photo
@@ -2606,6 +2641,13 @@ export default function MonitoringPage() {
           </aside>
         </div>
       )}
+      <SecureCameraCapture
+        open={cameraOpen}
+        request={apiRequest}
+        binding={cameraBinding}
+        onVerified={handleVerifiedCameraCapture}
+        onCancel={() => setCameraOpen(false)}
+      />
     </div>
   );
 }
