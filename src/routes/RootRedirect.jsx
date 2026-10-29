@@ -1,6 +1,7 @@
-import { Navigate } from "react-router-dom";
+import { Navigate, useLocation } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { dashboardPathForRole } from "../utils/roleRoutes";
+import { resolvePostLoginPath } from "../utils/postLoginRoute";
 
 function useEffectiveAuth() {
   const { currentUser, userRole, authLoading } = useAuth();
@@ -29,13 +30,17 @@ export function RootRedirect() {
 // in, skip straight to your dashboard instead of showing the form again.
 export function GuestOnlyRoute({ children }) {
   const { effectiveUser, effectiveRole, authLoading } = useEffectiveAuth();
+  const location = useLocation();
   if (authLoading) return null;
 
   if (effectiveUser) {
-    if (effectiveRole === "participant" && effectiveUser.profileComplete === false) {
-      return <Navigate to="/complete-profile" replace />;
-    }
-    return <Navigate to={dashboardPathForRole(effectiveRole)} replace />;
+    return <Navigate
+      to={resolvePostLoginPath(location.state?.from, {
+        ...effectiveUser,
+        role: effectiveRole,
+      })}
+      replace
+    />;
   }
 
   return children;

@@ -9,7 +9,7 @@ import {
 import { auth } from "../firebase/config";
 import { useAuth } from "../context/AuthContext";
 import { useToast } from "../context/ToastContext";
-import { dashboardPathForRole } from "../utils/roleRoutes";
+import { resolvePostLoginPath } from "../utils/postLoginRoute";
 import { authenticatedFetch, verifyMenroSession } from "../services/authenticatedApi";
 import { startGooglePopup } from "../services/googleRedirectAuth";
 import {
@@ -80,7 +80,12 @@ export default function LoginPage() {
     const message = location.state?.message;
     if (!message) return;
     showSuccess(message, { dedupeKey: `login-route:${message}` });
-    navigate(`${location.pathname}${location.search}`, { replace: true, state: null });
+    const preservedState = { ...location.state };
+    delete preservedState.message;
+    navigate(`${location.pathname}${location.search}`, {
+      replace: true,
+      state: Object.keys(preservedState).length ? preservedState : null,
+    });
   }, [location.pathname, location.search, location.state, navigate, showSuccess]);
 
   useEffect(() => {
@@ -126,7 +131,7 @@ export default function LoginPage() {
       const userData = await verifyMenroSession(credential.user);
 
       login(userData, userData.role);
-      navigate(dashboardPathForRole(userData.role), { replace: true });
+      navigate(resolvePostLoginPath(location.state?.from, userData), { replace: true });
     } catch (err) {
       console.error("Email sign in failed:", err?.code || err?.message);
       setError(getAuthErrorMessage(err, { online: navigator.onLine !== false }));
@@ -197,12 +202,7 @@ export default function LoginPage() {
 
         setError("");
         login(userData, userData.role);
-        navigate(
-          userData.role === "participant" && userData.profileComplete === false
-            ? "/complete-profile"
-            : dashboardPathForRole(userData.role),
-          { replace: true }
-        );
+        navigate(resolvePostLoginPath(location.state?.from, userData), { replace: true });
       } catch (err) {
         if (!isCurrentAttempt()) return;
         console.error("Google sign in failed:", err?.code || err?.message);
