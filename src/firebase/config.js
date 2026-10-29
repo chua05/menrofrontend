@@ -1,12 +1,13 @@
 import { initializeApp, getApps, getApp } from "firebase/app";
 import { connectAuthEmulator, getAuth, GoogleAuthProvider } from "firebase/auth";
 import { validateFrontendIntegrationEnvironment } from "../config/integrationEnvironment";
+import { resolveFirebaseAuthDomain } from "../config/firebaseAuthDomain";
 
 const integration = validateFrontendIntegrationEnvironment(import.meta.env);
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+  authDomain: resolveFirebaseAuthDomain(import.meta.env),
   projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
   storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
   messagingSenderId:
