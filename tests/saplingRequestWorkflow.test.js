@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import {
   addWorkingDays,
   canNavigateToStep,
@@ -14,6 +15,11 @@ import {
   validatePlantingSchedule,
   validateRequestLetterFile,
 } from "../src/utils/saplingRequestWorkflow.js";
+
+const wizardSource = readFileSync(
+  new URL("../src/pages/ParticipantSaplingRequestWizard.jsx", import.meta.url),
+  "utf8",
+);
 
 test("formats stored time-only schedule values without Invalid Date", () => {
   assert.equal(formatScheduleTime("06:00"), "06:00 AM");
@@ -166,6 +172,13 @@ test("allows same-day release and planting while the planting start remains in t
     date: "2026-10-28", startTime: "17:00", endTime: "18:00",
     group: true, participants: "40",
   }, afterStart).startTime, "The event start time must be in the future.");
+});
+
+test("uses inline validation feedback and a nonblocking date helper", () => {
+  assert.doesNotMatch(wizardSource, /sr-validation-summary|validationSummary/);
+  assert.match(wizardSource, /sr-processing-advisory/);
+  assert.match(wizardSource, /you may still continue/i);
+  assert.match(wizardSource, /setErrors\(\(current\) => \(\{ \.\.\.current, trees: "" \}\)\)/);
 });
 
 test("normalizes Arabic and Roman Zone barangay aliases", () => {

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Component, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import L from "leaflet";
 import { boundaryLayerOptions } from "../utils/barangayMap";
@@ -170,6 +170,55 @@ function getEventName(event) {
   return event?.eventName || event?.name || event?.title || event?.activityName || "";
 }
 
+function formatParticipantCount(value) {
+  if (typeof value === "number" && Number.isFinite(value)) return String(value);
+  if (typeof value === "string" && value.trim()) return value.trim();
+  return "Not Yet Identified";
+}
+
+class PlantingReportFormErrorBoundary extends Component {
+  constructor(props) {
+    super(props);
+    this.state = { failed: false };
+  }
+
+  static getDerivedStateFromError() {
+    return { failed: true };
+  }
+
+  componentDidCatch(error) {
+    // Do not serialize report, site, or evidence data into diagnostics.
+    console.error("Planting report form render failure", error?.name || "UnknownError");
+  }
+
+  componentDidUpdate(previousProps) {
+    if (this.state.failed && previousProps.resetKey !== this.props.resetKey) {
+      this.setState({ failed: false });
+    }
+  }
+
+  render() {
+    if (this.state.failed) {
+      return (
+        <div className="pr-overlay" role="presentation">
+          <div className="pr-modal" role="alertdialog" aria-modal="true" aria-labelledby="planting-report-recovery-title">
+            <div className="pr-modal-header">
+              <div>
+                <h2 id="planting-report-recovery-title" className="pr-modal-title">Unable to display this planting report form</h2>
+                <p className="pr-modal-subtitle">Your report has not been submitted. Correct the unavailable data, then retry without losing this report draft.</p>
+              </div>
+            </div>
+            <div className="pr-modal-footer">
+              <button type="button" className="pr-primary-button" onClick={this.props.onRecover}>Retry Form</button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 function getParticipantTypeLabel(value) {
   return value || "—";
 }
@@ -220,6 +269,7 @@ function normalizeBarangayName(value) {
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .replace(/^barangay\s+/i, "")
+    .replace(/([a-z])\.\s+/gi, "$1.")
     .toLowerCase();
 }
 
@@ -370,6 +420,7 @@ export default function PlantingPage() {
   const [photoPreviews, setPhotoPreviews] = useState([]);
   const [cameraLocationDiagnostic, setCameraLocationDiagnostic] = useState(null);
   const [locationPhotoSignature, setLocationPhotoSignature] = useState("");
+  const [formRenderRecovery, setFormRenderRecovery] = useState(0);
 
   const [form, setForm] = useState({
     submittedByName: "",
@@ -1095,12 +1146,14 @@ export default function PlantingPage() {
     if (!form.siteId || !form.eventId) return [];
     const selectedEvent = events.find((event) =>
       String(getEventId(event)) === String(form.eventId));
+    const selectedEventRequestId = String(selectedEvent?.sourceRequestId || "").trim();
     return availableDistributions
       .filter((distribution) =>
         (!distribution.plantingSiteId ||
           String(distribution.plantingSiteId) === String(form.siteId)) &&
         (String(distribution.eventId || "") === String(form.eventId) ||
-          String(distribution.requestId || "") === String(selectedEvent?.sourceRequestId || "")));
+          (selectedEventRequestId &&
+            String(distribution.requestId || "") === selectedEventRequestId)));
   }, [availableDistributions, events, form.siteId, form.eventId]);
 
   const eligibleDistributionItems = useMemo(() => {
@@ -2619,6 +2672,13 @@ export default function PlantingPage() {
       </div>
 
       {showSubmitModal && isParticipant && (
+        <PlantingReportFormErrorBoundary
+          resetKey={formRenderRecovery}
+          onRecover={async () => {
+            await refreshReferenceData();
+            setFormRenderRecovery((value) => value + 1);
+          }}
+        >
         <div className="pr-overlay">
           <div className="pr-modal">
             <div className="pr-modal-header">
@@ -2871,7 +2931,11 @@ export default function PlantingPage() {
                               <div className="pr-site-preview-meta">
                                 Request: {responsibleDistribution.requestNumber || responsibleDistribution.requestId || "Not Yet Identified"}
                                 {` • Distribution: ${getDistributionReference(responsibleDistribution)}`}
-                                {` • Registered event participants: ${responsibleEvent?.actualParticipants ?? responsibleEvent?.participantCount ?? responsibleEvent?.registeredParticipantCount ?? "Not Yet Identified"}`}
+                                {` • Registered event participants: ${formatParticipantCount(
+                                  responsibleEvent?.actualParticipants ??
+                                  responsibleEvent?.participantCount ??
+                                  responsibleEvent?.registeredParticipantCount,
+                                )}`}
                               </div>
                             </>
                           )}
@@ -3211,6 +3275,7 @@ export default function PlantingPage() {
             </form>
           </div>
         </div>
+        </PlantingReportFormErrorBoundary>
       )}
 
       {showPhotoRequirements && (

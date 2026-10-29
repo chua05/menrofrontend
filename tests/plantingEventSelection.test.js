@@ -22,6 +22,16 @@ test("selecting an event renders a serialized distribution release date as text"
   assert.match(plantingPage, /formatDate\(distribution\.releasedAt\)/);
 });
 
+test("event selection safely displays malformed participant-count metadata", () => {
+  assert.match(plantingPage, /function formatParticipantCount\(value\)/);
+  assert.match(plantingPage, /PlantingReportFormErrorBoundary/);
+  assert.match(plantingPage, /const selectedEventRequestId = String\(selectedEvent\?\.sourceRequestId \|\| ""\)\.trim\(\)/);
+  assert.match(plantingPage, /resetKey=\{formRenderRecovery\}/);
+  assert.match(plantingPage, /retry without losing this report draft/i);
+  assert.match(plantingPage, /formatParticipantCount\(\s*responsibleEvent\?\.actualParticipants/s);
+  assert.match(plantingPage, /replace\(\/\(\[a-z\]\)\\\.\\s\+\/gi, "\$1\."\)/);
+});
+
 test("planting event dates accept Firestore, serialized, ISO, and missing values", () => {
   const instant = new Date("2026-10-13T00:00:00.000Z");
   const firestoreTimestamp = { toDate: () => instant };

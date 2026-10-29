@@ -372,8 +372,7 @@ export default function ParticipantSaplingRequestWizard({ currentUser }) {
     [submitting, setSubmitting] = useState(false),
     [letterUploadState, setLetterUploadState] = useState("idle"),
     [requestLetterCapability, setRequestLetterCapability] = useState(false),
-    [mapValidation, setMapValidation] = useState("pending"),
-    [validationSummary, setValidationSummary] = useState(null);
+    [mapValidation, setMapValidation] = useState("pending");
   const formElement = useRef(null);
   const showErrorRef = useRef(showError);
   const submissionId = useRef(crypto.randomUUID());
@@ -486,7 +485,6 @@ export default function ParticipantSaplingRequestWizard({ currentUser }) {
         ? { niyogan: "", landType: "", currentCondition: "" }
         : {}),
     }));
-    setValidationSummary(null);
   };
   useEffect(() => {
     let cancelled = false;
@@ -686,9 +684,8 @@ export default function ParticipantSaplingRequestWizard({ currentUser }) {
     setErrors((current) => ({ ...current, ...stepErrors }));
     const keys = Object.keys(stepErrors);
     if (keys.length) {
-      setValidationSummary({ count: keys.length, firstKey: keys[0], firstMessage: stepErrors[keys[0]] });
       if (focus) focusFirstInvalidField(keys[0]);
-    } else setValidationSummary(null);
+    }
     return !Object.keys(stepErrors).length;
   };
   const next = () => {
@@ -728,7 +725,6 @@ export default function ParticipantSaplingRequestWizard({ currentUser }) {
       setErrors(Object.assign({}, ...allErrors.map((entry) => entry.errors)));
       setStep(firstInvalid.step);
       const keys = Object.keys(firstInvalid.errors);
-      setValidationSummary({ count: keys.length, firstKey: keys[0], firstMessage: firstInvalid.errors[keys[0]] });
       focusFirstInvalidField(keys[0]);
       return;
     }
@@ -1155,7 +1151,7 @@ export default function ParticipantSaplingRequestWizard({ currentUser }) {
               </Field>
               {getProcessingWindowAdvisory(form.preferredReleaseDate) && (
                 <p className="sr-processing-advisory" role="status">
-                  Your preferred date is earlier than MENRO's estimated 3–7 working-day processing window. You may continue, but release on that date is not guaranteed.
+                  Preferred date is earlier than MENRO's estimated 3–7 working-day processing window; you may still continue.
                 </p>
               )}
             </>
@@ -1707,12 +1703,6 @@ export default function ParticipantSaplingRequestWizard({ currentUser }) {
                 </div>
               </div>
             </>
-          )}
-          {validationSummary && (
-            <div className="sr-validation-summary" role="alert" aria-live="assertive">
-              <strong>{validationSummary.count} field{validationSummary.count === 1 ? "" : "s"} need attention.</strong>
-              <span>{validationSummary.firstMessage}</span>
-            </div>
           )}
           <div className="sr-wizard-actions">
             {step > 1 && (
