@@ -1,4 +1,5 @@
 import { GOOGLE_IN_APP_BROWSER_MESSAGE } from "./inAppBrowser.js";
+import { GOOGLE_POPUP_COMPLETION_TIMEOUT_CODE } from "./googlePopupRecovery.js";
 
 const FIREBASE_MESSAGES = {
   "auth/invalid-credential": "Invalid email or password.",
@@ -12,6 +13,7 @@ const FIREBASE_MESSAGES = {
   "auth/missing-initial-state": GOOGLE_IN_APP_BROWSER_MESSAGE,
   "auth/web-storage-unsupported": GOOGLE_IN_APP_BROWSER_MESSAGE,
   "auth/operation-not-supported-in-this-environment": GOOGLE_IN_APP_BROWSER_MESSAGE,
+  [GOOGLE_POPUP_COMPLETION_TIMEOUT_CODE]: "Google sign-in did not return to MENRO. Your Google sign-in may still be completing in another browser. Return to MENRO and try again, or use your device's default browser.",
 };
 
 const GOOGLE_CANCELLATION_CODES = new Set([
@@ -23,6 +25,7 @@ const GOOGLE_UNSUPPORTED_BROWSER_CODES = new Set([
   "auth/missing-initial-state",
   "auth/web-storage-unsupported",
   "auth/operation-not-supported-in-this-environment",
+  GOOGLE_POPUP_COMPLETION_TIMEOUT_CODE,
 ]);
 
 export const isGoogleCancellation = (error) =>

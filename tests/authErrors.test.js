@@ -7,6 +7,7 @@ import {
   isGoogleCancellation,
   isGoogleUnsupportedBrowserError,
 } from "../src/utils/authErrors.js";
+import { GOOGLE_POPUP_COMPLETION_TIMEOUT_CODE } from "../src/utils/googlePopupRecovery.js";
 
 test("Google popup cancellation is treated as a user action", () => {
   assert.equal(isGoogleCancellation({ code: "auth/popup-closed-by-user" }), true);
@@ -19,6 +20,7 @@ test("embedded-browser recovery is shown only after a supported failure signal",
   assert.equal(isGoogleUnsupportedBrowserError({ message: "Error 403: disallowed_useragent" }), true);
   assert.equal(isGoogleUnsupportedBrowserError({ code: "auth/popup-closed-by-user" }), false);
   assert.equal(isGoogleUnsupportedBrowserError({ code: "auth/network-request-failed" }), false);
+  assert.equal(isGoogleUnsupportedBrowserError({ code: GOOGLE_POPUP_COMPLETION_TIMEOUT_CODE }), true);
 });
 
 test("popup errors are reconciled only when a new Google session was established", () => {
@@ -48,6 +50,10 @@ test("authentication errors distinguish Firebase, network, and backend rejection
   assert.match(
     getAuthErrorMessage({ code: "auth/web-storage-unsupported" }, { provider: "google" }),
     /open MENRO in Chrome first/i,
+  );
+  assert.match(
+    getAuthErrorMessage({ code: GOOGLE_POPUP_COMPLETION_TIMEOUT_CODE }, { provider: "google" }),
+    /did not return to MENRO/i,
   );
   assert.equal(
     getAuthErrorMessage({ code: "auth/invalid-credential" }),
