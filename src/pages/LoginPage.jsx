@@ -64,6 +64,7 @@ export default function LoginPage() {
   const [loginStage, setLoginStage] = useState("");
   const [resetLoading, setResetLoading] = useState(false);
   const [inAppBrowser] = useState(() => isLikelyInAppBrowser());
+  const [showInAppGuidance, setShowInAppGuidance] = useState(false);
   const { login, verificationRequired } = useAuth();
   const { success: showSuccess } = useToast();
 
@@ -160,7 +161,7 @@ export default function LoginPage() {
     async () => {
       if (signInInProgress.current) return;
       if (inAppBrowser) {
-        setError(GOOGLE_IN_APP_BROWSER_MESSAGE);
+        setShowInAppGuidance(true);
         return;
       }
       const attempt = ++googleAttempt.current;
@@ -418,12 +419,6 @@ export default function LoginPage() {
             <span />
           </div>
 
-          {inAppBrowser && (
-            <div className="login-browser-notice" role="status">
-              {GOOGLE_IN_APP_BROWSER_MESSAGE}
-            </div>
-          )}
-
           <button
             type="button"
             className="login-google-btn"
@@ -442,6 +437,16 @@ export default function LoginPage() {
               Create account
             </Link>
           </div>
+
+          {showInAppGuidance && (
+            <div className="login-guidance-backdrop" role="presentation">
+              <section className="login-guidance-dialog" role="dialog" aria-modal="true" aria-labelledby="login-guidance-title" aria-describedby="login-guidance-message">
+                <h2 id="login-guidance-title">Open MENRO in Chrome</h2>
+                <p id="login-guidance-message">{GOOGLE_IN_APP_BROWSER_MESSAGE}</p>
+                <button type="button" className="login-primary-btn" onClick={() => setShowInAppGuidance(false)} autoFocus>Close</button>
+              </section>
+            </div>
+          )}
         </section>
 
         <footer className="login-footer">

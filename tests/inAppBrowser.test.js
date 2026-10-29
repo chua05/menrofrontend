@@ -11,7 +11,7 @@ test("detects known Meta in-app browser markers without classifying Chrome as em
   assert.equal(isLikelyInAppBrowser("Mozilla/5.0 (Linux; Android 13) Chrome/120.0 Mobile Safari/537.36"), false);
 });
 
-test("in-app browser recovery guidance requires the same browser for Google sign-in", () => {
-  assert.match(GOOGLE_IN_APP_BROWSER_MESSAGE, /same browser/i);
-  assert.match(GOOGLE_IN_APP_BROWSER_MESSAGE, /Open in browser or Open in Chrome/i);
+test("in-app browser recovery guidance gives the Messenger Chrome recovery path", () => {
+  assert.match(GOOGLE_IN_APP_BROWSER_MESSAGE, /open MENRO in Chrome first/i);
+  assert.match(GOOGLE_IN_APP_BROWSER_MESSAGE, /Open in browser/i);
 });

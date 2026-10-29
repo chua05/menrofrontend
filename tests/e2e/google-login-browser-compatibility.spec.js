@@ -10,7 +10,7 @@ if (!/^http:\/\/(?:127\.0\.0\.1|localhost):517[34]$/.test(FRONTEND)) {
 test("Chrome keeps Google Login available without embedded-browser recovery guidance", async ({ page }) => {
   await page.goto(`${FRONTEND}/login`);
   await expect(page.getByRole("button", { name: "Continue with Google" })).toBeEnabled();
-  await expect(page.locator(".login-browser-notice")).toHaveCount(0);
+  await expect(page.getByRole("dialog")).toHaveCount(0);
 });
 
 test.describe("Messenger in-app browser", () => {
@@ -18,10 +18,13 @@ test.describe("Messenger in-app browser", () => {
     userAgent: "Mozilla/5.0 (Linux; Android 13; SM-A025F) AppleWebKit/537.36 [FB_IAB/MESSENGER;FBAV/450.0] Mobile Safari/537.36",
   });
 
-  test("shows recovery guidance and does not start Google popup sign-in", async ({ page }) => {
+  test("shows one dismissible recovery dialog and does not start Google popup sign-in", async ({ page }) => {
     await page.goto(`${FRONTEND}/login`);
-    await expect(page.locator(".login-browser-notice")).toContainText("Open in browser or Open in Chrome");
+    await expect(page.getByRole("dialog")).toHaveCount(0);
     await page.getByRole("button", { name: "Continue with Google" }).click();
-    await expect(page.locator(".login-error")).toContainText("same browser");
+    await expect(page.getByRole("dialog")).toContainText("tap ⋯ → Open in browser");
+    await expect(page.locator(".login-error")).toHaveCount(0);
+    await page.getByRole("button", { name: "Close" }).click();
+    await expect(page.getByRole("dialog")).toHaveCount(0);
   });
 });

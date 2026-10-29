@@ -35,11 +35,11 @@ test("authentication errors distinguish Firebase, network, and backend rejection
   );
   assert.match(
     getAuthErrorMessage({ code: "auth/missing-initial-state" }, { provider: "google" }),
-    /same browser.*Open in browser or Open in Chrome/i,
+    /open MENRO in Chrome first.*Open in browser/i,
   );
   assert.match(
     getAuthErrorMessage({ code: "auth/web-storage-unsupported" }, { provider: "google" }),
-    /same browser/i,
+    /open MENRO in Chrome first/i,
   );
   assert.equal(
     getAuthErrorMessage({ code: "auth/invalid-credential" }),
