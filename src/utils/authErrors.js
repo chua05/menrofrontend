@@ -11,6 +11,7 @@ const FIREBASE_MESSAGES = {
   "auth/unauthorized-domain": "Google sign-in is not enabled for this website. Please contact the administrator.",
   "auth/missing-initial-state": GOOGLE_IN_APP_BROWSER_MESSAGE,
   "auth/web-storage-unsupported": GOOGLE_IN_APP_BROWSER_MESSAGE,
+  "auth/operation-not-supported-in-this-environment": GOOGLE_IN_APP_BROWSER_MESSAGE,
 };
 
 const GOOGLE_CANCELLATION_CODES = new Set([
@@ -18,8 +19,18 @@ const GOOGLE_CANCELLATION_CODES = new Set([
   "auth/cancelled-popup-request",
 ]);
 
+const GOOGLE_UNSUPPORTED_BROWSER_CODES = new Set([
+  "auth/missing-initial-state",
+  "auth/web-storage-unsupported",
+  "auth/operation-not-supported-in-this-environment",
+]);
+
 export const isGoogleCancellation = (error) =>
   GOOGLE_CANCELLATION_CODES.has(error?.code);
+
+export const isGoogleUnsupportedBrowserError = (error) =>
+  GOOGLE_UNSUPPORTED_BROWSER_CODES.has(error?.code) ||
+  /disallowed_useragent/i.test(String(error?.message || ""));
 
 export const hasNewGoogleSession = (userBeforePopup, authenticatedUser) => {
   if (!authenticatedUser?.uid || authenticatedUser.uid === userBeforePopup?.uid) {

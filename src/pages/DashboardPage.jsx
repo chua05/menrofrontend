@@ -45,6 +45,7 @@ import "../styles/dashboard-page.css";
 
 const BARANGAY_GEOJSON_URL = `${API_BASE_URL}/sites/barangay-boundaries`;
 const DASHBOARD_REQUEST_TIMEOUT_MS = 15_000;
+const DASHBOARD_TOKEN_TIMEOUT_MS = 10_000;
 
 const BULAN_FALLBACK_CENTER = {
   lat: 12.6598,
@@ -98,9 +99,15 @@ function unwrapArray(payload) {
 }
 
 async function getFreshToken() {
-  const getToken = async (firebaseUser) => {
-    return firebaseUser.getIdToken();
-  };
+  const getToken = (firebaseUser) => new Promise((resolve, reject) => {
+    const timeoutId = window.setTimeout(
+      () => reject(new Error("Firebase authentication token timed out.")),
+      DASHBOARD_TOKEN_TIMEOUT_MS,
+    );
+    firebaseUser.getIdToken().then(resolve, reject).finally(() => {
+      window.clearTimeout(timeoutId);
+    });
+  });
 
   if (auth.currentUser) {
     return getToken(auth.currentUser);

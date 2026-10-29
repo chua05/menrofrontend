@@ -6,7 +6,7 @@ import {
   isLikelyInAppBrowser,
 } from "../src/utils/inAppBrowser.js";
 
-test("detects known Meta in-app browser markers without classifying Chrome as embedded", () => {
+test("detection remains advisory and does not classify Chrome as embedded", () => {
   assert.equal(isLikelyInAppBrowser("Mozilla/5.0 [FB_IAB/MESSENGER;FBAV/450.0]"), true);
   assert.equal(isLikelyInAppBrowser("Mozilla/5.0 (Linux; Android 13) Chrome/120.0 Mobile Safari/537.36"), false);
 });

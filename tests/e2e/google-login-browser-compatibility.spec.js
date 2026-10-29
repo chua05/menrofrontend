@@ -11,6 +11,10 @@ test("Chrome keeps Google Login available without embedded-browser recovery guid
   await page.goto(`${FRONTEND}/login`);
   await expect(page.getByRole("button", { name: "Continue with Google" })).toBeEnabled();
   await expect(page.getByRole("dialog")).toHaveCount(0);
+  const popupPromise = page.waitForEvent("popup");
+  await page.getByRole("button", { name: "Continue with Google" }).click();
+  const popup = await popupPromise;
+  await popup.close();
 });
 
 test.describe("Messenger in-app browser", () => {
@@ -18,13 +22,14 @@ test.describe("Messenger in-app browser", () => {
     userAgent: "Mozilla/5.0 (Linux; Android 13; SM-A025F) AppleWebKit/537.36 [FB_IAB/MESSENGER;FBAV/450.0] Mobile Safari/537.36",
   });
 
-  test("shows one dismissible recovery dialog and does not start Google popup sign-in", async ({ page }) => {
+  test("does not preemptively block Google sign-in or show recovery guidance", async ({ page }) => {
     await page.goto(`${FRONTEND}/login`);
     await expect(page.getByRole("dialog")).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Continue with Google" })).toBeEnabled();
+    const popupPromise = page.waitForEvent("popup");
     await page.getByRole("button", { name: "Continue with Google" }).click();
-    await expect(page.getByRole("dialog")).toContainText("tap ⋯ → Open in browser");
-    await expect(page.locator(".login-error")).toHaveCount(0);
-    await page.getByRole("button", { name: "Close" }).click();
+    const popup = await popupPromise;
+    await popup.close();
     await expect(page.getByRole("dialog")).toHaveCount(0);
   });
 });

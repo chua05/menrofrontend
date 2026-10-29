@@ -5,12 +5,20 @@ import {
   getVerificationErrorMessage,
   hasNewGoogleSession,
   isGoogleCancellation,
+  isGoogleUnsupportedBrowserError,
 } from "../src/utils/authErrors.js";
 
 test("Google popup cancellation is treated as a user action", () => {
   assert.equal(isGoogleCancellation({ code: "auth/popup-closed-by-user" }), true);
   assert.equal(isGoogleCancellation({ code: "auth/cancelled-popup-request" }), true);
   assert.equal(isGoogleCancellation({ code: "auth/popup-blocked" }), false);
+});
+
+test("embedded-browser recovery is shown only after a supported failure signal", () => {
+  assert.equal(isGoogleUnsupportedBrowserError({ code: "auth/web-storage-unsupported" }), true);
+  assert.equal(isGoogleUnsupportedBrowserError({ message: "Error 403: disallowed_useragent" }), true);
+  assert.equal(isGoogleUnsupportedBrowserError({ code: "auth/popup-closed-by-user" }), false);
+  assert.equal(isGoogleUnsupportedBrowserError({ code: "auth/network-request-failed" }), false);
 });
 
 test("popup errors are reconciled only when a new Google session was established", () => {
