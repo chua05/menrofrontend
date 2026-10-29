@@ -1,0 +1,12 @@
+.page-loading-state {
+  min-height: 420px;
+  display: grid;
+  place-items: center;
+  box-sizing: border-box;
+  max-width: 100%;
+  color: #526159;
+  font-size: 13px;
+  font-weight: 600;
+  text-align: center;
+  padding: 24px;
+}

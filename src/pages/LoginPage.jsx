@@ -17,6 +17,10 @@ import {
   hasNewGoogleSession,
   isGoogleCancellation,
 } from "../utils/authErrors";
+import {
+  GOOGLE_IN_APP_BROWSER_MESSAGE,
+  isLikelyInAppBrowser,
+} from "../utils/inAppBrowser";
 
 import menroLogo from "../assets/menro-logo.png";
 import "../styles/login.css";
@@ -59,6 +63,7 @@ export default function LoginPage() {
     useState(false);
   const [loginStage, setLoginStage] = useState("");
   const [resetLoading, setResetLoading] = useState(false);
+  const [inAppBrowser] = useState(() => isLikelyInAppBrowser());
   const { login, verificationRequired } = useAuth();
   const { success: showSuccess } = useToast();
 
@@ -154,6 +159,10 @@ export default function LoginPage() {
   const handleGoogleLogin =
     async () => {
       if (signInInProgress.current) return;
+      if (inAppBrowser) {
+        setError(GOOGLE_IN_APP_BROWSER_MESSAGE);
+        return;
+      }
       const attempt = ++googleAttempt.current;
       const isCurrentAttempt = () =>
         mounted.current && googleAttempt.current === attempt;
@@ -408,6 +417,12 @@ export default function LoginPage() {
             <small>OR</small>
             <span />
           </div>
+
+          {inAppBrowser && (
+            <div className="login-browser-notice" role="status">
+              {GOOGLE_IN_APP_BROWSER_MESSAGE}
+            </div>
+          )}
 
           <button
             type="button"

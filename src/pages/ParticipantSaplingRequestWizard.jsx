@@ -21,6 +21,7 @@ import {
   resolveSecureRequestLetterCapability,
 } from "../utils/requestLetterCapabilities";
 import { useToast } from "../context/ToastContext";
+import PageLoadingState from "../components/PageLoadingState";
 import { BULAN_BARANGAYS } from "../utils/userTypes";
 import { IDENTIFICATION_DOCUMENTS } from "../utils/identificationDocuments";
 import { createLeafletResizeScheduler } from "../utils/leafletLifecycle";
@@ -866,7 +867,7 @@ export default function ParticipantSaplingRequestWizard({ currentUser }) {
   };
   if (loading)
     return (
-      <div className="seedling-requests-page">Loading request form...</div>
+      <div className="seedling-requests-page"><PageLoadingState message="Loading request form..." /></div>
     );
   return (
     <div className="seedling-requests-page participant-seedling-page">

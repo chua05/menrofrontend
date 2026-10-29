@@ -33,6 +33,14 @@ test("authentication errors distinguish Firebase, network, and backend rejection
     getAuthErrorMessage({ code: "auth/popup-blocked" }, { provider: "google" }),
     "The Google sign-in window was blocked. Allow pop-ups, then try again."
   );
+  assert.match(
+    getAuthErrorMessage({ code: "auth/missing-initial-state" }, { provider: "google" }),
+    /same browser.*Open in browser or Open in Chrome/i,
+  );
+  assert.match(
+    getAuthErrorMessage({ code: "auth/web-storage-unsupported" }, { provider: "google" }),
+    /same browser/i,
+  );
   assert.equal(
     getAuthErrorMessage({ code: "auth/invalid-credential" }),
     "Invalid email or password."

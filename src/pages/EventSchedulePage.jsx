@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 
 import { useAuth } from "../context/AuthContext";
+import PageLoadingState from "../components/PageLoadingState";
 import { useToast } from "../context/ToastContext";
 import { auth } from "../firebase/config";
 import { formatDisplayId } from "../utils/displayId";
@@ -1224,7 +1225,7 @@ export default function EventSchedulePage() {
   if (loading) {
     return (
       <div className="event-calendar-page">
-        <div style={{ minHeight: "420px", display: "grid", placeItems: "center", color: "#526159", fontSize: "13px", fontWeight: 600 }}>Loading events...</div>
+        <PageLoadingState message="Loading events..." />
       </div>
     );
   }

@@ -1,3 +1,5 @@
+import { GOOGLE_IN_APP_BROWSER_MESSAGE } from "./inAppBrowser.js";
+
 const FIREBASE_MESSAGES = {
   "auth/invalid-credential": "Invalid email or password.",
   "auth/user-not-found": "Account not found.",
@@ -7,6 +9,8 @@ const FIREBASE_MESSAGES = {
   "auth/too-many-requests": "Too many failed attempts. Please wait a while, then try again.",
   "auth/popup-blocked": "The Google sign-in window was blocked. Allow pop-ups, then try again.",
   "auth/unauthorized-domain": "Google sign-in is not enabled for this website. Please contact the administrator.",
+  "auth/missing-initial-state": GOOGLE_IN_APP_BROWSER_MESSAGE,
+  "auth/web-storage-unsupported": GOOGLE_IN_APP_BROWSER_MESSAGE,
 };
 
 const GOOGLE_CANCELLATION_CODES = new Set([

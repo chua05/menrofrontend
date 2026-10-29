@@ -1,5 +1,6 @@
 import {  useCallback, useEffect, useMemo, useRef, useState, } from "react";
 import { createPortal } from "react-dom";
+import PageLoadingState from "../components/PageLoadingState";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import L from "leaflet";
 import { boundaryLayerOptions } from "../utils/barangayMap";
@@ -1796,7 +1797,7 @@ useEffect(() => {
 }
 
   if (loadingRequests) {
-    return <div className="seedling-requests-page"><div style={{ minHeight: "420px", display: "grid", placeItems: "center", color: "#526159", fontSize: "13px", fontWeight: 600 }}>Loading seedling requests...</div></div>;
+    return <div className="seedling-requests-page"><PageLoadingState message="Loading seedling requests..." /></div>;
   }
 
   if (loadError) {

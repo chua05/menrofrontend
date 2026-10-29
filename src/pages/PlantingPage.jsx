@@ -6,6 +6,7 @@ import { createEvidenceAttempt, assertEvidenceComplete } from "../utils/evidence
 import "leaflet/dist/leaflet.css";
 import * as exifr from "exifr";
 import { extractGpsCoordinates } from "../utils/exifGps";
+import PageLoadingState from "../components/PageLoadingState";
 import SecureCameraCapture from "../components/SecureCameraCapture";
 import { buildEvidenceLocationView } from "../utils/evidenceLocationView";
 
@@ -2447,7 +2448,7 @@ export default function PlantingPage() {
     (selectedSubmission?.staffApprovalRequired === true ? userRole === "staff" : canReview);
 
   if (loading) {
-    return <div className="pr-page"><div style={{ minHeight: "420px", display: "grid", placeItems: "center", color: "#526159", fontSize: "13px", fontWeight: 600 }}>Loading planting reports...</div></div>;
+    return <div className="pr-page"><PageLoadingState message="Loading planting reports..." /></div>;
   }
 
   if (reportError) {

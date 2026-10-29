@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import PageLoadingState from "../components/PageLoadingState";
 import L from "leaflet";
 import { boundaryLayerOptions } from "../utils/barangayMap";
 import "leaflet/dist/leaflet.css";
@@ -2543,9 +2544,7 @@ export default function DashboardPage() {
   if (loading) {
     return (
       <div className="admin-dashboard">
-        <div className="dashboard-loading" role="status" aria-live="polite">
-          Loading dashboard...
-        </div>
+        <PageLoadingState message="Loading dashboard..." />
       </div>
     );
   }

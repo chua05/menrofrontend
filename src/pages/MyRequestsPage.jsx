@@ -2,6 +2,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { useToast } from "../context/ToastContext";
+import PageLoadingState from "../components/PageLoadingState";
 import L from "leaflet";
 import { boundaryLayerOptions } from "../utils/barangayMap";
 import "leaflet/dist/leaflet.css";
@@ -1054,7 +1055,7 @@ export default function MyRequestsPage() {
   };
 
   if (loading) {
-    return <div className="myr-page"><div style={{ minHeight: "420px", display: "grid", placeItems: "center", color: "#526159", fontSize: "13px", fontWeight: 600 }}>Loading your requests...</div></div>;
+    return <div className="myr-page"><PageLoadingState message="Loading your requests..." /></div>;
   }
 
   if (loadError) {
