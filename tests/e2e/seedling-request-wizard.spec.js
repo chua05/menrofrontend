@@ -16,7 +16,10 @@ const yazl = backendRequire("yazl");
 
 const EMAIL = "request-letter.browser.participant@example.test";
 const PASSWORD = "Request-Letter-Browser!2026";
-const FRONTEND = "http://127.0.0.1:5173";
+const FRONTEND = process.env.MENRO_ACCEPTANCE_FRONTEND || "http://127.0.0.1:5173";
+if (!/^http:\/\/(?:127\.0\.0\.1|localhost):517[34]$/.test(FRONTEND)) {
+  throw new Error("Seedling Request browser acceptance requires an approved loopback frontend endpoint.");
+}
 const ACCEPTANCE_API = process.env.MENRO_ACCEPTANCE_API_URL || "http://127.0.0.1:5000/api";
 if (!/^http:\/\/(?:127\.0\.0\.1|localhost):500[01]\/api$/.test(ACCEPTANCE_API)) {
   throw new Error("Seedling Request browser acceptance requires an approved loopback API endpoint.");
@@ -46,10 +49,10 @@ async function login(page) {
 }
 
 async function expectValidation(page, message) {
-  const summary = page.locator(".sr-validation-summary");
-  await expect(summary).toBeVisible();
-  if (message) await expect(summary).toContainText(message);
   const invalid = page.locator(".sr-invalid-field").first();
+  await expect(page.locator(".sr-validation-summary")).toHaveCount(0);
+  await expect(invalid).toBeVisible();
+  if (message) await expect(invalid).toContainText(message);
   await expect.poll(() => invalid.evaluate((element) => element.contains(document.activeElement))).toBe(true);
   await expect.poll(async () => {
     const box = await invalid.boundingBox();
