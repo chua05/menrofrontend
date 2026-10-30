@@ -8,6 +8,11 @@ test("normal production and local requests remain header-free", () => {
   const attempt = createEvidenceAttempt({}, () => { throw Error("must not generate"); });
   assert.deepEqual(attempt.headers(), {});
 });
+test("production cloud workflow sends a stable contract-valid key", () => {
+  const attempt = createEvidenceAttempt({ VITE_EVIDENCE_CLOUD_WORKFLOW_ENABLED: "true" }, () => "planting_retry-key_2026");
+  assert.deepEqual(attempt.headers(), { "Idempotency-Key": "planting_retry-key_2026" });
+  assert.deepEqual(attempt.headers(), { "Idempotency-Key": "planting_retry-key_2026" });
+});
 for (const changes of [{ DEV: false }, { VITE_USE_FIREBASE_EMULATORS: "false" },
   { VITE_FIREBASE_PROJECT_ID: "menrosystem-ddfac" }, { VITE_API_URL: "https://example.invalid/api" }]) {
   test(`development retry mode rejects ${JSON.stringify(changes)}`, () => {

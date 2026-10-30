@@ -49,6 +49,7 @@ const API_BASE_URL =
 
 const MAX_PHOTO_SIZE = 10 * 1024 * 1024;
 const MAX_EVIDENCE_PHOTOS = 10;
+const PLANTING_SUBMISSION_TIMEOUT_MS = 60_000;
 const SITE_GPS_TOLERANCE_METERS = 20;
 const OUTSIDE_SITE_WARNING =
   "The photo location is outside the selected planting site's coverage area. This report may still be submitted for MENRO Staff verification.";
@@ -69,6 +70,12 @@ const NO_DISTRIBUTION_MESSAGE =
 const PHOTO_EXIF_LOCATION_SOURCE = "Photo Metadata";
 const BARANGAY_GEOJSON_URL = `${API_BASE_URL}/sites/barangay-boundaries`;
 const BULAN_FALLBACK_CENTER = { lat: 12.6598, lng: 123.918 };
+
+function optionalFiniteNumber(value) {
+  if (value === "" || value === null || value === undefined) return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
 
 const STATUS_OPTIONS = [
   "Awaiting Submission",
@@ -499,10 +506,11 @@ export default function PlantingPage() {
       ...(options.headers || {}),
     });
 
-    let response = await fetch(`${API_BASE_URL}${path}`, {
-      ...options,
-      headers: buildHeaders(token),
-    });
+    const { timeoutMs, ...requestOptions } = options;
+    const timeoutController = Number.isFinite(timeoutMs) && timeoutMs > 0 && !requestOptions.signal ? new AbortController() : null;
+    const timeoutId = timeoutController ? window.setTimeout(() => timeoutController.abort(), timeoutMs) : null;
+    let response;
+    try { response = await fetch(`${API_BASE_URL}${path}`, { ...requestOptions, signal: requestOptions.signal || timeoutController?.signal, headers: buildHeaders(token) });
 
     // If Firebase restored an old cached token, force one
     // refresh and retry the request exactly once.
@@ -514,7 +522,8 @@ export default function PlantingPage() {
       }
 
       response = await fetch(`${API_BASE_URL}${path}`, {
-        ...options,
+        ...requestOptions,
+        signal: requestOptions.signal || timeoutController?.signal,
         headers: buildHeaders(refreshedToken),
       });
     }
@@ -539,6 +548,7 @@ export default function PlantingPage() {
     }
 
     return payload;
+    } catch (error) { if (timeoutController?.signal.aborted) throw new Error("The report submission timed out before MENRO could confirm it. Your draft and evidence remain available; retry once without changing them.", { cause: error }); throw error; } finally { if (timeoutId !== null) window.clearTimeout(timeoutId); }
   }
 
   function isSessionError(error) {
@@ -693,7 +703,7 @@ export default function PlantingPage() {
       cameraLocationDiagnostic || photoPreviews[0];
   const evidenceMapLatitude = Number(primaryLocationPreview?.latitude);
   const evidenceMapLongitude = Number(primaryLocationPreview?.longitude);
-  const evidenceMapAccuracy = Number(primaryLocationPreview?.accuracy);
+  const evidenceMapAccuracy = optionalFiniteNumber(primaryLocationPreview?.accuracy);
   const evidenceMapHasGps = Number.isFinite(evidenceMapLatitude) &&
     evidenceMapLatitude >= -90 && evidenceMapLatitude <= 90 &&
     Number.isFinite(evidenceMapLongitude) &&
@@ -2298,13 +2308,14 @@ export default function PlantingPage() {
         method: "POST",
         body: payload,
         headers: evidenceAttempt.current.headers(),
+        timeoutMs: PLANTING_SUBMISSION_TIMEOUT_MS,
       });
 
       resetForm();
       showPopup(`Planting Report Submitted Successfully — ${response.message ||
         "Your planting report has been submitted and is awaiting MENRO Staff verification."} Status: Pending Review.`);
 
-      await Promise.all([loadReports(), loadMyDistributions(), loadEvents()]);
+      void Promise.all([loadReports(), loadMyDistributions(), loadEvents()]).catch(() => showPopup("Your report was submitted, but the latest lists could not be refreshed. You can refresh this page when your connection is available.", "warning"));
     } catch (error) {
       showPopup(error.message || "Unable to submit the planting report. Please try again.", "error");
     } finally {
