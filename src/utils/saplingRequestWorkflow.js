@@ -1,9 +1,13 @@
 export const GROUP_SECTORS = new Set([
   "Barangay Official",
-  "School / Student",
   "Private Sector / Business",
   "Civic Organization / NGO",
   "Government Agency",
+]);
+
+export const REQUEST_TYPE_SELECTABLE_SECTORS = new Set([
+  "School / Student",
+  "Other (please specify)",
 ]);
 
 export const INDIVIDUAL_PURPOSES = [
@@ -49,7 +53,7 @@ const REQUEST_LETTER_TYPES = new Set([
 export function getEffectiveRequestType(sector, requestingAs) {
   return (
     GROUP_SECTORS.has(sector) ||
-    (sector === "Other (please specify)" && requestingAs === "group")
+    (REQUEST_TYPE_SELECTABLE_SECTORS.has(sector) && requestingAs === "group")
   ) ? "organization" : "individual";
 }
 

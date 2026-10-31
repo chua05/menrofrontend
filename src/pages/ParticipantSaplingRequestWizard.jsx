@@ -36,12 +36,14 @@ import {
   getPlantingAreaError,
   getPlantingAreaHectares,
   getPurposeOptions,
+  REQUEST_TYPE_SELECTABLE_SECTORS,
   getStepState,
   invalidateCompletedSteps,
   isOtherPurpose,
   getProcessingWindowAdvisory,
   MAX_SEEDLING_TYPES,
   normalizeBarangayName,
+  ORGANIZATION_PURPOSES,
   validatePlantingSchedule,
   validateRequestLetterFile,
 } from "../utils/saplingRequestWorkflow";
@@ -402,7 +404,7 @@ export default function ParticipantSaplingRequestWizard({ currentUser }) {
       const requestingAs =
         key === "requestingAs"
           ? value
-          : key === "sector" && value !== "Other (please specify)"
+          : key === "sector" && !REQUEST_TYPE_SELECTABLE_SECTORS.has(value)
             ? ""
             : old.requestingAs;
       const sector = key === "sector" ? value : old.sector;
@@ -525,7 +527,15 @@ export default function ParticipantSaplingRequestWizard({ currentUser }) {
           const defaultForm = fresh(profile);
           const savedWorkflow = request.workflow || {};
           const savedSector = savedWorkflow.sector || defaultForm.sector;
-          const savedRequestingAs = savedWorkflow.requestingAs || defaultForm.requestingAs;
+          // School requests created before the chooser existed were organization
+          // requests. Infer that legacy intent only while editing; new School
+          // requests still require the participant to choose a type.
+          const savedRequestingAs = savedWorkflow.requestingAs ||
+            (savedSector === "School / Student" &&
+              (savedWorkflow.effectiveRequestType === "organization" ||
+                ORGANIZATION_PURPOSES.includes(savedWorkflow.purpose || request.purpose) ||
+                request.eventProposal?.eventName)
+              ? "group" : defaultForm.requestingAs);
           const allowedPurposes = getPurposeOptions(savedSector, savedRequestingAs);
           const savedPurpose = savedWorkflow.purpose || request.purpose || "";
           const purpose = allowedPurposes.includes(savedPurpose)
@@ -616,8 +626,8 @@ export default function ParticipantSaplingRequestWizard({ currentUser }) {
           ? "Please select a barangay."
           : "Please enter a barangay name.");
       need("street", "Please enter your street, purok, or sitio.");
-      if (form.sector === "Other (please specify)") {
-        need("sectorOther");
+      if (REQUEST_TYPE_SELECTABLE_SECTORS.has(form.sector)) {
+        if (form.sector === "Other (please specify)") need("sectorOther");
         need("requestingAs", "Select how you are requesting.");
       }
     }
@@ -983,23 +993,21 @@ export default function ParticipantSaplingRequestWizard({ currentUser }) {
                     ))}
                   </select>
                 </Field>
-                {form.sector === "Other (please specify)" && (
+                {REQUEST_TYPE_SELECTABLE_SECTORS.has(form.sector) && (
                   <>
-                    <Field label="Please Specify *" error={errors.sectorOther}>
-                      <input
-                        value={form.sectorOther}
-                        onChange={(e) => put("sectorOther", e.target.value)}
-                      />
-                    </Field>
+                    {form.sector === "Other (please specify)" && (
+                      <Field label="Please Specify *" error={errors.sectorOther}>
+                        <input value={form.sectorOther} onChange={(e) => put("sectorOther", e.target.value)} />
+                      </Field>
+                    )}
                     <Field label="Requesting As *" error={errors.requestingAs}>
                       <Radios
                         name="requestingAs"
                         value={form.requestingAs}
                         set={(v) => put("requestingAs", v)}
-                        items={[
-                          ["individual", "Individual"],
-                          ["group", "Group / Organization"],
-                        ]}
+                        items={form.sector === "School / Student"
+                          ? [["individual", "Individual / Student"], ["group", "School / Organization Representative"]]
+                          : [["individual", "Individual"], ["group", "Group / Organization"]]}
                       />
                     </Field>
                   </>

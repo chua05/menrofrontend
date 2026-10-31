@@ -8,6 +8,7 @@ import {
   getPlantingAreaHectares,
   getEffectiveRequestType,
   getPurposeOptions,
+  REQUEST_TYPE_SELECTABLE_SECTORS,
   getStepState,
   invalidateCompletedSteps,
   isGroupRequester,
@@ -35,7 +36,6 @@ test("classifies individual and group requesters from sector/requesting-as", () 
   assert.equal(isGroupRequester("Other (please specify)", "individual"), false);
   for (const sector of [
     "Barangay Official",
-    "School / Student",
     "Private Sector / Business",
     "Civic Organization / NGO",
     "Government Agency",
@@ -46,9 +46,11 @@ test("classifies individual and group requesters from sector/requesting-as", () 
   assert.equal(isGroupRequester("", ""), false);
 });
 
-test("request purpose does not affect requester classification", () => {
+test("School / Student requires a requester type", () => {
   assert.equal(isGroupRequester("Resident / Individual", ""), false);
-  assert.equal(isGroupRequester("School / Student", ""), true);
+  assert.equal(REQUEST_TYPE_SELECTABLE_SECTORS.has("School / Student"), true);
+  assert.equal(getEffectiveRequestType("School / Student", "individual"), "individual");
+  assert.equal(getEffectiveRequestType("School / Student", "group"), "organization");
 });
 
 test("filters purposes by the effective request type", () => {
@@ -62,7 +64,9 @@ test("filters purposes by the effective request type", () => {
     "Environmental Conservation",
     "Other (Please Specify)",
   ]);
-  const organization = getPurposeOptions("School / Student", "");
+  const schoolIndividual = getPurposeOptions("School / Student", "individual");
+  assert.deepEqual(schoolIndividual, individual);
+  const organization = getPurposeOptions("School / Student", "group");
   assert.ok(organization.includes("School Activity"));
   assert.ok(!organization.includes("Backyard / Home Planting"));
   assert.equal(getEffectiveRequestType("Other (please specify)", "individual"), "individual");
@@ -76,6 +80,9 @@ test("wizard clears incompatible purpose and schedule values when request type c
   assert.match(wizardSource, /eventName: "",\s*activityDate: "",\s*startTime: "",\s*endTime: "",\s*participants: "",\s*requestLetter: null/);
   assert.match(wizardSource, /clearPurpose \? \{ purpose: "", purposeOther: "" \}/);
   assert.match(wizardSource, /effectiveRequestType: requestType/);
+  assert.match(wizardSource, /REQUEST_TYPE_SELECTABLE_SECTORS\.has\(form\.sector\)/);
+  assert.match(wizardSource, /Individual \/ Student/);
+  assert.match(wizardSource, /School \/ Organization Representative/);
 });
 
 test("derives exact hectares for fixed and custom planting-area choices", () => {

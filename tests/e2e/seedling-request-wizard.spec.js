@@ -60,9 +60,12 @@ async function expectValidation(page, message) {
   }).toBe(true);
 }
 
-async function fillStep1(page, sector) {
+async function fillStep1(page, sector, requestingAs = "") {
   await page.getByLabel("Sector *").selectOption({ label: sector });
   await expect(page.getByLabel("Sector *")).toHaveValue(sector);
+  if (requestingAs) await page.getByRole("radio", { name: requestingAs === "group"
+    ? /School \/ Organization Representative|Group \/ Organization/
+    : /Individual \/ Student|Individual/ }).check();
   await page.getByLabel("Province *").selectOption("Sorsogon");
   await expect(page.getByLabel("Province *")).toHaveValue("Sorsogon");
   await expect(page.getByLabel("Municipality / City *").locator('option[value="Bulan"]')).toBeAttached();
@@ -107,6 +110,33 @@ test("Resident / Individual renders only the individual purposes", async ({ page
     "Other (Please Specify)",
   ]);
   await expect(page.getByText("Individual Planting Schedule", { exact: true })).toHaveCount(0);
+});
+
+test("School / Student switches purpose and schedule fields by Requesting As", async ({ page }) => {
+  await login(page);
+  await fillStep1(page, "School / Student", "individual");
+  expect(await page.getByLabel("Purpose of Request *").locator("option").allTextContents()).toEqual([
+    "Select purpose", "Backyard / Home Planting", "Fruit-Bearing Tree Planting",
+    "Farm / Agricultural Planting", "Land Rehabilitation / Reforestation",
+    "Replacement Planting", "Environmental Conservation", "Other (Please Specify)",
+  ]);
+  await page.getByLabel("Purpose of Request *").selectOption("Backyard / Home Planting");
+  const individualTreeRow = page.locator(".sr-tree-row").first();
+  await individualTreeRow.locator("select").selectOption("request-letter-browser-inventory");
+  await individualTreeRow.locator('input[type="number"]').fill("2");
+  await page.getByLabel("Preferred Release Date *").fill("2026-11-10");
+  await page.getByRole("button", { name: /Next/ }).click();
+  await expect(page.getByText("Individual Planting Schedule", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: /Back/ }).click();
+  await page.getByRole("button", { name: /Back/ }).click();
+  await page.getByRole("radio", { name: "School / Organization Representative", exact: true }).check();
+  await page.getByRole("button", { name: /Next/ }).click();
+  const purposes = await page.getByLabel("Purpose of Request *").locator("option").allTextContents();
+  expect(purposes).toContain("School Activity");
+  expect(purposes).not.toContain("Backyard / Home Planting");
+  await expect(page.getByLabel("Purpose of Request *")).toHaveValue("");
+  await fillStep2(page, { group: true });
+  await expect(page.getByText("Organization Planting Event", { exact: true })).toBeVisible();
 });
 
 async function fillStep3(page, { group, frozen = false }) {
