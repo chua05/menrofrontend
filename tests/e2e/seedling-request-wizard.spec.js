@@ -78,10 +78,12 @@ async function fillStep1(page, sector) {
   await expect(page.getByRole("heading", { name: "Request Details", exact: true })).toBeVisible();
 }
 
-async function fillStep2(page, { frozen = false, preferredReleaseDate = "" } = {}) {
+async function fillStep2(page, { group = false, frozen = false, preferredReleaseDate = "" } = {}) {
   await page.getByRole("button", { name: /Next/ }).click();
   await expectValidation(page, "Select a purpose");
-  await page.getByLabel("Purpose of Request *").selectOption("Tree Planting Activity");
+  await page.getByLabel("Purpose of Request *").selectOption(
+    group ? "Tree Planting Activity" : "Backyard / Home Planting",
+  );
   const treeRow = page.locator(".sr-tree-row").first();
   await treeRow.locator("select").selectOption("request-letter-browser-inventory");
   await treeRow.locator('input[type="number"]').fill("2");
@@ -90,6 +92,22 @@ async function fillStep2(page, { frozen = false, preferredReleaseDate = "" } = {
   await page.getByRole("button", { name: /Next/ }).click();
   await expect(page.getByRole("heading", { name: "Planting Information", exact: true })).toBeVisible();
 }
+
+test("Resident / Individual renders only the individual purposes", async ({ page }) => {
+  await login(page);
+  await fillStep1(page, "Resident / Individual");
+  expect(await page.getByLabel("Purpose of Request *").locator("option").allTextContents()).toEqual([
+    "Select purpose",
+    "Backyard / Home Planting",
+    "Fruit-Bearing Tree Planting",
+    "Farm / Agricultural Planting",
+    "Land Rehabilitation / Reforestation",
+    "Replacement Planting",
+    "Environmental Conservation",
+    "Other (Please Specify)",
+  ]);
+  await expect(page.getByText("Individual Planting Schedule", { exact: true })).toHaveCount(0);
+});
 
 async function fillStep3(page, { group, frozen = false }) {
   await page.getByRole("button", { name: /Next/ }).click();
@@ -200,7 +218,7 @@ test("Individual Steps 1-4 validate, preserve values, focus errors, and submit",
 
 for (const fileIndex of [0, 1, 2, 3]) test(`Organization submits actual multipart format ${fileIndex + 1}`, async ({ page }) => {
   const file = (await makeFiles())[fileIndex];
-  await login(page); await fillStep1(page, "Civic Organization / NGO"); await fillStep2(page);
+  await login(page); await fillStep1(page, "Civic Organization / NGO"); await fillStep2(page, { group: true });
   await fillStep3(page, { group: true }); await completeStep4(page, file);
   await page.getByTitle("View request details").first().click();
   await expect(page.getByRole("button", { name: "Download Request Letter" })).toBeVisible();
@@ -211,7 +229,7 @@ for (const fileIndex of [0, 1, 2, 3]) test(`Organization submits actual multipar
 
 test("frozen October 26/27 group schedule advances to Step 4", async ({ page }) => {
   await page.clock.setFixedTime(new Date("2026-10-26T15:49:00.000Z"));
-  await login(page); await fillStep1(page, "Civic Organization / NGO"); await fillStep2(page, { frozen: true });
+  await login(page); await fillStep1(page, "Civic Organization / NGO"); await fillStep2(page, { group: true, frozen: true });
   await fillStep3(page, { group: true, frozen: true });
   await expect(page.locator(".sr-validation-summary")).toHaveCount(0);
 });
@@ -220,7 +238,7 @@ test("same-day release and event schedule advances to Step 4 before planting sta
   await page.clock.setFixedTime(new Date("2026-10-28T08:00:00.000Z"));
   await login(page);
   await fillStep1(page, "Civic Organization / NGO");
-  await fillStep2(page, { preferredReleaseDate: "2026-10-28" });
+  await fillStep2(page, { group: true, preferredReleaseDate: "2026-10-28" });
 
   const barangays = page.getByLabel("Barangay *");
   await barangays.last().selectOption("ZoneVIIIPoblacion");
