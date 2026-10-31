@@ -6,6 +6,29 @@ export const GROUP_SECTORS = new Set([
   "Government Agency",
 ]);
 
+export const INDIVIDUAL_PURPOSES = [
+  "Backyard / Home Planting",
+  "Fruit-Bearing Tree Planting",
+  "Farm / Agricultural Planting",
+  "Land Rehabilitation / Reforestation",
+  "Replacement Planting",
+  "Environmental Conservation",
+  "Other (Please Specify)",
+];
+
+// Keep the existing organization choices intact.
+export const ORGANIZATION_PURPOSES = [
+  "Tree Planting Activity",
+  "Reforestation / Rehabilitation",
+  "School Activity",
+  "Barangay Activity",
+  "Community Activity",
+  "Replacement Planting",
+  "Environmental Program",
+  "Personal Planting",
+  "Other",
+];
+
 export const EXACT_AREA_CHOICES = new Set([
   "Less than 1 hectare",
   "6–10 hectares",
@@ -23,11 +46,25 @@ const REQUEST_LETTER_TYPES = new Set([
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
 ]);
 
-export function isGroupRequester(sector, requestingAs) {
+export function getEffectiveRequestType(sector, requestingAs) {
   return (
     GROUP_SECTORS.has(sector) ||
     (sector === "Other (please specify)" && requestingAs === "group")
-  );
+  ) ? "organization" : "individual";
+}
+
+export function isGroupRequester(sector, requestingAs) {
+  return getEffectiveRequestType(sector, requestingAs) === "organization";
+}
+
+export function getPurposeOptions(sector, requestingAs) {
+  return getEffectiveRequestType(sector, requestingAs) === "organization"
+    ? ORGANIZATION_PURPOSES
+    : INDIVIDUAL_PURPOSES;
+}
+
+export function isOtherPurpose(purpose) {
+  return ["Other", "Other (Please Specify)"].includes(String(purpose || ""));
 }
 
 export function normalizeBarangayName(value) {

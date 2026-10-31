@@ -32,11 +32,13 @@ import {
 import {
   canNavigateToStep,
   EXACT_AREA_CHOICES,
+  getEffectiveRequestType,
   getPlantingAreaError,
   getPlantingAreaHectares,
+  getPurposeOptions,
   getStepState,
   invalidateCompletedSteps,
-  isGroupRequester,
+  isOtherPurpose,
   getProcessingWindowAdvisory,
   MAX_SEEDLING_TYPES,
   normalizeBarangayName,
@@ -61,17 +63,6 @@ const SECTORS = [
   "Civic Organization / NGO",
   "Government Agency",
   "Other (please specify)",
-];
-const PURPOSES = [
-  "Tree Planting Activity",
-  "Reforestation / Rehabilitation",
-  "School Activity",
-  "Barangay Activity",
-  "Community Activity",
-  "Replacement Planting",
-  "Environmental Program",
-  "Personal Planting",
-  "Other",
 ];
 const PROVINCES = getPhilippineProvinces();
 const AREAS = [
@@ -380,7 +371,9 @@ export default function ParticipantSaplingRequestWizard({ currentUser }) {
   useEffect(() => {
     showErrorRef.current = showError;
   }, [showError]);
-  const group = isGroupRequester(form.sector, form.requestingAs);
+  const requestType = getEffectiveRequestType(form.sector, form.requestingAs);
+  const group = requestType === "organization";
+  const purposeOptions = getPurposeOptions(form.sector, form.requestingAs);
   const chosenSite = sites.find((x) => x.id === form.existingSiteId);
   const addressMunicipalities = useMemo(
     () => getMunicipalitiesForProvince(form.addressProvince),
@@ -413,7 +406,15 @@ export default function ParticipantSaplingRequestWizard({ currentUser }) {
             ? ""
             : old.requestingAs;
       const sector = key === "sector" ? value : old.sector;
-      const nextIsGroup = isGroupRequester(sector, requestingAs);
+      const nextRequestType = getEffectiveRequestType(sector, requestingAs);
+      const nextIsGroup = nextRequestType === "organization";
+      const requestTypeChanged = nextRequestType !== getEffectiveRequestType(
+        old.sector,
+        old.requestingAs,
+      );
+      const nextPurposeOptions = getPurposeOptions(sector, requestingAs);
+      const clearPurpose = ["sector", "requestingAs"].includes(key) &&
+        !nextPurposeOptions.includes(old.purpose);
       return {
         ...old,
         [key]: value,
@@ -460,7 +461,17 @@ export default function ParticipantSaplingRequestWizard({ currentUser }) {
         ...(key === "areaChoice" && !EXACT_AREA_CHOICES.has(value)
           ? { exactArea: "" }
           : {}),
-        ...(!nextIsGroup
+        ...(clearPurpose ? { purpose: "", purposeOther: "" } : {}),
+        ...(requestTypeChanged
+          ? {
+              eventName: "",
+              activityDate: "",
+              startTime: "",
+              endTime: "",
+              participants: "",
+              requestLetter: null,
+            }
+          : !nextIsGroup
           ? { eventName: "", endTime: "", requestLetter: null }
           : {}),
       };
@@ -469,7 +480,10 @@ export default function ParticipantSaplingRequestWizard({ currentUser }) {
       ...old,
       [key]: "",
       ...(["sector", "requestingAs"].includes(key)
-        ? { eventName: "", endTime: "", participants: "", requestLetter: "" }
+        ? {
+            purpose: "", purposeOther: "", eventName: "", activityDate: "",
+            startTime: "", endTime: "", participants: "", requestLetter: "",
+          }
         : {}),
       ...(key === "areaChoice" ? { exactArea: "" } : {}),
       ...(key === "landType" ? { landTypeOther: "" } : {}),
@@ -507,10 +521,32 @@ export default function ParticipantSaplingRequestWizard({ currentUser }) {
         setInventory(stock || []);
         setSites(allSites?.data || allSites || []);
         setEditing(request);
-        if (request)
+        if (request) {
+          const defaultForm = fresh(profile);
+          const savedWorkflow = request.workflow || {};
+          const savedSector = savedWorkflow.sector || defaultForm.sector;
+          const savedRequestingAs = savedWorkflow.requestingAs || defaultForm.requestingAs;
+          const allowedPurposes = getPurposeOptions(savedSector, savedRequestingAs);
+          const savedPurpose = savedWorkflow.purpose || request.purpose || "";
+          const purpose = allowedPurposes.includes(savedPurpose)
+            ? savedPurpose
+            : savedPurpose
+              ? getEffectiveRequestType(savedSector, savedRequestingAs) === "organization"
+                ? "Other"
+                : "Other (Please Specify)"
+              : "";
           setForm({
-            ...fresh(profile),
-            ...(request.workflow || {}),
+            ...defaultForm,
+            ...savedWorkflow,
+            sector: savedSector,
+            requestingAs: savedRequestingAs,
+            purpose,
+            purposeOther: savedWorkflow.purposeOther || (isOtherPurpose(purpose) ? savedPurpose : ""),
+            eventName: request.workflow?.eventName || request.eventProposal?.eventName || "",
+            activityDate: request.workflow?.activityDate || request.eventProposal?.proposedDate || "",
+            startTime: request.workflow?.startTime || request.eventProposal?.proposedStartTime || "",
+            endTime: request.workflow?.endTime || request.eventProposal?.proposedEndTime || "",
+            participants: request.workflow?.participants || request.eventProposal?.expectedParticipants || "",
             addressProvince: request.workflow?.addressProvince || "Sorsogon",
             addressMunicipality: request.workflow?.addressMunicipality || "Bulan",
             fullName: request.participantName || profile.fullName,
@@ -527,7 +563,7 @@ export default function ParticipantSaplingRequestWizard({ currentUser }) {
             idNumber: "",
             confirmed: false,
           });
-        else setForm(fresh(profile));
+        } else setForm(fresh(profile));
       })
       .catch((e) => { if (!cancelled) showErrorRef.current(e.message); })
       .finally(() => { if (!cancelled) setLoading(false); });
@@ -587,7 +623,10 @@ export default function ParticipantSaplingRequestWizard({ currentUser }) {
     }
     if (s === 2) {
       need("purpose", "Select a purpose.");
-      if (form.purpose === "Other") need("purposeOther");
+      if (form.purpose && !purposeOptions.includes(form.purpose)) {
+        e.purpose = "Select a purpose for the selected request type.";
+      }
+      if (isOtherPurpose(form.purpose)) need("purposeOther", "Please specify the purpose.");
       const ids = form.trees.map((x) => x.inventoryId).filter(Boolean);
       if (
         form.trees.some(
@@ -736,6 +775,7 @@ export default function ParticipantSaplingRequestWizard({ currentUser }) {
         : `${form.specificLocation}, ${form.siteBarangay}, Bulan, Sorsogon`;
     const workflow = {
       ...form,
+      effectiveRequestType: requestType,
       addressProvince: form.addressProvince === "Other"
         ? form.addressProvinceOther.trim() : form.addressProvince,
       addressMunicipality: form.addressMunicipality === "Other"
@@ -775,17 +815,17 @@ export default function ParticipantSaplingRequestWizard({ currentUser }) {
         inventoryId: x.inventoryId,
         quantity: Number(x.quantity),
       })),
-      purpose: form.purpose === "Other" ? form.purposeOther : form.purpose,
+      purpose: isOtherPurpose(form.purpose) ? form.purposeOther.trim() : form.purpose,
       plantingLocation: location,
       preferredReleaseDate: form.preferredReleaseDate,
       workflow,
       eventProposal: {
-        eventName: group ? form.eventName : `Individual planting schedule`,
+        eventName: group ? form.eventName : "Individual planting schedule",
         barangay: form.siteBarangay,
         plantingSiteId: form.existingSiteId || "PROPOSED",
         proposedDate: form.activityDate,
-        startTime: form.startTime,
-        endTime: group ? form.endTime : "",
+        proposedStartTime: form.startTime,
+        proposedEndTime: group ? form.endTime : "",
         eventLocation: location,
         latitude: Number(
           form.siteMode === "existing" ? chosenSite?.latitude : form.latitude,
@@ -1029,12 +1069,12 @@ export default function ParticipantSaplingRequestWizard({ currentUser }) {
                     onChange={(e) => put("purpose", e.target.value)}
                   >
                     <option value="">Select purpose</option>
-                    {PURPOSES.map((x) => (
+                    {purposeOptions.map((x) => (
                       <option key={x}>{x}</option>
                     ))}
                   </select>
                 </Field>
-                {form.purpose === "Other" && (
+                {isOtherPurpose(form.purpose) && (
                   <Field label="Please Specify *" error={errors.purposeOther}>
                     <input
                       value={form.purposeOther}
@@ -1453,7 +1493,7 @@ export default function ParticipantSaplingRequestWizard({ currentUser }) {
                 />
               </Field>
               <Title>
-                {group ? "Proposed Planting Event" : "Planting Schedule"}
+                {group ? "Organization Planting Event" : "Individual Planting Schedule"}
               </Title>
               <div className="sr-form-grid">
                 {group && (

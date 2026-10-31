@@ -6,9 +6,12 @@ import {
   canNavigateToStep,
   getPlantingAreaError,
   getPlantingAreaHectares,
+  getEffectiveRequestType,
+  getPurposeOptions,
   getStepState,
   invalidateCompletedSteps,
   isGroupRequester,
+  isOtherPurpose,
   formatScheduleTime,
   getProcessingWindowAdvisory,
   normalizeBarangayName,
@@ -46,6 +49,33 @@ test("classifies individual and group requesters from sector/requesting-as", () 
 test("request purpose does not affect requester classification", () => {
   assert.equal(isGroupRequester("Resident / Individual", ""), false);
   assert.equal(isGroupRequester("School / Student", ""), true);
+});
+
+test("filters purposes by the effective request type", () => {
+  const individual = getPurposeOptions("Resident / Individual", "");
+  assert.deepEqual(individual, [
+    "Backyard / Home Planting",
+    "Fruit-Bearing Tree Planting",
+    "Farm / Agricultural Planting",
+    "Land Rehabilitation / Reforestation",
+    "Replacement Planting",
+    "Environmental Conservation",
+    "Other (Please Specify)",
+  ]);
+  const organization = getPurposeOptions("School / Student", "");
+  assert.ok(organization.includes("School Activity"));
+  assert.ok(!organization.includes("Backyard / Home Planting"));
+  assert.equal(getEffectiveRequestType("Other (please specify)", "individual"), "individual");
+  assert.equal(getEffectiveRequestType("Other (please specify)", "group"), "organization");
+  assert.equal(isOtherPurpose("Other (Please Specify)"), true);
+  assert.equal(isOtherPurpose("Other"), true);
+});
+
+test("wizard clears incompatible purpose and schedule values when request type changes", () => {
+  assert.match(wizardSource, /const requestTypeChanged = nextRequestType !== getEffectiveRequestType/);
+  assert.match(wizardSource, /eventName: "",\s*activityDate: "",\s*startTime: "",\s*endTime: "",\s*participants: "",\s*requestLetter: null/);
+  assert.match(wizardSource, /clearPurpose \? \{ purpose: "", purposeOther: "" \}/);
+  assert.match(wizardSource, /effectiveRequestType: requestType/);
 });
 
 test("derives exact hectares for fixed and custom planting-area choices", () => {
