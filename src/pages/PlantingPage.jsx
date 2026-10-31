@@ -50,7 +50,7 @@ const API_BASE_URL =
 const MAX_PHOTO_SIZE = 10 * 1024 * 1024;
 const MAX_EVIDENCE_PHOTOS = 10;
 const PLANTING_SUBMISSION_TIMEOUT_MS = 60_000;
-const SITE_GPS_TOLERANCE_METERS = 20;
+const SITE_GPS_TOLERANCE_METERS = 50;
 const OUTSIDE_SITE_WARNING =
   "The photo location is outside the selected planting site's coverage area. This report may still be submitted for MENRO Staff verification.";
 const SITE_MATCH_MESSAGE =

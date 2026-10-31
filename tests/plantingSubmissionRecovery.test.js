@@ -14,3 +14,9 @@ test("missing EXIF accuracy is not displayed as perfect accuracy", () => {
   assert.match(plantingPage, /function optionalFiniteNumber\(value\)/);
   assert.match(plantingPage, /const evidenceMapAccuracy = optionalFiniteNumber\(primaryLocationPreview\?\.accuracy\)/);
 });
+
+test("planting location metadata uses the 50 metre fallback consistently", () => {
+  assert.match(plantingPage, /const SITE_GPS_TOLERANCE_METERS = 50/);
+  assert.match(plantingPage, /"50m-fallback"/);
+  assert.doesNotMatch(plantingPage, /"20m-fallback"/);
+});
