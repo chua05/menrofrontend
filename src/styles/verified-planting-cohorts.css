@@ -1,0 +1,8 @@
+.cohort-page { max-width: 1000px; margin: 0 auto; padding: 1.5rem; }
+.cohort-page label { display: grid; gap: .35rem; margin: .65rem 0; }
+.cohort-page input, .cohort-page select, .cohort-page textarea { max-width: 100%; padding: .55rem; }
+.cohort-page fieldset { border: 1px solid #cbd5d0; border-radius: .5rem; margin: .8rem 0; padding: .75rem; }
+.cohort-card { background: #fff; border: 1px solid #dbe5df; border-radius: .75rem; margin-top: 1rem; padding: 1rem; }
+.cohort-notice { background: #eff6ff; border-left: 4px solid #2563eb; padding: .75rem; }
+.cohort-error { color: #991b1b; }.cohort-success { color: #166534; }.cohort-page button { margin: .25rem .5rem .25rem 0; }
+@media (max-width: 480px) { .cohort-page { padding: 1rem; } .cohort-page button { width: 100%; margin: .3rem 0; } }

@@ -41,6 +41,7 @@ import EventSchedulePage from "./pages/EventSchedulePage";
 import SitesPage from "./pages/SitesPage";
 import PlantingPage from "./pages/PlantingPage";
 import MonitoringPage from "./pages/MonitoringPage";
+import VerifiedPlantingCohortsPage from "./pages/VerifiedPlantingCohortsPage";
 
 import ReportsPage from "./pages/ReportsPage";
 import ProfilePage from "./pages/ProfilePage";
@@ -154,6 +155,7 @@ function App() {
                 path="survival-monitoring"
                 element={<MonitoringPage />}
               />
+              <Route path="verified-planting-cohorts" element={<VerifiedPlantingCohortsPage />} />
 
               <Route
                 path="reforestation-analytics"
@@ -325,6 +327,7 @@ function App() {
                 path="survival-monitoring"
                 element={<MonitoringPage />}
               />
+              <Route path="verified-planting-cohorts" element={<VerifiedPlantingCohortsPage />} />
 
               <Route
                 path="reforestation-analytics"
