@@ -5,4 +5,5 @@
 .cohort-card { background: #fff; border: 1px solid #dbe5df; border-radius: .75rem; margin-top: 1rem; padding: 1rem; }
 .cohort-notice { background: #eff6ff; border-left: 4px solid #2563eb; padding: .75rem; }
 .cohort-error { color: #991b1b; }.cohort-success { color: #166534; }.cohort-page button { margin: .25rem .5rem .25rem 0; }
+.cohort-photo-preview { display: block; width: min(100%, 280px); max-height: 220px; margin-top: .7rem; border-radius: .4rem; object-fit: cover; }
 @media (max-width: 480px) { .cohort-page { padding: 1rem; } .cohort-page button { width: 100%; margin: .3rem 0; } }
