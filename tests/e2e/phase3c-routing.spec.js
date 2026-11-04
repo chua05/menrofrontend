@@ -13,6 +13,26 @@ async function expectMonitoringPage(page) {
   await expect(page.getByRole("heading", { name: monitoringLabel })).toBeVisible();
 }
 
+test("same permanent tree in different visits never reuses cached private photos", async ({ page }) => {
+  await isolate(page);
+  await page.addInitScript(() => {
+    window.__REVOKED_PHOTOS__ = [];
+    const revoke = URL.revokeObjectURL.bind(URL);
+    URL.revokeObjectURL = value => { window.__REVOKED_PHOTOS__.push(value); revoke(value); };
+  });
+  await page.goto("/admin/permanent-sample-monitoring?role=admin&fixture=two-visits");
+  await page.getByRole("button", { name: "VPMV-RETURNED-001", exact: true }).click();
+  await page.getByRole("button", { name: "View private evidence revision 0", exact: true }).click();
+  const image = page.getByAltText("Private evidence for TREE-001, revision 0");
+  await expect(image).toBeVisible(); const first = await image.getAttribute("src");
+  await page.getByRole("button", { name: "VPMV-APPROVED-001", exact: true }).click();
+  await expect(image).toHaveCount(0);
+  expect(await page.evaluate(value => window.__REVOKED_PHOTOS__.includes(value), first)).toBe(true);
+  await page.getByRole("button", { name: "View private evidence revision 0", exact: true }).click();
+  await expect(image).toBeVisible(); expect(await image.getAttribute("src")).not.toBe(first);
+  expect(await page.evaluate(() => window.__PHASE3C_REQUESTS__.at(-1))).toBe("/evidence/sample-monitoring/visits/VPMV-APPROVED-001/samples/TREE-001/evidence/0");
+});
+
 test("admin fixture opens the real admin monitoring route when the gate is enabled", async ({ page }) => {
   await isolate(page);
   await page.goto("/admin/permanent-sample-monitoring?role=admin");
@@ -20,6 +40,32 @@ test("admin fixture opens the real admin monitoring route when the gate is enabl
   await expect(
     page.getByRole("link", { name: monitoringLabel, includeHidden: true })
   ).toHaveCount(1);
+});
+
+test("replaced and cross-visit pending photo previews are revoked", async ({ page }) => {
+  await isolate(page);
+  await page.addInitScript(() => {
+    window.__REVOKED_PENDING__ = [];
+    const revoke = URL.revokeObjectURL.bind(URL);
+    URL.revokeObjectURL = value => { window.__REVOKED_PENDING__.push(value); revoke(value); };
+  });
+  await page.goto("/staff/permanent-sample-monitoring?role=staff&fixture=two-visits");
+  await page.getByRole("button", { name: "VPMV-RETURNED-001", exact: true }).click();
+  const preview = page.getByAltText("Verified evidence preview for TREE-001");
+  let first;
+  for (let i = 0; i < 2; i++) {
+    await page.getByRole("button", { name: "Capture verified photo for TREE-001" }).click();
+    await page.getByRole("button", { name: "Verify fixture camera photo" }).click();
+    await expect(page.getByRole("dialog", { name: "Secure camera capture" })).toHaveCount(0);
+    await expect(preview).toBeVisible();
+    if (i === 0) first = await preview.getAttribute("src");
+  }
+  expect(await page.evaluate(value => window.__REVOKED_PENDING__.includes(value), first)).toBe(true);
+  const second = await preview.getAttribute("src");
+  await page.getByRole("button", { name: "VPMV-APPROVED-001", exact: true }).click();
+  await expect(preview).toHaveCount(0);
+  expect(await page.evaluate(value => window.__REVOKED_PENDING__.includes(value), second)).toBe(true);
+  await expect(page.getByRole("button", { name: "Upload verified photo for TREE-001" })).toHaveCount(0);
 });
 
 test("staff fixture opens the real staff monitoring route when the gate is enabled", async ({ page }) => {

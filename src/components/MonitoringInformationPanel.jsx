@@ -7,15 +7,27 @@ export default function MonitoringInformationPanel({ visitId }) {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
+  const [cursor, setCursor] = useState(null);
+  const [loadingMore, setLoadingMore] = useState(false);
   const attempt = useRef(null);
   useEffect(() => {
     let active = true;
-    sampleRequest(`/sample-monitoring-information?visitId=${encodeURIComponent(visitId)}`)
-      .then(data => { if (active) setRows(data); })
+    sampleRequest(`/sample-monitoring-information?paged=true&visitId=${encodeURIComponent(visitId)}`)
+      .then(data => { if (active) { setRows(data.requests); setCursor(data.nextCursor); } })
       .catch(error => { if (active) setError(error.message); })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
   }, [visitId]);
+  async function more() {
+    if (!cursor || loadingMore) return;
+    setLoadingMore(true);
+    try {
+      const data = await sampleRequest(`/sample-monitoring-information?paged=true&visitId=${encodeURIComponent(visitId)}&cursor=${encodeURIComponent(cursor)}`);
+      setRows(previous => [...new Map([...previous, ...data.requests].map(row => [row.id, row])).values()]);
+      setCursor(data.nextCursor);
+    } catch (error) { setError(error.message); }
+    finally { setLoadingMore(false); }
+  }
   async function send(event) {
     event.preventDefault();
     if (busy || !question.trim()) return;
@@ -48,5 +60,6 @@ export default function MonitoringInformationPanel({ visitId }) {
       {row.answer && <p>Reply: {row.answer}</p>}
       <ol>{row.history.map((entry, i) => <li key={i}>{entry.action} · {entry.role}</li>)}</ol>
     </li>)}</ul>
+    {cursor && <button disabled={loadingMore} onClick={more}>{loadingMore ? "Loading older requests…" : "Load older requests"}</button>}
   </section>;
 }

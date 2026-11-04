@@ -1,6 +1,30 @@
 {
   "indexes": [
     {
+      "collectionGroup": "sampleMonitoringInformationRequests", "queryScope": "COLLECTION",
+      "fields": [{ "fieldPath": "recipientUserId", "order": "ASCENDING" }, { "fieldPath": "createdAt", "order": "DESCENDING" }]
+    },
+    {
+      "collectionGroup": "sampleMonitoringInformationRequests", "queryScope": "COLLECTION",
+      "fields": [{ "fieldPath": "visitId", "order": "ASCENDING" }, { "fieldPath": "createdAt", "order": "DESCENDING" }]
+    },
+    {
+      "collectionGroup": "sampleMonitoringVisits", "queryScope": "COLLECTION",
+      "fields": [{ "fieldPath": "visitDate", "order": "DESCENDING" }, { "fieldPath": "__name__", "order": "ASCENDING" }]
+    },
+    {
+      "collectionGroup": "sampleMonitoringVisits", "queryScope": "COLLECTION",
+      "fields": [{ "fieldPath": "status", "order": "ASCENDING" }, { "fieldPath": "visitDate", "order": "DESCENDING" }, { "fieldPath": "__name__", "order": "ASCENDING" }]
+    },
+    {
+      "collectionGroup": "sampleMonitoringVisits", "queryScope": "COLLECTION",
+      "fields": [{ "fieldPath": "createdBy", "order": "ASCENDING" }, { "fieldPath": "visitDate", "order": "DESCENDING" }, { "fieldPath": "__name__", "order": "ASCENDING" }]
+    },
+    {
+      "collectionGroup": "sampleMonitoringVisits", "queryScope": "COLLECTION",
+      "fields": [{ "fieldPath": "createdBy", "order": "ASCENDING" }, { "fieldPath": "status", "order": "ASCENDING" }, { "fieldPath": "visitDate", "order": "DESCENDING" }, { "fieldPath": "__name__", "order": "ASCENDING" }]
+    },
+    {
       "collectionGroup": "notifications",
       "queryScope": "COLLECTION",
       "fields": [

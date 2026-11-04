@@ -65,6 +65,10 @@ const response = (status, body) => new Response(JSON.stringify(body), { status, 
 const failure = (status, message) => response(status, { success: false, message });
 
 function listResponse(url, activeFixture) {
+  if (activeFixture === "two-visits") return response(200, { success: true, data: { visits: [
+    { ...returnedDetail, progress: { completed: 2, total: 2, rechecking: 0 } },
+    { ...approvedDetail, progress: { completed: 2, total: 2, rechecking: 0 } },
+  ], nextCursor: null } });
   if (activeFixture === "empty") return response(200, { success: true, data: { visits: [], nextCursor: null } });
   if (activeFixture === "discovery-401") return failure(401, "Credentials required.");
   if (activeFixture === "discovery-403") return failure(403, "Forbidden.");
@@ -86,6 +90,12 @@ function listResponse(url, activeFixture) {
 }
 
 function detailResponse(visitId, activeFixture) {
+  if (activeFixture === "two-visits") {
+    const source = visitId === returnedDetail.id ? returnedDetail : approvedDetail;
+    return response(200, { success: true, data: { ...source, sampleAssessments: source.sampleAssessments.map((row, index) => ({
+      ...row, evidenceHistory: index === 0 ? [{ revision: 0 }] : [],
+    })) } });
+  }
   if (activeFixture === "detail-404") return failure(404, "private://fixture-object");
   if (activeFixture === "detail-500") return failure(500, "Detail unavailable.");
   if (activeFixture === "detail-401") return failure(401, "Sign in is required.");

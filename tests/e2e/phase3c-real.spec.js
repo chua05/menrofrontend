@@ -92,8 +92,13 @@ test("Staff captures, verifies, uploads, and retrieves private evidence through 
   await page.getByRole("button", { name: /Continue to Camera/ }).click();
   const video = page.locator("video.secure-camera-preview"); await expect(video).toBeVisible();
   await expect.poll(() => video.evaluate((node) => node.videoWidth > 0 && node.videoHeight > 0)).toBe(true);
+  await page.context().setGeolocation({ latitude: 12.662311, longitude: 123.932993, accuracy: 5 });
   await page.getByRole("button", { name: "Capture", exact: true }).click();
+  const verification = page.waitForResponse(response => response.url().includes("/api/evidence-capture-sessions/") && response.url().endsWith("/verify"));
   await page.getByRole("button", { name: /Verify & Use Photo/ }).click();
+  const verifiedLocation = (await (await verification).json()).data.location;
+  expect(verifiedLocation.latitude).toBe(12.662311);
+  expect(verifiedLocation.longitude).toBe(123.932993);
   await expect(page.getByText("Verified photo ready for private upload.")).toBeVisible();
   const upload = page.waitForResponse((response) => {
     const url = new URL(response.url());

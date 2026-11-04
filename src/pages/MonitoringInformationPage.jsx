@@ -12,17 +12,30 @@ export default function MonitoringInformationPage() {
   const [answer, setAnswer] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [cursor, setCursor] = useState(null);
+  const [loadingMore, setLoadingMore] = useState(false);
   const attempt = useRef(null);
   useEffect(() => {
     let active = true;
-    const path = id ? `/sample-monitoring-information/${encodeURIComponent(id)}` : "/sample-monitoring-information";
+    const path = id ? `/sample-monitoring-information/${encodeURIComponent(id)}` : "/sample-monitoring-information?paged=true";
     sampleRequest(path).then(data => {
       if (!active) return;
-      setRows(id ? [data] : data);
+      setRows(id ? [data] : data.requests);
+      setCursor(id ? null : data.nextCursor);
       if (id) setSelected(data);
     }).catch(error => { if (active) setError(error.message); });
     return () => { active = false; };
   }, [id]);
+  async function more() {
+    if (!cursor || loadingMore) return;
+    setLoadingMore(true);
+    try {
+      const data = await sampleRequest(`/sample-monitoring-information?paged=true&cursor=${encodeURIComponent(cursor)}`);
+      setRows(previous => [...new Map([...previous, ...data.requests].map(row => [row.id, row])).values()]);
+      setCursor(data.nextCursor);
+    } catch (error) { setError(error.message); }
+    finally { setLoadingMore(false); }
+  }
   async function reply(event) {
     event.preventDefault();
     if (!answer.trim() || busy) return;
@@ -49,6 +62,7 @@ export default function MonitoringInformationPage() {
       <p>{row.question}</p><p>{row.status}</p>{row.answer && <p>Reply: {row.answer}</p>}
       <button onClick={() => { setSelected(row); setAnswer(""); }} className="text-emerald-800 underline">{userRole === "participant" && row.status === "OPEN" ? "Answer This" : "View history"}</button>
     </li>)}</ul>
+    {cursor && <button disabled={loadingMore} onClick={more}>{loadingMore ? "Loading older requests…" : "Load older requests"}</button>}
     {selected && <div role="dialog" aria-modal="true" aria-label="Monitoring information reply" className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
       <div className="w-full max-w-xl rounded bg-white p-5">
         <h2 className="text-xl font-semibold">Monitoring information</h2><p>{selected.question}</p>

@@ -73,6 +73,28 @@ export default function PermanentSampleMonitoringPage() {
   const [pendingEvidence, setPendingEvidence] = useState({});
   const [evidenceUrls, setEvidenceUrls] = useState({});
   const uploadKeys = useRef({});
+  const evidenceEpoch = useRef(0);
+  const objectUrls = useRef(new Set());
+  const captureEpoch = useRef(null);
+  const resetEvidence = useCallback(() => {
+    evidenceEpoch.current += 1;
+    captureEpoch.current = null;
+    objectUrls.current.forEach(url => URL.revokeObjectURL(url));
+    objectUrls.current.clear();
+    uploadKeys.current = {};
+    setPendingEvidence({}); setEvidenceUrls({});
+    setCameraOpen(false); setCameraSampleId("");
+    return evidenceEpoch.current;
+  }, []);
+  useEffect(() => () => {
+    evidenceEpoch.current += 1;
+    objectUrls.current.forEach(url => URL.revokeObjectURL(url));
+    objectUrls.current.clear();
+  }, []);
+  const evidenceKey = (sampleId, index) => JSON.stringify([detail?.id, sampleId,
+    detail?.sampleAssessments?.find(row => row.sampleId === sampleId)?.evidenceHistory?.[index]?.revision, index]);
+  const pendingKey = sampleId => JSON.stringify([detail?.id, sampleId, detail?.version,
+    detail?.sampleAssessments?.find(row => row.sampleId === sampleId)?.assessmentRevision || 0]);
 
   const load = useCallback(
     async (next = "") => {
@@ -84,6 +106,7 @@ export default function PermanentSampleMonitoringPage() {
         if (next) query.set("cursor", next);
         const data = await api(`/verified-sample-monitoring/visits?${query}`);
         setPage(data);
+        resetEvidence();
         setDetail(null);
         setAssessments([]);
       } catch (requestError) {
@@ -98,7 +121,7 @@ export default function PermanentSampleMonitoringPage() {
         setLoading(false);
       }
     },
-    [status]
+    [status, resetEvidence]
   );
 
   useEffect(() => {
@@ -108,15 +131,19 @@ export default function PermanentSampleMonitoringPage() {
   }, [enabled, load, userRole]);
 
   const open = async (visitId) => {
+    const epoch = resetEvidence();
+    setDetail(null);
     setLoading(true);
     setError("");
     try {
       const data = await api(
         `/verified-sample-monitoring/visits/${encodeURIComponent(visitId)}`
       );
+      if (epoch !== evidenceEpoch.current) return;
       setDetail(data);
       setAssessments((data.sampleAssessments || []).map(formAssessment));
     } catch (requestError) {
+      if (epoch !== evidenceEpoch.current) return;
       setError(
         requestError.status === 404
           ? "This monitoring visit is unavailable."
@@ -159,6 +186,7 @@ export default function PermanentSampleMonitoringPage() {
           submit,
         }),
       });
+      resetEvidence();
       setDetail(data);
       setAssessments((data.sampleAssessments || []).map(formAssessment));
     } catch (requestError) {
@@ -191,22 +219,29 @@ export default function PermanentSampleMonitoringPage() {
 
   const cameraRequest = async (path, options) => ({ data: await api(path, options) });
 
-  const attachEvidence = ({ file, descriptor, previewUrl }) => {
-    if (!cameraSampleId) return;
+  const attachEvidence = ({ file, descriptor }) => {
+    if (!cameraSampleId || captureEpoch.current !== evidenceEpoch.current) return;
+    const previousUrl = pendingEvidence[pendingKey(cameraSampleId)]?.previewUrl;
+    if (previousUrl) { URL.revokeObjectURL(previousUrl); objectUrls.current.delete(previousUrl); }
+    const previewUrl = URL.createObjectURL(file);
+    objectUrls.current.add(previewUrl);
     setPendingEvidence((current) => ({
       ...current,
-      [cameraSampleId]: { file, descriptor, previewUrl },
+      [pendingKey(cameraSampleId)]: { file, descriptor, previewUrl },
     }));
     setCameraOpen(false);
     setCameraSampleId("");
   };
 
   const uploadEvidence = async (sampleId) => {
-    const pending = pendingEvidence[sampleId];
+    const contextKey = pendingKey(sampleId);
+    const pending = pendingEvidence[contextKey];
     const assessment = detail?.sampleAssessments?.find((item) => item.sampleId === sampleId);
     if (!pending || !detail || !assessment) return;
-    const key = uploadKeys.current[sampleId] || crypto.randomUUID();
-    uploadKeys.current[sampleId] = key;
+    const epoch = evidenceEpoch.current;
+    const attemptKey = `${contextKey}:${pending.descriptor.captureSessionId}`;
+    const key = uploadKeys.current[attemptKey] || crypto.randomUUID();
+    uploadKeys.current[attemptKey] = key;
     setSaving(true);
     setError("");
     try {
@@ -220,15 +255,16 @@ export default function PermanentSampleMonitoringPage() {
         { method: "PUT", body: form, headers: { "Idempotency-Key": key } }
       );
       const payload = await response.json().catch(() => ({}));
+      if (epoch !== evidenceEpoch.current) return;
       if (!response.ok || !payload.success) {
         throw Object.assign(new Error(payload.message || "Evidence upload could not be completed."), {
           status: response.status,
         });
       }
-      uploadKeys.current[sampleId] = "";
+      uploadKeys.current[attemptKey] = "";
       setPendingEvidence((current) => {
         const next = { ...current };
-        delete next[sampleId];
+        delete next[contextKey];
         return next;
       });
       await open(detail.id);
@@ -245,14 +281,18 @@ export default function PermanentSampleMonitoringPage() {
 
   const viewEvidence = async (sampleId, evidenceIndex) => {
     if (!detail) return;
-    const key = `${sampleId}:${evidenceIndex}`;
+    const epoch = evidenceEpoch.current;
+    const key = evidenceKey(sampleId, evidenceIndex);
     if (evidenceUrls[key]) return;
     try {
       const response = await authenticatedFetch(
         `/evidence/sample-monitoring/visits/${encodeURIComponent(detail.id)}/samples/${encodeURIComponent(sampleId)}/evidence/${evidenceIndex}`
       );
       if (!response.ok) throw new Error("The private evidence photo is unavailable.");
-      const objectUrl = URL.createObjectURL(await response.blob());
+      const blob = await response.blob();
+      if (epoch !== evidenceEpoch.current) return;
+      const objectUrl = URL.createObjectURL(blob);
+      objectUrls.current.add(objectUrl);
       setEvidenceUrls((current) => ({ ...current, [key]: objectUrl }));
     } catch (requestError) {
       setError(requestError.message || "The private evidence photo is unavailable.");
@@ -460,17 +500,18 @@ export default function PermanentSampleMonitoringPage() {
                     onClick={() => {
                       setCameraSampleId(assessment.sampleId);
                       setCameraOpen(true);
+                      captureEpoch.current = evidenceEpoch.current;
                     }}
                   >
                     Capture verified photo for {assessment.sampleId}
                   </button>
-                  {pendingEvidence[assessment.sampleId] && (
+                  {pendingEvidence[pendingKey(assessment.sampleId)] && (
                     <div>
                       <p role="status">Verified photo ready for private upload.</p>
                       {saving && <p role="status">Uploading private evidence…</p>}
                       <img
                         className="cohort-photo-preview"
-                        src={pendingEvidence[assessment.sampleId].previewUrl}
+                        src={pendingEvidence[pendingKey(assessment.sampleId)].previewUrl}
                         alt={`Verified evidence preview for ${assessment.sampleId}`}
                       />
                       <button
@@ -485,14 +526,14 @@ export default function PermanentSampleMonitoringPage() {
                   {(detail.sampleAssessments || [])
                     .find((item) => item.sampleId === assessment.sampleId)
                     ?.evidenceHistory?.map((evidence, evidenceIndex) => {
-                      const evidenceKey = `${assessment.sampleId}:${evidenceIndex}`;
+                      const key = evidenceKey(assessment.sampleId, evidenceIndex);
                       return (
-                        <div key={evidenceKey}>
+                        <div key={key}>
                           <p>{`Historical evidence revision ${evidence.revision}`}</p>
-                          {evidenceUrls[evidenceKey] ? (
+                          {evidenceUrls[key] ? (
                             <img
                               className="cohort-photo-preview"
-                              src={evidenceUrls[evidenceKey]}
+                              src={evidenceUrls[key]}
                               alt={`Private evidence for ${assessment.sampleId}, revision ${evidence.revision}`}
                             />
                           ) : (
@@ -551,17 +592,17 @@ export default function PermanentSampleMonitoringPage() {
                       ? ` · previous ${assessment.previousAssessmentReference.condition || "assessment"}`
                       : ""}
                     {(assessment.evidenceHistory || []).map((evidence, evidenceIndex) => {
-                      const evidenceKey = `${assessment.sampleId}:${evidenceIndex}`;
-                      return evidenceUrls[evidenceKey] ? (
+                      const key = evidenceKey(assessment.sampleId, evidenceIndex);
+                      return evidenceUrls[key] ? (
                         <img
-                          key={evidenceKey}
+                          key={key}
                           className="cohort-photo-preview"
-                          src={evidenceUrls[evidenceKey]}
+                          src={evidenceUrls[key]}
                           alt={`Private evidence for ${assessment.sampleId}, revision ${evidence.revision}`}
                         />
                       ) : (
                         <button
-                          key={evidenceKey}
+                          key={key}
                           type="button"
                           onClick={() => viewEvidence(assessment.sampleId, evidenceIndex)}
                         >

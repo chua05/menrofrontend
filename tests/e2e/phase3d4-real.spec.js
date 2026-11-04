@@ -48,6 +48,12 @@ test.afterAll(async () => {
 test("real request → notification Answer This → requester reply, with privacy and idempotency", async ({ browser, page }) => {
   const checkStaff = await isolate(page);
   const data = await open(page, "staff");
+  if (process.env.MENRO_READINESS_EVIDENCE_READ_ONLY_EXPECTED === "true") expect(data.evidenceWriteEnabled).toBe(false);
+  const preflight = await page.request.fetch("http://127.0.0.1:5185/api/sample-monitoring-information", { method: "OPTIONS", headers: {
+    Origin: "http://127.0.0.1:5186", "Access-Control-Request-Method": "POST", "Access-Control-Request-Headers": "authorization,content-type,idempotency-key",
+  } });
+  expect(preflight.status()).toBe(204);
+  expect(preflight.headers()["access-control-allow-headers"].toLowerCase()).toContain("idempotency-key");
   await page.getByLabel("Question to the verified planting requester").fill("Is the access path usable?");
   const created = page.waitForResponse(response => response.url().endsWith("/api/sample-monitoring-information") && response.request().method() === "POST");
   await page.getByRole("button", { name: "Request Information", exact: true }).click();
@@ -110,6 +116,8 @@ test("unanswered information never blocks approval; approved-only analytics pres
   expect((await api(page, "/permanent-sample-analytics")).body.data.cohorts).toEqual([]);
   const admin = await browser.newPage(); const checkAdmin = await isolate(admin);
   await open(admin, "admin");
+  expect((await api(admin, `/verified-sample-monitoring/visits/${data.visitId}/review`, "POST", { expectedVersion: 2, approve: "false" })).status).toBe(400);
+  expect((await api(admin, `/verified-sample-monitoring/visits/${data.visitId}/review`, "POST", { expectedVersion: 2, approve: false, reasons: " " })).status).toBe(400);
   await expect(admin.getByText("Reply: Yes, the path is usable.")).toBeVisible();
   await admin.getByRole("button", { name: "Approve Visit", exact: true }).click();
   await expect(admin.getByText(/APPROVED · version/)).toBeVisible();
@@ -118,6 +126,8 @@ test("unanswered information never blocks approval; approved-only analytics pres
   await expect(admin.getByRole("heading", { name: "Permanent Sample Monitoring Analytics" })).toBeVisible();
   await expect(admin.getByText("Unassessed: 0 · Unresolved: 1")).toBeVisible();
   const analytics = (await api(admin, "/permanent-sample-analytics")).body.data;
+  const approved = await api(admin, "/verified-sample-monitoring/visits?status=APPROVED&limit=1");
+  expect(approved.body.data.visits.map(row => row.id)).toEqual([data.visitId]);
   expect(analytics.cohorts).toHaveLength(1);
   expect(analytics.cohorts[0].latest.samples[0].sampleId).toBe("TREE-001");
   expect(analytics.cohorts[0].latest.counts.Dead).toBe(0);
@@ -125,4 +135,26 @@ test("unanswered information never blocks approval; approved-only analytics pres
   await admin.getByLabel("Site", { exact: true }).selectOption(analytics.cohorts[0].siteId);
   await admin.getByLabel("Cohort", { exact: true }).selectOption(analytics.cohorts[0].cohortId);
   checkAdmin(); checkStaff(); await admin.close();
+});
+
+test("requester and owner inboxes expose older authorized requests through real cursor queries", async ({ browser, page }) => {
+  const checkStaff = await isolate(page); const data = await open(page, "staff");
+  for (let i = 0; i < 53; i++) {
+    const response = await api(page, "/sample-monitoring-information", "POST", { visitId: data.visitId, question: `Pagination request ${i}` }, `pagination-${i}`);
+    expect(response.status).toBe(200);
+  }
+  const participant = await browser.newPage(); const checkParticipant = await isolate(participant);
+  await login(participant, "participant", "/participant/monitoring-information");
+  await expect(participant.getByRole("button", { name: "Load older requests" })).toBeVisible({ timeout: 15000 });
+  await expect(participant.getByText("Pagination request 0", { exact: true })).toHaveCount(0);
+  await participant.getByRole("button", { name: "Load older requests" }).click();
+  await expect(participant.getByText("Pagination request 0", { exact: true })).toBeVisible();
+  await page.reload(); await page.getByRole("button", { name: data.visitId, exact: true }).click();
+  await page.getByRole("button", { name: "Load older requests" }).click();
+  await expect(page.getByText("Pagination request 0", { exact: true })).toBeVisible();
+  const filters = await api(page, "/permanent-sample-analytics/filters?limit=1");
+  const approved = await api(page, "/verified-sample-monitoring/visits?status=APPROVED&limit=1");
+  expect(approved.body.data.visits.map(row => row.id)).toEqual([data.visitId]);
+  expect(filters.status).toBe(200); expect(filters.body.data.filters[0].cohortId).toBe(data.prefix + "-cohort");
+  checkParticipant(); checkStaff(); await participant.close();
 });
