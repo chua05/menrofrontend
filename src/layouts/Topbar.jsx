@@ -874,7 +874,7 @@ export default function Topbar({ onOpenSidebar }) {
                 const path = getNotificationPath(selectedNotification, userRole);
                 setSelectedNotification(null);
                 navigate(path);
-              }}>Open Related Record</button>}
+              }}>{selectedNotification?.relatedRecordType === "sampleMonitoringInformation" && userRole === "participant" ? "Answer This" : "Open Related Record"}</button>}
               <button type="button" onClick={() => setSelectedNotification(null)}>Close</button>
             </div>
           </section>

@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { authenticatedFetch } from "../services/authenticatedApi";
 import SecureCameraCapture from "../components/SecureCameraCapture";
+import MonitoringInformationPanel from "../components/MonitoringInformationPanel";
+import { informationEnabled } from "../utils/permanentSampleFeatures";
 import {
   resolveVerifiedPlantingCohortEnabled,
   visibleCohortMessage,
@@ -586,6 +588,7 @@ export default function PermanentSampleMonitoringPage() {
           )}
         </section>
       )}
+      {detail && informationEnabled() && <MonitoringInformationPanel key={detail.id} visitId={detail.id} />}
       <SecureCameraCapture
         open={cameraOpen}
         request={cameraRequest}
