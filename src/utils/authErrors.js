@@ -54,14 +54,10 @@ export function getVerificationErrorMessage(error) {
 export function getAuthErrorMessage(error, { provider = "email", online = true } = {}) {
   if (FIREBASE_MESSAGES[error?.code]) return FIREBASE_MESSAGES[error.code];
 
-  if (error?.code === "auth/network-request-failed") {
+  if (["auth/network-request-failed", "BACKEND_UNAVAILABLE", "ERR_NETWORK", "BACKEND_SERVER_ERROR"].includes(error?.code) || error?.status >= 500 || error instanceof TypeError || error?.name === "AbortError") {
     return online
-      ? "Unable to reach Firebase Authentication. Check your connection or disable any VPN or ad blocker, then try again."
-      : "You appear to be offline. Reconnect to the internet, then try again.";
-  }
-
-  if (error?.code === "BACKEND_UNAVAILABLE" || error?.code === "ERR_NETWORK") {
-    return "Signed in to Firebase, but the MENRO server could not be reached. Please try again shortly.";
+      ? "Unable to connect. Please check your connection and try again."
+      : "No internet connection. Please check your connection and try again.";
   }
 
   if (error?.code === "BACKEND_UNAUTHORIZED" || error?.status === 401) {
@@ -80,10 +76,6 @@ export function getAuthErrorMessage(error, { provider = "email", online = true }
 
   if (error?.code === "BACKEND_RATE_LIMITED" || error?.status === 429) {
     return "Sign in is temporarily limited. Please wait and try again.";
-  }
-
-  if (error?.code === "BACKEND_SERVER_ERROR" || error?.status >= 500) {
-    return "The MENRO server could not complete sign-in. Please try again shortly.";
   }
 
   if (error?.message && error?.code === "BACKEND_REJECTED") {

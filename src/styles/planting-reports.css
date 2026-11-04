@@ -1536,3 +1536,8 @@ button:disabled {
   .pr-reminder-button { flex: 0 0 auto; }
   .pr-requirements-dialog { padding: 20px 16px; }
 }
+.pr-page input[aria-invalid="true"], .pr-page select[aria-invalid="true"], .pr-page textarea[aria-invalid="true"] { border-color: #b91c1c; }
+.pr-field-error { display: block; color: #b91c1c; font-size: 0.8125rem; line-height: 1.4; margin-top: 0.375rem; }
+.pr-page .pr-field, .pr-page .pr-invalid-field, .pr-page [aria-invalid="true"] { scroll-margin-top: 110px; }
+.pr-page .pr-upload-box.pr-invalid-field,
+.pr-page .pr-upload-button button[aria-invalid="true"] { border-color: #d83b3b; }

@@ -1,3 +1,4 @@
+import { identificationFormatError } from "./identificationFormat.js";
 export const IDENTIFICATION_DOCUMENTS = Object.freeze([
   ["national_id", "National ID (PhilID / ePhilID / Digital National ID)"],
   ["passport", "Philippine Passport"],
@@ -40,6 +41,8 @@ export function validateIdentificationForm({
     if (value.length < minimum || value.length > maximum || !/^[A-Za-z0-9 /-]+$/.test(value)) {
       errors.idNumber = "Enter the ID number exactly as shown using letters, numbers, spaces, hyphens, or slashes.";
     }
+    const formatError = identificationFormatError(identificationType, value);
+    if (formatError) errors.idNumber = formatError;
   }
   if (identificationType === "school_id" && !String(schoolInstitutionName || "").trim()) {
     errors.schoolInstitutionName = "School / Institution Name is required.";

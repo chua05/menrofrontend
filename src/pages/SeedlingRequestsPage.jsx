@@ -33,6 +33,8 @@ import {
 } from "lucide-react";
 
 import { useAuth } from "../context/AuthContext";
+import { focusFirstInvalid } from "../utils/formValidation";
+import { getPlantingAreaError } from "../utils/saplingRequestWorkflow";
 import { useToast } from "../context/ToastContext";
 import {
   IDENTIFICATION_DOCUMENTS,
@@ -124,11 +126,11 @@ async function apiRequest(path, options = {}) {
     .catch(() => null);
 
   if (!response.ok) {
-    throw new Error(
+    throw Object.assign(new Error(
       payload?.message ||
         payload?.error ||
         "Unable to complete the request."
-    );
+    ), { status: response.status, fieldErrors: payload?.fieldErrors });
   }
 
   return payload?.data ?? payload;
@@ -1252,7 +1254,7 @@ useEffect(() => {
     }
   };
 
-  const submitReview = async () => {
+  const submitReview = async (siteVerification) => {
     if (!reviewModal?.request?.id) return;
 
     const request = reviewModal.request;
@@ -1275,6 +1277,7 @@ useEffect(() => {
           "",
         preferredReleaseDate: request.preferredReleaseDate || "",
         expectedVersion: Number(request.requestVersion || 0),
+        ...(siteVerification ? { siteVerification } : {}),
       };
 
       const updated = await apiRequest(
@@ -1291,7 +1294,8 @@ useEffect(() => {
       showSuccess(`${getRequestDisplayId(request)} was reviewed successfully.`);
     } catch (error) {
       console.error(error);
-      setReviewError(error.message || "Unable to review the request.");
+      setReviewError(error.fieldErrors ? "" : error.message || "Unable to review the request.");
+      return error;
     } finally {
       setActionLoading(false);
     }
@@ -4239,6 +4243,27 @@ function ReviewRequestModal({
     endTime: coordinated.endTime || "",
     adjustmentReason: coordinated.adjustmentReason || "",
   });
+  const [siteVerification, setSiteVerification] = useState({
+    areaHectares: String(request.proposedSiteVerification?.areaHectares ?? ""),
+    maximumCapacity: String(request.proposedSiteVerification?.maximumCapacity ?? ""),
+  });
+  const [siteErrors, setSiteErrors] = useState({});
+  const reviewForm = useRef(null);
+  const needsSiteReview = request.workflow?.siteMode === "proposed" && !request.workflow?.officialSiteId;
+  const completeReview = async () => {
+    if (!needsSiteReview) return onSubmit();
+    const next = {};
+    const areaError = getPlantingAreaError("Other / Exact Area", siteVerification.areaHectares);
+    if (areaError) next.areaHectares = areaError;
+    if (!/^\d+$/.test(siteVerification.maximumCapacity) || !Number.isSafeInteger(Number(siteVerification.maximumCapacity)) || Number(siteVerification.maximumCapacity) <= 0) next.maximumCapacity = "Enter the verified capacity as a positive whole number.";
+    setSiteErrors(next);
+    if (Object.keys(next).length) return focusFirstInvalid(() => reviewForm.current);
+    const failure = await onSubmit(siteVerification);
+    if (failure?.fieldErrors) {
+      setSiteErrors({ areaHectares: failure.fieldErrors.verifiedAreaHectares, maximumCapacity: failure.fieldErrors.verifiedMaximumCapacity });
+      focusFirstInvalid(() => reviewForm.current);
+    }
+  };
   const update = (field) => (event) => setSchedule((value) => ({ ...value, [field]: event.target.value }));
   const confirmationRequired = request.preApprovalSchedule?.status === "AwaitingRequesterConfirmation";
   const scheduleWarning = getScheduleValidationWarning(schedule);
@@ -4272,7 +4297,7 @@ function ReviewRequestModal({
           </button>
         </div>
 
-        <div className="sr-modal-body">
+        <div className="sr-modal-body" ref={reviewForm}>
           <div className="sr-decision-request-summary">
             <span>Request</span>
             <strong>{getRequestDisplayId(modal.request)}</strong>
@@ -4285,6 +4310,15 @@ function ReviewRequestModal({
             <DetailItem label="Requester Confirmation" value={confirmationRequired ? "Awaiting requester" : request.preApprovalSchedule?.status === "Confirmed" ? "Confirmed" : "Not required"} />
           </div>
           {request.processingEstimate && <p className="sr-decision-confirm-text">Estimated processing window: {formatDate(request.processingEstimate.earliestDate)} to {formatDate(request.processingEstimate.latestDate)} (advisory).</p>}
+          {needsSiteReview && <section className="sr-form-grid">
+            <p className="full-width">Verify the proposed site's area and capacity before forwarding this request for Admin approval. The requester's location stays unchanged.</p>
+            {[ ["areaHectares", "Verified Planting Area (Hectares)"], ["maximumCapacity", "Verified Site Capacity (Seedlings)"] ].map(([key, label]) => <div className="sr-form-field" key={key}>
+              <label htmlFor={`site-review-${key}`}>{label} *</label>
+              <input id={`site-review-${key}`} type="number" step={key === "areaHectares" ? "any" : "1"} min="0" value={siteVerification[key]} aria-invalid={siteErrors[key] ? "true" : undefined} aria-describedby={siteErrors[key] ? `site-review-error-${key}` : undefined}
+                onChange={event => { setSiteVerification(value => ({ ...value, [key]: event.target.value })); setSiteErrors(value => ({ ...value, [key]: "" })); }} />
+              {siteErrors[key] && <small className="sr-field-error" id={`site-review-error-${key}`} role="alert">{siteErrors[key]}</small>}
+            </div>)}
+          </section>}
           {scheduleWarning && <p className="sr-field-error" role="alert">{scheduleWarning}</p>}
           <div className="sr-form-grid">
             <label className="sr-form-field"><span>Proposed Release Date *</span><input type="date" value={schedule.preferredReleaseDate} onChange={update("preferredReleaseDate")} /></label>
@@ -4317,7 +4351,7 @@ function ReviewRequestModal({
           <button
             type="button"
             className="sr-approve-btn sr-large-action"
-            onClick={onSubmit}
+            onClick={completeReview}
             disabled={loading || confirmationRequired || Boolean(scheduleWarning)}
           >
             {loading ? "Reviewing..." : "Complete Review"}

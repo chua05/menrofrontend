@@ -1,0 +1,13 @@
+.pr-official-backdrop { position: fixed; inset: 0; z-index: 1500; display: grid; place-items: center; padding: 16px; background: #163d2d80; }
+.pr-official-dialog { background: white; border-radius: 16px; width: min(900px, 100%); max-height: 90dvh; overflow: auto; padding: 24px; }
+.pr-official-dialog h2 { margin-top: 0; }
+.pr-official-dialog fieldset { min-width: 0; border: 0; padding: 0; margin: 0 0 16px; }
+.pr-official-dialog .pr-official-species { border: 1px solid #dce7e0; border-radius: 8px; padding: 16px; }
+.pr-official-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; margin-bottom: 16px; }
+.pr-official-dialog label, .pr-official-dialog .pr-field { display: grid; align-content: start; gap: 6px; min-width: 0; margin-bottom: 12px; }
+.pr-official-dialog input, .pr-official-dialog select, .pr-official-dialog textarea { width: 100%; min-width: 0; box-sizing: border-box; border: 1px solid #a7bcae; border-radius: 8px; padding: 10px; font: inherit; }
+.pr-official-dialog input[readonly] { background: #f4f7f5; }
+.pr-official-dialog [aria-invalid="true"] { border-color: #d83b3b; }
+.pr-official-dialog .pr-field { scroll-margin-top: 100px; }
+.pr-official-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 12px; }
+@media (max-width: 600px) { .pr-official-grid { grid-template-columns: minmax(0, 1fr); } .pr-official-dialog { padding: 16px; } }

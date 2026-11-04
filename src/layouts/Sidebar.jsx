@@ -78,7 +78,7 @@ const NAVIGATION = {
           to: "/admin/survival-monitoring",
         },
         {
-          label: "Verified Planting Cohorts",
+          label: "Verified Planting Records",
           icon: Activity,
           to: "/admin/verified-planting-cohorts",
         },
@@ -173,7 +173,7 @@ const NAVIGATION = {
           to: "/staff/survival-monitoring",
         },
         {
-          label: "Verified Planting Cohorts",
+          label: "Verified Planting Records",
           icon: Activity,
           to: "/staff/verified-planting-cohorts",
         },

@@ -15,6 +15,7 @@ import {
   isOtherPurpose,
   formatScheduleTime,
   getProcessingWindowAdvisory,
+  PROCESSING_ADVISORY,
   normalizeBarangayName,
   validatePlantingSchedule,
   validateRequestLetterFile,
@@ -188,13 +189,15 @@ test("accepts the reported future group schedule at 11:49 PM Manila time", () =>
   }, now).endTime, "Please select an event end time.");
 });
 
-test("keeps the 3–7 working-day period advisory only", () => {
+test("keeps five working days advisory and excludes published nonworking holidays", () => {
   const now = new Date("2026-10-26T23:49:00+08:00");
   assert.equal(addWorkingDays("2026-10-26", 3), "2026-10-29");
   assert.deepEqual(getProcessingWindowAdvisory("2026-10-27", now), {
-    earliestDate: "2026-10-29", latestDate: "2026-11-04",
+    earliestDate: "2026-11-03", latestDate: "2026-11-03",
   });
-  assert.equal(getProcessingWindowAdvisory("2026-10-29", now), null);
+  assert.equal(getProcessingWindowAdvisory("2026-11-03", now), null);
+  assert.equal(addWorkingDays("2026-12-23", 5), "2027-01-06");
+  assert.equal(getProcessingWindowAdvisory("2029-01-01", new Date("2029-01-01T00:00:00Z")), null);
 });
 
 test("allows same-day release and planting while the planting start remains in the future", () => {
@@ -214,7 +217,7 @@ test("allows same-day release and planting while the planting start remains in t
 test("uses inline validation feedback and a nonblocking date helper", () => {
   assert.doesNotMatch(wizardSource, /sr-validation-summary|validationSummary/);
   assert.match(wizardSource, /sr-processing-advisory/);
-  assert.match(wizardSource, /you may still continue/i);
+  assert.match(PROCESSING_ADVISORY, /You may continue, but MENRO may adjust your requested schedule\./);
   assert.match(wizardSource, /setErrors\(\(current\) => \(\{ \.\.\.current, trees: "" \}\)\)/);
 });
 

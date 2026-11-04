@@ -7,7 +7,10 @@ import "leaflet/dist/leaflet.css";
 import * as exifr from "exifr";
 import { extractGpsCoordinates } from "../utils/exifGps";
 import PageLoadingState from "../components/PageLoadingState";
+import { focusFirstInvalid, backendFieldErrors } from "../utils/formValidation";
+import { validatePlantingReportForm } from "../utils/plantingReportForm";
 import SecureCameraCapture from "../components/SecureCameraCapture";
+import StaffPlantingReportForm, { ProtectedAttendanceButton } from "../components/StaffPlantingReportForm";
 import { buildEvidenceLocationView } from "../utils/evidenceLocationView";
 
 import {
@@ -373,7 +376,7 @@ function isPointInPolygon(latitude, longitude, polygon) {
 }
 
 export default function PlantingPage() {
-  const { userRole } = useAuth();
+  const { userRole, currentUser } = useAuth();
   const [pageSearchParams] = useSearchParams();
 
   const isParticipant = userRole === "participant";
@@ -409,6 +412,7 @@ export default function PlantingPage() {
   const [showViewModal, setShowViewModal] = useState(false);
   const [selectedRecord, setSelectedRecord] = useState(null);
   const [selectedSubmission, setSelectedSubmission] = useState(null);
+  const [officialForm, setOfficialForm] = useState(null);
 
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("All");
@@ -417,6 +421,7 @@ export default function PlantingPage() {
   const [locationLoading, setLocationLoading] = useState(false);
   const [verificationRemarks, setVerificationRemarks] = useState("");
   const [decision, setDecision] = useState("");
+  const [decisionFieldError, setDecisionFieldError] = useState("");
   const [reportError, setReportError] = useState("");
   const [noEventsAlertSiteId, setNoEventsAlertSiteId] = useState("");
 
@@ -430,6 +435,10 @@ export default function PlantingPage() {
   const [locationPhotoSignature, setLocationPhotoSignature] = useState("");
   const [formRenderRecovery, setFormRenderRecovery] = useState(0);
 
+  const [formErrors, setFormErrors] = useState({});
+  const reportFormRef = useRef(null);
+  const fieldAccessibility = key => ({ id: `planting-${key}`, "aria-invalid": formErrors[key] ? "true" : undefined,
+    "aria-describedby": formErrors[key] ? `planting-error-${key}` : undefined });
   const [form, setForm] = useState({
     submittedByName: "",
     submittedBySector: "",
@@ -544,6 +553,7 @@ export default function PlantingPage() {
       const requestError = new Error(payload.message || "The request could not be completed.");
       requestError.code = payload.code || "";
       requestError.status = response.status;
+      requestError.fieldErrors = payload.fieldErrors;
       throw requestError;
     }
 
@@ -1429,6 +1439,7 @@ export default function PlantingPage() {
     selectedSite, form.latitude, form.longitude]);
 
   function resetForm() {
+    setFormErrors({});
     evidenceAttempt.current.reset();
     clearNoEventsAlert();
     stopCamera();
@@ -1568,6 +1579,7 @@ export default function PlantingPage() {
   }), [form.siteId, form.eventId, form.distributionId]);
 
   function updateFormField(field, value) {
+    setFormErrors(previous => ({ ...previous, [field]: "" }));
     if (field === "barangay") clearNoEventsAlert();
 
     setForm((previous) => {
@@ -1594,6 +1606,7 @@ export default function PlantingPage() {
   }
 
   function handleDistributionChange(event) {
+    setFormErrors(previous => ({ ...previous, distributionId: "", distributionItemKey: "" }));
     const selectedId = event.target.value;
     const distribution = eligibleDistributions.find(
       (entry) => String(entry.id) === String(selectedId)
@@ -1647,6 +1660,7 @@ export default function PlantingPage() {
   }
 
   function handleSaplingChange(event) {
+    setFormErrors(previous => ({ ...previous, distributionItemKey: "", quantity: "" }));
     const selectedId = event.target.value;
     const item = eligibleDistributionItems.find((entry) =>
       String(entry.optionId) === String(selectedId));
@@ -1663,6 +1677,7 @@ export default function PlantingPage() {
   }
 
   function handleSiteChange(event) {
+    setFormErrors(previous => ({ ...previous, siteId: "", eventId: "", plantingDate: "", distributionId: "", distributionItemKey: "", quantity: "" }));
     clearNoEventsAlert();
     const selectedId = event.target.value;
     const site = filteredSites.find(
@@ -1708,6 +1723,7 @@ export default function PlantingPage() {
   }
 
   function handleEventChange(event) {
+    setFormErrors(previous => ({ ...previous, eventId: "", plantingDate: "", distributionId: "", distributionItemKey: "", quantity: "" }));
     const selectedId = event.target.value;
 
     if (!selectedId) {
@@ -2026,23 +2042,20 @@ export default function PlantingPage() {
     const remainingSlots = MAX_EVIDENCE_PHOTOS - photoFiles.length;
 
     if (remainingSlots <= 0) {
-      showPopup("A maximum of 10 planting evidence photos is allowed.", "error");
+      setFormErrors(current => ({ ...current, photos: "A maximum of 10 planting evidence photos is allowed." }));
       event.target.value = "";
       return;
     }
 
     if (selectedFiles.length > remainingSlots) {
-      showPopup(
-        `You can add only ${remainingSlots} more photo${remainingSlots === 1 ? "" : "s"}. Maximum is 10.`,
-        "error"
-      );
+      setFormErrors(current => ({ ...current, photos: `You can add only ${remainingSlots} more photo${remainingSlots === 1 ? "" : "s"}. Maximum is 10.` }));
       event.target.value = "";
       return;
     }
 
     for (const file of selectedFiles) {
       if (!isAllowedImageFile(file)) {
-        showPopup(UNSUPPORTED_PHOTO_MESSAGE, "error");
+        setFormErrors(current => ({ ...current, photos: UNSUPPORTED_PHOTO_MESSAGE }));
         event.target.value = "";
         return;
       }
@@ -2172,6 +2185,10 @@ export default function PlantingPage() {
 
   async function handleSubmit(event) {
     event.preventDefault();
+    if (submitting) return;
+    const errors = validatePlantingReportForm(form, { distributions, photos: photoFiles, previews: photoPreviews, hasGps, municipalityScopeStatus });
+    setFormErrors(errors);
+    if (Object.keys(errors).length) { focusFirstInvalid(() => reportFormRef.current); return; }
 
     if (!form.submittedByName.trim() || !form.submittedBySector || !form.submittedByContactNumber.trim()) {
       showPopup("Please complete your name, sector, and contact number.", "error");
@@ -2317,7 +2334,9 @@ export default function PlantingPage() {
 
       void Promise.all([loadReports(), loadMyDistributions(), loadEvents()]).catch(() => showPopup("Your report was submitted, but the latest lists could not be refreshed. You can refresh this page when your connection is available.", "warning"));
     } catch (error) {
-      showPopup(error.message || "Unable to submit the planting report. Please try again.", "error");
+      const fields = backendFieldErrors(error, { quantityPlanted: "quantity", inventoryId: "distributionItemKey", evidence: "photos", files: "photos" });
+      if (Object.keys(fields).length) { setFormErrors(fields); focusFirstInvalid(() => reportFormRef.current); }
+      else showPopup(error.message || "Unable to submit the planting report. Please try again.", "error");
     } finally {
       setSubmitting(false);
     }
@@ -2389,10 +2408,8 @@ export default function PlantingPage() {
     const reason = verificationRemarks.trim();
 
     if (!reason) {
-      showPopup(
-        "Please enter a reason for rejecting the planting report.",
-        "error"
-      );
+      setDecisionFieldError("Enter a reason for rejecting this planting report.");
+      focusFirstInvalid(document.querySelector(".pr-modal-small"));
       return;
     }
 
@@ -2456,7 +2473,7 @@ export default function PlantingPage() {
     })),
   }));
   const staffCanReviewSelected = selectedSubmission?.staffReviewStatus === "Pending Review" &&
-    (selectedSubmission?.staffApprovalRequired === true ? userRole === "staff" : canReview);
+    (selectedSubmission?.adminApprovalRequired === true ? userRole === "admin" : selectedSubmission?.staffApprovalRequired === true ? userRole === "staff" : canReview);
 
   if (loading) {
     return <div className="pr-page"><PageLoadingState message="Loading planting reports..." /></div>;
@@ -2501,6 +2518,7 @@ export default function PlantingPage() {
           </div>
         </div>
 
+        {userRole === "staff" && <button type="button" className="pr-primary-button" onClick={() => setOfficialForm({})}><FiPlus size={15} />Submit Planting Report</button>}
         {isParticipant && (
           <button
             type="button"
@@ -2683,6 +2701,7 @@ export default function PlantingPage() {
         )}
       </div>
 
+      {officialForm && userRole === "staff" && <StaffPlantingReportForm currentUser={currentUser} correction={officialForm.correction} onClose={() => setOfficialForm(null)} onSaved={async () => { await loadReports(); showPopup("Official planting report saved for Admin verification."); }} />}
       {showSubmitModal && isParticipant && (
         <PlantingReportFormErrorBoundary
           resetKey={formRenderRecovery}
@@ -2712,7 +2731,10 @@ export default function PlantingPage() {
               </button>
             </div>
 
-            <form onSubmit={handleSubmit}>
+            <form ref={reportFormRef} noValidate onSubmit={handleSubmit} onBlur={event => {
+              const field = event.target.id?.replace(/^planting-/, "");
+              if (field && Object.hasOwn(formErrors, field)) setFormErrors(current => ({ ...current, [field]: validatePlantingReportForm(form, { distributions, photos: photoFiles, previews: photoPreviews, hasGps, municipalityScopeStatus })[field] || "" }));
+            }}>
               <div className="pr-modal-body pr-submit-modal-body">
                 <div
                   className="pr-submit-alert-slot"
@@ -2736,26 +2758,29 @@ export default function PlantingPage() {
 
                   <div className="pr-grid2">
                     <div>
-                      <label className="pr-label">Full Name <span className="pr-required">*</span></label>
-                      <input className="pr-input" value={form.submittedByName}
+                      <label htmlFor="planting-submittedByName" className="pr-label">Full Name <span className="pr-required">*</span></label>
+                      <input {...fieldAccessibility("submittedByName")} className="pr-input" value={form.submittedByName}
                         onChange={(event) => updateFormField("submittedByName", event.target.value)}
                         placeholder="Enter full name" />
+{formErrors.submittedByName && <small id="planting-error-submittedByName" className="pr-field-error" role="alert">{formErrors.submittedByName}</small>}
                     </div>
 
                     <div>
-                      <label className="pr-label">Sector <span className="pr-required">*</span></label>
-                      <select className="pr-input" value={form.submittedBySector}
+                      <label htmlFor="planting-submittedBySector" className="pr-label">Sector <span className="pr-required">*</span></label>
+                      <select {...fieldAccessibility("submittedBySector")} className="pr-input" value={form.submittedBySector}
                         onChange={(event) => updateFormField("submittedBySector", event.target.value)}>
                         <option value="">Select sector</option>
                         {USER_TYPES.map((type) => <option key={type} value={type}>{type}</option>)}
                       </select>
+{formErrors.submittedBySector && <small id="planting-error-submittedBySector" className="pr-field-error" role="alert">{formErrors.submittedBySector}</small>}
                     </div>
 
                     <div>
-                      <label className="pr-label">Contact Number <span className="pr-required">*</span></label>
-                      <input className="pr-input" type="tel" value={form.submittedByContactNumber}
+                      <label htmlFor="planting-submittedByContactNumber" className="pr-label">Contact Number <span className="pr-required">*</span></label>
+                      <input {...fieldAccessibility("submittedByContactNumber")} className="pr-input" type="tel" value={form.submittedByContactNumber}
                         onChange={(event) => updateFormField("submittedByContactNumber", event.target.value)}
                         placeholder="09XXXXXXXXX" />
+{formErrors.submittedByContactNumber && <small id="planting-error-submittedByContactNumber" className="pr-field-error" role="alert">{formErrors.submittedByContactNumber}</small>}
                     </div>
                   </div>
                 </section>
@@ -2768,10 +2793,10 @@ export default function PlantingPage() {
 
                   <div className="pr-grid2">
                     <div className="pr-full-width">
-                      <label className="pr-label">
+                      <label htmlFor="planting-barangay" className="pr-label">
                         Barangay <span className="pr-required">*</span>
                       </label>
-                      <select
+                      <select {...fieldAccessibility("barangay")}
                         className="pr-input pr-barangay-select"
                         value={form.barangay}
                         onChange={(event) => updateFormField("barangay", event.target.value)}
@@ -2789,13 +2814,14 @@ export default function PlantingPage() {
                           );
                         })}
                       </select>
+{formErrors.barangay && <small id="planting-error-barangay" className="pr-field-error" role="alert">{formErrors.barangay}</small>}
                     </div>
 
                     <div className="pr-full-width">
-                      <label className="pr-label">
+                      <label htmlFor="planting-siteId" className="pr-label">
                         Planting Site <span className="pr-required">*</span>
                       </label>
-                      <select
+                      <select {...fieldAccessibility("siteId")}
                         className="pr-input"
                         value={form.siteId}
                         onChange={handleSiteChange}
@@ -2811,6 +2837,7 @@ export default function PlantingPage() {
                           </option>
                         ))}
                       </select>
+{formErrors.siteId && <small id="planting-error-siteId" className="pr-field-error" role="alert">{formErrors.siteId}</small>}
                       {form.barangay && !referenceLoading && filteredSites.length === 0 && (
                         <div className="pr-helper-text">
                           No planting sites are currently available for this barangay.
@@ -2819,10 +2846,10 @@ export default function PlantingPage() {
                     </div>
 
                     <div className="pr-full-width">
-                      <label className="pr-label">
+                      <label htmlFor="planting-eventId" className="pr-label">
                         Planting Event <span className="pr-required">*</span>
                       </label>
-                      <select
+                      <select {...fieldAccessibility("eventId")}
                         className="pr-input"
                         value={form.eventId}
                         onChange={handleEventChange}
@@ -2846,6 +2873,7 @@ export default function PlantingPage() {
                           </option>
                         ))}
                       </select>
+{formErrors.eventId && <small id="planting-error-eventId" className="pr-field-error" role="alert">{formErrors.eventId}</small>}
                       {noEventsAlertSiteId === String(form.siteId) && (
                         <div className="pr-no-events-alert-slot">
                           <div className="pr-no-events-alert" role="status">
@@ -2856,15 +2884,16 @@ export default function PlantingPage() {
                     </div>
 
                     <div>
-                      <label className="pr-label">Planting Event Date</label>
-                      <input type="date" className="pr-input pr-readonly" value={form.plantingDate} readOnly />
+                      <label htmlFor="planting-plantingDate" className="pr-label">Planting Event Date</label>
+                      <input {...fieldAccessibility("plantingDate")} type="date" className="pr-input pr-readonly" value={form.plantingDate} readOnly />
+{formErrors.plantingDate && <small id="planting-error-plantingDate" className="pr-field-error" role="alert">{formErrors.plantingDate}</small>}
                     </div>
 
                     <div className="pr-full-width">
-                      <label className="pr-label">
+                      <label htmlFor="planting-distributionId" className="pr-label">
                         Released Seedling Distribution <span className="pr-required">*</span>
                       </label>
-                      <select
+                      <select {...fieldAccessibility("distributionId")}
                         className="pr-input"
                         value={form.distributionId}
                         onChange={handleDistributionChange}
@@ -2879,6 +2908,7 @@ export default function PlantingPage() {
                           </option>
                         ))}
                       </select>
+{formErrors.distributionId && <small id="planting-error-distributionId" className="pr-field-error" role="alert">{formErrors.distributionId}</small>}
                       {form.eventId && eligibleDistributions.length === 0 && (
                         <div className="pr-helper-text" role="status">
                           No released seedling distributions are available for this planting event.
@@ -2887,8 +2917,8 @@ export default function PlantingPage() {
                     </div>
 
                     <div>
-                      <label className="pr-label">Seedling Tree <span className="pr-required">*</span></label>
-                      <select
+                      <label htmlFor="planting-distributionItemKey" className="pr-label">Seedling Tree <span className="pr-required">*</span></label>
+                      <select {...fieldAccessibility("distributionItemKey")}
                         className="pr-input"
                         value={form.distributionItemKey}
                         onChange={handleSaplingChange}
@@ -2903,24 +2933,28 @@ export default function PlantingPage() {
                           </option>
                         ))}
                       </select>
+{formErrors.distributionItemKey && <small id="planting-error-distributionItemKey" className="pr-field-error" role="alert">{formErrors.distributionItemKey}</small>}
                     </div>
 
                     <div>
-                      <label className="pr-label">Quantity Released</label>
-                      <input className="pr-input pr-readonly" value={form.quantityReleased} readOnly />
+                      <label htmlFor="planting-quantityReleased" className="pr-label">Quantity Released</label>
+                      <input {...fieldAccessibility("quantityReleased")} className="pr-input pr-readonly" value={form.quantityReleased} readOnly />
+{formErrors.quantityReleased && <small id="planting-error-quantityReleased" className="pr-field-error" role="alert">{formErrors.quantityReleased}</small>}
                     </div>
 
                     <div>
-                      <label className="pr-label">Remaining Reportable Quantity</label>
-                      <input className="pr-input pr-readonly" value={form.remainingQuantity} readOnly />
+                      <label htmlFor="planting-remainingQuantity" className="pr-label">Seedlings Available for Reporting</label>
+                      <input {...fieldAccessibility("remainingQuantity")} className="pr-input pr-readonly" value={form.remainingQuantity} readOnly />
+{formErrors.remainingQuantity && <small id="planting-error-remainingQuantity" className="pr-field-error" role="alert">{formErrors.remainingQuantity}</small>}
                     </div>
 
                     <div>
-                      <label className="pr-label">Quantity Planted <span className="pr-required">*</span></label>
-                      <input type="number" min="1" step="1" max={form.remainingQuantity || undefined}
+                      <label htmlFor="planting-quantity" className="pr-label">Quantity Planted <span className="pr-required">*</span></label>
+                      <input {...fieldAccessibility("quantity")} type="number" min="1" step="1" max={form.remainingQuantity || undefined}
                         className="pr-input" value={form.quantity}
                         onChange={(event) => updateFormField("quantity", event.target.value)}
                         placeholder="Enter quantity" />
+{formErrors.quantity && <small id="planting-error-quantity" className="pr-field-error" role="alert">{formErrors.quantity}</small>}
                     </div>
 
                     <div className="pr-full-width">
@@ -3111,8 +3145,8 @@ export default function PlantingPage() {
                             </div>
                           )}
 
-                          <div className="pr-upload-box">
-                            <input
+                          <div className={`pr-upload-box ${formErrors.photos ? "pr-invalid-field" : ""}`}>
+                            <input {...fieldAccessibility("photos")}
                               ref={uploadInputRef}
                               type="file"
                               accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp"
@@ -3123,7 +3157,7 @@ export default function PlantingPage() {
                             />
 
                     <FiCamera size={27} className="pr-upload-icon" />
-                    <div className="pr-upload-title">Planting evidence photos</div>
+                    <label htmlFor="planting-photos" className="pr-upload-title">Planting evidence photos</label>
                     <div className="pr-upload-text">
                       JPG, PNG, or WEBP • Maximum 10 MB each • 1 to 10 photos
                     </div>
@@ -3141,6 +3175,8 @@ export default function PlantingPage() {
                         type="button"
                         disabled={photoFiles.length >= MAX_EVIDENCE_PHOTOS}
                         onClick={startCamera}
+                        aria-invalid={formErrors.photos ? "true" : undefined}
+                        aria-describedby={formErrors.photos ? "planting-error-photos" : undefined}
                         className="pr-primary-button"
                       >
                         <FiCamera size={14} />
@@ -3151,12 +3187,15 @@ export default function PlantingPage() {
                         type="button"
                         disabled={photoFiles.length >= MAX_EVIDENCE_PHOTOS}
                         onClick={() => uploadInputRef.current?.click()}
+                        aria-invalid={formErrors.photos ? "true" : undefined}
+                        aria-describedby={formErrors.photos ? "planting-error-photos" : undefined}
                         className="pr-secondary-button"
                       >
                         <FiImage size={14} />
                         Upload Existing Photos
                       </button>
                     </div>
+                    {formErrors.photos && <small id="planting-error-photos" className="pr-field-error" role="alert">{formErrors.photos}</small>}
 
                     <div className="pr-helper-text" style={{ marginTop: "10px" }}>
                       {photoFiles.length} / {MAX_EVIDENCE_PHOTOS} photos selected
@@ -3252,8 +3291,8 @@ export default function PlantingPage() {
                     Additional Information
                   </div>
 
-                  <label className="pr-label">Remarks</label>
-                  <textarea
+                  <label htmlFor="planting-remarks" className="pr-label">Remarks</label>
+                  <textarea {...fieldAccessibility("remarks")}
                     value={form.remarks}
                     onChange={(event) =>
                       updateFormField("remarks", event.target.value)
@@ -3261,6 +3300,7 @@ export default function PlantingPage() {
                     placeholder="Add notes about the planting activity, if necessary..."
                     className="pr-textarea"
                   />
+{formErrors.remarks && <small id="planting-error-remarks" className="pr-field-error" role="alert">{formErrors.remarks}</small>}
                 </section>
               </div>
 
@@ -3615,7 +3655,11 @@ export default function PlantingPage() {
                       {selectedRecord.activeSubmittedQuantity ?? selectedRecord.quantityPlanted ?? "—"} / {selectedRecord.quantityReleased ?? "—"}
                     </div>
                   </div>
-                  <div className="pr-info-block"><div className="pr-info-label">Accepted / Accounted</div><div className="pr-info-value">{selectedRecord.acceptedQuantity ?? "—"}</div></div>
+                  <div className="pr-info-block"><div className="pr-info-label">Confirmed Planted</div><div className="pr-info-value">{selectedRecord.acceptedQuantity ?? "—"}</div></div>
+                  {selectedRecord.officialPlantingWorkflow && <>
+                    <div className="pr-info-block"><div className="pr-info-label">Declared Leftover Seedlings (Not Planted)</div><div className="pr-info-value">{selectedRecord.declaredLeftoverQuantity || 0}</div></div>
+                    <div className="pr-info-block"><div className="pr-info-label">Admin-Verified Leftovers</div><div className="pr-info-value">{selectedRecord.acceptedLeftoverQuantity || 0}</div></div>
+                  </>}
                   <div className="pr-info-block"><div className="pr-info-label">Pending Review</div><div className="pr-info-value">{selectedRecord.pendingReviewQuantity ?? "—"}</div></div>
                   <div className="pr-info-block"><div className="pr-info-label">Rejected</div><div className="pr-info-value">{selectedRecord.rejectedQuantity ?? "—"}</div></div>
                   <div className="pr-info-block"><div className="pr-info-label">Remaining Available</div><div className="pr-info-value">{selectedRecord.remainingAvailableQuantity ?? "—"}</div></div>
@@ -3675,6 +3719,13 @@ export default function PlantingPage() {
                             <div className="pr-info-block"><div className="pr-info-label">Submitter Contact</div><div className="pr-info-value">{submission.submittedByContactNumber || "—"}</div></div>
                             <div className="pr-info-block"><div className="pr-info-label">User ID</div><div className="pr-info-value">{submission.contributorId || submission.participantId || "—"}</div></div>
                             <div className="pr-info-block"><div className="pr-info-label">Quantity Planted</div><div className="pr-info-value">{submission.quantity ?? "—"}</div></div>
+                            {submission.officialStaffReport && <>
+                              <div className="pr-info-block"><div className="pr-info-label">Leftover Seedlings (Not Planted)</div><div className="pr-info-value">{submission.leftoverQuantity || 0}</div></div>
+                              <div className="pr-info-block"><div className="pr-info-label">Confirmation Basis</div><div className="pr-info-value">{submission.confirmationBasis === "release-based" ? "Individual Release-Based Confirmation" : "MENRO Field Report"}</div></div>
+                              <div className="pr-info-block"><div className="pr-info-label">Submitted By / Revision</div><div className="pr-info-value">MENRO Staff — {submission.submittedByName} / {submission.revision || 0}</div></div>
+                              {submission.attendanceAvailable && (userRole === "admin" || userRole === "staff" && submission.authenticatedSubmitterUid === currentUser?.uid) && <ProtectedAttendanceButton submissionId={submission.id} />}
+                              {submission.staffReviewStatus === "Rejected" && !submission.correctedBySubmission && userRole === "staff" && submission.authenticatedSubmitterUid === currentUser?.uid && <button type="button" className="pr-secondary-button" onClick={() => { setOfficialForm({ correction: submission }); setShowViewModal(false); }}>Correct Official Submission</button>}
+                            </>}
                             <div className="pr-info-block"><div className="pr-info-label">Site / Event / Distribution</div><div className="pr-info-value">{selectedRecord.siteName || "—"} / {selectedRecord.eventName || submission.eventId || "—"} / {submission.requestId || selectedRecord.distributionId || "—"}</div></div>
                             <div className="pr-info-block"><div className="pr-info-label">Photo Coordinates</div><div className="pr-info-value">{submission.latitude ?? "—"}, {submission.longitude ?? "—"}</div></div>
                             <div className="pr-info-block"><div className="pr-info-label">Verification</div><div className="pr-info-value">{submission.verificationStatus || "Needs Review"}</div></div>
@@ -3700,7 +3751,7 @@ export default function PlantingPage() {
                             </div>
                           )}
                           {submission.staffReviewStatus === "Pending Review" &&
-                            (submission.staffApprovalRequired === true ? userRole === "staff" : canReview) && (
+                            (submission.adminApprovalRequired === true ? userRole === "admin" : submission.staffApprovalRequired === true ? userRole === "staff" : canReview) && (
                             <div className="pr-drawer-verification-actions">
                               <button type="button" className="pr-secondary-button" onClick={() => { setSelectedSubmission(submission); setDecision("approve"); }}>Review</button>
                               <button type="button" className="pr-danger-button" onClick={() => { setSelectedSubmission(submission); setDecision("reject"); }}>Reject</button>
@@ -3712,7 +3763,7 @@ export default function PlantingPage() {
                   )}
                 </section>
 
-                {staffCanReviewSelected && <div className="pr-info-value">Selected submission is pending MENRO Staff review.</div>}
+                {staffCanReviewSelected && <div className="pr-info-value">Selected submission is pending MENRO {selectedSubmission?.adminApprovalRequired ? "Admin verification" : "Staff review"}.</div>}
               </section>
 
               <section className="pr-drawer-section pr-drawer-section-last">
@@ -3803,12 +3854,13 @@ export default function PlantingPage() {
             {decision === "reject" && (
               <div className="pr-modal-body">
                 <label className="pr-label" htmlFor="pr-rejection-reason">Reason for Rejection <span className="pr-required">*</span></label>
-                <textarea id="pr-rejection-reason" className="pr-textarea" value={verificationRemarks} onChange={(event) => setVerificationRemarks(event.target.value)} placeholder="Explain why this report is being rejected" />
+                <textarea id="pr-rejection-reason" className="pr-textarea" value={verificationRemarks} aria-invalid={decisionFieldError ? "true" : undefined} aria-describedby={decisionFieldError ? "planting-decision-error" : undefined} onChange={(event) => { setVerificationRemarks(event.target.value); if (event.target.value.trim()) setDecisionFieldError(""); }} placeholder="Explain why this report is being rejected" />
+                {decisionFieldError && <small id="planting-decision-error" className="pr-field-error" role="alert">{decisionFieldError}</small>}
               </div>
             )}
             <div className="pr-modal-footer">
               <button type="button" className="pr-secondary-button" onClick={() => setDecision("")} disabled={actionLoading}>Cancel</button>
-              <button type="button" className={decision === "approve" ? "pr-primary-button" : "pr-danger-button"} onClick={decision === "approve" ? approveRecord : rejectRecord} disabled={actionLoading || (decision === "reject" && !verificationRemarks.trim())}>
+              <button type="button" className={decision === "approve" ? "pr-primary-button" : "pr-danger-button"} onClick={decision === "approve" ? approveRecord : rejectRecord} disabled={actionLoading}>
                 {actionLoading ? "Saving..." : decision === "approve" ? "Confirm Review" : "Confirm Rejection"}
               </button>
             </div>

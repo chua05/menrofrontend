@@ -2,7 +2,9 @@ import {
   getAllMunicipalities,
   getAllProvinces,
   getMunicipalitiesByProvince,
+  getBarangaysByMunicipality,
 } from "@aivangogh/ph-address";
+import { BULAN_BARANGAYS } from "./userTypes.js";
 
 const METRO_MANILA = {
   name: "Metro Manila",
@@ -27,4 +29,10 @@ export function getMunicipalitiesForProvince(provinceName) {
       .sort((left, right) => left.name.localeCompare(right.name));
   }
   return getMunicipalitiesByProvince(province.psgcCode);
+}
+
+export function getBarangaysForLocation(provinceName, municipalityName) {
+  if (provinceName === "Sorsogon" && municipalityName === "Bulan") return BULAN_BARANGAYS;
+  const municipality = getMunicipalitiesForProvince(provinceName).find(row => row.name === municipalityName);
+  return municipality ? getBarangaysByMunicipality(municipality.psgcCode).map(row => row.name).sort((a, b) => a.localeCompare(b)) : [];
 }
