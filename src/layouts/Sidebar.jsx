@@ -24,6 +24,7 @@ import {
   NOTIFICATIONS_UPDATED_EVENT,
 } from "../utils/notificationRoutes";
 import menroLogo from "../assets/menro-logo.png";
+import { resolveVerifiedPlantingCohortEnabled } from "../utils/verifiedPlantingCohort";
 
 const NAVIGATION = {
   admin: [
@@ -80,6 +81,7 @@ const NAVIGATION = {
           icon: Activity,
           to: "/admin/verified-planting-cohorts",
         },
+        { label: "Permanent Sample Monitoring", icon: Activity, to: "/admin/permanent-sample-monitoring", cohortFeature: true },
       ],
     },
     {
@@ -173,6 +175,7 @@ const NAVIGATION = {
           icon: Activity,
           to: "/staff/verified-planting-cohorts",
         },
+        { label: "Permanent Sample Monitoring", icon: Activity, to: "/staff/permanent-sample-monitoring", cohortFeature: true },
       ],
     },
     {
@@ -317,7 +320,7 @@ export default function Sidebar({ isOpen, onClose }) {
   const resolvedRole =
     userRole && NAVIGATION[userRole] ? userRole : "participant";
 
-  const navigation = NAVIGATION[resolvedRole];
+  const navigation = NAVIGATION[resolvedRole].map((group) => ({ ...group, items: group.items.filter((item) => !item.cohortFeature || resolveVerifiedPlantingCohortEnabled()) }));
   const unreadCounts = useMemo(
     () => getUnreadCountsByPath(notifications, resolvedRole),
     [notifications, resolvedRole],

@@ -42,6 +42,8 @@ import SitesPage from "./pages/SitesPage";
 import PlantingPage from "./pages/PlantingPage";
 import MonitoringPage from "./pages/MonitoringPage";
 import VerifiedPlantingCohortsPage from "./pages/VerifiedPlantingCohortsPage";
+import PermanentSampleMonitoringPage from "./pages/PermanentSampleMonitoringPage";
+import { resolveVerifiedPlantingCohortEnabled } from "./utils/verifiedPlantingCohort";
 
 import ReportsPage from "./pages/ReportsPage";
 import ProfilePage from "./pages/ProfilePage";
@@ -52,6 +54,7 @@ import ReforestationAnalyticsPage from "./pages/ReforestationAnalyticsPage";
 import MapVisualizationPage from "./pages/MapVisualizationPage";
 
 function App() {
+  const permanentMonitoring = resolveVerifiedPlantingCohortEnabled() ? <PermanentSampleMonitoringPage /> : <Navigate to="dashboard" replace />;
   return (
     <ToastProvider>
       <AuthProvider>
@@ -156,6 +159,7 @@ function App() {
                 element={<MonitoringPage />}
               />
               <Route path="verified-planting-cohorts" element={<VerifiedPlantingCohortsPage />} />
+              <Route path="permanent-sample-monitoring" element={permanentMonitoring} />
 
               <Route
                 path="reforestation-analytics"
@@ -328,6 +332,7 @@ function App() {
                 element={<MonitoringPage />}
               />
               <Route path="verified-planting-cohorts" element={<VerifiedPlantingCohortsPage />} />
+              <Route path="permanent-sample-monitoring" element={permanentMonitoring} />
 
               <Route
                 path="reforestation-analytics"
