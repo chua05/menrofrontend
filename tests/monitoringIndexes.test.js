@@ -24,3 +24,16 @@ test("all three existing notification indexes and field overrides remain intact"
   ]);
   assert.deepEqual(manifest.fieldOverrides, []);
 });
+
+test("pilot cohort constraints retain ordered discovery, requester inbox and analytics filtering indexes", () => {
+  const signatures = new Set(manifest.indexes.map(signature));
+  for (const equalities of [[], ["status"], ["createdBy"], ["createdBy", "status"]]) {
+    const fields = ["cohortId/ASCENDING", ...equalities.map(field => `${field}/ASCENDING`), "visitDate/DESCENDING", "__name__/ASCENDING"].join(",");
+    assert.ok(signatures.has(`sampleMonitoringVisits:${fields}`));
+  }
+  assert.ok(signatures.has("sampleMonitoringInformationRequests:cohortId/ASCENDING,recipientUserId/ASCENDING,createdAt/DESCENDING"));
+  for (const owner of [false, true]) for (const site of [false, true]) {
+    const fields = ["cohortId/ASCENDING", "status/ASCENDING", ...(owner ? ["createdBy/ASCENDING"] : []), ...(site ? ["siteId/ASCENDING"] : []), "__name__/ASCENDING"].join(",");
+    assert.ok(signatures.has(`sampleMonitoringVisits:${fields}`));
+  }
+});

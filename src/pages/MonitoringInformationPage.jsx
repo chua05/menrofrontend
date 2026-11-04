@@ -67,7 +67,8 @@ export default function MonitoringInformationPage() {
       <div className="w-full max-w-xl rounded bg-white p-5">
         <h2 className="text-xl font-semibold">Monitoring information</h2><p>{selected.question}</p>
         <ol>{selected.history.map((entry, i) => <li key={i}>{entry.action} · {entry.role}</li>)}</ol>
-        {selected.answer ? <p>Reply: {selected.answer}</p> : userRole === "participant" && <form onSubmit={reply}>
+        {selected.writesPaused && <p role="status">Replies are paused. Information history remains available.</p>}
+        {selected.answer ? <p>Reply: {selected.answer}</p> : userRole === "participant" && !selected.writesPaused && <form onSubmit={reply}>
           <label>Your answer<textarea required maxLength={4000} value={answer} onChange={e => setAnswer(e.target.value)} className="block w-full rounded border p-2" /></label>
           <button disabled={busy || !answer.trim()} className="my-3 rounded bg-emerald-700 p-2 text-white">{busy ? "Sending…" : "Send answer"}</button>
         </form>}

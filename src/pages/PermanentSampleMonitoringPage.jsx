@@ -351,12 +351,13 @@ export default function PermanentSampleMonitoringPage() {
   }
 
   const editable =
-    userRole === "staff" && ["DRAFT", "RETURNED"].includes(detail?.status);
+    userRole === "staff" && !detail?.writesPaused && ["DRAFT", "RETURNED"].includes(detail?.status);
   const completed = assessments.filter((assessment) => assessment.condition).length;
 
   return (
     <main className="cohort-page">
       <h1>Permanent Sample Monitoring</h1>
+      {detail?.writesPaused && <p role="status">Changes are paused. Authorized visit and photo history remain available.</p>}
       <p>Existing authorized visits only. Scheduling and visit creation are unavailable.</p>
       <label>
         Status
@@ -554,7 +555,7 @@ export default function PermanentSampleMonitoringPage() {
             <>
               <p>{`Cohort ${detail.cohortId} · Site ${detail.siteId} · ${completed}/${assessments.length} assessments complete`}</p>
               {detail.reviewReasons && <p>{`Review reason: ${detail.reviewReasons}`}</p>}
-              {userRole === "admin" && detail.status === "PENDING_ADMIN_APPROVAL" && (
+              {userRole === "admin" && !detail.writesPaused && detail.status === "PENDING_ADMIN_APPROVAL" && (
                 <section aria-label="Admin visit review">
                   <h3>Admin Visit Review</h3>
                   <label>
@@ -629,7 +630,7 @@ export default function PermanentSampleMonitoringPage() {
           )}
         </section>
       )}
-      {detail && informationEnabled() && <MonitoringInformationPanel key={detail.id} visitId={detail.id} />}
+      {detail && informationEnabled() && <MonitoringInformationPanel key={detail.id} visitId={detail.id} readOnly={detail.writesPaused} />}
       <SecureCameraCapture
         open={cameraOpen}
         request={cameraRequest}

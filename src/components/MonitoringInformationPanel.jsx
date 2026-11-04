@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { sampleRequest } from "../services/permanentSampleApi";
 
-export default function MonitoringInformationPanel({ visitId }) {
+export default function MonitoringInformationPanel({ visitId, readOnly = false }) {
   const [rows, setRows] = useState([]);
   const [question, setQuestion] = useState("");
   const [error, setError] = useState("");
@@ -48,12 +48,12 @@ export default function MonitoringInformationPanel({ visitId }) {
     <p>Optional. Unanswered questions do not block assessments, submission or review.</p>
     {loading && <p role="status">Loading information requests…</p>}
     {error && <p role="alert">{error}</p>}
-    <form onSubmit={send} className="my-3 space-y-2">
+    {!readOnly && <form onSubmit={send} className="my-3 space-y-2">
       <label className="block">Question to the verified planting requester
         <textarea required maxLength={2000} value={question} onChange={e => setQuestion(e.target.value)} className="block w-full rounded border p-2" />
       </label>
       <button disabled={busy || !question.trim()} className="rounded bg-emerald-700 px-4 py-2 text-white">{busy ? "Sending…" : "Request Information"}</button>
-    </form>
+    </form>}
     {!loading && !rows.length && <p>No information requests.</p>}
     <ul className="space-y-3">{rows.map(row => <li key={row.id} className="rounded border p-3">
       <p>{row.question}</p><p>Status: {row.status}</p>

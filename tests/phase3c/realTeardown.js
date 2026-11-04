@@ -15,7 +15,8 @@ export default function realTeardown() {
   for (let pass = 0; pass < 2; pass += 1) {
     const result = spawnSync(process.execPath, ["tests/integration/phase3cBrowserCleanup.js", prefix], {
       cwd: "C:/Users/chuak/Desktop/menrobackend-phase3b-per-tree-evidence",
-      env: { ...process.env, NODE_PATH: "C:/Users/chuak/Desktop/menrobackend/node_modules" },
+      env: { ...process.env, NODE_PATH: "C:/Users/chuak/Desktop/menrobackend/node_modules",
+        MENRO_VERIFY_RELEASE_NO_WRITES: pass === 0 && process.env.MENRO_RELEASE_PAUSE_EXPECTED === "true" ? "true" : "false" },
       encoding: "utf8", windowsHide: true, timeout: 30000,
     });
     assert.equal(result.status, 0, "Explicit isolated UUID fixture cleanup failed");
