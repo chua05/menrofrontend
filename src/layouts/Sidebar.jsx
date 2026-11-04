@@ -24,6 +24,8 @@ import {
   NOTIFICATIONS_UPDATED_EVENT,
 } from "../utils/notificationRoutes";
 import menroLogo from "../assets/menro-logo.png";
+import { resolveVerifiedPlantingCohortEnabled } from "../utils/verifiedPlantingCohort";
+import { informationEnabled, sampleAnalyticsEnabled } from "../utils/permanentSampleFeatures";
 
 const NAVIGATION = {
   admin: [
@@ -80,6 +82,8 @@ const NAVIGATION = {
           icon: Activity,
           to: "/admin/verified-planting-cohorts",
         },
+        { label: "Permanent Sample Monitoring", icon: Activity, to: "/admin/permanent-sample-monitoring", cohortFeature: true },
+        { label: "Permanent Sample Monitoring Analytics", icon: ChartNoAxesCombined, to: "/admin/permanent-sample-analytics", sampleAnalyticsFeature: true },
       ],
     },
     {
@@ -173,6 +177,8 @@ const NAVIGATION = {
           icon: Activity,
           to: "/staff/verified-planting-cohorts",
         },
+        { label: "Permanent Sample Monitoring", icon: Activity, to: "/staff/permanent-sample-monitoring", cohortFeature: true },
+        { label: "Permanent Sample Monitoring Analytics", icon: ChartNoAxesCombined, to: "/staff/permanent-sample-analytics", sampleAnalyticsFeature: true },
       ],
     },
     {
@@ -266,6 +272,7 @@ const NAVIGATION = {
           icon: Activity,
           to: "/participant/survival-monitoring",
         },
+        { label: "Monitoring Information Requests", icon: ClipboardList, to: "/participant/monitoring-information", informationFeature: true },
       ],
     },
     {
@@ -317,7 +324,10 @@ export default function Sidebar({ isOpen, onClose }) {
   const resolvedRole =
     userRole && NAVIGATION[userRole] ? userRole : "participant";
 
-  const navigation = NAVIGATION[resolvedRole];
+  const navigation = NAVIGATION[resolvedRole].map((group) => ({ ...group, items: group.items.filter((item) =>
+    (!item.cohortFeature || resolveVerifiedPlantingCohortEnabled())
+    && (!item.informationFeature || informationEnabled())
+    && (!item.sampleAnalyticsFeature || sampleAnalyticsEnabled())) }));
   const unreadCounts = useMemo(
     () => getUnreadCountsByPath(notifications, resolvedRole),
     [notifications, resolvedRole],

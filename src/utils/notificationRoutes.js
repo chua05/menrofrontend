@@ -10,6 +10,10 @@ export function getNotificationPath(notification, role) {
     ? `?${name}=${encodeURIComponent(recordId)}`
     : "";
 
+  if (notification?.relatedRecordType === "sampleMonitoringInformation") {
+    return `${prefix}/monitoring-information${recordQuery("request")}`;
+  }
+
   if (notification?.relatedRecordType === "seedlingRequest") {
     return role === "participant"
       ? `${prefix}/my-requests${recordQuery("request")}`

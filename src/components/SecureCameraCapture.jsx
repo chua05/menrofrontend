@@ -143,16 +143,29 @@ export default function SecureCameraCapture({ open, request, binding, onVerified
   }, [open, begin, stopTracks, clearPreview]);
 
   async function capture() {
+    setStatus("capturing"); setError("");
+    try {
+      // A fresh, uncached fix is required for this frame, not the earlier
+      // preview location. Server session/accuracy/site validation still applies.
+      const position = await getLocation();
+      if (!mountedRef.current) return;
+      if (!isAcceptableBrowserCameraAccuracy(position.coords.accuracy)) throw new Error("GPS accuracy must be 50 meters or better. Retake after acquiring precise location.");
+      setLocation({ latitude: position.coords.latitude, longitude: position.coords.longitude,
+        accuracy: position.coords.accuracy, capturedAt: new Date(position.timestamp).toISOString() });
     const video = videoRef.current;
-    if (!video?.videoWidth || !video.videoHeight) return setError("The camera preview is not ready.");
+    if (!video?.videoWidth || !video.videoHeight) throw new Error("The camera preview is not ready.");
     const canvas = document.createElement("canvas");
     canvas.width = video.videoWidth; canvas.height = video.videoHeight;
     canvas.getContext("2d").drawImage(video, 0, 0);
     const blob = await new Promise(resolve => canvas.toBlob(resolve, "image/jpeg", 0.92));
-    if (!blob) return setError("The captured frame could not be encoded.");
+    if (!blob) throw new Error("The captured frame could not be encoded.");
     const captured = new File([blob], `menro-camera-${Date.now()}.jpg`, { type: "image/jpeg", lastModified: Date.now() });
     const url = URL.createObjectURL(captured);
     previewRef.current = url; setPreview(url); setFile(captured); stopTracks(); setStatus("captured");
+    } catch (reason) {
+      setError(reason?.code ? locationPermissionError(reason) : reason.message || "Fresh capture location is unavailable.");
+      setStatus("ready");
+    }
   }
 
   async function verify() {

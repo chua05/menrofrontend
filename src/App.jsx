@@ -42,6 +42,11 @@ import SitesPage from "./pages/SitesPage";
 import PlantingPage from "./pages/PlantingPage";
 import MonitoringPage from "./pages/MonitoringPage";
 import VerifiedPlantingCohortsPage from "./pages/VerifiedPlantingCohortsPage";
+import PermanentSampleMonitoringPage from "./pages/PermanentSampleMonitoringPage";
+import MonitoringInformationPage from "./pages/MonitoringInformationPage";
+import PermanentSampleAnalyticsPage from "./pages/PermanentSampleAnalyticsPage";
+import { informationEnabled, sampleAnalyticsEnabled } from "./utils/permanentSampleFeatures";
+import { resolveVerifiedPlantingCohortEnabled } from "./utils/verifiedPlantingCohort";
 
 import ReportsPage from "./pages/ReportsPage";
 import ProfilePage from "./pages/ProfilePage";
@@ -52,6 +57,9 @@ import ReforestationAnalyticsPage from "./pages/ReforestationAnalyticsPage";
 import MapVisualizationPage from "./pages/MapVisualizationPage";
 
 function App() {
+  const information = informationEnabled() ? <MonitoringInformationPage /> : <Navigate to="dashboard" replace />;
+  const sampleAnalytics = sampleAnalyticsEnabled() ? <PermanentSampleAnalyticsPage /> : <Navigate to="dashboard" replace />;
+  const permanentMonitoring = resolveVerifiedPlantingCohortEnabled() ? <PermanentSampleMonitoringPage /> : <Navigate to="dashboard" replace />;
   return (
     <ToastProvider>
       <AuthProvider>
@@ -156,6 +164,9 @@ function App() {
                 element={<MonitoringPage />}
               />
               <Route path="verified-planting-cohorts" element={<VerifiedPlantingCohortsPage />} />
+              <Route path="permanent-sample-monitoring" element={permanentMonitoring} />
+              <Route path="monitoring-information" element={information} />
+              <Route path="permanent-sample-analytics" element={sampleAnalytics} />
 
               <Route
                 path="reforestation-analytics"
@@ -328,6 +339,9 @@ function App() {
                 element={<MonitoringPage />}
               />
               <Route path="verified-planting-cohorts" element={<VerifiedPlantingCohortsPage />} />
+              <Route path="permanent-sample-monitoring" element={permanentMonitoring} />
+              <Route path="monitoring-information" element={information} />
+              <Route path="permanent-sample-analytics" element={sampleAnalytics} />
 
               <Route
                 path="reforestation-analytics"
@@ -476,6 +490,7 @@ function App() {
                   <SeedlingRequestsPage />
                 }
               />
+              <Route path="monitoring-information" element={information} />
 
               <Route
                 path="my-requests"
