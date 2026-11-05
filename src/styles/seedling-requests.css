@@ -1029,6 +1029,11 @@
 .participant-request-form .sr-invalid-field {
   scroll-margin-top: 96px;
 }
+.participant-request-form .sr-wizard-map[aria-invalid="true"],
+.participant-request-form .sr-request-letter-picker[aria-invalid="true"] {
+  outline: 2px solid #d83b3b;
+  outline-offset: -2px;
+}
 
 .participant-request-form .sr-address-field-group {
   display: grid;

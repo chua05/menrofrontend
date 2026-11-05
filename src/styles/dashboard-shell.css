@@ -4,6 +4,7 @@
   --menro-green: #087443;
   --menro-green-hover: #096b40;
   --menro-active: #0b7e47;
+  --menro-forest: #145b3a;
 
   --page-bg: #f7f9f7;
   --surface: #ffffff;
@@ -137,6 +138,23 @@
 .sidebar.open {
   transform: translateX(0);
 }
+
+.menro-modal-dialog {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100dvh;
+  max-width: none;
+  max-height: none;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  color: var(--text-main);
+}
+.menro-modal-dialog:not([open]) { display: none; }
+.menro-modal-dialog::backdrop { background: transparent; }
+.sidebar-modal-layer { background: transparent; }
+.sidebar-modal-layer[open] { display: block; }
 
 /* =====================================================
    SIDEBAR HEADER
@@ -500,13 +518,16 @@
 
   gap: 24px;
 
-  background:
-    rgba(255, 255, 255, 0.97);
-
   border-bottom:
-    1px solid #e3e9e5;
+    1px solid #0d472d;
 
   backdrop-filter: blur(10px);
+}
+
+.dashboard-shell .topbar {
+  background-color: var(--menro-forest, #145b3a);
+  background-image: none;
+  color: #fff;
 }
 
 .topbar-left {
@@ -542,13 +563,13 @@
   place-items: center;
 
   border:
-    1px solid var(--border);
+    1px solid #7aaf90;
 
   border-radius: 8px;
 
-  background: white;
+  background: transparent;
 
-  color: #253029;
+  color: #fff;
 
   cursor: pointer;
 
@@ -559,7 +580,7 @@
 }
 
 .topbar-menu-btn:hover {
-  background: #f8faf8;
+  background: #0d472d;
 
   border-color: #bfd4c6;
 
@@ -680,7 +701,7 @@
 .topbar-search-result-copy span { color: #718078; font-size: 10px; }
 
 .topbar-search input::placeholder {
-  color: #849087;
+  color: #58675f;
 }
 
 .topbar-search input:focus {
@@ -740,7 +761,7 @@ input[type="search"]::-webkit-search-results-decoration {
 
   background: transparent;
 
-  color: #1f2923;
+  color: #fff;
 
   cursor: pointer;
 
@@ -750,7 +771,7 @@ input[type="search"]::-webkit-search-results-decoration {
 }
 
 .topbar-icon-btn:hover {
-  background: #f2f6f3;
+  background: #0d472d;
 
   transform: translateY(-1px);
 }
@@ -789,10 +810,10 @@ input[type="search"]::-webkit-search-results-decoration {
   padding: 0 4px;
   display: grid;
   place-items: center;
-  border: 2px solid #fff;
+  border: 2px solid var(--menro-forest);
   border-radius: 999px;
-  background: #087443;
-  color: #fff;
+  background: #ffe08a;
+  color: #193c29;
   font-size: 8px;
   font-weight: 800;
 }
@@ -819,7 +840,7 @@ input[type="search"]::-webkit-search-results-decoration {
 
 .topbar-user:hover,
 .topbar-user:focus-visible {
-  background: #f2f6f3;
+  background: #0d472d;
 }
 
 .topbar-profile-wrap {
@@ -843,7 +864,7 @@ input[type="search"]::-webkit-search-results-decoration {
   white-space: nowrap;
   text-overflow: ellipsis;
 
-  color: #17211b;
+  color: #fff;
 
   font-size: 11.5px;
   font-weight: 600;
@@ -852,7 +873,7 @@ input[type="search"]::-webkit-search-results-decoration {
 .topbar-user-role {
   margin-top: 3px;
 
-  color: #69776f;
+  color: #d9eadf;
 
   font-size: 9.5px;
 }
@@ -868,9 +889,9 @@ input[type="search"]::-webkit-search-results-decoration {
 
   border-radius: 50%;
 
-  background: #087238;
+  background: var(--menro-green-100, #dff4e5);
 
-  color: white;
+  color: var(--menro-forest);
 
   font-size: 11px;
   font-weight: 700;
@@ -885,13 +906,29 @@ input[type="search"]::-webkit-search-results-decoration {
 }
 
 .topbar-profile-chevron {
-  color: #7a867e;
+  color: #d9eadf;
   transition: transform 150ms ease;
 }
 
 .topbar-user[aria-expanded="true"] .topbar-profile-chevron {
   transform: rotate(180deg);
 }
+
+.topbar-menu-btn:focus-visible,
+.topbar-icon-btn:focus-visible,
+.topbar-user:focus-visible,
+.topbar-search input:focus-visible {
+  outline: 3px solid #ffe08a;
+  outline-offset: 3px;
+}
+.topbar-menu-btn:active,
+.topbar-icon-btn:active,
+.topbar-user:active,
+.topbar-icon-btn[aria-expanded="true"],
+.topbar-user[aria-expanded="true"] { background: #083821; }
+.topbar-search-results,
+.topbar-profile-menu,
+.notification-panel { color: var(--text-main); }
 
 .topbar-profile-menu {
   position: absolute;
@@ -922,8 +959,8 @@ input[type="search"]::-webkit-search-results-decoration {
   place-items: center;
   overflow: hidden;
   border-radius: 50%;
-  background: var(--menro-green);
-  color: #fff;
+  background: var(--menro-green-100, #dff4e5);
+  color: var(--menro-forest, #145b3a);
   font-size: 13px;
   font-weight: 750;
 }

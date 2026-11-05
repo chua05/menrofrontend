@@ -59,9 +59,9 @@ test("authentication errors distinguish Firebase, network, and backend rejection
     getAuthErrorMessage({ code: "auth/invalid-credential" }),
     "Invalid email or password."
   );
-  assert.match(
+  assert.equal(
     getAuthErrorMessage({ code: "BACKEND_UNAVAILABLE" }),
-    /MENRO server could not be reached/i
+    "Unable to connect. Please check your connection and try again."
   );
   assert.match(
     getAuthErrorMessage({ code: "BACKEND_UNAUTHORIZED", status: 401 }),
@@ -71,10 +71,16 @@ test("authentication errors distinguish Firebase, network, and backend rejection
     getAuthErrorMessage({ code: "BACKEND_FORBIDDEN", status: 403, message: "User account is inactive." }),
     /inactive/i
   );
-  assert.match(
+  assert.equal(
     getAuthErrorMessage({ code: "BACKEND_SERVER_ERROR", status: 500 }),
-    /could not complete sign-in/i
+    "Unable to connect. Please check your connection and try again."
   );
+});
+
+test("only confirmed offline failures claim no internet connection", () => {
+  for (const online of [true, undefined]) assert.equal(getAuthErrorMessage({ code: "auth/network-request-failed" }, { online }), "Unable to connect. Please check your connection and try again.");
+  assert.equal(getAuthErrorMessage({ code: "auth/network-request-failed" }, { online: false }), "No internet connection. Please check your connection and try again.");
+  assert.equal(getAuthErrorMessage({ code: "auth/invalid-credential" }, { online: false }), "Invalid email or password.");
 });
 
 test("verification action errors are safe and actionable", () => {

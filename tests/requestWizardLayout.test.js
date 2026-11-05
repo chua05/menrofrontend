@@ -42,9 +42,10 @@ test("requester address uses dependent PSGC fields and preserves the Bulan baran
   assert.match(source, /getMunicipalitiesForProvince\(form\.addressProvince\)/);
   assert.match(source, /key === "addressProvince"[\s\S]*addressMunicipality: ""[\s\S]*addressBarangay: ""/);
   assert.match(source, /key === "addressMunicipality"[\s\S]*addressBarangay: ""/);
-  assert.match(source, /form\.addressProvince === "Sorsogon" && form\.addressMunicipality === "Bulan"/);
+  assert.match(source, /getBarangaysForLocation/);
   assert.match(source, /<SelectBarangay/);
-  assert.match(source, /placeholder="Enter barangay name"/);
+  assert.match(source, /<select value=\{form\.addressBarangay\}/);
+  assert.doesNotMatch(source, /placeholder="Enter barangay name"/);
   assert.doesNotMatch(source, /Manual barangay input for locations outside Bulan/i);
 });
 

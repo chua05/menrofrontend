@@ -10,6 +10,7 @@ import { auth } from "../firebase/config";
 import { useAuth } from "../context/AuthContext";
 import { useToast } from "../context/ToastContext";
 import { resolvePostLoginPath } from "../utils/postLoginRoute";
+import { markSuccessfulLogin } from "../utils/loginSuccess";
 import { authenticatedFetch, verifyMenroSession } from "../services/authenticatedApi";
 import { startGooglePopup } from "../services/googleRedirectAuth";
 import {
@@ -131,6 +132,7 @@ export default function LoginPage() {
       const userData = await verifyMenroSession(credential.user);
 
       login(userData, userData.role);
+      markSuccessfulLogin(userData);
       navigate(resolvePostLoginPath(location.state?.from, userData), { replace: true });
     } catch (err) {
       console.error("Email sign in failed:", err?.code || err?.message);
@@ -202,6 +204,7 @@ export default function LoginPage() {
 
         setError("");
         login(userData, userData.role);
+        markSuccessfulLogin(userData);
         navigate(resolvePostLoginPath(location.state?.from, userData), { replace: true });
       } catch (err) {
         if (!isCurrentAttempt()) return;

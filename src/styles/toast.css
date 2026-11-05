@@ -58,6 +58,7 @@
 }
 
 .menro-toast-success { color: #087443; }
+.menro-toast-title { display: block; }
 .menro-toast-error { color: #b42318; }
 .menro-toast-warning { color: #a15c00; }
 .menro-toast-info { color: #26352d; }

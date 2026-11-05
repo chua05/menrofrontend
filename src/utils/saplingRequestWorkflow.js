@@ -1,3 +1,6 @@
+import calendar from "../data/request-processing-holidays.json" with { type: "json" };
+const processingHolidays = new Set(calendar.dates);
+export const PROCESSING_ADVISORY = "MENRO requires 5 working days (Monday to Friday, excluding holidays) to review and process seedling requests. Your selected date is earlier than the standard processing period. You may continue, but MENRO may adjust your requested schedule.";
 export const GROUP_SECTORS = new Set([
   "Barangay Official",
   "Private Sector / Business",
@@ -79,30 +82,23 @@ export function normalizeBarangayName(value) {
   return `zone ${zones[zoneMatch[1]] || zoneMatch[1]}`;
 }
 
+const FIXED_AREAS = Object.freeze({ "1 hectare": 1, "2 hectares": 2, "3 hectares": 3, "4 hectares": 4, "5 hectares": 5 });
 export function getPlantingAreaHectares(areaChoice, exactArea) {
-  if (EXACT_AREA_CHOICES.has(areaChoice)) return Number(exactArea) || 0;
-  const exactChoices = {
-    "1 hectare": 1,
-    "2 hectares": 2,
-    "3 hectares": 3,
-    "4 hectares": 4,
-    "5 hectares": 5,
-  };
-  return exactChoices[areaChoice] || 0;
+  if (!areaChoice) return null;
+  if (getPlantingAreaError(areaChoice, exactArea)) return null;
+  return EXACT_AREA_CHOICES.has(areaChoice) ? Number(exactArea) : FIXED_AREAS[areaChoice];
 }
-
-export function getPlantingAreaError(areaChoice, exactArea) {
-  if (!areaChoice) return "Select the planting area.";
-  if (!EXACT_AREA_CHOICES.has(areaChoice)) return "";
-  const value = Number(exactArea);
-  if (!Number.isFinite(value) || value <= 0)
-    return "Enter a positive planting area in hectares.";
-  if (areaChoice === "Less than 1 hectare" && value >= 1)
-    return "Enter an area greater than 0 and less than 1 hectare.";
-  if (areaChoice === "6–10 hectares" && (value < 6 || value > 10))
-    return "Enter an area from 6 to 10 hectares.";
-  if (areaChoice === "More than 10 hectares" && value <= 10)
-    return "Enter an area greater than 10 hectares.";
+export function getPlantingAreaError(areaChoice, exactArea, { optional = false } = {}) {
+  if (!areaChoice) return optional ? "" : "Select the planting area.";
+  if (Object.hasOwn(FIXED_AREAS, areaChoice)) return "";
+  if (!EXACT_AREA_CHOICES.has(areaChoice)) return "Select a valid planting area.";
+  const text = typeof exactArea === "number" ? String(exactArea) : typeof exactArea === "string" ? exactArea.trim() : "";
+  const value = Number(text);
+  if ((typeof exactArea !== "number" && !/^(?:\d+(?:\.\d+)?|\.\d+)$/.test(text)) || !Number.isFinite(value) || value <= 0)
+    return "Enter a positive, finite planting area in hectares.";
+  if (areaChoice === "Less than 1 hectare" && value >= 1) return "Enter an area greater than 0 and less than 1 hectare.";
+  if (areaChoice === "6\u201310 hectares" && (value < 6 || value > 10)) return "Enter an area from 6 to 10 hectares.";
+  if (areaChoice === "More than 10 hectares" && value <= 10) return "Enter an area greater than 10 hectares.";
   return "";
 }
 
@@ -162,6 +158,7 @@ export function dateOnlyInManila(date = new Date()) {
 }
 
 export function addWorkingDays(dateOnly, count) {
+  if (!isValidDateOnly(dateOnly) || !Number.isSafeInteger(count) || count < 0) throw new Error("Invalid working-day calculation.");
   const date = new Date(`${dateOnly}T12:00:00+08:00`);
   let added = 0;
   while (added < count) {
@@ -169,7 +166,9 @@ export function addWorkingDays(dateOnly, count) {
     const weekday = new Intl.DateTimeFormat("en-US", {
       timeZone: "Asia/Manila", weekday: "short",
     }).format(date);
-    if (weekday !== "Sat" && weekday !== "Sun") added += 1;
+    const day = dateOnlyInManila(date);
+    if (!calendar.coverageYears.includes(Number(day.slice(0, 4)))) throw new Error("The published processing calendar needs an update.");
+    if (weekday !== "Sat" && weekday !== "Sun" && !processingHolidays.has(day)) added += 1;
   }
   return dateOnlyInManila(date);
 }
@@ -177,9 +176,9 @@ export function addWorkingDays(dateOnly, count) {
 export function getProcessingWindowAdvisory(preferredReleaseDate, now = new Date()) {
   if (!isValidDateOnly(preferredReleaseDate)) return null;
   const submittedDate = dateOnlyInManila(now);
-  const earliestDate = addWorkingDays(submittedDate, 3);
-  const latestDate = addWorkingDays(submittedDate, 7);
-  return preferredReleaseDate < earliestDate ? { earliestDate, latestDate } : null;
+  let standardDate;
+  try { standardDate = addWorkingDays(submittedDate, 5); } catch { return null; }
+  return preferredReleaseDate < standardDate ? { earliestDate: standardDate, latestDate: standardDate } : null;
 }
 
 export function isValidDateOnly(value) {

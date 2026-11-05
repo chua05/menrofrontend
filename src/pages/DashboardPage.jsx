@@ -1,6 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import PageLoadingState from "../components/PageLoadingState";
+import { useToast } from "../context/ToastContext";
+import { consumeSuccessfulLogin } from "../utils/loginSuccess";
+import { DASHBOARD_SOURCES, DASHBOARD_UNAVAILABLE_MESSAGE, metricAvailability } from "../utils/dashboardAvailability";
 import L from "leaflet";
 import { boundaryLayerOptions } from "../utils/barangayMap";
 import "leaflet/dist/leaflet.css";
@@ -95,7 +98,9 @@ function unwrapArray(payload) {
     payload?.events,
   ];
 
-  return candidates.find(Array.isArray) || [];
+  const rows = candidates.find(Array.isArray);
+  if (!rows) throw Object.assign(new Error("Dashboard response is unavailable."), { code: "INVALID_DASHBOARD_RESPONSE" });
+  return rows;
 }
 
 async function getFreshToken() {
@@ -989,6 +994,9 @@ function DashboardSitesMap({
       try {
         if (!mapContainerRef.current || mapRef.current) return;
 
+        const mapTilerKey = import.meta.env.VITE_MAPTILER_API_KEY;
+        if (!mapTilerKey) throw new Error("MapTiler API key is not configured.");
+
         const map = L.map(mapContainerRef.current, {
           center: [
             BULAN_FALLBACK_CENTER.lat,
@@ -1000,15 +1008,6 @@ function DashboardSitesMap({
           zoomControl: true,
           attributionControl: true,
         });
-
-        const mapTilerKey =
-          import.meta.env.VITE_MAPTILER_API_KEY;
-
-        if (!mapTilerKey) {
-          throw new Error(
-            "MapTiler API key is not configured."
-          );
-        }
 
         L.tileLayer(
           `https://api.maptiler.com/maps/streets-v2/{z}/{x}/{y}.png?key=${mapTilerKey}`,
@@ -1535,6 +1534,16 @@ export default function DashboardPage() {
   const navigate = useNavigate();
   const { currentUser, userRole } =
     useAuth();
+  const { success: loginToast } = useToast();
+  const hasLoadedData = useRef(false);
+  const [unavailableSources, setUnavailableSources] = useState(() => new Set());
+  useEffect(() => {
+    const frame = window.requestAnimationFrame(() => {
+      const nonce = consumeSuccessfulLogin(currentUser);
+      if (nonce) loginToast("Welcome back! You have successfully signed in.", { title: "Login Successful", duration: 4000, dedupeKey: `login-success:${nonce}` });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [currentUser, loginToast]);
 
   const isParticipant =
     userRole === "participant";
@@ -1649,91 +1658,30 @@ export default function DashboardPage() {
 
         if (cancelled) return;
 
-        const pick = (index) => {
-          const result =
-            results[index];
-
-          if (
-            result?.status ===
-              "fulfilled" &&
-            Array.isArray(
-              result.value
-            )
-          ) {
-            return result.value;
-          }
-
-          return [];
+        const unavailable = new Set();
+        const commit = (index, setter, transform = value => value) => {
+          const result = results[index];
+          if (result?.status === "fulfilled" && Array.isArray(result.value)) setter(transform(result.value));
+          else unavailable.add(DASHBOARD_SOURCES[index]);
         };
-
-        setRequests(pick(0));
-
-        // Registered planting sites now come only from the backend.
-        setSites(
-          pick(1)
-        );
-
-        setReports(pick(2));
-
-        // Event Calendar and Dashboard now share the same backend source.
-        setEvents(
-          pick(3).filter((event) =>
-            ["Tree Planting", "Other MENRO Activity"].includes(event?.type)
-          )
-        );
-
+        commit(0, setRequests);
+        commit(1, setSites);
+        commit(2, setReports);
+        commit(3, setEvents, rows => rows.filter(event => ["Tree Planting", "Other MENRO Activity"].includes(event?.type)));
+        commit(4, setMonitoring);
         if (isManagement) {
-          setUsers(
-            pick(5)
-          );
-
-          setInventory(pick(6));
-
-          setDistributions(pick(7));
-        } else {
-          // Preserve participant restrictions.
-          setUsers([]);
-          setInventory([]);
-          setDistributions([]);
+          commit(5, setUsers); commit(6, setInventory); commit(7, setDistributions);
         }
-
-        setMonitoring(
-          pick(4)
-        );
-
-        const failedCount = results.filter(
-          (result) => result.status === "rejected"
-        ).length;
-        setLoadError(
-          failedCount > 0
-            ? `${failedCount} dashboard data source${failedCount === 1 ? "" : "s"} could not be loaded.`
-            : ""
-        );
+        setUnavailableSources(unavailable);
+        setFatalLoadError("");
+        if (results.some(result => result.status === "fulfilled")) hasLoadedData.current = true;
+        setLoadError(unavailable.size ? DASHBOARD_UNAVAILABLE_MESSAGE : "");
       } catch (error) {
-        console.error(error);
-
+        console.error("Dashboard refresh failed", { code: error?.code || null, status: error?.status || null });
         if (cancelled) return;
-
-        setRequests([]);
-
-        setSites([]);
-
-        setReports([]);
-
-        setInventory([]);
-
-        setDistributions([]);
-
-        setUsers([]);
-
-        setEvents([]);
-
-        setMonitoring([]);
-
-        setLoadError(
-          "Unable to load dashboard records. Please try again."
-        );
-        setFatalLoadError("Unable to load dashboard records. Please try again.");
+        setUnavailableSources(new Set(DASHBOARD_SOURCES));
+        setLoadError(DASHBOARD_UNAVAILABLE_MESSAGE);
+        if (!hasLoadedData.current) setFatalLoadError(DASHBOARD_UNAVAILABLE_MESSAGE);
       } finally {
         requestInFlight = false;
         if (!cancelled) {
@@ -2150,11 +2098,16 @@ export default function DashboardPage() {
           dashboardDistributions,
           dashboardReports,
           dashboardMonitoring
-        ),
+          ).map(row => ({ ...row,
+            allocated: unavailableSources.has("distributions") ? null : row.allocated,
+            planted: unavailableSources.has("reports") ? null : row.planted,
+            survivalRate: unavailableSources.has("monitoring") || unavailableSources.has("reports") ? null : row.survivalRate,
+          })),
       [
         dashboardDistributions,
         dashboardMonitoring,
         dashboardReports,
+          unavailableSources,
       ]
     );
 
@@ -2460,10 +2413,8 @@ export default function DashboardPage() {
     },
   ];
 
-  const kpis =
-    isParticipant
-      ? participantKpis
-      : managementKpis;
+  const kpis = (isParticipant ? participantKpis : managementKpis)
+    .map(item => metricAvailability(item, unavailableSources, !isParticipant && barangay !== "All Barangays"));
 
   const quickActions =
     isParticipant
@@ -2568,9 +2519,10 @@ export default function DashboardPage() {
           : ""
       }`}
     >
-      {loadError && !isParticipant && (
+      {loadError && (
         <div className="dashboard-warning">
-          {loadError} Available API records are shown where possible.
+          {loadError}
+          <button type="button" className="dashboard-secondary-button" onClick={() => { setFatalLoadError(""); setRetryKey(key => key + 1); }}>Retry</button>
         </div>
       )}
 

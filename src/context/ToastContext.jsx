@@ -61,7 +61,7 @@ export function ToastProvider({ children }) {
 
     const makeVisible = () => {
       scheduledFrames.current.delete(id);
-      setToasts((current) => [...current, { id, key, message: text, type, exiting: false }]);
+      setToasts((current) => [...current, { id, key, title: String(options.title || ""), message: text, type, exiting: false }]);
       if (duration > 0) {
         timers.current.set(id, window.setTimeout(() => dismiss(id), duration));
       }
@@ -123,6 +123,7 @@ export function ToastProvider({ children }) {
           aria-live={toast.type === "error" ? "assertive" : "polite"}
           aria-atomic="true"
         >
+          {toast.title && <strong className="menro-toast-title">{toast.title}</strong>}
           {toast.message}
         </div>
       ))}
