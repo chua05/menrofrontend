@@ -59,6 +59,15 @@
 
 .menro-toast-success { color: #087443; }
 .menro-toast-title { display: block; }
+.menro-toast-viewport-floating { top: calc(var(--topbar-height, 72px) + 12px); }
+.menro-toast-viewport-floating .menro-toast {
+  position: relative; padding: 14px 48px 14px 18px; border: 1px solid #98c9ac;
+  border-radius: 12px; background: #fff; box-shadow: 0 8px 28px #123d2526;
+  text-align: left; text-shadow: none; pointer-events: auto;
+}
+.menro-toast-dismiss { position: absolute; right: 8px; top: 8px; width: 30px; height: 30px; border: 0; border-radius: 6px; background: transparent; color: #145b3a; font-size: 22px; cursor: pointer; }
+.menro-toast-dismiss:hover { background: #dff4e5; }
+.menro-toast-dismiss:focus-visible { outline: 2px solid #145b3a; outline-offset: 2px; }
 .menro-toast-error { color: #b42318; }
 .menro-toast-warning { color: #a15c00; }
 .menro-toast-info { color: #26352d; }

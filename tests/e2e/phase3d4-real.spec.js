@@ -22,7 +22,8 @@ async function login(page, role, destination) {
   await page.locator("#login-email").fill(data.emails[role]);
   await page.locator("#login-password").fill(data.password);
   await page.locator("button.login-primary-btn").click();
-  await expect(page).not.toHaveURL(/\/login$/, { timeout: 20000 });
+  await expect(page).toHaveURL(new RegExp(`/${role === "otherStaff" ? "staff" : role}/dashboard$`), { timeout: 20000 });
+  await page.goto(destination);
   return data;
 }
 async function open(page, role) {

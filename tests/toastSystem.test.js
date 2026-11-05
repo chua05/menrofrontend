@@ -20,7 +20,7 @@ test("global toast provider uses an eight-second default and a body portal", () 
   assert.match(contextSource, /document\.querySelectorAll\("\[data-menro-toast-anchor\]"\)/);
   assert.match(contextSource, /document\.querySelector\("\[data-menro-toast-page-anchor\]"\)/);
   assert.match(contextSource, /modalAnchors\.at\(-1\) \|\| pageAnchor[\s\S]*document\.body/);
-  assert.match(contextSource, /createPortal\(toastViewport, toastHost\)/);
+  assert.match(contextSource, /createPortal\(toastViewport\(toasts\.filter/);
 });
 
 test("toast queue deduplicates active messages and cleans up timers", () => {
@@ -40,9 +40,9 @@ test("toast viewport overlays content and honors reduced motion", () => {
   assert.match(toastCss, /z-index:\s*var\(--menro-overlay-toast\)/);
   assert.match(toastCss, /pointer-events:\s*none/);
   assert.match(toastCss, /prefers-reduced-motion:\s*reduce/);
-  assert.doesNotMatch(toastCss, /\.menro-toast\s*\{[^}]*\bbackground\s*:/s);
-  assert.doesNotMatch(toastCss, /\.menro-toast\s*\{[^}]*\bborder\s*:/s);
-  assert.doesNotMatch(toastCss, /\.menro-toast\s*\{[^}]*\bbox-shadow\s*:/s);
+  assert.doesNotMatch(toastCss, /(?:^|\n)\.menro-toast\s*\{[^}]*\bbackground\s*:/s);
+  assert.doesNotMatch(toastCss, /(?:^|\n)\.menro-toast\s*\{[^}]*\bborder\s*:/s);
+  assert.doesNotMatch(toastCss, /(?:^|\n)\.menro-toast\s*\{[^}]*\bbox-shadow\s*:/s);
 });
 
 test("modal alerts use a flow-positioned anchor without permanent empty spacing", () => {

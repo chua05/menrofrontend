@@ -77,3 +77,13 @@ test("only unread notifications contribute to each sidebar badge", () => {
     "/staff/seedlings": 1,
   });
 });
+
+
+test("Staff requester notices reach owned requests while processing notices retain the queue", () => {
+  for (const type of ["request_submitted", "request_returned", "request_schedule_confirmation_required", "request_approved", "late_release_schedule_returned"]) {
+    assert.equal(getNotificationPath({ type, relatedRecordType: "seedlingRequest", relatedRecordId: "own-request" }, "staff"), "/staff/my-requests?request=own-request");
+  }
+  for (const type of ["request_submitted_staff", "request_resubmitted_staff", "request_approved_staff", "request_schedule_confirmed"]) {
+    assert.equal(getNotificationPath({ type, relatedRecordType: "seedlingRequest", relatedRecordId: "other-request" }, "staff"), "/staff/requests?request=other-request");
+  }
+});

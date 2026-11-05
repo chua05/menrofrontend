@@ -1,3 +1,6 @@
+import AttendanceUpload from "../components/AttendanceUpload";
+import ModalDialog from "../components/ModalDialog";
+import { attendanceFileError } from "../utils/attendanceFile";
 import { Component, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import L from "leaflet";
@@ -379,6 +382,8 @@ export default function PlantingPage() {
   const { userRole, currentUser } = useAuth();
   const [pageSearchParams] = useSearchParams();
 
+  const [attendanceFile, setAttendanceFile] = useState(null);
+  const [savedParticipantReport, setSavedParticipantReport] = useState(null);
   const isParticipant = userRole === "participant";
   const canReview = ["staff", "admin"].includes(userRole);
 
@@ -454,6 +459,7 @@ export default function PlantingPage() {
     quantityReleased: "",
     remainingQuantity: "",
     quantity: "",
+    leftoverQuantity: "0",
     plantingDate: "",
     siteId: "",
     siteName: "",
@@ -1201,7 +1207,7 @@ export default function PlantingPage() {
         optionId: String(item.inventoryId || item.species),
         releasedQuantity,
         remainingQuantity: Math.max(0, releasedQuantity - Number(recorded[item.inventoryId] || 0) -
-          Number(pendingReservations[item.inventoryId] || 0)),
+          Number(pendingReservations[item.inventoryId] || 0) - Number(selectedEvent?.leftoverSeedlingsByInventory?.[item.inventoryId] || 0)),
       };
     });
   }, [eligibleDistributions, events, form.distributionId, form.eventId]);
@@ -1439,6 +1445,7 @@ export default function PlantingPage() {
     selectedSite, form.latitude, form.longitude]);
 
   function resetForm() {
+    setAttendanceFile(null); setSavedParticipantReport(null);
     setFormErrors({});
     evidenceAttempt.current.reset();
     clearNoEventsAlert();
@@ -1458,6 +1465,7 @@ export default function PlantingPage() {
       quantityReleased: "",
       remainingQuantity: "",
       quantity: "",
+    leftoverQuantity: "0",
       plantingDate: "",
       siteId: "",
       siteName: "",
@@ -1623,6 +1631,7 @@ export default function PlantingPage() {
         quantityReleased: "",
         remainingQuantity: "",
         quantity: "",
+    leftoverQuantity: "0",
       }));
       return;
     }
@@ -1643,7 +1652,7 @@ export default function PlantingPage() {
       : "";
     const remainingQuantity = item
       ? Math.max(0, releasedQuantity - Number(selectedEvent?.recordedSeedlingsByInventory?.[item.inventoryId] || 0) -
-        Number(selectedEvent?.pendingSeedlingsByInventory?.[item.inventoryId] || 0))
+        Number(selectedEvent?.pendingSeedlingsByInventory?.[item.inventoryId] || 0) - Number(selectedEvent?.leftoverSeedlingsByInventory?.[item.inventoryId] || 0))
       : "";
 
     setForm((previous) => ({
@@ -1656,6 +1665,7 @@ export default function PlantingPage() {
       quantityReleased: releasedQuantity,
       remainingQuantity,
       quantity: "",
+    leftoverQuantity: "0",
     }));
   }
 
@@ -1673,6 +1683,7 @@ export default function PlantingPage() {
       quantityReleased: item?.releasedQuantity ?? "",
       remainingQuantity: item?.remainingQuantity ?? "",
       quantity: "",
+    leftoverQuantity: "0",
     }));
   }
 
@@ -1700,6 +1711,7 @@ export default function PlantingPage() {
         quantityReleased: "",
         remainingQuantity: "",
         quantity: "",
+    leftoverQuantity: "0",
       }));
       return;
     }
@@ -1719,6 +1731,7 @@ export default function PlantingPage() {
       quantityReleased: "",
       remainingQuantity: "",
       quantity: "",
+    leftoverQuantity: "0",
     }));
   }
 
@@ -1740,6 +1753,7 @@ export default function PlantingPage() {
         quantityReleased: "",
         remainingQuantity: "",
         quantity: "",
+    leftoverQuantity: "0",
       }));
       return;
     }
@@ -1761,6 +1775,7 @@ export default function PlantingPage() {
       quantityReleased: "",
       remainingQuantity: "",
       quantity: "",
+    leftoverQuantity: "0",
     }));
   }
 
@@ -2186,7 +2201,32 @@ export default function PlantingPage() {
   async function handleSubmit(event) {
     event.preventDefault();
     if (submitting) return;
+    // A completed report is immutable here. An interrupted optional attachment
+    // must never replay the planting quantities or consume a second photo session.
+    if (savedParticipantReport) {
+      const attendanceError = attendanceFileError(attendanceFile) || formErrors.attendance;
+      setFormErrors(attendanceError ? { attendance: attendanceError } : {});
+      if (attendanceError) return focusFirstInvalid(() => reportFormRef.current);
+      setSubmitting(true);
+      try {
+        if (attendanceFile) {
+          const id = savedParticipantReport.data?.participantSubmissionId;
+          if (!id) throw new Error("Private attendance is unavailable for this saved legacy report. Contact MENRO; do not resubmit planting quantities.");
+          const data = new FormData(); data.append("attendance", attendanceFile);
+          await apiRequest(`/planting-reports/submissions/${encodeURIComponent(id)}/attendance`, { method: "PUT", body: data });
+        }
+        resetForm(); showPopup("Your planting report is saved pending MENRO verification.");
+        void loadReports();
+      } catch (error) {
+        const fields = backendFieldErrors(error);
+        if (Object.keys(fields).length) { setFormErrors(fields); focusFirstInvalid(() => reportFormRef.current); }
+        else showPopup(`Your report is already saved. ${error.message || "Retry only the same optional attendance file."}`, "error");
+      } finally { setSubmitting(false); }
+      return;
+    }
     const errors = validatePlantingReportForm(form, { distributions, photos: photoFiles, previews: photoPreviews, hasGps, municipalityScopeStatus });
+    const attendanceError = attendanceFileError(attendanceFile) || formErrors.attendance;
+    if (attendanceError) errors.attendance = attendanceError;
     setFormErrors(errors);
     if (Object.keys(errors).length) { focusFirstInvalid(() => reportFormRef.current); return; }
 
@@ -2306,6 +2346,7 @@ export default function PlantingPage() {
     payload.append("siteId", form.siteId);
     payload.append("barangay", form.barangay);
     payload.append("quantityPlanted", String(quantity));
+    payload.append("leftoverQuantity", String(form.leftoverQuantity ?? "0"));
     payload.append("plantingDate", form.plantingDate);
     payload.append("plantingLocation", form.siteName);
     payload.append("eventId", form.eventId || "");
@@ -2320,6 +2361,7 @@ export default function PlantingPage() {
 
     setSubmitting(true);
 
+    let savedResponse = null;
     try {
       const response = await apiRequest("/planting-reports", {
         method: "POST",
@@ -2328,6 +2370,14 @@ export default function PlantingPage() {
         timeoutMs: PLANTING_SUBMISSION_TIMEOUT_MS,
       });
 
+      setSavedParticipantReport(response);
+      savedResponse = response;
+      if (attendanceFile) {
+        const id = response.data?.participantSubmissionId;
+        if (!id) throw new Error("The report is saved, but private attendance is unavailable for this legacy record. Contact MENRO; do not resubmit the report.");
+        const attendance = new FormData(); attendance.append("attendance", attendanceFile);
+        await apiRequest(`/planting-reports/submissions/${encodeURIComponent(id)}/attendance`, { method: "PUT", body: attendance });
+      }
       resetForm();
       showPopup(`Planting Report Submitted Successfully — ${response.message ||
         "Your planting report has been submitted and is awaiting MENRO Staff verification."} Status: Pending Review.`);
@@ -2336,7 +2386,7 @@ export default function PlantingPage() {
     } catch (error) {
       const fields = backendFieldErrors(error, { quantityPlanted: "quantity", inventoryId: "distributionItemKey", evidence: "photos", files: "photos" });
       if (Object.keys(fields).length) { setFormErrors(fields); focusFirstInvalid(() => reportFormRef.current); }
-      else showPopup(error.message || "Unable to submit the planting report. Please try again.", "error");
+      else showPopup((savedResponse ? "The report is already saved. Retry attendance only. " : "") + (error.message || "Unable to submit the planting report. Please try again."), "error");
     } finally {
       setSubmitting(false);
     }
@@ -2701,8 +2751,9 @@ export default function PlantingPage() {
         )}
       </div>
 
-      {officialForm && userRole === "staff" && <StaffPlantingReportForm currentUser={currentUser} correction={officialForm.correction} onClose={() => setOfficialForm(null)} onSaved={async () => { await loadReports(); showPopup("Official planting report saved for Admin verification."); }} />}
+      {officialForm && userRole === "staff" && <StaffPlantingReportForm currentUser={currentUser} correction={officialForm.correction} resumeEvidence={officialForm.resumeEvidence} onClose={() => setOfficialForm(null)} onSaved={async () => { await loadReports(); showPopup("Official planting report saved for Admin verification."); }} />}
       {showSubmitModal && isParticipant && (
+        <ModalDialog label="Submit Planting Report" onClose={closeSubmitModal} dismissible={!submitting} busy={submitting}>
         <PlantingReportFormErrorBoundary
           resetKey={formRenderRecovery}
           onRecover={async () => {
@@ -2736,6 +2787,7 @@ export default function PlantingPage() {
               if (field && Object.hasOwn(formErrors, field)) setFormErrors(current => ({ ...current, [field]: validatePlantingReportForm(form, { distributions, photos: photoFiles, previews: photoPreviews, hasGps, municipalityScopeStatus })[field] || "" }));
             }}>
               <div className="pr-modal-body pr-submit-modal-body">
+                <fieldset disabled={submitting || Boolean(savedParticipantReport)} style={{ border: 0, margin: 0, padding: 0, minWidth: 0 }}>
                 <div
                   className="pr-submit-alert-slot"
                   aria-live={popup.type === "error" ? "assertive" : "polite"}
@@ -2955,6 +3007,11 @@ export default function PlantingPage() {
                         onChange={(event) => updateFormField("quantity", event.target.value)}
                         placeholder="Enter quantity" />
 {formErrors.quantity && <small id="planting-error-quantity" className="pr-field-error" role="alert">{formErrors.quantity}</small>}
+                    </div>
+                    <div>
+                      <label htmlFor="planting-leftoverQuantity" className="pr-label">Leftover Seedlings (Not Planted)</label>
+                      <input {...fieldAccessibility("leftoverQuantity")} className="pr-input" type="number" min="0" step="1" value={form.leftoverQuantity ?? "0"} onChange={event => { setForm(current => ({ ...current, leftoverQuantity: event.target.value })); setFormErrors(current => ({ ...current, leftoverQuantity: "", quantity: "" })); }} />
+                      {formErrors.leftoverQuantity && <small id="planting-error-leftoverQuantity" className="pr-field-error" role="alert">{formErrors.leftoverQuantity}</small>}
                     </div>
 
                     <div className="pr-full-width">
@@ -3302,8 +3359,11 @@ export default function PlantingPage() {
                   />
 {formErrors.remarks && <small id="planting-error-remarks" className="pr-field-error" role="alert">{formErrors.remarks}</small>}
                 </section>
+                </fieldset>
               </div>
 
+              <AttendanceUpload file={attendanceFile} onChange={setAttendanceFile} error={formErrors.attendance} onError={message => setFormErrors(current => ({ ...current, attendance: message }))} disabled={submitting} />
+              {savedParticipantReport && <p role="status">Your report is already saved pending MENRO verification. This action retries only optional attendance.</p>}
               <div className="pr-modal-footer">
                 <button
                   type="button"
@@ -3328,9 +3388,11 @@ export default function PlantingPage() {
           </div>
         </div>
         </PlantingReportFormErrorBoundary>
+        </ModalDialog>
       )}
 
       {showPhotoRequirements && (
+        <ModalDialog label="Photo Verification Requirements" onClose={() => setShowPhotoRequirements(false)}>
         <div className="pr-requirements-backdrop" role="presentation">
           <div
             className="pr-requirements-dialog"
@@ -3362,6 +3424,7 @@ export default function PlantingPage() {
             </button>
           </div>
         </div>
+        </ModalDialog>
       )}
 
       {showViewModal && selectedRecord && (
@@ -3723,8 +3786,9 @@ export default function PlantingPage() {
                               <div className="pr-info-block"><div className="pr-info-label">Leftover Seedlings (Not Planted)</div><div className="pr-info-value">{submission.leftoverQuantity || 0}</div></div>
                               <div className="pr-info-block"><div className="pr-info-label">Confirmation Basis</div><div className="pr-info-value">{submission.confirmationBasis === "release-based" ? "Individual Release-Based Confirmation" : "MENRO Field Report"}</div></div>
                               <div className="pr-info-block"><div className="pr-info-label">Submitted By / Revision</div><div className="pr-info-value">MENRO Staff — {submission.submittedByName} / {submission.revision || 0}</div></div>
-                              {submission.attendanceAvailable && (userRole === "admin" || userRole === "staff" && submission.authenticatedSubmitterUid === currentUser?.uid) && <ProtectedAttendanceButton submissionId={submission.id} />}
+                              {submission.attendanceAvailable && (userRole === "admin" || userRole === "staff" || submission.authenticatedSubmitterUid === currentUser?.uid) && <ProtectedAttendanceButton submissionId={submission.id} official={submission.officialStaffReport === true} />}
                               {submission.staffReviewStatus === "Rejected" && !submission.correctedBySubmission && userRole === "staff" && submission.authenticatedSubmitterUid === currentUser?.uid && <button type="button" className="pr-secondary-button" onClick={() => { setOfficialForm({ correction: submission }); setShowViewModal(false); }}>Correct Official Submission</button>}
+                              {submission.officialStaffReport && submission.confirmationBasis === "menro-field-report" && submission.staffReviewStatus === "Pending Review" && !submission.hasVerifiedPlantingEvidence && userRole === "staff" && submission.authenticatedSubmitterUid === currentUser?.uid && <button type="button" className="pr-secondary-button" onClick={() => { setOfficialForm({ resumeEvidence: submission }); setShowViewModal(false); }}>Add Verified Planting Evidence</button>}
                             </>}
                             <div className="pr-info-block"><div className="pr-info-label">Site / Event / Distribution</div><div className="pr-info-value">{selectedRecord.siteName || "—"} / {selectedRecord.eventName || submission.eventId || "—"} / {submission.requestId || selectedRecord.distributionId || "—"}</div></div>
                             <div className="pr-info-block"><div className="pr-info-label">Photo Coordinates</div><div className="pr-info-value">{submission.latitude ?? "—"}, {submission.longitude ?? "—"}</div></div>
@@ -3830,7 +3894,7 @@ export default function PlantingPage() {
           </aside>
         </div>
       )}
-      <SecureCameraCapture
+      {cameraOpen && <ModalDialog label="Secure planting camera" onClose={() => setCameraOpen(false)}><SecureCameraCapture
         open={cameraOpen}
         request={apiRequest}
         binding={cameraBinding}
@@ -3838,7 +3902,7 @@ export default function PlantingPage() {
         onDiagnostic={handleCameraDiagnostic}
         onViewLocation={() => setCameraOpen(false)}
         onCancel={() => setCameraOpen(false)}
-      />
+      /></ModalDialog>}
       {decision && selectedRecord && (
         <div className="pr-overlay pr-decision-overlay" onMouseDown={(event) => {
           if (event.target === event.currentTarget && !actionLoading) setDecision("");

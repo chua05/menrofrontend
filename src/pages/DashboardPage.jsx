@@ -1540,7 +1540,7 @@ export default function DashboardPage() {
   useEffect(() => {
     const frame = window.requestAnimationFrame(() => {
       const nonce = consumeSuccessfulLogin(currentUser);
-      if (nonce) loginToast("Welcome back! You have successfully signed in.", { title: "Login Successful", duration: 4000, dedupeKey: `login-success:${nonce}` });
+      if (nonce) loginToast("Welcome back! You have successfully signed in.", { title: "Login Successful", duration: 4000, floating: true, dismissible: true, dedupeKey: `login-success:${nonce}` });
     });
     return () => window.cancelAnimationFrame(frame);
   }, [currentUser, loginToast]);

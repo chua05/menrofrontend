@@ -2,6 +2,7 @@ import { Navigate, useLocation } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { dashboardPathForRole } from "../utils/roleRoutes";
 import { resolvePostLoginPath } from "../utils/postLoginRoute";
+import { hasInteractiveLoginIntent, isInteractiveLoginPending } from "../utils/loginSuccess";
 
 function useEffectiveAuth() {
   const { currentUser, userRole, authLoading } = useAuth();
@@ -34,8 +35,9 @@ export function GuestOnlyRoute({ children }) {
   if (authLoading) return null;
 
   if (effectiveUser) {
+    if (isInteractiveLoginPending()) return children;
     return <Navigate
-      to={resolvePostLoginPath(location.state?.from, {
+      to={resolvePostLoginPath(hasInteractiveLoginIntent() ? undefined : location.state?.from, {
         ...effectiveUser,
         role: effectiveRole,
       })}

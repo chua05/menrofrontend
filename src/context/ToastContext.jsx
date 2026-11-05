@@ -61,7 +61,7 @@ export function ToastProvider({ children }) {
 
     const makeVisible = () => {
       scheduledFrames.current.delete(id);
-      setToasts((current) => [...current, { id, key, title: String(options.title || ""), message: text, type, exiting: false }]);
+      setToasts((current) => [...current, { id, key, title: String(options.title || ""), message: text, type, floating: options.floating === true, dismissible: options.dismissible === true, exiting: false }]);
       if (duration > 0) {
         timers.current.set(id, window.setTimeout(() => dismiss(id), duration));
       }
@@ -92,6 +92,14 @@ export function ToastProvider({ children }) {
     activeKeys.current.clear();
   }, []);
 
+  useEffect(() => {
+    const clearLogin = () => {
+      for (const [key, id] of activeKeys.current) if (key.startsWith("login-success:")) remove(id);
+    };
+    window.addEventListener("menro:clear-login-toast", clearLogin);
+    return () => window.removeEventListener("menro:clear-login-toast", clearLogin);
+  }, [remove]);
+
   const api = useMemo(() => ({
     showToast,
     success: (message, options) => showToast(message, { ...options, type: "success" }),
@@ -110,12 +118,12 @@ export function ToastProvider({ children }) {
   const toastPlacement = modalAnchors.length ? "modal" : pageAnchor ? "page" : "viewport";
   const toastHost = modalAnchors.at(-1) || pageAnchor ||
     (typeof document !== "undefined" ? document.body : null);
-  const toastViewport = (
+  const toastViewport = (items, placement) => (
     <div
-      className={`menro-toast-viewport menro-toast-viewport-${toastPlacement}`}
+      className={`menro-toast-viewport menro-toast-viewport-${placement}`}
       aria-label="Notifications"
     >
-      {toasts.map((toast) => (
+      {items.map((toast) => (
         <div
           key={toast.id}
           className={`menro-toast menro-toast-${toast.type}${toast.exiting ? " exiting" : ""}`}
@@ -125,6 +133,7 @@ export function ToastProvider({ children }) {
         >
           {toast.title && <strong className="menro-toast-title">{toast.title}</strong>}
           {toast.message}
+          {toast.dismissible && <button type="button" className="menro-toast-dismiss" aria-label={`Dismiss ${toast.title || "notification"}`} onClick={() => dismiss(toast.id)}>×</button>}
         </div>
       ))}
     </div>
@@ -133,7 +142,8 @@ export function ToastProvider({ children }) {
   return (
     <ToastContext.Provider value={api}>
       {children}
-      {toasts.length > 0 && toastHost && createPortal(toastViewport, toastHost)}
+      {toasts.some(toast => !toast.floating) && toastHost && createPortal(toastViewport(toasts.filter(toast => !toast.floating), toastPlacement), toastHost)}
+      {toasts.some(toast => toast.floating) && createPortal(toastViewport(toasts.filter(toast => toast.floating), "floating"), document.body)}
     </ToastContext.Provider>
   );
 }

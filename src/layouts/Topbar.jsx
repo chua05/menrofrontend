@@ -394,6 +394,7 @@ export default function Topbar({ onOpenSidebar, sidebarOpen = false }) {
 
       navigate("/login", {
         replace: true,
+        state: null,
       });
     } catch (error) {
       console.error(

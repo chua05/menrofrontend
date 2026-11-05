@@ -20,15 +20,18 @@ async function isolate(page) { await page.route("**/*", (route) => {
   unexpectedOrigins.push(origin);
   return route.abort();
 }); }
-async function login(page, role, route, beforeSubmit = () => {}) {
+async function login(page, role, route, beforeNavigation) {
   const data = await fixture();
   await page.goto(route);
   await expect(page.locator("#login-email")).toBeVisible({ timeout: 15000 });
   await expect(page).toHaveURL(/\/login$/, { timeout: 15000 });
   await page.locator("#login-email").fill(data.emails[role]);
   await page.locator("#login-password").fill(data.password);
-  beforeSubmit();
   await page.locator("button.login-primary-btn").click();
+  await expect(page).toHaveURL(role === "participant" ? /\/(?:participant\/dashboard|complete-profile)$/ : new RegExp(`/${role === "otherStaff" ? "staff" : role}/dashboard$`), { timeout: 20000 });
+  // Fresh interactive login intentionally lands on the verified role dashboard.
+  // Open monitoring only AFTER authentication, with its request waiter armed.
+  if (beforeNavigation) { beforeNavigation(); await page.goto(route); }
 }
 function discoveryResponse(page) {
   return page.waitForResponse((response) => {

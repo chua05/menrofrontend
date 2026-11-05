@@ -7,6 +7,7 @@ import {
   verifyMenroSession,
 } from "../services/authenticatedApi";
 import { normalizeRole } from "../utils/roleRoutes";
+import { clearSuccessfulLogin } from "../utils/loginSuccess";
 
 const AuthContext = createContext();
 
@@ -69,6 +70,7 @@ export function AuthProvider({ children }) {
   };
 
   const logout = async () => {
+    clearSuccessfulLogin();
     authRevision.current += 1;
     resetMenroSessionRequest();
     await signOut(auth);

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { auth } from "../firebase/config";
+import { privateImageRequest } from "../utils/privateImageRequests";
 
 const API_BASE_URL =
   import.meta.env.VITE_API_URL || "http://localhost:5000/api";
@@ -32,16 +33,23 @@ export default function ProtectedEvidenceImage({
   const [state, setState] = useState({ status: "loading", url: "" });
 
   useEffect(() => {
-    const controller = new AbortController();
+    let active = true;
     let objectUrl = "";
 
     async function load() {
       setState({ status: "loading", url: "" });
       try {
-        let response = await authenticatedImageRequest(endpoint, false, controller.signal);
-        if (response.status === 401 && auth.currentUser) {
-          response = await authenticatedImageRequest(endpoint, true, controller.signal);
-        }
+        const uid = auth.currentUser?.uid;
+        if (!uid) { setState({ status: "session", url: "" }); return; }
+        const response = await privateImageRequest(uid, endpoint, async () => {
+          if (auth.currentUser?.uid !== uid) return { status: 401 };
+          const signal = AbortSignal.timeout(30000);
+          let result = await authenticatedImageRequest(endpoint, false, signal);
+          if (result.status === 401 && auth.currentUser?.uid === uid) result = await authenticatedImageRequest(endpoint, true, signal);
+          const blob = result.ok ? await result.blob() : null;
+          return auth.currentUser?.uid === uid ? { status: result.status, ok: result.ok, blob } : { status: 401 };
+        });
+        if (!active) return;
 
         if (response.status === 403) {
           setState({ status: "forbidden", url: "" });
@@ -60,10 +68,10 @@ export default function ProtectedEvidenceImage({
           return;
         }
 
-        objectUrl = URL.createObjectURL(await response.blob());
+        objectUrl = URL.createObjectURL(response.blob);
         setState({ status: "ready", url: objectUrl });
       } catch (error) {
-        if (error.name !== "AbortError") {
+        if (active && error.name !== "AbortError") {
           setState({ status: "failed", url: "" });
         }
       }
@@ -71,7 +79,7 @@ export default function ProtectedEvidenceImage({
 
     load();
     return () => {
-      controller.abort();
+      active = false;
       if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
   }, [endpoint]);

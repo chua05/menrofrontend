@@ -16,7 +16,8 @@ async function login(page, role) {
   await page.locator("#login-email").fill(data.emails[role]);
   await page.locator("#login-password").fill(data.password);
   await page.locator("button.login-primary-btn").click();
-  await expect(page).not.toHaveURL(/\/login$/, { timeout: 20000 });
+  await expect(page).toHaveURL(new RegExp(`/${role === "otherStaff" ? "staff" : role}/dashboard$`), { timeout: 20000 });
+  await page.goto(role === "participant" ? "/participant/monitoring-information" : `/${role === "otherStaff" ? "staff" : role}/permanent-sample-monitoring`);
   return { data, check: () => expect(external).toEqual([]) };
 }
 async function api(page, url, method = "GET", body) {
