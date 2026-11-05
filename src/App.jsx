@@ -305,6 +305,9 @@ function App() {
                 element={<DashboardPage />}
               />
 
+              <Route path="request-seedlings" element={<SeedlingRequestsPage />} />
+              <Route path="my-requests" element={<MyRequestsPage />} />
+
               <Route
                 path="requests"
                 element={

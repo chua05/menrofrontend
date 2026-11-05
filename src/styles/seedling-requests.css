@@ -3670,3 +3670,15 @@
     justify-content: flex-end;
   }
 }
+
+/* Requester and processing actions share the existing responsive page header. */
+.sr-header-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+@media (max-width: 640px) {
+  .sr-header-actions { width: 100%; }
+  .sr-header-actions > button { flex: 1 1 200px; }
+}

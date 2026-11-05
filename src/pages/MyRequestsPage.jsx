@@ -1,6 +1,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
+import { useAuth } from "../context/AuthContext";
 import { useToast } from "../context/ToastContext";
 import PageLoadingState from "../components/PageLoadingState";
 import L from "leaflet";
@@ -784,6 +785,8 @@ function MyRequestLocationPreview({ request }) {
 }
 
 export default function MyRequestsPage() {
+  const { userRole } = useAuth();
+  const requesterPrefix = userRole === "staff" ? "/staff" : "/participant";
   const navigate = useNavigate();
   const location = useLocation();
   const { success: showSuccess, error: showError } = useToast();
@@ -948,7 +951,7 @@ export default function MyRequestsPage() {
   );
 
   const handleRequestSeedlings = () => {
-    navigate("/participant/request-seedlings");
+    navigate(`${requesterPrefix}/request-seedlings`);
   };
 
   const handleViewRequest = (request) => {
@@ -1719,7 +1722,7 @@ export default function MyRequestsPage() {
                   className="myr-edit-button"
                   onClick={() =>
                     navigate(
-                      `/participant/request-seedlings?edit=${encodeURIComponent(selectedRequest.id)}`
+                      `${requesterPrefix}/request-seedlings?edit=${encodeURIComponent(selectedRequest.id)}`
                     )
                   }
                 >

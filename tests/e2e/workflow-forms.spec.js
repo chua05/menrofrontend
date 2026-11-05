@@ -29,8 +29,8 @@ async function setup(page, overrides = {}) {
   });
   return { calls, check() { expect(unexpected).toEqual([]); expect(external.filter(origin => !/cartocdn|openstreetmap/.test(origin))).toEqual([]); } };
 }
-async function requester(page) {
-  await page.goto("/participant/request-seedlings?role=participant");
+async function requester(page, { role = "participant", navigate = true } = {}) {
+  if (navigate) await page.goto(`/${role}/request-seedlings?role=${role}`);
   await expect(page.getByRole("heading", { name: "Request Seedlings", exact: true })).toBeVisible();
   await page.getByLabel("Sector *", { exact: true }).selectOption("Resident / Individual");
   await page.getByLabel("Province *", { exact: true }).selectOption("Sorsogon");
@@ -354,4 +354,116 @@ test("parent gallery and submission thumbnail share one authenticated private im
   await expect.poll(() => requests).toBe(1); release();
   await expect(page.locator('.pr-report-drawer img[src^="blob:"]')).toHaveCount(2);
   expect(requests).toBe(1); fixture.check();
+});
+
+const ownRequest = (status = "Pending", owner = "test-staff") => ({
+  id: "staff-own-request", requestNumber: "REQ-2099-001", participantId: owner,
+  participantName: "Staff Requester", requesterRole: "staff", status, requestVersion: 3,
+  contactNumber: "09123456789", organization: "", purpose: "Backyard / Home Planting",
+  plantingLocation: "Bical, Bulan", preferredReleaseDate: "2099-01-01", createdAt: "2026-11-05T01:00:00Z",
+  items: [{ inventoryId: "tree-1", species: "Narra", quantity: 2 }],
+  workflow: { sector: "Resident / Individual", effectiveRequestType: "individual", purpose: "Backyard / Home Planting", addressProvince: "Sorsogon", addressMunicipality: "Bulan", addressBarangay: "Bical", street: "Fixture street", siteMode: "existing", siteBarangay: "Bical", existingSiteId: "site-1", areaChoice: "1 hectare", releaseMethod: "Pick-up", caretaker: "Staff Requester", carePlan: "Water weekly", monitoringFrequency: "Weekly" },
+  eventProposal: { eventName: "Individual planting schedule", barangay: "Bical", plantingSiteId: "site-1", proposedDate: "2099-01-02", proposedStartTime: "08:00", proposedEndTime: "", expectedParticipants: 1 },
+});
+
+test("Staff opens the shared accessible four-step wizard and submits their own request to My Requests", async ({ page }) => {
+  let saved;
+  const fixture = await setup(page, {
+    "GET /api/auth/profile": route => route.fulfill({ json: { success: true, data: { uid: "test-staff", fullName: "Staff Requester", contactNumber: "09123456789", province: "Sorsogon", municipality: "Bulan", barangay: "Bical" } } }),
+    "POST /api/seedling-requests": (route, request) => {
+      const body = request.postDataJSON();
+      expect(body).not.toHaveProperty("participantId"); expect(body).not.toHaveProperty("status");
+      expect(body.workflow.fullName).toBe("Staff Requester");
+      saved = { ...ownRequest(), ...body, id: "staff-own-request", requestNumber: "REQ-2099-001", participantId: "test-staff", status: "Pending" };
+      return route.fulfill({ status: 201, json: { success: true, data: saved } });
+    },
+    "GET /api/seedling-requests/my": route => route.fulfill({ json: { success: true, data: saved ? [saved] : [] } }),
+  });
+  await page.goto("/staff/requests?role=staff");
+  const trigger = page.getByRole("button", { name: "Submit Seedling Request", exact: true }); await trigger.focus(); await page.keyboard.press("Enter");
+  await expect(page).toHaveURL(/staff\/request-seedlings/);
+  await expect(page.getByLabel("Full Name *", { exact: true })).toHaveValue("Staff Requester");
+  await expect(page.getByLabel("Full Name *", { exact: true })).toHaveAttribute("readonly");
+  await expect(page.getByLabel("Contact Number *", { exact: true })).toHaveAttribute("readonly");
+  await page.getByRole("button", { name: "Next", exact: true }).click();
+  await expect(page.getByLabel("Sector *", { exact: true })).toBeFocused();
+  await requester(page, { role: "staff", navigate: false }); await plantingDetails(page);
+  await expect(page.getByText("Review Your Request", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Submit Request", exact: true }).click();
+  await expect(page).toHaveURL(/staff\/my-requests/); await expect(page.getByText("REQ-2099-001", { exact: true }).first()).toBeVisible();
+  expect(saved.workflow.exactArea).toBe("0.5"); expect(saved.eventProposal.latitude).toBe(site.latitude);
+  expect(fixture.calls.filter(call => call.key === "POST /api/seedling-requests")).toHaveLength(1); fixture.check();
+});
+
+for (const [role, status] of [["staff", "Pending"], ["staff", "Approved"], ["admin", "Reviewed"]]) {
+  test(`${role} requester cannot process their own ${status} request in the management view`, async ({ page }) => {
+    const request = ownRequest(status, `test-${role}`);
+    const fixture = await setup(page, { "GET /api/seedling-requests": route => route.fulfill({ json: { success: true, data: [request] } }) });
+    await page.goto(`/${role}/requests?role=${role}`);
+    await page.getByRole("button", { name: "View details for REQ-2099-001", exact: true }).click();
+    for (const action of ["Review", "Return Request", "Approve", "Reject", "Release Seedlings"]) await expect(page.getByRole("button", { name: action, exact: true })).toHaveCount(0);
+    if (role === "staff") await expect(page.getByRole("button", { name: "Manage My Request" })).toBeVisible();
+    expect(fixture.calls.filter(call => call.key.startsWith("PATCH"))).toHaveLength(0); fixture.check();
+  });
+}
+
+test("independent Staff retains normal review controls for another request", async ({ page }) => {
+  const request = ownRequest("Pending", "other-requester");
+  const fixture = await setup(page, { "GET /api/seedling-requests": route => route.fulfill({ json: { success: true, data: [request] } }) });
+  await page.goto("/staff/requests?role=staff"); await page.getByRole("button", { name: "View details for REQ-2099-001", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Review", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Return Request", exact: true })).toBeVisible(); fixture.check();
+});
+
+for (const role of ["staff", "participant"]) {
+test(`${role} returned request reopens the same wizard and resubmits with its authoritative version`, async ({ page }) => {
+  const request = { ...ownRequest("Returned", `test-${role}`), returnReason: "Clarify care plan" }; let edited = false;
+  const fixture = await setup(page, {
+    "GET /api/seedling-requests/my": route => route.fulfill({ json: { success: true, data: [{ ...request, status: edited ? "Pending" : "Returned" }] } }),
+    "GET /api/seedling-requests/staff-own-request": route => route.fulfill({ json: { success: true, data: request } }),
+    "PATCH /api/seedling-requests/staff-own-request/resubmit": (route, req) => {
+      expect(req.postDataJSON().expectedVersion).toBe(3); edited = true;
+      return route.fulfill({ json: { success: true, data: { ...request, status: "Pending", requestVersion: 4 } } });
+    },
+  });
+  await page.goto(`/${role}/my-requests?role=${role}&request=staff-own-request`);
+  await page.getByRole("button", { name: "Edit Request", exact: true }).click(); await expect(page).toHaveURL(new RegExp(`/${role}/request-seedlings\\?edit=staff-own-request`));
+  await page.getByRole("button", { name: "Next", exact: true }).click();
+  await expect(page.getByLabel("Preferred Release Date *")).toHaveValue("2099-01-01");
+  await page.getByRole("button", { name: "Next", exact: true }).click();
+  await page.getByLabel(/How will you care/).fill("Water and protect the seedlings daily");
+  await page.getByRole("button", { name: "Next", exact: true }).click();
+  await expect(page.getByLabel("Identification Type *")).toHaveCount(0);
+  await page.getByRole("checkbox", { name: /confirm that the information/ }).check();
+  await page.getByRole("button", { name: "Resubmit Request", exact: true }).click();
+  await expect(page).toHaveURL(new RegExp(`/${role}/my-requests`)); expect(edited).toBe(true); fixture.check();
+});
+}
+
+test("Participant and unauthenticated users cannot open Staff requester routes", async ({ page }) => {
+  const fixture = await setup(page);
+  for (const role of ["participant", "unauthenticated"]) {
+    for (const path of ["request-seedlings", "my-requests"]) {
+      await page.goto(`/staff/${path}?role=${role}`);
+      await expect(page).not.toHaveURL(new RegExp(`/staff/${path}`));
+    }
+  }
+  fixture.check();
+});
+
+
+test("Staff requester confirms the coordinated schedule through the shared owner page", async ({ page }) => {
+  const request = { ...ownRequest(), preApprovalSchedule: { status: "AwaitingRequesterConfirmation", proposalVersion: 2, plantingDate: "2099-01-03", startTime: "09:00", endTime: "", preferredReleaseDate: "2099-01-01" } };
+  const fixture = await setup(page, {
+    "GET /api/seedling-requests/my": route => route.fulfill({ json: { success: true, data: [request] } }),
+    "PATCH /api/seedling-requests/staff-own-request/pre-approval-schedule/confirm": (route, req) => {
+      expect(req.postDataJSON()).toMatchObject({ expectedVersion: 3, proposalVersion: 2, plantingDate: "2099-01-03", startTime: "09:00" });
+      return route.fulfill({ json: { success: true, data: { ...request, requestVersion: 4, preApprovalSchedule: { ...request.preApprovalSchedule, status: "Confirmed" } } } });
+    },
+  });
+  await page.goto("/staff/my-requests?role=staff&request=staff-own-request");
+  await expect(page.getByLabel("Planting Date *", { exact: true })).toHaveValue("2099-01-03");
+  await page.getByRole("button", { name: "Confirm Planting Schedule", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Confirm Planting Schedule", exact: true })).toHaveCount(0);
+  expect(fixture.calls.filter(call => call.key.includes("/pre-approval-schedule/confirm"))).toHaveLength(1); fixture.check();
 });

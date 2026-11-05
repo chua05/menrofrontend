@@ -15,7 +15,13 @@ export function getNotificationPath(notification, role) {
   }
 
   if (notification?.relatedRecordType === "seedlingRequest") {
-    return role === "participant"
+    const requesterNotice = new Set([
+      "request_submitted", "request_early_release_advisory", "request_returned",
+      "request_approved", "request_rejected", "request_released",
+      "request_schedule_confirmation_required", "late_release_conflict",
+      "late_release_schedule_returned", "late_release_schedule_approved",
+    ]).has(notification.type);
+    return role === "participant" || (role === "staff" && requesterNotice)
       ? `${prefix}/my-requests${recordQuery("request")}`
       : `${prefix}/requests${recordQuery("request")}`;
   }

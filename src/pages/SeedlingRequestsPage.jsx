@@ -2,7 +2,7 @@ import ModalDialog from "../components/ModalDialog";
 import {  useCallback, useEffect, useMemo, useRef, useState, } from "react";
 import { createPortal } from "react-dom";
 import PageLoadingState from "../components/PageLoadingState";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import L from "leaflet";
 import { boundaryLayerOptions } from "../utils/barangayMap";
 import "leaflet/dist/leaflet.css";
@@ -49,6 +49,7 @@ import { downloadPrivateRequestLetter, hasPrivateRequestLetter } from "../utils/
 
 import "../styles/seedling-requests.css";
 import ParticipantSaplingRequestWizard from "./ParticipantSaplingRequestWizard";
+import { ownsSeedlingRequest } from "../utils/requestOwnership";
 
 
 const TABS = [
@@ -212,7 +213,7 @@ function normalizeRequestForUi(request = {}) {
       request.requesterName ||
       request.fullName ||
       "",
-    requesterRole: request.requesterRole || "Participant",
+    requesterRole: request.requesterRole === "staff" ? "Staff" : request.requesterRole || "Participant",
     organization:
       request.organization ||
       request.participantOrganization ||
@@ -554,6 +555,7 @@ const waitForUiPaint = () => new Promise((resolve) => {
 
 export default function SeedlingRequestsPage() {
   const { userRole, currentUser } = useAuth();
+  const location = useLocation(), navigate = useNavigate();
   const { success: showSuccess, warning: showWarning } = useToast();
   const [pageSearchParams] = useSearchParams();
 
@@ -1793,13 +1795,14 @@ useEffect(() => {
   );
 
 
-  if (userRole === "participant") {
-  return (
-    <ParticipantSaplingRequestWizard
-      currentUser={currentUser}
-    />
-  );
-}
+  if (userRole === "participant" || (userRole === "staff" && location.pathname === "/staff/request-seedlings")) {
+    return (
+      <ParticipantSaplingRequestWizard
+        currentUser={currentUser}
+        requesterRole={userRole}
+      />
+    );
+  }
 
   if (loadingRequests) {
     return <div className="seedling-requests-page"><PageLoadingState message="Loading seedling requests..." /></div>;
@@ -1824,6 +1827,10 @@ useEffect(() => {
             <h1>Seedling Requests</h1>
           </div>
         </div>
+        {userRole === "staff" && <div className="sr-header-actions">
+          <button type="button" className="sr-secondary-btn" onClick={() => navigate("/staff/my-requests")}>My Requests</button>
+          <button type="button" className="sr-primary-btn" onClick={() => navigate("/staff/request-seedlings")}><Plus size={16} /> Submit Seedling Request</button>
+        </div>}
 
       </section>
 
@@ -3137,7 +3144,11 @@ useEffect(() => {
                   Close
                 </button>
 
-                {userRole === "staff" &&
+                {userRole === "staff" && ownsSeedlingRequest(selectedRequest, currentUser) && <div>
+                  <p>Another authorized MENRO officer must review and process your request.</p>
+                  <button type="button" className="sr-secondary-btn" onClick={() => navigate(`/staff/my-requests?request=${encodeURIComponent(selectedRequest.id)}`)}>Manage My Request</button>
+                </div>}
+                {userRole === "staff" && !ownsSeedlingRequest(selectedRequest, currentUser) &&
                   selectedRequest.status === "Pending Review" && (
                     <>
                       <button
@@ -3159,7 +3170,7 @@ useEffect(() => {
                     </>
                   )}
 
-                {userRole === "admin" &&
+                {userRole === "admin" && !ownsSeedlingRequest(selectedRequest, currentUser) &&
                   selectedRequest.status ===
                     "Reviewed" && (
                     <>
@@ -3181,7 +3192,7 @@ useEffect(() => {
                     </>
                   )}
 
-                {userRole === "staff" &&
+                {userRole === "staff" && !ownsSeedlingRequest(selectedRequest, currentUser) &&
                   selectedRequest.status === "Approved" && (
                     <button
                       type="button"

@@ -364,7 +364,7 @@ function Radios({ name, value, set, items, ...accessibility }) {
   );
 }
 
-export default function ParticipantSaplingRequestWizard({ currentUser }) {
+export default function ParticipantSaplingRequestWizard({ currentUser, requesterRole = "participant" }) {
   const navigate = useNavigate(),
     [params] = useSearchParams(),
     editId = params.get("edit") || "";
@@ -574,6 +574,7 @@ export default function ParticipantSaplingRequestWizard({ currentUser }) {
             requestingAs: savedRequestingAs,
             purpose,
             purposeOther: savedWorkflow.purposeOther || (isOtherPurpose(purpose) ? savedPurpose : ""),
+            preferredReleaseDate: request.preferredReleaseDate || savedWorkflow.preferredReleaseDate || "",
             eventName: request.workflow?.eventName || request.eventProposal?.eventName || "",
             activityDate: request.workflow?.activityDate || request.eventProposal?.proposedDate || "",
             startTime: request.workflow?.startTime || request.eventProposal?.proposedStartTime || "",
@@ -887,7 +888,7 @@ export default function ParticipantSaplingRequestWizard({ currentUser }) {
       );
       const requestReference = savedRequest?.requestNumber || savedRequest?.id;
       if (group && requestLetterCapability) setLetterUploadState("stored");
-      navigate("/participant/my-requests", {
+      navigate(requesterRole === "staff" ? "/staff/my-requests" : "/participant/my-requests", {
         replace: true,
         state: {
           submittedRequestReference: requestReference,
