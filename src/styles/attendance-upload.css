@@ -1,0 +1,14 @@
+.attendance-upload { display: grid; gap: 8px; min-width: 0; margin: 16px 0; scroll-margin-top: 100px; }
+.attendance-upload > label { margin: 0; font-weight: 650; }
+.attendance-dropzone { display: grid; justify-items: center; gap: 10px; padding: 20px; border: 2px dashed #a0bdab; border-radius: 10px; background: #f5faf7; }
+.attendance-dropzone button { padding: 10px 16px; border: 1px solid #145b3a; border-radius: 7px; background: #fff; color: #145b3a; cursor: pointer; font: inherit; }
+.attendance-dropzone span { color: #52665a; font-size: 12px; text-align: center; }
+.attendance-upload-invalid .attendance-dropzone { border-color: #b42318; }
+.attendance-file { display: flex; align-items: center; gap: 12px; min-width: 0; padding: 12px; border: 1px solid #dce7e0; border-radius: 8px; }
+.attendance-file img { width: 72px; height: 72px; object-fit: contain; border-radius: 6px; }
+.attendance-file > span { display: grid; gap: 4px; min-width: 0; flex: 1; overflow-wrap: anywhere; }
+.attendance-file small { color: #52665a; }
+.attendance-file button { align-self: start; border: 0; border-radius: 6px; background: #eef6f0; color: #145b3a; min-width: 32px; height: 32px; font-size: 22px; cursor: pointer; }
+.attendance-upload button:focus-visible { outline: 3px solid #145b3a; outline-offset: 3px; }
+.attendance-upload button:disabled { opacity: .65; cursor: wait; }
+@media(max-width: 600px) { .attendance-dropzone { padding: 16px 12px; } .attendance-file img { width: 50px; height: 50px; } }

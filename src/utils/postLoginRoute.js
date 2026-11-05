@@ -24,3 +24,9 @@ export function resolvePostLoginPath(requestedPath, user) {
 
   return dashboardPath;
 }
+
+// Fresh interactive authentication never restores an old operational page.
+// Existing authenticated deep links continue to use resolvePostLoginPath.
+export function resolveInteractiveLoginPath(user) {
+  return resolvePostLoginPath(undefined, user);
+}

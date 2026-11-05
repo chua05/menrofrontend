@@ -45,7 +45,7 @@ export default function ModalDialog({ open = true, onClose, dismissible = true, 
   };
   return createPortal(<dialog ref={dialogRef} id={id} className={`menro-modal-dialog ${className || ""}`} aria-label={label} aria-modal="true" aria-busy={busy}
     onKeyDown={containTab}
-    onCancel={event => { event.preventDefault(); close(); }}
+    onCancel={event => { event.preventDefault(); event.stopPropagation(); close(); }}
     onClick={event => { if (event.target.closest("[data-modal-close]")) close(); }}
     onMouseDown={event => { if (event.target === event.currentTarget) close(); }}>
     {children}

@@ -20,8 +20,8 @@ test("email-password and registration authentication paths remain available", ()
   assert.match(register, /publicApiFetch\("\/auth\/register"/);
 });
 
-test("verified sign-in restores only a protected destination from the same role", () => {
+test("fresh sign-in uses the verified role dashboard and authenticated deep links remain guarded", () => {
   assert.match(protectedRoute, /state=\{\{ from \}\}/);
-  assert.match(login, /resolvePostLoginPath\(location\.state\?\.from, userData\)/);
-  assert.match(rootRedirect, /resolvePostLoginPath\(location\.state\?\.from/);
+  assert.equal((login.match(/resolveInteractiveLoginPath\(userData\)/g) || []).length, 2);
+  assert.match(rootRedirect, /hasInteractiveLoginIntent\(\) \? undefined : location\.state\?\.from/);
 });

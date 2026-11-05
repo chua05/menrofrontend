@@ -9,8 +9,8 @@ import {
 import { auth } from "../firebase/config";
 import { useAuth } from "../context/AuthContext";
 import { useToast } from "../context/ToastContext";
-import { resolvePostLoginPath } from "../utils/postLoginRoute";
-import { markSuccessfulLogin } from "../utils/loginSuccess";
+import { resolveInteractiveLoginPath } from "../utils/postLoginRoute";
+import { beginInteractiveLogin, clearSuccessfulLogin, markSuccessfulLogin } from "../utils/loginSuccess";
 import { authenticatedFetch, verifyMenroSession } from "../services/authenticatedApi";
 import { startGooglePopup } from "../services/googleRedirectAuth";
 import {
@@ -119,6 +119,7 @@ export default function LoginPage() {
     }
 
     signInInProgress.current = true;
+    beginInteractiveLogin();
     setLoading(true);
     setLoginStage("Signing in...");
 
@@ -131,10 +132,11 @@ export default function LoginPage() {
       setLoginStage("Continuing...");
       const userData = await verifyMenroSession(credential.user);
 
-      login(userData, userData.role);
       markSuccessfulLogin(userData);
-      navigate(resolvePostLoginPath(location.state?.from, userData), { replace: true });
+      login(userData, userData.role);
+      navigate(resolveInteractiveLoginPath(userData), { replace: true, state: null });
     } catch (err) {
+      clearSuccessfulLogin();
       console.error("Email sign in failed:", err?.code || err?.message);
       setError(getAuthErrorMessage(err, { online: navigator.onLine !== false }));
     } finally {
@@ -169,6 +171,7 @@ export default function LoginPage() {
         mounted.current && googleAttempt.current === attempt;
       const userBeforePopup = auth.currentUser;
       signInInProgress.current = true;
+      beginInteractiveLogin();
       setError("");
       setLoading(true);
       setLoginStage("Continuing...");
@@ -188,6 +191,7 @@ export default function LoginPage() {
             if (hasNewGoogleSession(userBeforePopup, authenticatedUser)) {
               firebaseUser = authenticatedUser;
             } else if (isGoogleCancellation(popupError)) {
+              clearSuccessfulLogin();
               console.info("Google sign-in was cancelled before authentication completed.");
               setError("");
               return;
@@ -203,11 +207,12 @@ export default function LoginPage() {
         if (!isCurrentAttempt()) return;
 
         setError("");
-        login(userData, userData.role);
         markSuccessfulLogin(userData);
-        navigate(resolvePostLoginPath(location.state?.from, userData), { replace: true });
+        login(userData, userData.role);
+        navigate(resolveInteractiveLoginPath(userData), { replace: true, state: null });
       } catch (err) {
         if (!isCurrentAttempt()) return;
+        clearSuccessfulLogin();
         console.error("Google sign in failed:", err?.code || err?.message);
         if (isGoogleUnsupportedBrowserError(err)) {
           setShowInAppGuidance(true);

@@ -67,19 +67,32 @@ test("request wizard renders all inline errors and focuses the first invalid con
 });
 
 const releaseOption = { requestId: "released-request", requesterName: "Authoritative requester", participantSector: "Resident / Individual", requestType: "individual", expectedVersion: 3,
-  siteId: "site-1", siteName: "Fixture site", eventName: "Approved planting", items: [{ inventoryId: "narra", species: "Narra", quantityReleased: 10, availableQuantity: 8 }] };
+  siteId: "site-1", siteName: "Fixture site", eventId: "event-1", latitude: site.latitude, longitude: site.longitude, coverageRadiusMeters: 50,
+  barangay: "Bical", plantingDate: "2026-11-05", eventName: "Approved planting", items: [{ inventoryId: "narra", species: "Narra", quantityReleased: 10, availableQuantity: 8 }] };
 async function staffForm(page, overrides = {}) {
   const fixture = await setup(page, { "GET /api/planting-reports/official/options": route => route.fulfill({ json: { success: true, data: { options: [releaseOption], nextCursor: null } } }),
+    "POST /api/evidence-capture-sessions": (route, request) => {
+      expect(request.postDataJSON()).toEqual({ workflow: "planting-report", siteId: "site-1", eventId: "event-1", distributionId: "released-request" });
+      return route.fulfill({ json: { success: true, data: { captureSessionId: "mock-session", nonce: "mock-nonce" } } });
+    },
+    "POST /api/evidence-capture-sessions/mock-session/verify": route => route.fulfill({ json: { success: true, data: { verificationId: "mock-verification", imageSha256: "mock-digest", location: { latitude: site.latitude, longitude: site.longitude } } } }),
+    "PUT /api/planting-reports/official/submission-fixture/photos": (route, request) => {
+      expect(request.headers()["content-type"]).toMatch(/^multipart\/form-data; boundary=/);
+      const multipart = request.postDataBuffer().toString();
+      expect(multipart).toContain('name="photos"'); expect(multipart).toContain('name="expectedRevision"\r\n\r\n0');
+      expect(multipart).toContain('"captureSessionId":"mock-session"'); expect(request.headers()["idempotency-key"]).toBeTruthy();
+      return route.fulfill({ json: { success: true, data: { hasEvidence: true, evidenceVerified: true, evidenceSubmissionId: "submission-fixture" } } });
+    },
     "POST /api/planting-reports/official": route => route.fulfill({ status: 201, json: { success: true, data: { id: "report-fixture", officialSubmissionIds: ["submission-fixture"] } } }), ...overrides });
   await page.goto("/staff/planting-reports?role=staff");
   await page.getByRole("button", { name: "Submit Planting Report", exact: true }).click();
-  await page.getByRole("combobox", { name: "Released Seedling Distribution *" }).selectOption("released-request");
+  await page.getByRole("combobox", { name: "Seedling Release Record *" }).selectOption("released-request");
   return fixture;
 }
 test("Staff official reporting derives read-only identity/release data and submits partial planted plus leftover quantities", async ({ page }) => {
   const fixture = await staffForm(page);
-  await expect(page.getByLabel("Requester Name", { exact: true })).toHaveValue("Authoritative requester");
-  await expect(page.getByLabel("Requester Name", { exact: true })).toHaveAttribute("readonly");
+  await expect(page.getByLabel("Requester Full Name", { exact: true })).toHaveValue("Authoritative requester");
+  await expect(page.getByLabel("Requester Full Name", { exact: true })).toHaveAttribute("readonly");
   await expect(page.getByLabel("Submitted By", { exact: true })).toHaveValue("MENRO Staff");
   await expect(page.getByLabel("Quantity Released", { exact: true })).toHaveValue("10");
   await page.getByLabel("Quantity Planted *", { exact: true }).fill("9");
@@ -88,6 +101,9 @@ test("Staff official reporting derives read-only identity/release data and submi
   await expect(page.getByLabel("Quantity Planted *", { exact: true })).toHaveAttribute("aria-invalid", "true");
   await expect(page.getByLabel("Quantity Planted *", { exact: true })).toBeFocused();
   await page.getByLabel("Quantity Planted *", { exact: true }).fill("6");
+  await page.getByRole("button", { name: "Take Photo", exact: true }).click();
+  await page.getByRole("button", { name: "Verify fixture camera photo" }).click();
+  await expect(page.getByText("Backend-verified camera capture", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Submit for Admin Verification" }).click();
   await expect(page.getByRole("dialog", { name: "Submit Official Planting Report" })).toHaveCount(0);
   const request = fixture.calls.find(call => call.key === "POST /api/planting-reports/official");
@@ -107,9 +123,111 @@ test("individual release-based preview excludes leftovers and optional attendanc
   await expect(page.getByRole("dialog")).toHaveCount(0);
   expect(fixture.calls.filter(call => call.key === "PUT /api/planting-reports/official/submission-fixture/attendance")).toHaveLength(1); fixture.check();
 });
+
+test("field report requires verified photos and keeps authoritative identity read-only", async ({ page }) => {
+  const fixture = await staffForm(page);
+  await expect(page.getByRole("heading", { name: "Narra", exact: true })).toBeVisible();
+  await expect(page.getByLabel("Barangay", { exact: true })).toHaveValue("Bical");
+  await expect(page.getByLabel("Site Latitude", { exact: true })).toHaveAttribute("readonly");
+  await page.getByLabel("Quantity Planted *").fill("2");
+  await page.getByRole("button", { name: "Submit for Admin Verification" }).click();
+  await expect(page.getByRole("alert").filter({ hasText: "Add and verify original" })).toBeVisible();
+  expect(fixture.calls.filter(call => call.key === "POST /api/planting-reports/official")).toHaveLength(0);
+  await page.getByRole("button", { name: "Take Photo", exact: true }).click();
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("dialog", { name: "Secure planting camera", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("dialog", { name: "Submit Official Planting Report", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Take Photo", exact: true })).toBeFocused();
+  fixture.check();
+});
+
+test("shared optional attendance validates files, previews images and removes only the unsaved selection", async ({ page }) => {
+  const fixture = await staffForm(page);
+  await page.getByLabel("Confirmation Basis").selectOption("release-based");
+  const input = page.getByLabel("Attendance Photo/File (Optional)");
+  await input.setInputFiles({ name: "unsafe.svg", mimeType: "image/svg+xml", buffer: Buffer.from("<svg/>") });
+  await expect(page.getByRole("button", { name: "Choose Attendance File" })).toHaveAttribute("aria-invalid", "true");
+  await expect(page.getByRole("alert").filter({ hasText: "Choose one PDF" })).toBeVisible();
+  await page.getByRole("button", { name: "Submit for Admin Verification" }).click();
+  await expect(page.getByRole("button", { name: "Choose Attendance File" })).toBeFocused();
+  expect(fixture.calls.filter(call => call.key === "POST /api/planting-reports/official")).toHaveLength(0);
+  await input.setInputFiles({ name: "attendance.png", mimeType: "image/png", buffer: Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aWQkAAAAASUVORK5CYII=", "base64") });
+  await expect(page.getByAltText("Attendance preview: attendance.png")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Choose Attendance File" })).toHaveAttribute("aria-invalid", "false");
+  await page.getByRole("button", { name: "Remove attendance.png", exact: true }).click();
+  await expect(page.getByAltText("Attendance preview: attendance.png")).toHaveCount(0);
+  const drop = await page.evaluateHandle(() => {
+    const transfer = new DataTransfer();
+    const bytes = Uint8Array.from(atob("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aWQkAAAAASUVORK5CYII="), value => value.charCodeAt(0));
+    transfer.items.add(new File([bytes], "dropped.png", { type: "image/png" })); return transfer;
+  });
+  await page.locator(".attendance-dropzone").dispatchEvent("drop", { dataTransfer: drop }); await drop.dispose();
+  await expect(page.getByAltText("Attendance preview: dropped.png")).toBeVisible();
+  await page.getByRole("button", { name: "Remove dropped.png", exact: true }).click();
+  await page.getByRole("button", { name: "Submit for Admin Verification" }).click();
+  await expect(page.getByRole("dialog", { name: "Submit Official Planting Report", exact: true })).toHaveCount(0);
+  expect(fixture.calls.filter(call => call.key.startsWith("DELETE"))).toHaveLength(0);
+  fixture.check();
+});
+
+test("interrupted Staff photo upload retries the same intent without submitting quantities twice", async ({ page }) => {
+  const keys = []; let attempts = 0;
+  const fixture = await staffForm(page, { "PUT /api/planting-reports/official/submission-fixture/photos": (route, request) => {
+    keys.push(request.headers()["idempotency-key"]); attempts++;
+    return route.fulfill(attempts === 1 ? { status: 503, json: { success: false, message: "Storage unavailable" } } : { json: { success: true, data: { evidenceVerified: true } } });
+  } });
+  await page.getByLabel("Quantity Planted *").fill("2");
+  await page.getByRole("button", { name: "Take Photo", exact: true }).click();
+  await page.getByRole("button", { name: "Verify fixture camera photo" }).click();
+  await page.getByRole("button", { name: "Submit for Admin Verification" }).click();
+  await expect(page.getByText(/The report is saved pending Admin verification/)).toBeVisible();
+  await expect(page.getByRole("button", { name: "Take Photo", exact: true })).toBeDisabled();
+  await page.getByRole("button", { name: "Upload Evidence for Saved Report", exact: true }).click();
+  await expect(page.getByRole("dialog", { name: "Submit Official Planting Report", exact: true })).toHaveCount(0);
+  expect(keys).toHaveLength(2); expect(keys[0]).toBe(keys[1]);
+  expect(fixture.calls.filter(call => call.key === "POST /api/planting-reports/official")).toHaveLength(1); fixture.check();
+});
+
+test("pending saved Staff report can resume verified evidence without reposting planting quantities", async ({ page }) => {
+  const submission = { id: "submission-fixture", requestId: "released-request", inventoryId: "narra", species: "Narra", quantity: 2, leftoverQuantity: 0, revision: 0,
+    officialStaffReport: true, authenticatedSubmitterUid: "test-staff", confirmationBasis: "menro-field-report", staffReviewStatus: "Pending Review", adminApprovalRequired: true, photos: [] };
+  const report = { id: "report-fixture", reportType: "parent", verificationStatus: "Partial", quantityReleased: 10, quantityPlanted: 2, submissions: [submission], photos: [] };
+  const fixture = await staffForm(page, { "GET /api/planting-reports": route => route.fulfill({ json: { success: true, data: [report] } }),
+    "GET /api/planting-reports/report-fixture": route => route.fulfill({ json: { success: true, data: report } }) });
+  await page.getByRole("button", { name: "Close", exact: true }).click();
+  await page.goto("/staff/planting-reports?role=staff&report=report-fixture");
+  await page.getByRole("button", { name: "Add Verified Planting Evidence", exact: true }).click();
+  await expect(page.getByLabel("Quantity Planted *")).toBeDisabled();
+  await page.getByRole("button", { name: "Take Photo", exact: true }).click();
+  await page.getByRole("button", { name: "Verify fixture camera photo" }).click();
+  await page.getByRole("button", { name: "Upload Evidence for Saved Report", exact: true }).click();
+  await expect(page.getByRole("dialog", { name: "Add Verified Planting Evidence", exact: true })).toHaveCount(0);
+  expect(fixture.calls.filter(call => call.key === "POST /api/planting-reports/official")).toHaveLength(0); fixture.check();
+});
+
+test("login toast is fixed below topbar, dismissible and does not reappear on refresh", async ({ page }) => {
+  const fixture = await setup(page);
+  await page.addInitScript(() => {
+    if (!sessionStorage.getItem("fixture-login-seeded")) {
+      sessionStorage.setItem("fixture-login-seeded", "true");
+      sessionStorage.setItem("menro:pending-dashboard-login", JSON.stringify({ uid: "test-staff", nonce: "fixture-once", createdAt: Date.now() }));
+    }
+  });
+  await page.goto("/staff/dashboard?role=staff");
+  const toast = page.getByRole("status").filter({ hasText: "Login Successful" });
+  await expect(toast).toContainText("Welcome back! You have successfully signed in.");
+  await expect(page.locator(".menro-toast-viewport-floating")).toHaveCSS("position", "fixed");
+  const topbar = page.locator(".topbar"); const before = await topbar.boundingBox();
+  await page.getByRole("button", { name: "Dismiss Login Successful", exact: true }).click();
+  await expect(toast).toHaveCount(0); expect(await topbar.boundingBox()).toEqual(before);
+  await page.reload(); await expect(page.getByText("Login Successful", { exact: true })).toHaveCount(0);
+  fixture.check();
+});
 test("stale reportable balance displays a general conflict and never silently changes expectedVersion", async ({ page }) => {
   const fixture = await staffForm(page, { "POST /api/planting-reports/official": route => route.fulfill({ status: 409, json: { success: false, message: "The reportable balance changed." } }) });
   await page.getByLabel("Quantity Planted *").fill("2");
+  await page.getByRole("button", { name: "Take Photo", exact: true }).click();
+  await page.getByRole("button", { name: "Verify fixture camera photo" }).click();
   await page.getByRole("button", { name: "Submit for Admin Verification" }).click();
   await expect(page.getByRole("alert").filter({ hasText: "balance changed" })).toBeVisible();
   expect(fixture.calls.find(call => call.key === "POST /api/planting-reports/official").body.expectedVersion).toBe(3); fixture.check();
@@ -206,4 +324,34 @@ test("planting report shows field-specific errors, linked labels and correction 
   await name.fill("Fixture participant"); await expect(name).not.toHaveAttribute("aria-invalid", "true");
   await expect(page.locator("#planting-error-siteId")).toBeVisible();
   fixture.check();
+});
+
+test("Participant form retains planting fields and traps keyboard focus with optional attendance", async ({ page }) => {
+  const fixture = await setup(page);
+  await page.goto("/participant/my-planting-reports?role=participant");
+  const trigger = page.getByRole("button", { name: "Submit Planting Report", exact: true }); await trigger.click();
+  const dialog = page.getByRole("dialog", { name: "Submit Planting Report", exact: true }); await expect(dialog).toBeVisible();
+  await expect(page.getByLabel("Leftover Seedlings (Not Planted)", { exact: true })).toHaveValue("0");
+  await expect(page.getByLabel("Attendance Photo/File (Optional)")).toHaveCount(1);
+  const close = dialog.getByRole("button", { name: "Close", exact: true }); await close.focus();
+  await page.keyboard.press("Shift+Tab"); await expect(dialog.getByRole("button", { name: "Submit Report", exact: true })).toBeFocused();
+  await page.keyboard.press("Tab"); await expect(close).toBeFocused();
+  await page.keyboard.press("Escape"); await expect(dialog).toHaveCount(0); await expect(trigger).toBeFocused(); fixture.check();
+});
+
+test("parent gallery and submission thumbnail share one authenticated private image request", async ({ page }) => {
+  const photo = { hasEvidence: true, latitude: site.latitude, longitude: site.longitude };
+  const report = { id: "shared-photo-report", reportType: "parent", verificationStatus: "Partial", quantityReleased: 10, quantityPlanted: 2, photos: [photo],
+    submissions: [{ id: "owned-row", quantity: 2, photos: [photo], staffReviewStatus: "Pending Review" }] };
+  let release; const gate = new Promise(resolve => { release = resolve; }); let requests = 0;
+  const fixture = await setup(page, { "GET /api/planting-reports": route => route.fulfill({ json: { success: true, data: [report] } }),
+    "GET /api/planting-reports/shared-photo-report": route => route.fulfill({ json: { success: true, data: report } }),
+    "GET /api/evidence/planting-reports/shared-photo-report/photos/0": async route => {
+      requests++; await gate; return route.fulfill({ contentType: "image/png", body: Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aWQkAAAAASUVORK5CYII=", "base64") });
+    } });
+  await page.goto("/staff/planting-reports?role=staff&report=shared-photo-report");
+  await expect(page.getByText("Loading photo…", { exact: true })).toHaveCount(2);
+  await expect.poll(() => requests).toBe(1); release();
+  await expect(page.locator('.pr-report-drawer img[src^="blob:"]')).toHaveCount(2);
+  expect(requests).toBe(1); fixture.check();
 });
