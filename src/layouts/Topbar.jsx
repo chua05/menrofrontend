@@ -80,7 +80,7 @@ function timestampText(value) {
   return seconds != null ? new Date(seconds * 1000).toLocaleString("en-PH") : "—";
 }
 
-export default function Topbar({ onOpenSidebar }) {
+export default function Topbar({ onOpenSidebar, sidebarOpen = false }) {
   const { currentUser, userRole, logout } = useAuth();
   const navigate = useNavigate();
 
@@ -429,6 +429,8 @@ export default function Topbar({ onOpenSidebar }) {
           className="topbar-menu-btn"
           onClick={onOpenSidebar}
           aria-label="Open sidebar"
+          aria-expanded={sidebarOpen}
+          aria-controls="menro-sidebar"
           title="Open navigation"
         >
           <Menu

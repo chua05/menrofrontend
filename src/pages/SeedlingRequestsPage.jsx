@@ -1,3 +1,4 @@
+import ModalDialog from "../components/ModalDialog";
 import {  useCallback, useEffect, useMemo, useRef, useState, } from "react";
 import { createPortal } from "react-dom";
 import PageLoadingState from "../components/PageLoadingState";
@@ -2528,14 +2529,13 @@ useEffect(() => {
         onSubmit={submitReturnForRevision}
       />
 
-      {releaseModal && createPortal(
-        <div className="sr-modal-backdrop sr-review-backdrop" onMouseDown={(event) => {
-          if (event.target === event.currentTarget && !actionLoading) setReleaseModal(null);
-        }}>
-          <div className="sr-modal sr-decision-modal" role="dialog" aria-modal="true" aria-label="Release seedlings">
+      {releaseModal && (
+        <ModalDialog className="sr-modal-backdrop sr-review-backdrop" label="Release seedlings" dismissible={!actionLoading} busy={releaseLoading || actionLoading}
+          onClose={() => setReleaseModal(null)} returnFocusSelector=".sr-detail-footer-actions .sr-secondary-btn">
+          <div className="sr-modal sr-decision-modal">
             <div className="sr-modal-header">
               <div><h2>Release Seedlings</h2><p>Confirm actual quantities against current inventory.</p></div>
-              <button type="button" className="sr-modal-close" onClick={() => setReleaseModal(null)} disabled={actionLoading} aria-label="Close"><X size={18} /></button>
+              <button type="button" className="sr-modal-close" data-modal-close="" disabled={actionLoading} aria-label="Close"><X size={18} /></button>
             </div>
             <div className="sr-modal-body">
               <div className="sr-details-grid">
@@ -2563,7 +2563,7 @@ useEffect(() => {
                   <div className="sr-modal-footer"><button type="button" className="sr-secondary-btn" disabled={actionLoading || !lateReleaseReturnReason.trim()} onClick={() => runLateReleaseAction("return")}>Return for Revision</button><button type="button" className="sr-approve-btn" disabled={actionLoading} onClick={() => runLateReleaseAction("approve")}>Approve Rescheduling</button></div>
                 </>}
               </section>
-              {releaseLoading ? <p>Loading current inventory...</p> : (releaseModal.trees || []).map((tree, index) => {
+              {releaseLoading ? <p role="status">Loading current inventory...</p> : (releaseModal.trees || []).map((tree, index) => {
                 const stock = releaseInventory.find((item) => item.id === tree.inventoryId);
                 const entered = releaseEntries[index]?.quantity ?? "";
                 const available = stock && Number(stock.availableQuantity) + (releaseModal.inventoryReserved === true ? Number(stock.reservedQuantity || 0) : 0);
@@ -2594,13 +2594,13 @@ useEffect(() => {
               {releaseError && <p className="sr-field-error" role="alert">{releaseError}</p>}
             </div>
             <div className="sr-modal-footer">
-              <button type="button" className="sr-secondary-btn" onClick={() => setReleaseModal(null)} disabled={actionLoading}>Cancel</button>
+              <button type="button" className="sr-secondary-btn" data-modal-close="" disabled={actionLoading}>Cancel</button>
               <button type="button" className="sr-approve-btn sr-large-action" onClick={confirmRelease} disabled={!availableReleaseDate || releaseLoading || actionLoading || releaseInventory.length === 0 || availableReleaseDate > (releaseModal.approvedSchedule?.plantingDate || releaseModal.proposedDate || "") && releaseModal.lateReleaseRescheduling?.status !== "Approved" || ["AwaitingRequester", "PendingStaffReview", "ReturnedForRevision"].includes(releaseModal.lateReleaseRescheduling?.status)}>
                 {actionLoading ? "Releasing..." : "Confirm Release"}
               </button>
             </div>
           </div>
-        </div>, document.body
+        </ModalDialog>
       )}
 
       <AdminDecisionModal

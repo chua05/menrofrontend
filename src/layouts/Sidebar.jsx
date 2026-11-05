@@ -1,3 +1,4 @@
+import ModalDialog from "../components/ModalDialog";
 import { NavLink } from "react-router-dom";
 import { useEffect, useMemo, useState } from "react";
 import {
@@ -361,9 +362,13 @@ export default function Sidebar({ isOpen, onClose }) {
   const initials = getInitials(displayName, resolvedRole);
 
   return (
+    <ModalDialog open={isOpen} onClose={onClose} className="sidebar-modal-layer" label="Main navigation" id="menro-sidebar">
+      <>
+      <div className="sidebar-backdrop open" data-modal-close="" aria-hidden="true" />
     <aside
       className={`sidebar ${isOpen ? "open" : ""}`}
       aria-hidden={!isOpen}
+      inert={!isOpen}
     >
       {/* Header */}
       <div className="sb-header">
@@ -383,7 +388,7 @@ export default function Sidebar({ isOpen, onClose }) {
         <button
           type="button"
           className="sb-close"
-          onClick={onClose}
+          data-modal-close=""
           aria-label="Close sidebar"
           title="Close sidebar"
         >
@@ -405,7 +410,7 @@ export default function Sidebar({ isOpen, onClose }) {
                 <NavLink
                   key={item.to}
                   to={item.to}
-                  onClick={onClose}
+                  data-modal-close=""
                   className={({ isActive }) =>
                     `sb-item ${isActive ? "active" : ""}`
                   }
@@ -446,5 +451,7 @@ export default function Sidebar({ isOpen, onClose }) {
 
       </div>
     </aside>
+      </>
+    </ModalDialog>
   );
 }

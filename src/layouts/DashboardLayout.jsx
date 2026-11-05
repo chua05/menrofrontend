@@ -17,43 +17,15 @@ export default function DashboardLayout() {
     });
   }, [location.pathname]);
 
-  useEffect(() => {
-    document.body.style.overflow = sidebarOpen ? "hidden" : "";
-
-    return () => {
-      document.body.style.overflow = "";
-    };
-  }, [sidebarOpen]);
-
-  useEffect(() => {
-    const handleEscape = (event) => {
-      if (event.key === "Escape") {
-        setSidebarOpen(false);
-      }
-    };
-
-    document.addEventListener("keydown", handleEscape);
-
-    return () => {
-      document.removeEventListener("keydown", handleEscape);
-    };
-  }, []);
-
   return (
     <div className="dashboard-shell">
-      <div
-        className={`sidebar-backdrop ${sidebarOpen ? "open" : ""}`}
-        onClick={() => setSidebarOpen(false)}
-        aria-hidden="true"
-      />
-
       <Sidebar
         isOpen={sidebarOpen}
         onClose={() => setSidebarOpen(false)}
       />
 
       <div className="dashboard-main">
-        <Topbar onOpenSidebar={() => setSidebarOpen(true)} />
+        <Topbar sidebarOpen={sidebarOpen} onOpenSidebar={() => setSidebarOpen(true)} />
 
         <div className="menro-toast-page-anchor" data-menro-toast-page-anchor />
 
