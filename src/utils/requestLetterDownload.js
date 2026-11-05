@@ -12,9 +12,9 @@ export function hasPrivateRequestLetter(request) {
   return request?.requestLetter?.storageStatus === "private_v1";
 }
 
-export async function downloadPrivateRequestLetter(request) {
-  if (!request?.id || !hasPrivateRequestLetter(request)) throw new Error("No stored request letter is available.");
-  const response = await authenticatedFetch(`/seedling-requests/${encodeURIComponent(request.id)}/request-letter`);
+async function downloadPrivateDocument(request, kind, metadata) {
+  if (!request?.id || metadata?.storageStatus !== "private_v1") throw new Error("No stored private document is available.");
+  const response = await authenticatedFetch(`/seedling-requests/${encodeURIComponent(request.id)}/${kind}`);
   if (!response.ok) {
     const body = await response.json().catch(() => ({}));
     throw new Error(body.message || "Request letter could not be downloaded.");
@@ -23,7 +23,7 @@ export async function downloadPrivateRequestLetter(request) {
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement("a");
   anchor.href = url;
-  anchor.download = safeDownloadName(request.requestLetter.originalName);
+  anchor.download = safeDownloadName(metadata.originalName);
   anchor.style.display = "none";
   document.body.appendChild(anchor);
   try { anchor.click(); } finally {
@@ -31,3 +31,6 @@ export async function downloadPrivateRequestLetter(request) {
     URL.revokeObjectURL(url);
   }
 }
+
+export const downloadPrivateRequestLetter = request => downloadPrivateDocument(request, "request-letter", request?.requestLetter);
+export const downloadPrivateWalkInAcknowledgement = request => downloadPrivateDocument(request, "acknowledgement", request?.walkIn?.acknowledgement);

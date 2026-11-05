@@ -49,7 +49,7 @@ export default function PermanentSampleAnalyticsPage() {
   }
   return <main className="space-y-4 p-4">
     <h1 className="text-2xl font-semibold">Permanent Sample Monitoring Analytics</h1>
-    <p>Approved permanent samples only. No whole-site survival estimates or official KPI projections.</p>
+    <p>Approved permanent samples only. Estimates require complete, resolved assessments and explicit sampling-validity approval. Official aggregate KPIs remain separate.</p>
     {error && <p role="alert">{error}</p>}
     {loading && !error && <p role="status">Loading approved monitoring analytics…</p>}
     {ready && <>
@@ -68,6 +68,7 @@ export default function PermanentSampleAnalyticsPage() {
         <p>{row.latest.assessed}/{row.latest.total} samples assessed ({Math.round(row.latest.coverage * 100)}% coverage)</p>
         <p>Unassessed: {row.latest.unassessed} · Unresolved: {row.latest.unresolved}</p>
         <dl className="my-3 grid grid-cols-2 gap-2 sm:grid-cols-4">{Object.entries(row.latest.counts).map(([condition, count]) => <div key={condition} className="rounded bg-emerald-50 p-2"><dt>{condition}</dt><dd>{count}</dd></div>)}</dl>
+        {row.estimate && <div><h3>Sample Survival and Estimated Survivors</h3><p>Confirmed planted: {row.estimate.confirmedPlanted ?? "Not verified"}. Permanent sample size: {row.estimate.permanentSampleSize}. Sample survival rate: {row.estimate.sampleSurvivalRate == null ? "Pending complete observations" : `${row.estimate.sampleSurvivalRate.toFixed(2)}%`}.</p><p>Estimated survivors: {row.estimate.estimatedSurvivors == null ? `Not published ? ${row.estimate.estimateStatus}` : row.estimate.estimatedSurvivors.toLocaleString(undefined, { maximumFractionDigits: 2 })}. {row.estimate.label}</p></div>}
         <h3>Approved visit history</h3>
         {row.history.map(visit => <details key={visit.visitId} className="my-2 rounded border p-2">
           <summary>{visit.visitDate} · {visit.assessed}/{visit.total} assessed</summary>

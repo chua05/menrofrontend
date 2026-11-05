@@ -1,3 +1,4 @@
+import SamplingPolicyReadiness from "../components/SamplingPolicyReadiness";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { authenticatedFetch } from "../services/authenticatedApi";
 import { useAuth } from "../context/AuthContext";
@@ -38,7 +39,7 @@ export default function VerifiedPlantingCohortsPage() {
   const baselineAttemptKey = useRef("");
 
   const selected = useMemo(() => cohorts.find((cohort) => cohort.id === selectedId) || null, [cohorts, selectedId]);
-  const target = Number(selected?.samplingPlan?.provisionalTarget || Math.max(0, Math.ceil(Number(selected?.verifiedPlantedQuantity || 0) * 0.1)));
+  const target = selected?.samplingPolicySnapshot ? Number(selected.samplingReadiness?.target ?? 0) : Number(selected?.samplingPlan?.provisionalTarget || Math.max(0, Math.ceil(Number(selected?.verifiedPlantedQuantity || 0) * 0.1)));
 
   const reload = async () => {
     const data = await api("/verified-planting-cohorts");
@@ -49,7 +50,7 @@ export default function VerifiedPlantingCohortsPage() {
   useEffect(() => {
     if (!selected) return;
     const plan = selected.samplingPlan;
-    setPlanSamples(plan?.selectedSamples?.length ? plan.selectedSamples : Array.from({ length: target || 1 }, emptyPlanSample));
+    setPlanSamples(plan?.selectedSamples?.length ? plan.selectedSamples : Array.from({ length: selected.samplingPolicySnapshot ? target : target || 1 }, emptyPlanSample));
     setSelectionMethod(plan?.selectionMethod || "documented-manual");
     setNotes(plan?.notes || "");
     setBaselineUnits(plan?.selectedSamples?.map(emptyBaseline) || []);
@@ -131,12 +132,13 @@ export default function VerifiedPlantingCohortsPage() {
     {error && <p className="cohort-error" role="alert">{error}</p>}{message && <p className="cohort-success" role="status">{message}</p>}
     <label>Verified cohort<select value={selectedId} onChange={(event) => setSelectedId(event.target.value)}><option value="">Select a cohort</option>{cohorts.map((cohort) => <option key={cohort.id} value={cohort.id}>{cohort.id} — {cohort.verifiedPlantedQuantity} verified trees</option>)}</select></label>
     {selected && <>
+      <SamplingPolicyReadiness key={selected.id} cohort={selected} role={userRole} onSaved={reload} />
       <section className="cohort-card"><h2>Sampling Plan</h2><p>Provisional target: <strong>{target}</strong> samples ({selected.samplingPlan?.provisionalPolicy || "test-only ceil(verified quantity × 10%)"}).</p>
       <label>Selection method<select value={selectionMethod} disabled={userRole !== "staff" || selected.samplingPlan?.status === "APPROVED"} onChange={(event) => setSelectionMethod(event.target.value)}><option value="documented-manual">Documented manual selection</option><option value="systematic">Systematic selection</option><option value="stratified">Stratified selection</option></select></label>
       {planSamples.map((sample, index) => <fieldset key={index}><legend>Sample {index + 1}</legend>{[["permanentId","Permanent ID"],["species","Species"],["siteReference","Site / plot reference"],["selectionReason","Selection note"]].map(([key,label]) => <label key={key}>{label}<input value={sample[key]} disabled={userRole !== "staff" || selected.samplingPlan?.status === "APPROVED"} onChange={(event) => setPlanSamples((items) => items.map((item, itemIndex) => itemIndex === index ? { ...item, [key]: event.target.value } : item))}/></label>)}<label>Unit type<select value={sample.unitType} disabled={userRole !== "staff" || selected.samplingPlan?.status === "APPROVED"} onChange={(event) => setPlanSamples((items) => items.map((item, itemIndex) => itemIndex === index ? { ...item, unitType: event.target.value } : item))}><option value="tree">Tree</option><option value="plot">Plot</option></select></label></fieldset>)}
       <label>Plan notes<textarea value={notes} disabled={userRole !== "staff" || selected.samplingPlan?.status === "APPROVED"} onChange={(event) => setNotes(event.target.value)} /></label>
       {userRole === "staff" && selected.samplingPlan?.status !== "APPROVED" && <p><button disabled={busy} onClick={() => savePlan(false)}>Save draft</button><button disabled={busy} onClick={() => savePlan(true)}>Submit plan for approval</button></p>}
-      {userRole === "admin" && selected.samplingPlan?.status === "PENDING_ADMIN_APPROVAL" && <button disabled={busy} onClick={approvePlan}>Approve sampling plan</button>}
+      {userRole === "admin" && !selected.samplingPolicySnapshot && selected.samplingPlan?.status === "PENDING_ADMIN_APPROVAL" && <button disabled={busy} onClick={approvePlan}>Approve sampling plan</button>}
       <p>Status: {selected.samplingPlan?.status || "NOT STARTED"}</p></section>
       <section className="cohort-card"><h2>Staff Baseline</h2>{selected.samplingPlan?.status !== "APPROVED" ? <p>An Admin-approved sampling plan is required before baseline registration.</p> : <>{baselineUnits.map((unit, index) => <fieldset key={unit.permanentId}><legend>{unit.permanentId}</legend>{[["latitude","Latitude"],["longitude","Longitude"],["heightMeters","Height (m)"],["diameterCentimeters","Diameter (cm)"],["captureDate","Capture date"],["remarks","Remarks"]].map(([key,label]) => <label key={key}>{label}<input type={key === "captureDate" ? "date" : "text"} value={unit[key]} disabled={userRole !== "staff" || selected.baseline?.approvalStatus === "APPROVED"} onChange={(event) => setBaselineUnits((items) => items.map((item, itemIndex) => itemIndex === index ? { ...item, [key]: event.target.value } : item))}/></label>)}<label>Condition<select value={unit.condition} disabled={userRole !== "staff" || selected.baseline?.approvalStatus === "APPROVED"} onChange={(event) => setBaselineUnits((items) => items.map((item, itemIndex) => itemIndex === index ? { ...item, condition: event.target.value } : item))}>{["Healthy","Damaged","Dead","Unknown"].map((condition) => <option key={condition}>{condition}</option>)}</select></label>{userRole === "staff" && selected.baseline?.approvalStatus !== "APPROVED" && <button type="button" onClick={() => { setCameraSampleId(unit.permanentId); setCameraOpen(true); }}>Capture verified baseline photo</button>}{baselinePhotos[unit.permanentId] && <><img className="cohort-photo-preview" src={baselinePhotos[unit.permanentId].previewUrl} alt={`Verified baseline for ${unit.permanentId}`} /><p>GPS accuracy: {Math.round(baselinePhotos[unit.permanentId].location.accuracy)} m · Site verified</p></>}{selected.baseline?.sampleUnits?.find((sample) => sample.permanentId === unit.permanentId)?.photoReferences?.map((photo, photoIndex) => <div key={photo.evidenceId}><p>Stored evidence: {photo.verificationStatus || "Needs Review"} · {photo.capturedAt ? "capture metadata retained" : "metadata unavailable"}</p>{storedPhotoUrls[`${unit.permanentId}:${photoIndex}`] ? <img className="cohort-photo-preview" src={storedPhotoUrls[`${unit.permanentId}:${photoIndex}`]} alt={`Stored baseline for ${unit.permanentId}`} /> : <button type="button" onClick={() => viewStoredPhoto(unit.permanentId, photo, photoIndex)}>View stored photo</button>}</div>)}</fieldset>)}
       {userRole === "staff" && selected.baseline?.approvalStatus !== "APPROVED" && <button disabled={busy} onClick={saveBaseline}>Submit baseline for approval</button>}

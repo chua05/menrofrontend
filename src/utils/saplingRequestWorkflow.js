@@ -1,7 +1,9 @@
+import requestContract from "../data/requestWorkflow.json" with { type: "json" };
 import calendar from "../data/request-processing-holidays.json" with { type: "json" };
 const processingHolidays = new Set(calendar.dates);
 export const PROCESSING_ADVISORY = "MENRO requires 5 working days (Monday to Friday, excluding holidays) to review and process seedling requests. Your selected date is earlier than the standard processing period. You may continue, but MENRO may adjust your requested schedule.";
 export const GROUP_SECTORS = new Set([
+  "School Organization Representative",
   "Barangay Official",
   "Private Sector / Business",
   "Civic Organization / NGO",
@@ -64,10 +66,10 @@ export function isGroupRequester(sector, requestingAs) {
   return getEffectiveRequestType(sector, requestingAs) === "organization";
 }
 
-export function getPurposeOptions(sector, requestingAs) {
-  return getEffectiveRequestType(sector, requestingAs) === "organization"
-    ? ORGANIZATION_PURPOSES
-    : INDIVIDUAL_PURPOSES;
+export const REQUEST_SECTORS = requestContract.sectors;
+export const SHARED_PURPOSES = requestContract.purposes;
+export function getPurposeOptions() {
+  return SHARED_PURPOSES;
 }
 
 export function isOtherPurpose(purpose) {
