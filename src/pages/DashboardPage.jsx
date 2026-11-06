@@ -3249,7 +3249,7 @@ export default function DashboardPage() {
                             site.id
                           }
                         >
-                          <td>
+                          <td data-label="Site ID">
                             <strong>
                               {
                                 site.displayId
@@ -3257,24 +3257,24 @@ export default function DashboardPage() {
                             </strong>
                           </td>
 
-                          <td>
+                          <td data-label="Barangay">
                             {
                               site.barangay
                             }
                           </td>
 
-                          <td>
+                          <td data-label="Trees planted">
                             {site.treesPlanted.toLocaleString()}
                           </td>
 
-                          <td>
+                          <td data-label="Capacity">
                             {site.capacity >
                             0
                               ? site.capacity.toLocaleString()
                               : "—"}
                           </td>
 
-                          <td>
+                          <td data-label="Utilization">
                             <div className="utilization-cell">
                               <span>
                                 {
@@ -3302,7 +3302,7 @@ export default function DashboardPage() {
                             </div>
                           </td>
 
-                          <td>
+                          <td data-label="Condition">
                             <span
                               className={`dashboard-condition ${normalizeStatus(
                                 site.condition

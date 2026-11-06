@@ -128,16 +128,21 @@
 ===================================================== */
 
 .dashboard-kpi-grid {
-  display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 14px;
+  --kpi-per-row: 5;
+  --kpi-gap: 14px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--kpi-gap);
+}
+
+.participant-dashboard .dashboard-kpi-grid {
+  --kpi-per-row: 4;
 }
 
 .dashboard-kpi-card {
-  width: 100%;
+  flex: 1 1 calc((100% - (var(--kpi-per-row) - 1) * var(--kpi-gap)) / var(--kpi-per-row) - 1px);
   min-width: 0;
   min-height: 128px;
-  height: 100%;
   padding: 18px 19px;
   border: 1px solid #dfe6e1;
   border-radius: 10px;
@@ -304,7 +309,9 @@
   grid-row: 3;
   min-height: 0;
   height: auto;
-  align-self: start;
+  align-self: stretch;
+  display: flex;
+  flex-direction: column;
 }
 
 .activity-card {
@@ -312,7 +319,9 @@
   grid-row: 3;
   min-height: 0;
   height: auto;
-  align-self: start;
+  align-self: stretch;
+  display: flex;
+  flex-direction: column;
 }
 
 .dashboard-right-column {
@@ -320,9 +329,10 @@
   grid-row: 3;
   min-width: 0;
   display: grid;
-  grid-template-rows: auto auto auto;
+  grid-template-rows: 1fr;
+  grid-auto-rows: auto;
   gap: 14px;
-  align-self: start;
+  align-self: stretch;
 }
 
 .dashboard-bottom-grid {
@@ -398,12 +408,15 @@
 
 .dashboard-map-wrap {
   position: relative;
-  height: 360px;
+  flex: 1 1 360px;
+  min-height: 360px;
   overflow: hidden;
   background: #eef3e9;
 }
 
-.dashboard-leaflet-map {
+.dashboard-map-wrap .dashboard-leaflet-map {
+  position: absolute;
+  inset: 0;
   width: 100%;
   height: 100%;
   z-index: 1;
@@ -626,7 +639,8 @@
 }
 
 .activity-chart {
-  height: 250px;
+  flex: 1 1 250px;
+  min-height: 250px;
   position: relative;
 }
 
@@ -637,6 +651,7 @@
 }
 
 .activity-card > .dashboard-empty {
+  flex: 1 1 auto;
   min-height: 250px;
 }
 
@@ -769,7 +784,9 @@
 ===================================================== */
 
 .recent-card {
-  height: clamp(220px, 24vh, 260px);
+  --recent-chrome: 57px; /* header plus card and list borders */
+  --recent-row: 66px;
+  height: calc(var(--recent-chrome) + 3 * var(--recent-row));
   min-height: 0;
   display: flex;
   flex-direction: column;
@@ -1057,8 +1074,7 @@
 
 .sites-table {
   width: 100%;
-  min-width: 720px;
-  table-layout: fixed;
+  table-layout: auto;
   border-collapse: collapse;
   font-size: 11px;
 }
@@ -1087,6 +1103,11 @@
   color: #2e3a33;
   font-size: 11px;
   white-space: nowrap;
+}
+
+.sites-table td:nth-child(2) {
+  min-width: 96px;
+  white-space: normal;
 }
 
 .sites-table tbody tr:last-child td {
@@ -1252,6 +1273,17 @@
   }
 }
 
+@media (max-width: 1700px) {
+  .dashboard-bottom-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .sites-table-card {
+    grid-column: 1 / -1;
+    order: 3;
+  }
+}
+
 /* =====================================================
    TABLET / SMALL DESKTOP
 ===================================================== */
@@ -1282,18 +1314,13 @@
   .dashboard-right-column {
     grid-column: 1 / -1;
     grid-row: auto;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     grid-template-rows: none;
   }
 
   .dashboard-bottom-grid {
     grid-column: 1 / -1;
     grid-row: auto;
-  }
-
-  .dashboard-kpi-grid,
-  .participant-dashboard .dashboard-kpi-grid {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
   .participant-dashboard {
@@ -1318,13 +1345,21 @@
   }
 }
 
+@media (min-width: 951px) and (max-width: 1300px) {
+  /* Side by side with Upcoming Events, so the list can show every row. */
+  .admin-dashboard:not(.participant-dashboard) .recent-card {
+    height: auto;
+    align-self: stretch;
+  }
+}
+
 @media (max-width: 1100px) {
-  .dashboard-bottom-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+  .dashboard-kpi-grid {
+    --kpi-per-row: 3;
   }
 
-  .dashboard-bottom-grid .quick-card {
-    grid-column: 1 / -1;
+  .dashboard-bottom-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .survival-card,
@@ -1376,7 +1411,7 @@
 
   .dashboard-kpi-grid,
   .participant-dashboard .dashboard-kpi-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    --kpi-per-row: 2;
   }
 
   .dashboard-right-column,
@@ -1386,10 +1421,6 @@
 
   .participant-dashboard .quick-card {
     grid-column: auto;
-  }
-
-  .activity-chart {
-    height: 250px;
   }
 }
 
@@ -1415,23 +1446,25 @@
 
   .dashboard-kpi-grid,
   .participant-dashboard .dashboard-kpi-grid {
-    grid-template-columns: 1fr;
-    gap: 10px;
+    --kpi-gap: 10px;
   }
 
   .dashboard-kpi-card {
-    min-height: 110px;
-    padding: 15px 16px;
+    min-height: 0;
+    padding: 13px;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
   }
 
   .dashboard-kpi-icon {
-    width: 52px;
-    height: 52px;
-    flex-basis: 52px;
+    width: 40px;
+    height: 40px;
+    flex-basis: 40px;
   }
 
   .dashboard-kpi-value {
-    font-size: 25px;
+    font-size: 22px;
   }
 
   .dash-card-header {
@@ -1448,11 +1481,13 @@
   }
 
   .activity-chart {
-    height: 235px;
+    flex-basis: 235px;
+    min-height: 235px;
   }
 
   .dashboard-map-wrap {
-    height: 300px;
+    flex-basis: 300px;
+    min-height: 300px;
   }
 
   .quick-list {
@@ -1475,8 +1510,8 @@
     height: 190px;
   }
 
-  .sites-table {
-    min-width: 700px;
+  .sites-table-card {
+    order: 0;
   }
 
   .upcoming-event {
@@ -1493,12 +1528,71 @@
   }
 
   .recent-card {
-    height: clamp(240px, 42vh, 300px);
+    --recent-chrome: 55px;
+    --recent-row: 81px;
   }
 
   .dashboard-pan-control {
     transform: scale(0.92);
     transform-origin: top left;
+  }
+}
+
+/* Each site reads as a labelled card once six columns no longer fit. */
+@media (max-width: 700px) {
+  .sites-table,
+  .sites-table tbody,
+  .sites-table tr,
+  .sites-table td {
+    display: block;
+    width: 100%;
+  }
+
+  .sites-table thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
+
+  .sites-table tbody tr {
+    padding: 8px 0;
+    border-bottom: 1px solid #eef1ef;
+  }
+
+  .sites-table tbody tr:last-child {
+    border-bottom: none;
+  }
+
+  .sites-table tbody td,
+  .sites-table tbody td:nth-child(n) {
+    width: 100%;
+    height: auto;
+    min-width: 0;
+    min-height: 28px;
+    padding: 4px 14px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    border-bottom: none;
+    text-align: right;
+    white-space: normal;
+    overflow-wrap: break-word;
+  }
+
+  .sites-table td::before {
+    content: attr(data-label);
+    flex: 0 0 auto;
+    color: #536159;
+    font-size: 11px;
+    font-weight: 600;
+    text-align: left;
+  }
+
+  .sites-table .utilization-cell {
+    width: min(150px, 60%);
   }
 }
 
