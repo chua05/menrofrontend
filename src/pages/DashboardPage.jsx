@@ -1,3 +1,4 @@
+import ReportingCoveragePanel from "../components/ReportingCoveragePanel";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import PageLoadingState from "../components/PageLoadingState";
@@ -2082,11 +2083,8 @@ export default function DashboardPage() {
           visibleReports.length,
         verifiedReports,
         totalPlanted,
-        monitoringUpdates:
-          visibleMonitoring.length,
       };
     }, [
-      visibleMonitoring,
       visibleReports,
       visibleRequests,
     ]);
@@ -2390,27 +2388,6 @@ export default function DashboardPage() {
       route:
         "/participant/my-planting-reports",
     },
-    {
-      id: "monitoring",
-      label:
-        "Monitoring Updates",
-      value:
-        participantSummary.monitoringUpdates >
-        0
-          ? participantSummary.monitoringUpdates
-          : "—",
-      icon:
-        CircleCheckBig,
-      className:
-        "kpi-purple",
-      note:
-        participantSummary.monitoringUpdates >
-        0
-          ? "Your monitoring records"
-          : "No monitoring updates yet",
-      route:
-        "/participant/survival-monitoring",
-    },
   ];
 
   const kpis = (isParticipant ? participantKpis : managementKpis)
@@ -2447,13 +2424,10 @@ export default function DashboardPage() {
               FileCheck2,
           },
           {
-            id:
-              "monitoring",
-            label:
-              "Update Survival Monitoring",
-            route:
-              "/participant/survival-monitoring",
-            icon: Trees,
+            id: "report-status",
+            label: "View Planting Report Status",
+            route: "/participant/my-planting-reports",
+            icon: FileCheck2,
           },
         ]
       : [
@@ -2532,6 +2506,7 @@ export default function DashboardPage() {
         </h1>
       )}
 
+      <ReportingCoveragePanel requests={dashboardRequests} reports={dashboardReports} distributions={dashboardDistributions} />
       <div className="dashboard-filter-row">
         {!isParticipant && (
           <select
@@ -2832,16 +2807,6 @@ export default function DashboardPage() {
                   </strong>
                 </div>
 
-                <div>
-                  <span>
-                    Monitoring Updates
-                  </span>
-
-                  <strong>
-                    {participantSummary.monitoringUpdates ||
-                      "—"}
-                  </strong>
-                </div>
               </>
             ) : (
               <>

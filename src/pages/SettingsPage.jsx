@@ -1,3 +1,4 @@
+import PurposePolicySettings from "../components/PurposePolicySettings";
 import { useMemo, useRef, useState } from "react";
 import {
   FiBell,
@@ -700,6 +701,7 @@ export default function SettingsPage() {
           </SettingsSection>
         </div>
       </form>
+      {isAdmin && <PurposePolicySettings />}
     </div>
   );
 }

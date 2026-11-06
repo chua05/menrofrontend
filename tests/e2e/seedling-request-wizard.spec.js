@@ -120,7 +120,7 @@ test("School / Student switches purpose and schedule fields by Requesting As", a
     "Farm / Agricultural Planting", "Land Rehabilitation / Reforestation",
     "Replacement Planting", "Environmental Conservation", "Other (Please Specify)",
   ]);
-  await page.getByLabel("Purpose of Request *").selectOption("Backyard / Home Planting");
+  await page.getByLabel("Purpose of Request *").selectOption("Household / Backyard");
   const individualTreeRow = page.locator(".sr-tree-row").first();
   await individualTreeRow.locator("select").selectOption("request-letter-browser-inventory");
   await individualTreeRow.locator('input[type="number"]').fill("2");

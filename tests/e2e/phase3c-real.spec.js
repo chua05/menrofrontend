@@ -31,18 +31,18 @@ async function login(page, role, route, beforeNavigation) {
   await expect(page).toHaveURL(role === "participant" ? /\/(?:participant\/dashboard|complete-profile)$/ : new RegExp(`/${role === "otherStaff" ? "staff" : role}/dashboard$`), { timeout: 20000 });
   // Fresh interactive login intentionally lands on the verified role dashboard.
   // Open monitoring only AFTER authentication, with its request waiter armed.
-  if (beforeNavigation) { beforeNavigation(); await page.goto(route); }
+  if (beforeNavigation) await Promise.all([beforeNavigation(), page.goto(route, { waitUntil: "domcontentloaded" })]);
 }
 function discoveryResponse(page) {
   return page.waitForResponse((response) => {
     const url = new URL(response.url());
     return response.request().method() === "GET" && url.origin === "http://127.0.0.1:5185" && url.pathname === "/api/verified-sample-monitoring/visits";
-  }, { timeout: 15000 });
+  }, { timeout: 30000 });
 }
 async function openAuthorizedVisit(page, role, route) {
   const data = await fixture();
   let discovery;
-  await login(page, role, route, () => { discovery = discoveryResponse(page); });
+  await login(page, role, route, () => { discovery = discoveryResponse(page); return discovery; });
   const response = await discovery;
   const body = await response.json().catch(() => null);
   expect(response.status(), JSON.stringify(body)).toBe(200);

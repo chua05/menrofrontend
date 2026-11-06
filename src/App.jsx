@@ -306,6 +306,7 @@ function App() {
               />
 
               <Route path="request-seedlings" element={<SeedlingRequestsPage />} />
+              <Route path="walk-in-requests/new" element={<SeedlingRequestsPage />} />
               <Route path="my-requests" element={<MyRequestsPage />} />
 
               <Route
@@ -521,7 +522,7 @@ function App() {
 
               <Route
                 path="survival-monitoring"
-                element={<MonitoringPage />}
+                element={<Navigate to="../my-planting-reports" replace />}
               />
 
               <Route

@@ -47,7 +47,7 @@ async function openMonitoring(page, role) {
 }
 
 async function submitObservation(page, reportId, evidenceName, counts = { total: 10, healthy: 8, damaged: 1, dead: 1 }) {
-  await page.getByRole("button", { name: "Monitor Planted Trees" }).click();
+  await page.getByRole("button", { name: "Submit Monitoring Record", exact: true }).click();
   const modal = page.locator(".sm-modal");
   await expect(modal).toBeVisible();
   await modal.locator("select").first().selectOption(reportId);
@@ -59,7 +59,7 @@ async function submitObservation(page, reportId, evidenceName, counts = { total:
   await modal.locator('input[type="file"]').last().setInputFiles(path.join(EVIDENCE_ROOT, evidenceName));
   await expect(modal.getByText("Photo GPS found")).toBeVisible();
   await modal.getByRole("button", { name: "Submit Monitoring Record" }).click();
-  await expect(page.getByText("Your monitoring record was submitted successfully.")).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByText("Monitoring record submitted successfully.")).toBeVisible({ timeout: 20_000 });
   await modal.locator(".sm-modal-close").click();
 }
 
@@ -105,17 +105,12 @@ async function resubmitReturnedObservation(page, reportNumber, evidenceName) {
 }
 
 test.describe.serial("Monitoring Phase 2 authenticated workflows", () => {
-  test("A: participant submits, Staff reviews, and Admin approves", async ({ browser }) => {
-    const participant = await browser.newPage();
-    await login(participant, "participant");
-    await openMonitoring(participant, "participant");
-    await submitObservation(participant, "phase2-report-a", "valid-original.jpg");
-    await expect(recordRow(participant, "TEST-PHASE2-A")).toHaveCount(1);
-    await participant.context().close();
-
+  test("A: Staff submits, Staff reviews, and Admin approves", async ({ browser }) => {
     const staff = await browser.newPage();
     await login(staff, "staff");
     await openMonitoring(staff, "staff");
+    await submitObservation(staff, "phase2-report-a", "valid-original.jpg");
+    await expect(recordRow(staff, "TEST-PHASE2-A")).toHaveCount(1);
     await performAction(staff, "TEST-PHASE2-A", "Review");
     await expect(staff.getByText("Reviewed", { exact: true })).toBeVisible();
     await staff.context().close();
@@ -136,12 +131,12 @@ test.describe.serial("Monitoring Phase 2 authenticated workflows", () => {
     await admin.context().close();
   });
 
-  test("B and E: Staff returns, participant replaces evidence and resubmits, then Admin approves", async ({ browser }) => {
-    const participant = await browser.newPage();
-    await login(participant, "participant");
-    await openMonitoring(participant, "participant");
-    await submitObservation(participant, "phase2-report-b", "outside-site.jpg");
-    await participant.context().close();
+  test("B and E: Staff submission is returned, corrected by Staff, and approved by Admin", async ({ browser }) => {
+    const submittingStaff = await browser.newPage();
+    await login(submittingStaff, "staff");
+    await openMonitoring(submittingStaff, "staff");
+    await submitObservation(submittingStaff, "phase2-report-b", "outside-site.jpg");
+    await submittingStaff.context().close();
 
     const staffReturn = await browser.newPage();
     await login(staffReturn, "staff");
@@ -151,8 +146,8 @@ test.describe.serial("Monitoring Phase 2 authenticated workflows", () => {
     await staffReturn.context().close();
 
     const correction = await browser.newPage();
-    await login(correction, "participant");
-    await openMonitoring(correction, "participant");
+    await login(correction, "staff");
+    await openMonitoring(correction, "staff");
     await resubmitReturnedObservation(correction, "TEST-PHASE2-B", "valid-replacement.jpg");
     await openRecord(correction, "TEST-PHASE2-B");
     await expect(correction.getByText("Revision history: Revision 1, Revision 2")).toBeVisible();
@@ -174,15 +169,10 @@ test.describe.serial("Monitoring Phase 2 authenticated workflows", () => {
   });
 
   test("C: Admin rejection permits a new observation while preserving the rejected one", async ({ browser }) => {
-    const participant = await browser.newPage();
-    await login(participant, "participant");
-    await openMonitoring(participant, "participant");
-    await submitObservation(participant, "phase2-report-c", "valid-third.jpg");
-    await participant.context().close();
-
     const staff = await browser.newPage();
     await login(staff, "staff");
     await openMonitoring(staff, "staff");
+    await submitObservation(staff, "phase2-report-c", "valid-third.jpg");
     await performAction(staff, "TEST-PHASE2-C", "Review");
     await staff.context().close();
 
@@ -194,8 +184,8 @@ test.describe.serial("Monitoring Phase 2 authenticated workflows", () => {
     await admin.context().close();
 
     const replacement = await browser.newPage();
-    await login(replacement, "participant");
-    await openMonitoring(replacement, "participant");
+    await login(replacement, "staff");
+    await openMonitoring(replacement, "staff");
     await submitObservation(replacement, "phase2-report-c", "valid-fourth.jpg");
     await openRecord(replacement, "TEST-PHASE2-C");
     await expect(replacement.getByText("Rejected", { exact: true })).toBeVisible();
@@ -204,13 +194,21 @@ test.describe.serial("Monitoring Phase 2 authenticated workflows", () => {
   });
 
   test("D: emulator identities reach only their protected role monitoring route", async ({ browser }) => {
-    for (const role of ["participant", "staff", "admin"]) {
+    for (const role of ["staff", "admin"]) {
       const page = await browser.newPage();
       await login(page, role);
       await openMonitoring(page, role);
-      await page.goto(role === "participant" ? "/admin/survival-monitoring" : "/participant/survival-monitoring");
-      await expect(page).not.toHaveURL(role === "participant" ? /\/admin\/survival-monitoring/ : /\/participant\/survival-monitoring/);
+      await page.goto("/participant/survival-monitoring");
+      await expect(page).toHaveURL(/\/participant\/my-planting-reports/);
       await page.context().close();
     }
+    const participant = await browser.newPage();
+    await login(participant, "participant");
+    await participant.goto("/participant/survival-monitoring");
+    await expect(participant).toHaveURL(/\/participant\/my-planting-reports/);
+    await expect(participant.getByRole("button", { name: "Monitor Planted Trees" })).toHaveCount(0);
+    await participant.goto("/staff/survival-monitoring");
+    await expect(participant).not.toHaveURL(/\/staff\/survival-monitoring/);
+    await participant.context().close();
   });
 });

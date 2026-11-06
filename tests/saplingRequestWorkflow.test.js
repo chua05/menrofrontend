@@ -54,25 +54,13 @@ test("School / Student requires a requester type", () => {
   assert.equal(getEffectiveRequestType("School / Student", "group"), "organization");
 });
 
-test("filters purposes by the effective request type", () => {
-  const individual = getPurposeOptions("Resident / Individual", "");
-  assert.deepEqual(individual, [
-    "Backyard / Home Planting",
-    "Fruit-Bearing Tree Planting",
-    "Farm / Agricultural Planting",
-    "Land Rehabilitation / Reforestation",
-    "Replacement Planting",
-    "Environmental Conservation",
-    "Other (Please Specify)",
-  ]);
-  const schoolIndividual = getPurposeOptions("School / Student", "individual");
-  assert.deepEqual(schoolIndividual, individual);
-  const organization = getPurposeOptions("School / Student", "group");
-  assert.ok(organization.includes("School Activity"));
-  assert.ok(!organization.includes("Backyard / Home Planting"));
-  assert.equal(getEffectiveRequestType("Other (please specify)", "individual"), "individual");
-  assert.equal(getEffectiveRequestType("Other (please specify)", "group"), "organization");
-  assert.equal(isOtherPurpose("Other (Please Specify)"), true);
+test("shares the approved purpose dropdown across requester types without changing classification", () => {
+  const shared = ["Household / Backyard", "Agroforestry / Fruit Tree", "Reforestation / Mangrove / Riverbank / Slope", "School / Community / Roadside Greening", "Replacement Planting", "Special Occasion", "Other"];
+  assert.deepEqual(getPurposeOptions("Resident / Individual", ""), shared);
+  assert.deepEqual(getPurposeOptions("School Organization Representative", ""), shared);
+  assert.deepEqual(getPurposeOptions("Student (Individual)", ""), shared);
+  assert.equal(getEffectiveRequestType("Student (Individual)", ""), "individual");
+  assert.equal(getEffectiveRequestType("School Organization Representative", ""), "organization");
   assert.equal(isOtherPurpose("Other"), true);
 });
 

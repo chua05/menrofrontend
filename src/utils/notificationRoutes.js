@@ -38,6 +38,7 @@ export function getNotificationPath(notification, role) {
   }
 
   if (notification?.relatedRecordType === "monitoring") {
+    if (role === "participant") return `${prefix}/my-planting-reports`;
     const observation = notification?.relatedSubrecordId
       ? `${recordId ? "&" : "?"}observation=${encodeURIComponent(notification.relatedSubrecordId)}`
       : "";

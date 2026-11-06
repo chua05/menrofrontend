@@ -1,3 +1,4 @@
+import PlantingPhotoControls from "../components/PlantingPhotoControls";
 import AttendanceUpload from "../components/AttendanceUpload";
 import ModalDialog from "../components/ModalDialog";
 import { attendanceFileError } from "../utils/attendanceFile";
@@ -460,6 +461,7 @@ export default function PlantingPage() {
     remainingQuantity: "",
     quantity: "",
     leftoverQuantity: "0",
+    confirmationMode: "partial",
     plantingDate: "",
     siteId: "",
     siteName: "",
@@ -1466,6 +1468,7 @@ export default function PlantingPage() {
       remainingQuantity: "",
       quantity: "",
     leftoverQuantity: "0",
+    confirmationMode: "partial",
       plantingDate: "",
       siteId: "",
       siteName: "",
@@ -1632,6 +1635,7 @@ export default function PlantingPage() {
         remainingQuantity: "",
         quantity: "",
     leftoverQuantity: "0",
+    confirmationMode: "partial",
       }));
       return;
     }
@@ -1658,6 +1662,7 @@ export default function PlantingPage() {
     setForm((previous) => ({
       ...previous,
       distributionId: distribution.id,
+      confirmationMode: distribution.reportingPolicy ? "final" : "partial",
       distributionItemKey: item ? String(item.inventoryId || item.species) : "",
       inventoryId: item?.inventoryId || "",
       species: item?.species || "",
@@ -1712,6 +1717,7 @@ export default function PlantingPage() {
         remainingQuantity: "",
         quantity: "",
     leftoverQuantity: "0",
+    confirmationMode: "partial",
       }));
       return;
     }
@@ -1732,6 +1738,7 @@ export default function PlantingPage() {
       remainingQuantity: "",
       quantity: "",
     leftoverQuantity: "0",
+    confirmationMode: "partial",
     }));
   }
 
@@ -1754,6 +1761,7 @@ export default function PlantingPage() {
         remainingQuantity: "",
         quantity: "",
     leftoverQuantity: "0",
+    confirmationMode: "partial",
       }));
       return;
     }
@@ -1776,6 +1784,7 @@ export default function PlantingPage() {
       remainingQuantity: "",
       quantity: "",
     leftoverQuantity: "0",
+    confirmationMode: "partial",
     }));
   }
 
@@ -2276,10 +2285,10 @@ export default function PlantingPage() {
       return;
     }
 
-    const quantity = Number(form.quantity);
+    const quantity = form.confirmationMode === "final" ? Number(form.remainingQuantity) - Number(form.leftoverQuantity || 0) : Number(form.quantity);
     const remainingQuantity = Number(form.remainingQuantity);
 
-    if (!Number.isInteger(quantity) || quantity <= 0) {
+    if (!Number.isInteger(quantity) || (form.confirmationMode === "final" ? quantity < 0 : quantity <= 0)) {
       showPopup("Please enter a valid quantity of planted seedlings.", "error");
       return;
     }
@@ -2346,6 +2355,7 @@ export default function PlantingPage() {
     payload.append("siteId", form.siteId);
     payload.append("barangay", form.barangay);
     payload.append("quantityPlanted", String(quantity));
+    payload.append("confirmationMode", form.confirmationMode || "partial");
     payload.append("leftoverQuantity", String(form.leftoverQuantity ?? "0"));
     payload.append("plantingDate", form.plantingDate);
     payload.append("plantingLocation", form.siteName);
@@ -2719,10 +2729,10 @@ export default function PlantingPage() {
                     <td className="pr-td">{record.species || "—"}</td>
                     <td className="pr-td">
                       <strong>{record.reportType === "parent"
-                        ? `${record.activeSubmittedQuantity ?? 0} / ${record.quantityReleased ?? 0}`
+                        ? `${record.activeSubmittedQuantity ?? "Not reported"} reported planted / ${record.quantityReleased ?? "Unavailable"} released`
                         : record.quantityPlanted ?? "—"}</strong>
                       {record.reportType === "parent" && (
-                        <div className="pr-table-sub">{record.remainingAvailableQuantity ?? 0} remaining</div>
+                        <div className="pr-table-sub">{record.remainingAvailableQuantity ?? "Unavailable"} available for future planting</div>
                       )}
                     </td>
                     <td className="pr-td">{formatDate(record.plantingDate)}</td>
@@ -2988,6 +2998,7 @@ export default function PlantingPage() {
 {formErrors.distributionItemKey && <small id="planting-error-distributionItemKey" className="pr-field-error" role="alert">{formErrors.distributionItemKey}</small>}
                     </div>
 
+<div className="pr-full-width"><label htmlFor="planting-confirmation-mode">Planting Confirmation</label><select id="planting-confirmation-mode" className="pr-input" value={form.confirmationMode || "partial"} onChange={event => updateFormField("confirmationMode", event.target.value)}><option value="final">Final confirmation of the remaining release</option><option value="partial">Partial planting (balance may be planted later)</option></select><p>Final: planted = remaining reportable quantity minus final leftovers. Partial balances stay available for future planting.</p></div>
                     <div>
                       <label htmlFor="planting-quantityReleased" className="pr-label">Quantity Released</label>
                       <input {...fieldAccessibility("quantityReleased")} className="pr-input pr-readonly" value={form.quantityReleased} readOnly />
@@ -3002,14 +3013,14 @@ export default function PlantingPage() {
 
                     <div>
                       <label htmlFor="planting-quantity" className="pr-label">Quantity Planted <span className="pr-required">*</span></label>
-                      <input {...fieldAccessibility("quantity")} type="number" min="1" step="1" max={form.remainingQuantity || undefined}
-                        className="pr-input" value={form.quantity}
+                      <input {...fieldAccessibility("quantity")} type="number" min={form.confirmationMode === "final" ? "0" : "1"} step="1" max={form.remainingQuantity || undefined}
+                        className="pr-input" readOnly={form.confirmationMode === "final"} value={form.confirmationMode === "final" ? Math.max(0, Number(form.remainingQuantity || 0) - Number(form.leftoverQuantity || 0)) : form.quantity}
                         onChange={(event) => updateFormField("quantity", event.target.value)}
                         placeholder="Enter quantity" />
 {formErrors.quantity && <small id="planting-error-quantity" className="pr-field-error" role="alert">{formErrors.quantity}</small>}
                     </div>
                     <div>
-                      <label htmlFor="planting-leftoverQuantity" className="pr-label">Leftover Seedlings (Not Planted)</label>
+                      <label htmlFor="planting-leftoverQuantity" className="pr-label">Final Leftover Seedlings (Not Planted)</label>
                       <input {...fieldAccessibility("leftoverQuantity")} className="pr-input" type="number" min="0" step="1" value={form.leftoverQuantity ?? "0"} onChange={event => { setForm(current => ({ ...current, leftoverQuantity: event.target.value })); setFormErrors(current => ({ ...current, leftoverQuantity: "", quantity: "" })); }} />
                       {formErrors.leftoverQuantity && <small id="planting-error-leftoverQuantity" className="pr-field-error" role="alert">{formErrors.leftoverQuantity}</small>}
                     </div>
@@ -3067,124 +3078,7 @@ export default function PlantingPage() {
                   </div>
                 </section>
 
-                <section className="pr-section pr-photo-location-section">
-                  <div className="pr-section-header">
-                    <FiNavigation size={15} />
-                    Photo Location Verification
-                  </div>
-
-                  <div className="pr-gps-card">
-                    <div className="pr-gps-top">
-                      <div>
-                        <div className="pr-gps-title">
-                          Location Verification
-                        </div>
-                      </div>
-
-                      <button
-                        type="button"
-                        className="pr-secondary-button"
-                        disabled={locationLoading}
-                        onClick={verifyPhotoLocation}
-                      >
-                        <FiMapPin size={14} />
-                        {locationLoading
-                          ? "Reading Photo..."
-                          : hasGps
-                          ? "Verify Again"
-                          : "Verify Photo Location"}
-                      </button>
-                    </div>
-
-                    {evidenceMapHasGps && (
-                      <div className="pr-gps-captured">
-                        <div>
-                          <div className="pr-gps-value-label">Latitude</div>
-                          <div className="pr-gps-value">{evidenceMapLatitude.toFixed(6)}</div>
-                        </div>
-                        <div>
-                          <div className="pr-gps-value-label">Longitude</div>
-                          <div className="pr-gps-value">{evidenceMapLongitude.toFixed(6)}</div>
-                        </div>
-                        <div>
-                          <div className="pr-gps-value-label">Source</div>
-                          <div className="pr-gps-value">{primaryLocationPreview?.locationSource || "—"}</div>
-                        </div>
-                        <div>
-                          <div className="pr-gps-value-label">GPS Accuracy</div>
-                          <div className="pr-gps-value">
-                            {Number.isFinite(evidenceMapAccuracy) && evidenceMapAccuracy >= 0
-                              ? `${evidenceMapAccuracy.toFixed(1)} m` : "Not provided by EXIF"}
-                          </div>
-                        </div>
-                        <div>
-                          <div className="pr-gps-value-label">Distance from Site</div>
-                          <div className="pr-gps-value">
-                            {capturedSiteDistance !== null ? `${capturedSiteDistance.toFixed(1)} m` : "Unable to calculate"}
-                          </div>
-                        </div>
-                        <div>
-                          <div className="pr-gps-value-label">Boundary Rule</div>
-                          <div className="pr-gps-value">
-                            {primaryLocationPreview?.boundaryRule === "configured-radius"
-                              ? `Configured radius (${primaryLocationPreview.boundaryLimitMeters ?? siteCoverageRadiusMeters} m)`
-                              : primaryLocationPreview?.boundaryRule === "site-polygon" || capturedInsideSitePolygon !== null
-                                ? "Authoritative site polygon"
-                                : "50 m site-distance fallback where applicable"}
-                          </div>
-                        </div>
-                        <div>
-                          <div className="pr-gps-value-label">Location Status</div>
-                          <div className="pr-gps-value">
-                            {verificationMapResult.label}
-                          </div>
-                        </div>
-                      </div>
-                    )}
-
-                    <div className="pr-location-map-section">
-                      <div className="pr-location-map-heading">
-                        <div>
-                          <div className="pr-location-map-title">Bulan Location Preview</div>
-                  
-                        </div>
-
-                        <span
-                          className={`pr-location-status pr-location-status-${locationPreviewStatus.type}`}
-                        >
-                          {locationPreviewStatus.label}
-                        </span>
-                      </div>
-
-                      <div className="pr-location-map-wrap">
-                                      <div
-                                        ref={locationMapContainerRef}
-                                        className="pr-location-map"
-                                        aria-label="Interactive Bulan barangay and planting site location preview"
-                                      />
-
-                                      
-
-                              </div>
-
-                              <div className="pr-location-map-legend">
-                                <span><i className="pr-map-legend-line" /> Barangay Boundary</span>
-                                <span><i className="pr-map-legend-site" /> Registered Site</span>
-                                <span><i className="pr-map-legend-captured" /> Evidence GPS</span>
-                              </div>
-                            </div>
-                          </div>
-
-                          {evidenceMapHasGps && (
-                            <div className="pr-helper-text">
-                              Evidence captured: {primaryLocationPreview?.metadata?.capturedAt || form.photoCapturedAt
-                                ? formatDateTime(primaryLocationPreview?.metadata?.capturedAt || form.photoCapturedAt)
-                                : "Timestamp unavailable"}
-                            </div>
-                          )}
-                        </section>
-
-                        <section className="pr-section pr-photo-evidence-section">
+                <section className="pr-section pr-photo-evidence-section">
                           <div className="pr-section-header pr-photo-section-header">
                             <span><FiCamera size={15} /> Planting Photo Evidence</span>
                             <button
@@ -3203,15 +3097,7 @@ export default function PlantingPage() {
                           )}
 
                           <div className={`pr-upload-box ${formErrors.photos ? "pr-invalid-field" : ""}`}>
-                            <input {...fieldAccessibility("photos")}
-                              ref={uploadInputRef}
-                              type="file"
-                              accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp"
-                              multiple
-                              disabled={photoFiles.length >= MAX_EVIDENCE_PHOTOS}
-                              onChange={handlePhotoChange}
-                              className="pr-file-input"
-                            />
+
 
                     <FiCamera size={27} className="pr-upload-icon" />
                     <label htmlFor="planting-photos" className="pr-upload-title">Planting evidence photos</label>
@@ -3219,39 +3105,7 @@ export default function PlantingPage() {
                       JPG, PNG, or WEBP • Maximum 10 MB each • 1 to 10 photos
                     </div>
 
-                    <div
-                      className="pr-upload-button"
-                      style={{
-                        display: "flex",
-                        justifyContent: "center",
-                        gap: "10px",
-                        flexWrap: "wrap",
-                      }}
-                    >
-                      <button
-                        type="button"
-                        disabled={photoFiles.length >= MAX_EVIDENCE_PHOTOS}
-                        onClick={startCamera}
-                        aria-invalid={formErrors.photos ? "true" : undefined}
-                        aria-describedby={formErrors.photos ? "planting-error-photos" : undefined}
-                        className="pr-primary-button"
-                      >
-                        <FiCamera size={14} />
-                        Take Photo
-                      </button>
-
-                      <button
-                        type="button"
-                        disabled={photoFiles.length >= MAX_EVIDENCE_PHOTOS}
-                        onClick={() => uploadInputRef.current?.click()}
-                        aria-invalid={formErrors.photos ? "true" : undefined}
-                        aria-describedby={formErrors.photos ? "planting-error-photos" : undefined}
-                        className="pr-secondary-button"
-                      >
-                        <FiImage size={14} />
-                        Upload Existing Photos
-                      </button>
-                    </div>
+                    <PlantingPhotoControls inputId="planting-photos" count={photoFiles.length} max={MAX_EVIDENCE_PHOTOS} disabled={submitting} error={formErrors.photos} onCamera={startCamera} onFiles={files => handlePhotoChange({ target: { files, value: "" } })} />
                     {formErrors.photos && <small id="planting-error-photos" className="pr-field-error" role="alert">{formErrors.photos}</small>}
 
                     <div className="pr-helper-text" style={{ marginTop: "10px" }}>
@@ -3341,6 +3195,123 @@ export default function PlantingPage() {
                     )}
                   </div>
                 </section>
+
+                        <section className="pr-section pr-photo-location-section">
+                  <div className="pr-section-header">
+                    <FiNavigation size={15} />
+                    Photo Location Verification
+                  </div>
+
+                  <div className="pr-gps-card">
+                    <div className="pr-gps-top">
+                      <div>
+                        <div className="pr-gps-title">
+                          Location Verification
+                        </div>
+                      </div>
+
+                      <button
+                        type="button"
+                        className="pr-secondary-button"
+                        disabled={locationLoading}
+                        onClick={verifyPhotoLocation}
+                      >
+                        <FiMapPin size={14} />
+                        {locationLoading
+                          ? "Reading Photo..."
+                          : hasGps
+                          ? "Verify Again"
+                          : "Verify Photo Location"}
+                      </button>
+                    </div>
+
+                    {evidenceMapHasGps && (
+                      <div className="pr-gps-captured">
+                        <div>
+                          <div className="pr-gps-value-label">Latitude</div>
+                          <div className="pr-gps-value">{evidenceMapLatitude.toFixed(6)}</div>
+                        </div>
+                        <div>
+                          <div className="pr-gps-value-label">Longitude</div>
+                          <div className="pr-gps-value">{evidenceMapLongitude.toFixed(6)}</div>
+                        </div>
+                        <div>
+                          <div className="pr-gps-value-label">Source</div>
+                          <div className="pr-gps-value">{primaryLocationPreview?.locationSource || "—"}</div>
+                        </div>
+                        <div>
+                          <div className="pr-gps-value-label">GPS Accuracy</div>
+                          <div className="pr-gps-value">
+                            {Number.isFinite(evidenceMapAccuracy) && evidenceMapAccuracy >= 0
+                              ? `${evidenceMapAccuracy.toFixed(1)} m` : "Not provided by EXIF"}
+                          </div>
+                        </div>
+                        <div>
+                          <div className="pr-gps-value-label">Distance from Site</div>
+                          <div className="pr-gps-value">
+                            {capturedSiteDistance !== null ? `${capturedSiteDistance.toFixed(1)} m` : "Unable to calculate"}
+                          </div>
+                        </div>
+                        <div>
+                          <div className="pr-gps-value-label">Boundary Rule</div>
+                          <div className="pr-gps-value">
+                            {primaryLocationPreview?.boundaryRule === "configured-radius"
+                              ? `Configured radius (${primaryLocationPreview.boundaryLimitMeters ?? siteCoverageRadiusMeters} m)`
+                              : primaryLocationPreview?.boundaryRule === "site-polygon" || capturedInsideSitePolygon !== null
+                                ? "Authoritative site polygon"
+                                : "50 m site-distance fallback where applicable"}
+                          </div>
+                        </div>
+                        <div>
+                          <div className="pr-gps-value-label">Location Status</div>
+                          <div className="pr-gps-value">
+                            {verificationMapResult.label}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="pr-location-map-section">
+                      <div className="pr-location-map-heading">
+                        <div>
+                          <div className="pr-location-map-title">Bulan Location Preview</div>
+
+                        </div>
+
+                        <span
+                          className={`pr-location-status pr-location-status-${locationPreviewStatus.type}`}
+                        >
+                          {locationPreviewStatus.label}
+                        </span>
+                      </div>
+
+                      <div className="pr-location-map-wrap">
+                                      <div
+                                        ref={locationMapContainerRef}
+                                        className="pr-location-map"
+                                        aria-label="Interactive Bulan barangay and planting site location preview"
+                                      />
+
+
+
+                              </div>
+
+                              <div className="pr-location-map-legend">
+                                <span><i className="pr-map-legend-line" /> Barangay Boundary</span>
+                                <span><i className="pr-map-legend-site" /> Registered Site</span>
+                                <span><i className="pr-map-legend-captured" /> Evidence GPS</span>
+                              </div>
+                            </div>
+                          </div>
+
+                          {evidenceMapHasGps && (
+                            <div className="pr-helper-text">
+                              Evidence captured: {primaryLocationPreview?.metadata?.capturedAt || form.photoCapturedAt
+                                ? formatDateTime(primaryLocationPreview?.metadata?.capturedAt || form.photoCapturedAt)
+                                : "Timestamp unavailable"}
+                            </div>
+                          )}
+                        </section>
 
                 <section className="pr-section pr-section-last pr-report-additional-section">
                   <div className="pr-section-header">

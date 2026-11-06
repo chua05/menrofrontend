@@ -1,3 +1,5 @@
+import WalkInScheduleAcknowledgement from "../components/WalkInScheduleAcknowledgement";
+import PurposePolicyFields from "../components/PurposePolicyFields";
 import ModalDialog from "../components/ModalDialog";
 import {  useCallback, useEffect, useMemo, useRef, useState, } from "react";
 import { createPortal } from "react-dom";
@@ -45,7 +47,7 @@ import { auth } from "../firebase/config";
 import { formatDisplayId } from "../utils/displayId";
 import { BULAN_BARANGAYS } from "../utils/userTypes";
 import { formatScheduleTime } from "../utils/saplingRequestWorkflow";
-import { downloadPrivateRequestLetter, hasPrivateRequestLetter } from "../utils/requestLetterDownload";
+import { downloadPrivateRequestLetter, downloadPrivateWalkInAcknowledgement, hasPrivateRequestLetter } from "../utils/requestLetterDownload";
 
 import "../styles/seedling-requests.css";
 import ParticipantSaplingRequestWizard from "./ParticipantSaplingRequestWizard";
@@ -566,6 +568,7 @@ export default function SeedlingRequestsPage() {
   const [requestError, setRequestError] = useState("");
   const [actionLoading, setActionLoading] = useState(false);
   const [decisionModal, setDecisionModal] = useState(null);
+  const [policyDecision, setPolicyDecision] = useState({});
   const [rejectionChoice, setRejectionChoice] = useState("");
   const [decisionError, setDecisionError] = useState("");
   const [reviewModal, setReviewModal] = useState(null);
@@ -628,6 +631,13 @@ export default function SeedlingRequestsPage() {
     setRevealedIdentification({ requestId: "", idNumber: "" });
     setIdentificationError({ requestId: "", message: "" });
     setSelectedRequest(null);
+  };
+  const downloadAcknowledgement = async () => {
+    if (letterDownloadLoading) return;
+    setLetterDownloadLoading(true);
+    try { await downloadPrivateWalkInAcknowledgement(selectedRequest); }
+    catch (error) { showWarning(error.message || "Acknowledgement could not be downloaded."); }
+    finally { setLetterDownloadLoading(false); }
   };
   const downloadRequestLetter = async () => {
     if (letterDownloadLoading) return;
@@ -765,7 +775,7 @@ useEffect(() => {
   // Initial backend synchronization for the current role.
   // eslint-disable-next-line react-hooks/set-state-in-effect
   void loadRequests();
-}, [loadRequests]);
+}, [loadRequests, location.pathname]);
 
   useEffect(() => {
     const handleOutsideClick = (event) => {
@@ -1257,7 +1267,7 @@ useEffect(() => {
     }
   };
 
-  const submitReview = async (siteVerification) => {
+  const submitReview = async (siteVerification, policyProposal) => {
     if (!reviewModal?.request?.id) return;
 
     const request = reviewModal.request;
@@ -1281,6 +1291,7 @@ useEffect(() => {
         preferredReleaseDate: request.preferredReleaseDate || "",
         expectedVersion: Number(request.requestVersion || 0),
         ...(siteVerification ? { siteVerification } : {}),
+        ...(policyProposal ? { policyProposal } : {}),
       };
 
       const updated = await apiRequest(
@@ -1488,7 +1499,16 @@ useEffect(() => {
     await releaseRequest(releaseModal, items);
   };
 
-  const openDecisionModal = (request, action) => {
+  const openDecisionModal = async (request, action) => {
+    setPolicyDecision({});
+    if (action === "approve" && request.purposePolicyManaged) {
+      try {
+        let current = await apiRequest("/purpose-policies");
+        const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Manila", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
+        if (current.effectiveDate && current.effectiveDate > today) current = current.previousEffective || current;
+        request = { ...request, purposePolicyCandidate: { ...request.purposePolicyCandidate, policyVersion: current.version, definition: current.purposes.find(row => row.purpose === request.purposePolicyCandidate?.purpose) } };
+      } catch (failure) { setRequestError(failure.message || "The current policy could not be loaded. Retry before approval."); return; }
+    }
     setDecisionModal({ request, action });
     setRejectionChoice("");
     setDecisionError("");
@@ -1522,7 +1542,7 @@ useEffect(() => {
 
       payload = { reason, expectedVersion: Number(request.requestVersion || 0) };
     } else {
-      payload = { expectedVersion: Number(request.requestVersion || 0) };
+      payload = { expectedVersion: Number(request.requestVersion || 0), ...(request.purposePolicyManaged && (policyDecision.reporting || policyDecision.monitoring || policyDecision.reason) ? { policyDecision: { ...policyDecision, expectedPolicyVersion: request.purposePolicyCandidate?.policyVersion } } : {}) };
     }
 
     setActionLoading(true);
@@ -1795,11 +1815,12 @@ useEffect(() => {
   );
 
 
-  if (userRole === "participant" || (userRole === "staff" && location.pathname === "/staff/request-seedlings")) {
+  if (userRole === "participant" || (userRole === "staff" && ["/staff/request-seedlings", "/staff/walk-in-requests/new"].includes(location.pathname))) {
     return (
       <ParticipantSaplingRequestWizard
         currentUser={currentUser}
         requesterRole={userRole}
+        walkIn={location.pathname === "/staff/walk-in-requests/new"}
       />
     );
   }
@@ -1829,6 +1850,7 @@ useEffect(() => {
         </div>
         {userRole === "staff" && <div className="sr-header-actions">
           <button type="button" className="sr-secondary-btn" onClick={() => navigate("/staff/my-requests")}>My Requests</button>
+          <button type="button" className="sr-secondary-btn" onClick={() => navigate("/staff/walk-in-requests/new")}>Encode Walk-in Request</button>
           <button type="button" className="sr-primary-btn" onClick={() => navigate("/staff/request-seedlings")}><Plus size={16} /> Submit Seedling Request</button>
         </div>}
 
@@ -2612,6 +2634,8 @@ useEffect(() => {
 
       <AdminDecisionModal
         modal={decisionModal}
+        policyDecision={policyDecision}
+        onPolicyDecision={setPolicyDecision}
         rejectionChoice={rejectionChoice}
         setRejectionChoice={setRejectionChoice}
         error={decisionError}
@@ -3014,6 +3038,7 @@ useEffect(() => {
                   ].filter(([, value]) => value).map(([label, value]) => (
                     <div className="sr-detail-tree-row" key={label}><span>{label}</span><strong>{value}</strong></div>
                   ))}
+                  {selectedRequest.walkIn && <div className="sr-detail-tree-row"><span>Walk-in Citizen / Encoded By / Receipt</span><strong>{selectedRequest.participantName} / {selectedRequest.walkIn.encodedByName || "Authorized Staff"} / {selectedRequest.walkIn.receiptReference}</strong>{selectedRequest.walkIn.acknowledgement?.storageStatus === "private_v1" && <button type="button" className="sr-secondary-btn" disabled={letterDownloadLoading} onClick={downloadAcknowledgement}>Download Signed Acknowledgement</button>}</div>}
                   {hasPrivateRequestLetter(selectedRequest) && (
                     <div className="sr-detail-tree-row">
                       <span>Private Request Letter</span>
@@ -3144,6 +3169,8 @@ useEffect(() => {
                   Close
                 </button>
 
+                {userRole === "staff" && selectedRequest.walkIn?.encodedBy === currentUser?.uid && (selectedRequest.preApprovalSchedule?.status === "AwaitingRequesterConfirmation" || ["AwaitingRequester", "ReturnedForRevision"].includes(selectedRequest.lateReleaseRescheduling?.status)) && <WalkInScheduleAcknowledgement key={`${selectedRequest.id}:${selectedRequest.requestVersion}`} request={selectedRequest} onSaved={async updated => { refreshSelectedRequest(updated); await loadRequests({ background: true }); }} />}
+                {userRole === "staff" && selectedRequest.walkIn?.encodedBy === currentUser?.uid && selectedRequest.status === "Request Returned" && <button type="button" className="sr-secondary-btn" onClick={() => navigate(`/staff/walk-in-requests/new?edit=${encodeURIComponent(selectedRequest.id)}`)}>Correct Walk-in Request</button>}
                 {userRole === "staff" && ownsSeedlingRequest(selectedRequest, currentUser) && <div>
                   <p>Another authorized MENRO officer must review and process your request.</p>
                   <button type="button" className="sr-secondary-btn" onClick={() => navigate(`/staff/my-requests?request=${encodeURIComponent(selectedRequest.id)}`)}>Manage My Request</button>
@@ -4259,17 +4286,19 @@ function ReviewRequestModal({
     maximumCapacity: String(request.proposedSiteVerification?.maximumCapacity ?? ""),
   });
   const [siteErrors, setSiteErrors] = useState({});
+  const [policyProposal, setPolicyProposal] = useState({});
+  const proposalValue = request.purposePolicyManaged && (policyProposal.reporting || policyProposal.reason || policyProposal.monitoring) ? policyProposal : undefined;
   const reviewForm = useRef(null);
   const needsSiteReview = request.workflow?.siteMode === "proposed" && !request.workflow?.officialSiteId;
   const completeReview = async () => {
-    if (!needsSiteReview) return onSubmit();
+    if (!needsSiteReview) return onSubmit(undefined, proposalValue);
     const next = {};
     const areaError = getPlantingAreaError("Other / Exact Area", siteVerification.areaHectares);
     if (areaError) next.areaHectares = areaError;
     if (!/^\d+$/.test(siteVerification.maximumCapacity) || !Number.isSafeInteger(Number(siteVerification.maximumCapacity)) || Number(siteVerification.maximumCapacity) <= 0) next.maximumCapacity = "Enter the verified capacity as a positive whole number.";
     setSiteErrors(next);
     if (Object.keys(next).length) return focusFirstInvalid(() => reviewForm.current);
-    const failure = await onSubmit(siteVerification);
+    const failure = await onSubmit(siteVerification, proposalValue);
     if (failure?.fieldErrors) {
       setSiteErrors({ areaHectares: failure.fieldErrors.verifiedAreaHectares, maximumCapacity: failure.fieldErrors.verifiedMaximumCapacity });
       focusFirstInvalid(() => reviewForm.current);
@@ -4342,7 +4371,8 @@ function ReviewRequestModal({
           {error && <small className="sr-field-error">{error}</small>}
         </div>
 
-        <div className="sr-modal-footer">
+        {request.purposePolicyManaged && <PurposePolicyFields candidate={request.purposePolicyCandidate} value={policyProposal} onChange={setPolicyProposal} label="Staff Policy Proposal (Admin approval required)" />}
+          <div className="sr-modal-footer">
           <button
             type="button"
             className="sr-secondary-btn"
@@ -4382,6 +4412,7 @@ function AdminDecisionModal({
   loading,
   onClose,
   onSubmit,
+  policyDecision, onPolicyDecision,
 }) {
   if (!modal) return null;
 
@@ -4401,7 +4432,7 @@ function AdminDecisionModal({
             </h2>
             <p>
               {isApprove
-                ? "Confirm approval of this seedling request. No approval reason is required."
+                ? modal.request.purposePolicyManaged ? "Confirm approval using the effective purpose policy. Overrides and unresolved policies require an explicit decision and reason." : "Confirm approval of this seedling request. No approval reason is required."
                 : "Provide the reason that will be shown to the participant."}
             </p>
           </div>
@@ -4424,6 +4455,7 @@ function AdminDecisionModal({
 
           {isApprove ? (
             <>
+              {modal.request.purposePolicyManaged && <PurposePolicyFields candidate={modal.request.purposePolicyCandidate} value={policyDecision} onChange={onPolicyDecision} label="Admin Final Purpose Policy" />}
               <p className="sr-decision-confirm-text">Are you sure you want to approve this seedling request?</p>
               <div className="sr-details-grid">
                 <DetailItem label="Original Planting Date" value={formatDate(modal.request.originalSchedule?.plantingDate || modal.request.proposedDate)} />

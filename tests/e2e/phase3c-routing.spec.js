@@ -13,6 +13,30 @@ async function expectMonitoringPage(page) {
   await expect(page.getByRole("heading", { name: monitoringLabel })).toBeVisible();
 }
 
+async function mockLegacyMonitoringApi(page) {
+  await page.route("http://localhost:5000/api/**", (route) => {
+    const url = new URL(route.request().url());
+    const data = url.pathname === "/api/monitoring" ? []
+      : url.pathname === "/api/planting-reports" ? [{
+        id: "phase3c-staff-report",
+        reportNumber: "TEST-STAFF-MONITORING",
+        verificationStatus: "Approved",
+        reportingProgress: "Completed",
+        participantId: "requester-fixture",
+        participantName: "Requester Fixture",
+        siteId: "site-fixture",
+        siteName: "Bulan Test Site",
+        barangay: "Bulan",
+        species: "Narra",
+        quantityPlanted: 10,
+        plantingDate: "2026-10-01",
+      }]
+        : url.pathname === "/api/sites" ? [] : null;
+    if (!data) return route.abort();
+    return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ success: true, data }) });
+  });
+}
+
 test("same permanent tree in different visits never reuses cached private photos", async ({ page }) => {
   await isolate(page);
   await page.addInitScript(() => {
@@ -93,6 +117,35 @@ test("participant is denied both protected monitoring routes", async ({ page }) 
     await expect(page).toHaveURL(/\/participant\/dashboard/);
     await expect(page.getByRole("heading", { name: monitoringLabel })).toHaveCount(0);
   }
+});
+
+test("participant legacy monitoring links redirect to planting reports without submission tasks", async ({ page }) => {
+  await isolate(page);
+  await page.goto("/participant/survival-monitoring?role=participant");
+  await expect(page).toHaveURL(/\/participant\/my-planting-reports/);
+  await expect(page.getByRole("heading", { name: "Survival Monitoring" })).toHaveCount(0);
+  await page.goto("/participant/dashboard?role=participant");
+  await page.getByRole("button", { name: "Open sidebar" }).click();
+  await expect(page.getByRole("link", { name: "Survival Monitoring", includeHidden: true })).toHaveCount(0);
+  await expect(page.getByRole("link", { name: "My Planting Reports" })).toBeVisible();
+});
+
+test("Staff can open the legacy monitoring submission form while Admin remains read-only", async ({ page }) => {
+  await isolate(page);
+  await mockLegacyMonitoringApi(page);
+  await page.goto("/staff/survival-monitoring?role=staff");
+  await expect(page.getByRole("heading", { name: "Survival Monitoring" })).toBeVisible();
+  const submitButton = page.getByRole("button", { name: "Submit Monitoring Record", exact: true });
+  await expect(submitButton).toBeVisible();
+  await submitButton.click();
+  const modal = page.locator(".sm-modal");
+  await expect(modal).toBeVisible();
+  await expect(modal.getByRole("heading", { name: "Monitor Planted Trees" })).toBeVisible();
+  await expect(modal.locator('select[data-monitoring-field="plantingReportId"] option[value="phase3c-staff-report"]')).toHaveCount(1);
+
+  await page.goto("/admin/survival-monitoring?role=admin");
+  await expect(page.getByRole("heading", { name: "Survival Monitoring" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Submit Monitoring Record", exact: true })).toHaveCount(0);
 });
 
 test("unauthenticated users are redirected by the real protected route", async ({ page }) => {

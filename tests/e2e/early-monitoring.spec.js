@@ -25,7 +25,7 @@ function row(page, reportNumber) {
 }
 
 async function submit(page, reportId, evidenceName, monitoredDate, type = "early") {
-  await page.getByRole("button", { name: "Monitor Planted Trees" }).click();
+  await page.getByRole("button", { name: "Submit Monitoring Record", exact: true }).click();
   const modal = page.locator(".sm-modal");
   await modal.locator("select").first().selectOption(reportId);
   if (type === "early") {
@@ -40,7 +40,7 @@ async function submit(page, reportId, evidenceName, monitoredDate, type = "early
   await modal.locator('input[type="file"]').last().setInputFiles(path.join(EVIDENCE_ROOT, evidenceName));
   await expect(modal.getByText("Photo GPS found")).toBeVisible();
   await modal.getByRole("button", { name: "Submit Monitoring Record" }).click();
-  await expect(page.getByText("Your monitoring record was submitted successfully.")).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByText("Monitoring record submitted successfully.")).toBeVisible({ timeout: 20_000 });
   await modal.locator(".sm-modal-close").click();
 }
 
@@ -58,15 +58,11 @@ async function action(page, reportNumber, label, reason) {
 }
 
 test.describe.serial("Early Survival Monitoring authenticated acceptance", () => {
-  test("Participant submits Early, Staff reviews, and Admin approves without official KPI impact", async ({ browser }) => {
-    const participant = await browser.newPage();
-    await login(participant, "participant");
-    await submit(participant, "early-e2e-report-a", "early-a.jpg", "2026-10-01");
-    await expect(row(participant, "TEST-EARLY-A")).toContainText("Early: Submitted");
-    await participant.context().close();
-
+  test("Staff submits Early, Staff reviews, and Admin approves without official KPI impact", async ({ browser }) => {
     const staff = await browser.newPage();
     await login(staff, "staff");
+    await submit(staff, "early-e2e-report-a", "early-a.jpg", "2026-10-01");
+    await expect(row(staff, "TEST-EARLY-A")).toContainText("Early: Submitted");
     await action(staff, "TEST-EARLY-A", "Review");
     await staff.context().close();
 
@@ -79,19 +75,15 @@ test.describe.serial("Early Survival Monitoring authenticated acceptance", () =>
     await admin.context().close();
   });
 
-  test("Staff return and participant correction preserve the same Early observation", async ({ browser }) => {
-    const participant = await browser.newPage();
-    await login(participant, "participant");
-    await submit(participant, "early-e2e-report-b", "early-b-initial.jpg", "2026-10-01");
-    await participant.context().close();
-
+  test("Staff return and correction preserve the same Early observation", async ({ browser }) => {
     const staff = await browser.newPage();
     await login(staff, "staff");
+    await submit(staff, "early-e2e-report-b", "early-b-initial.jpg", "2026-10-01");
     await action(staff, "TEST-EARLY-B", "Return for Rechecking", "Correct the early observation.");
     await staff.context().close();
 
     const correction = await browser.newPage();
-    await login(correction, "participant");
+    await login(correction, "staff");
     const record = row(correction, "TEST-EARLY-B");
     await record.getByTitle("View monitoring record").click();
     await correction.getByRole("button", { name: "Edit and Resubmit" }).click();
@@ -109,16 +101,16 @@ test.describe.serial("Early Survival Monitoring authenticated acceptance", () =>
   });
 
   test("Official submission remains available while an Early observation is unresolved", async ({ browser }) => {
-    const participant = await browser.newPage();
-    await login(participant, "participant");
-    await participant.getByPlaceholder("Search monitoring records...").fill("early-e2e-report-c");
-    await expect(row(participant, "TEST-EARLY-C")).toContainText("Early: Submitted");
-    await participant.getByPlaceholder("Search monitoring records...").fill("");
-    await submit(participant, "early-e2e-report-c", "valid-official-current.jpg", "2026-10-15", "official");
-    await participant.getByPlaceholder("Search monitoring records...").fill("early-e2e-report-c");
-    await row(participant, "TEST-EARLY-C").getByTitle("View monitoring record").click();
-    await expect(participant.getByText("Early Monitoring Entry 1")).toBeVisible();
-    await expect(participant.getByText("Official Monitoring Entry 2")).toBeVisible();
-    await participant.context().close();
+    const staff = await browser.newPage();
+    await login(staff, "staff");
+    await staff.getByPlaceholder("Search monitoring records...").fill("early-e2e-report-c");
+    await expect(row(staff, "TEST-EARLY-C")).toContainText("Early: Submitted");
+    await staff.getByPlaceholder("Search monitoring records...").fill("");
+    await submit(staff, "early-e2e-report-c", "valid-official-current.jpg", "2026-10-15", "official");
+    await staff.getByPlaceholder("Search monitoring records...").fill("early-e2e-report-c");
+    await row(staff, "TEST-EARLY-C").getByTitle("View monitoring record").click();
+    await expect(staff.getByText("Early Monitoring Entry 1")).toBeVisible();
+    await expect(staff.getByText("Official Monitoring Entry 2")).toBeVisible();
+    await staff.context().close();
   });
 });

@@ -1,3 +1,4 @@
+import { attendanceFileError } from "../utils/attendanceFile";
 import { cloneElement, isValidElement, useEffect, useId, useMemo, useRef, useState } from "react";
 import L from "leaflet";
 import { boundaryLayerOptions, geometryCoversPoint } from "../utils/barangayMap";
@@ -38,6 +39,7 @@ import {
   getPlantingAreaError,
   getPlantingAreaHectares,
   getPurposeOptions,
+  REQUEST_SECTORS,
   REQUEST_TYPE_SELECTABLE_SECTORS,
   getStepState,
   invalidateCompletedSteps,
@@ -47,7 +49,6 @@ import {
   dateOnlyInManila,
   MAX_SEEDLING_TYPES,
   normalizeBarangayName,
-  ORGANIZATION_PURPOSES,
   validatePlantingSchedule,
   validateRequestLetterFile,
 } from "../utils/saplingRequestWorkflow";
@@ -61,15 +62,7 @@ const STEPS = [
   "Planting Information",
   "Identification & Review",
 ];
-const SECTORS = [
-  "Resident / Individual",
-  "Barangay Official",
-  "School / Student",
-  "Private Sector / Business",
-  "Civic Organization / NGO",
-  "Government Agency",
-  "Other (please specify)",
-];
+const SECTORS = REQUEST_SECTORS;
 const PROVINCES = getPhilippineProvinces();
 const AREAS = [
   "Less than 1 hectare",
@@ -148,6 +141,7 @@ const fresh = (p) => ({
   sector: "",
   sectorOther: "",
   requestingAs: "",
+  organizationName: p?.organization || p?.affiliationName || "",
   addressProvince: "",
   addressProvinceOther: "",
   addressMunicipality: "",
@@ -364,7 +358,7 @@ function Radios({ name, value, set, items, ...accessibility }) {
   );
 }
 
-export default function ParticipantSaplingRequestWizard({ currentUser, requesterRole = "participant" }) {
+export default function ParticipantSaplingRequestWizard({ currentUser, requesterRole = "participant", walkIn = false }) {
   const navigate = useNavigate(),
     [params] = useSearchParams(),
     editId = params.get("edit") || "";
@@ -372,7 +366,7 @@ export default function ParticipantSaplingRequestWizard({ currentUser, requester
   const [step, setStep] = useState(1),
     [highestUnlockedStep, setHighestUnlockedStep] = useState(1),
     [completedSteps, setCompletedSteps] = useState(() => new Set()),
-    [form, setForm] = useState(() => fresh(currentUser)),
+    [form, setForm] = useState(() => fresh(walkIn ? {} : currentUser)),
     [inventory, setInventory] = useState([]),
     [sites, setSites] = useState([]),
     [editing, setEditing] = useState(null),
@@ -382,6 +376,8 @@ export default function ParticipantSaplingRequestWizard({ currentUser, requester
     [letterUploadState, setLetterUploadState] = useState("idle"),
     [requestLetterCapability, setRequestLetterCapability] = useState(false),
     [mapValidation, setMapValidation] = useState("pending");
+  const [acknowledgement, setAcknowledgement] = useState(null);
+  const [receiptReference, setReceiptReference] = useState("");
   const formElement = useRef(null);
   const showErrorRef = useRef(showError);
   const submissionId = useRef(crypto.randomUUID());
@@ -390,7 +386,9 @@ export default function ParticipantSaplingRequestWizard({ currentUser, requester
   }, [showError]);
   const requestType = getEffectiveRequestType(form.sector, form.requestingAs);
   const group = requestType === "organization";
-  const purposeOptions = getPurposeOptions(form.sector, form.requestingAs);
+  const sharedPurposes = getPurposeOptions();
+  const legacyPurpose = editing?.workflow?.purpose || editing?.purpose;
+  const purposeOptions = legacyPurpose && !sharedPurposes.includes(legacyPurpose) ? [...sharedPurposes, legacyPurpose] : sharedPurposes;
   const chosenSite = sites.find((x) => x.id === form.existingSiteId);
   const addressMunicipalities = useMemo(
     () => getMunicipalitiesForProvince(form.addressProvince),
@@ -546,19 +544,17 @@ export default function ParticipantSaplingRequestWizard({ currentUser, requester
         setSites(allSites?.data || allSites || []);
         setEditing(request);
         if (request) {
-          const defaultForm = fresh(profile);
+          const defaultForm = fresh(walkIn ? {} : profile);
+          if (walkIn) setReceiptReference(request.walkIn?.receiptReference || "");
           const savedWorkflow = request.workflow || {};
           const savedSector = savedWorkflow.sector || defaultForm.sector;
           // School requests created before the chooser existed were organization
           // requests. Infer that legacy intent only while editing; new School
           // requests still require the participant to choose a type.
           const savedRequestingAs = savedWorkflow.requestingAs ||
-            (savedSector === "School / Student" &&
-              (savedWorkflow.effectiveRequestType === "organization" ||
-                ORGANIZATION_PURPOSES.includes(savedWorkflow.purpose || request.purpose) ||
-                request.eventProposal?.eventName)
-              ? "group" : defaultForm.requestingAs);
-          const allowedPurposes = getPurposeOptions(savedSector, savedRequestingAs);
+            (savedSector === "School / Student" && ["individual", "organization"].includes(savedWorkflow.effectiveRequestType)
+              ? savedWorkflow.effectiveRequestType === "organization" ? "group" : "individual" : "");
+          const allowedPurposes = [...getPurposeOptions(), ...(request.workflow?.purpose ? [request.workflow.purpose] : [])];
           const savedPurpose = savedWorkflow.purpose || request.purpose || "";
           const purpose = allowedPurposes.includes(savedPurpose)
             ? savedPurpose
@@ -596,12 +592,12 @@ export default function ParticipantSaplingRequestWizard({ currentUser, requester
             idNumber: "",
             confirmed: false,
           });
-        } else setForm(fresh(profile));
+        } else setForm(fresh(walkIn ? {} : profile));
       })
       .catch((e) => { if (!cancelled) showErrorRef.current(e.message); })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, [editId]);
+  }, [editId, walkIn]);
   const handleMapValidation = (status) => {
     setMapValidation(status);
     if (status === "valid") {
@@ -615,9 +611,10 @@ export default function ParticipantSaplingRequestWizard({ currentUser, requester
       if (!String(form[k] ?? "").trim()) e[k] = m;
     };
     if (s === 1) {
+      if (group) need("organizationName", "Enter the school or organization name.");
       need("fullName", "Please enter your full name.");
       need("sector", "Please select a sector.");
-      need("contactNumber", "Please enter a valid contact number.");
+      if (!walkIn) need("contactNumber", "Please enter a valid contact number.");
       if (form.contactNumber && !/^(?:\+63|0)9\d{9}$/.test(String(form.contactNumber).replace(/[\s-]/g, "")))
         e.contactNumber = "Please enter a valid contact number.";
       need("addressProvince", "Please select a province.");
@@ -722,6 +719,10 @@ export default function ParticipantSaplingRequestWizard({ currentUser, requester
       if (form.monitoringFrequency === "Other")
         need("monitoringOther", "Specify the monitoring frequency.");
     }
+    if (s === 4 && walkIn) {
+      if (!receiptReference.trim()) e.receiptReference = "Enter the acknowledgement receipt reference.";
+      if (!acknowledgement || attendanceFileError(acknowledgement)) e.acknowledgement = attendanceFileError(acknowledgement) || "Upload the signed acknowledgement.";
+    }
     if (s === 4 && !editing) {
       const identificationErrors = validateIdentificationForm({ ...form, confirmedInformation: true });
       Object.assign(e, identificationErrors);
@@ -788,6 +789,7 @@ export default function ParticipantSaplingRequestWizard({ currentUser, requester
         : `${form.specificLocation}, ${form.siteBarangay}, Bulan, Sorsogon`;
     const workflow = {
       ...form,
+      requestContractVersion: 2,
       effectiveRequestType: requestType,
       addressProvince: form.addressProvince === "Other"
         ? form.addressProvinceOther.trim() : form.addressProvince,
@@ -824,6 +826,7 @@ export default function ParticipantSaplingRequestWizard({ currentUser, requester
     delete workflow.addressProvinceOther;
     delete workflow.addressMunicipalityOther;
     const payload = {
+      ...(walkIn ? { clientSubmissionId: submissionId.current, citizen: { fullName: form.fullName, contactNumber: form.contactNumber, receiptReference } } : {}),
       items: form.trees.map((x) => ({
         inventoryId: x.inventoryId,
         quantity: Number(x.quantity),
@@ -865,10 +868,11 @@ export default function ParticipantSaplingRequestWizard({ currentUser, requester
     const controller = new AbortController();
     const timeoutId = window.setTimeout(() => controller.abort(), 30000);
     try {
-      const submissionBody = group && requestLetterCapability
+      const submissionBody = walkIn || group && requestLetterCapability
         ? (() => {
             const data = new FormData();
             data.append("request", JSON.stringify(payload));
+            if (walkIn && acknowledgement) data.append("acknowledgement", acknowledgement, acknowledgement.name);
             if (form.requestLetter instanceof File) {
               data.append("requestLetter", form.requestLetter, form.requestLetter.name);
             }
@@ -878,8 +882,8 @@ export default function ParticipantSaplingRequestWizard({ currentUser, requester
       if (group && requestLetterCapability) setLetterUploadState("uploading");
       const savedRequest = await api(
         editing
-          ? `/seedling-requests/${encodeURIComponent(editing.id)}/resubmit`
-          : "/seedling-requests",
+          ? walkIn ? `/seedling-requests/walk-in/${encodeURIComponent(editing.id)}/resubmit` : `/seedling-requests/${encodeURIComponent(editing.id)}/resubmit`
+          : walkIn ? "/seedling-requests/walk-in" : "/seedling-requests",
         {
           method: editing ? "PATCH" : "POST",
           body: submissionBody,
@@ -888,7 +892,7 @@ export default function ParticipantSaplingRequestWizard({ currentUser, requester
       );
       const requestReference = savedRequest?.requestNumber || savedRequest?.id;
       if (group && requestLetterCapability) setLetterUploadState("stored");
-      navigate(requesterRole === "staff" ? "/staff/my-requests" : "/participant/my-requests", {
+      navigate(walkIn ? "/staff/requests" : requesterRole === "staff" ? "/staff/my-requests" : "/participant/my-requests", {
         replace: true,
         state: {
           submittedRequestReference: requestReference,
@@ -901,7 +905,7 @@ export default function ParticipantSaplingRequestWizard({ currentUser, requester
       if (group && requestLetterCapability) setLetterUploadState("error");
       if (e.fieldErrors && Object.keys(e.fieldErrors).length) {
         const fields = backendFieldErrors(e, { proposedDate: "activityDate", proposedStartTime: "startTime", proposedEndTime: "endTime", expectedParticipants: "participants", plantingSiteId: "existingSiteId", confirmedInformation: "confirmed" });
-        const fieldStep = { identificationType: 4, idNumber: 4, schoolInstitutionName: 4,
+        const fieldStep = { organizationName: 1, receiptReference: 4, acknowledgement: 4, identificationType: 4, idNumber: 4, schoolInstitutionName: 4,
           requestLetter: 4, confirmed: 4,
           activityDate: 3, startTime: 3, endTime: 3, participants: 3,
           siteBarangay: 3, areaChoice: 3, exactArea: 3, existingSiteId: 3,
@@ -931,7 +935,7 @@ export default function ParticipantSaplingRequestWizard({ currentUser, requester
             <Sprout size={21} />
           </div>
           <div>
-            <h1>{editing ? "Edit Seedling Request" : "Request Seedlings"}</h1>
+            <h1>{editing ? "Edit Seedling Request" : walkIn ? "Encode Walk-in Request" : "Request Seedlings"}</h1>
             <p>Complete the four steps to submit your request.</p>
           </div>
         </div>
@@ -989,16 +993,16 @@ export default function ParticipantSaplingRequestWizard({ currentUser, requester
               </Title>
               <div className="sr-form-grid">
                 <Field fieldKey="fullName" label="Full Name *" error={errors.fullName}>
-                  <input value={form.fullName} readOnly />
+                  <input value={form.fullName} readOnly={!walkIn} onChange={event => walkIn && put("fullName", event.target.value)} />
                 </Field>
                 <div className="sr-address-field-group">
-                <Field fieldKey="sector" label="Sector *" error={errors.sector}>
+                <Field fieldKey="sector" label="Requesting As *" error={errors.sector}>
                   <select
                     value={form.sector}
                     onChange={(e) => put("sector", e.target.value)}
                   >
                     <option value="">Select the group you represent</option>
-                    {SECTORS.map((x) => (
+                    {[...SECTORS, ...(editing?.workflow?.sector === "School / Student" ? ["School / Student"] : [])].map((x) => (
                       <option key={x}>{x}</option>
                     ))}
                   </select>
@@ -1011,7 +1015,7 @@ export default function ParticipantSaplingRequestWizard({ currentUser, requester
                 </div>
                 {REQUEST_TYPE_SELECTABLE_SECTORS.has(form.sector) && (
                   <>
-                    <Field fieldKey="requestingAs" label="Requesting As *" error={errors.requestingAs}>
+                    <Field fieldKey="requestingAs" label="Request Type (Legacy / Other) *" error={errors.requestingAs}>
                       <Radios
                         name="requestingAs"
                         value={form.requestingAs}
@@ -1023,10 +1027,14 @@ export default function ParticipantSaplingRequestWizard({ currentUser, requester
                     </Field>
                   </>
                 )}
-                <Field fieldKey="contactNumber" label="Contact Number *" error={errors.contactNumber}>
-                  <input value={form.contactNumber} readOnly />
+                <Field fieldKey="contactNumber" label={walkIn ? "Available Contact Number (Optional)" : "Contact Number *"} error={errors.contactNumber}>
+                  <input value={form.contactNumber} readOnly={!walkIn} onChange={event => walkIn && put("contactNumber", event.target.value)} />
                 </Field>
               </div>
+              {group && <div className="sr-form-grid">
+                <Field fieldKey="organizationName" label="School / Organization Name *" error={errors.organizationName}><input value={form.organizationName} maxLength={160} onChange={event => put("organizationName", event.target.value)} /></Field>
+                <Field label="Representative Full Name"><input value={form.fullName} readOnly /></Field>
+              </div>}
               <Title>Address Information</Title>
               <div className="sr-form-grid">
                 <div className="sr-address-field-group">
@@ -1663,6 +1671,13 @@ export default function ParticipantSaplingRequestWizard({ currentUser, requester
           )}
           {step === 4 && (
             <>
+              {walkIn && <div className="sr-form-grid">
+                <p className="full-width">Citizen requester and authenticated Staff encoder are recorded separately. No citizen account is created.</p>
+                <Field label="Encoded By"><input value={currentUser?.fullName || currentUser?.name || "MENRO Staff"} readOnly /></Field>
+                <Field fieldKey="receiptReference" label="Acknowledgement Receipt Reference *" error={errors.receiptReference}><input value={receiptReference} maxLength={120} onChange={event => { setReceiptReference(event.target.value); setErrors(current => ({ ...current, receiptReference: event.target.value.trim() ? "" : "Enter the acknowledgement receipt reference." })); }} /></Field>
+                <Field fieldKey="acknowledgement" label="Signed Acknowledgement *" error={errors.acknowledgement}><input type="file" accept=".pdf,.jpg,.jpeg,.png" onChange={event => { setAcknowledgement(event.target.files?.[0] || null); setErrors(current => ({ ...current, acknowledgement: "" })); }} /></Field>
+              </div>}
+
               {group && (
                 <>
                   <div className="participant-supporting-section">

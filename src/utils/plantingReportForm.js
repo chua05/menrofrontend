@@ -9,10 +9,10 @@ export function validatePlantingReportForm(form, { distributions = [], photos = 
   if (!distributions.some(row => String(row.id) === String(form.distributionId) && row.status === "Released")) errors.distributionId = "Select a valid released seedling distribution.";
   if (!form.inventoryId) errors.distributionItemKey = "Select the released seedling species.";
   if (!form.plantingDate) errors.plantingDate = "The planting event needs a valid date.";
-  const quantity = Number(form.quantity);
+  const quantity = form.confirmationMode === "final" ? Number(form.remainingQuantity) - Number(form.leftoverQuantity || 0) : Number(form.quantity);
   const leftover = form.leftoverQuantity == null ? 0 : Number(form.leftoverQuantity);
   if (form.leftoverQuantity === "" || !Number.isSafeInteger(leftover) || leftover < 0) errors.leftoverQuantity = "Enter a nonnegative whole number.";
-  if (!Number.isSafeInteger(quantity) || quantity <= 0) errors.quantity = "Enter a whole number greater than zero.";
+  if (!Number.isSafeInteger(quantity) || (form.confirmationMode === "final" ? quantity < 0 : quantity <= 0)) errors.quantity = "Enter a whole number greater than zero.";
   else if (Number.isFinite(Number(form.remainingQuantity)) && quantity + leftover > Number(form.remainingQuantity)) errors.quantity = `Planted plus leftovers cannot exceed the ${Number(form.remainingQuantity)} seedlings available for reporting.`;
   if (!photos.length) errors.photos = "Add at least one planting evidence photo.";
   else if (photos.length > 10) errors.photos = "A maximum of 10 evidence photos is allowed.";
