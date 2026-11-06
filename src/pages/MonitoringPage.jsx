@@ -1313,7 +1313,7 @@ export default function MonitoringPage() {
       resetForm();
       showSuccess(editingObservation
         ? "Monitoring observation resubmitted for review."
-        : "Your monitoring record was submitted successfully.");
+        : "Monitoring record submitted successfully.");
     } catch (error) {
       console.error(
         "Failed to submit monitoring record:",
@@ -1495,14 +1495,14 @@ export default function MonitoringPage() {
             <FiRefreshCw size={16} />
           </button>
 
-          {isParticipant && (
+          {isStaff && (
             <button
               type="button"
               className="sm-primary-button"
               onClick={openForm}
             >
               <FiPlus size={15} />
-              Monitor Planted Trees
+              Submit Monitoring Record
             </button>
           )}
         </div>
@@ -1971,7 +1971,7 @@ export default function MonitoringPage() {
                   : visibleRecords.length === 0
                   ? isParticipant
                     ? "Your monitoring records will appear here after you submit updates for verified planting reports."
-                    : "Survival monitoring records will appear here once participants submit updates for verified planting reports."
+                    : "Survival monitoring records will appear here after MENRO Staff submit authorized observations."
                   : "Try changing or clearing the current filters."}
               </p>
             </div>
@@ -1999,7 +1999,7 @@ export default function MonitoringPage() {
       </section>
 
       {/* ADD MONITORING RECORD */}
-      {showForm && isParticipant && (
+      {showForm && isStaff && (
         <div className="sm-modal-backdrop">
           <div className="sm-modal">
             <div className="sm-modal-header">

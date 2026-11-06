@@ -522,7 +522,7 @@ function App() {
 
               <Route
                 path="survival-monitoring"
-                element={<MonitoringPage />}
+                element={<Navigate to="../my-planting-reports" replace />}
               />
 
               <Route

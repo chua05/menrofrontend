@@ -268,11 +268,6 @@ const NAVIGATION = {
           icon: FileCheck2,
           to: "/participant/my-planting-reports",
         },
-        {
-          label: "Survival Monitoring",
-          icon: Activity,
-          to: "/participant/survival-monitoring",
-        },
         { label: "Monitoring Information Requests", icon: ClipboardList, to: "/participant/monitoring-information", informationFeature: true },
       ],
     },

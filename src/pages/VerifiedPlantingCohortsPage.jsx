@@ -40,22 +40,37 @@ export default function VerifiedPlantingCohortsPage() {
 
   const selected = useMemo(() => cohorts.find((cohort) => cohort.id === selectedId) || null, [cohorts, selectedId]);
   const target = selected?.samplingPolicySnapshot ? Number(selected.samplingReadiness?.target ?? 0) : Number(selected?.samplingPlan?.provisionalTarget || Math.max(0, Math.ceil(Number(selected?.verifiedPlantedQuantity || 0) * 0.1)));
+  const selectedPlan = selected?.samplingPlan || null;
+  const selectedSamples = selectedPlan?.selectedSamples;
+  const selectedMethod = selectedPlan?.selectionMethod || "documented-manual";
+  const selectedNotes = selectedPlan?.notes || "";
+  const hasSamplingPolicySnapshot = Boolean(selected?.samplingPolicySnapshot);
+  const hasSelectedCohort = Boolean(selected);
 
-  const reload = async () => {
+  const loadCohorts = async () => {
     const data = await api("/verified-planting-cohorts");
-    setCohorts(Array.isArray(data) ? data : []);
+    return Array.isArray(data) ? data : [];
   };
+  const reload = async () => setCohorts(await loadCohorts());
 
-  useEffect(() => { if (enabled) reload().catch((err) => setError(err.message)); }, [enabled]);
   useEffect(() => {
-    if (!selected) return;
-    const plan = selected.samplingPlan;
-    setPlanSamples(plan?.selectedSamples?.length ? plan.selectedSamples : Array.from({ length: selected.samplingPolicySnapshot ? target : target || 1 }, emptyPlanSample));
-    setSelectionMethod(plan?.selectionMethod || "documented-manual");
-    setNotes(plan?.notes || "");
-    setBaselineUnits(plan?.selectedSamples?.map(emptyBaseline) || []);
-    setBaselinePhotos({});
-  }, [selectedId, selected?.samplingPlan?.version, target]);
+    if (!enabled) return undefined;
+    let current = true;
+    loadCohorts().then((data) => { if (current) setCohorts(data); })
+      .catch((err) => { if (current) setError(err.message); });
+    return () => { current = false; };
+  }, [enabled]);
+  useEffect(() => {
+    if (!hasSelectedCohort) return;
+    const frame = window.requestAnimationFrame(() => {
+      setPlanSamples(selectedSamples?.length ? selectedSamples : Array.from({ length: hasSamplingPolicySnapshot ? target : target || 1 }, emptyPlanSample));
+      setSelectionMethod(selectedMethod);
+      setNotes(selectedNotes);
+      setBaselineUnits(selectedSamples?.map(emptyBaseline) || []);
+      setBaselinePhotos({});
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [hasSelectedCohort, selectedId, selectedPlan?.version, selectedSamples, selectedMethod, selectedNotes, hasSamplingPolicySnapshot, target]);
 
   const savePlan = async (submitForApproval) => {
     if (!selected) return;

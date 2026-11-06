@@ -1,5 +1,8 @@
 export const auth = {
-  currentUser: null,
+  get currentUser() {
+    const role = new URLSearchParams(window.location.search).get("role");
+    return role && role !== "unauthenticated" ? { getIdToken: async () => "phase3c-test-token" } : null;
+  },
   authStateReady: async () => {},
   onAuthStateChanged: (callback) => {
     callback(null);

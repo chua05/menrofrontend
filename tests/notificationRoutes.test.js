@@ -39,12 +39,14 @@ test("participant request and report notifications use participant pages", () =>
   );
 });
 
-test("monitoring notifications route to the exact lifecycle and observation", () => {
+test("Staff monitoring notifications open the observation while old Participant links stay on planting reports", () => {
   assert.equal(getNotificationPath({
     relatedRecordType: "monitoring",
     relatedRecordId: "report-1",
     relatedSubrecordId: "observation-1",
-  }, "participant"), "/participant/survival-monitoring?monitoring=report-1&observation=observation-1");
+  }, "staff"), "/staff/survival-monitoring?monitoring=report-1&observation=observation-1");
+  assert.equal(getNotificationPath({ relatedRecordType: "monitoring", relatedRecordId: "monitor-1" },
+    "participant"), "/participant/my-planting-reports");
 });
 
 test("inventory and distribution notifications route to their operational records", () => {
