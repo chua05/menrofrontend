@@ -1,15 +1,29 @@
 import { test, expect } from "@playwright/test";
 
-async function installCameraMocks(page, { accuracy = 50, denied = false, cameras = 2 } = {}) {
-  await page.addInitScript(({ accuracy, denied, cameras }) => {
+async function installCameraMocks(page, { accuracy = 50, readings = [accuracy], denied = false, cameras = 2 } = {}) {
+  await page.addInitScript(({ accuracy, readings, denied, cameras }) => {
     window.acceptanceAccuracy = accuracy;
+    window.acceptanceReadings = readings;
+    window.activeWatches = 0;
     window.trackStops = 0;
     const tracks = () => [{ stop() { window.trackStops += 1; }, getSettings() { return { deviceId: "camera-1" }; } }];
     Object.defineProperty(navigator, "geolocation", { configurable: true, value: {
-      getCurrentPosition(success, failure) {
-        if (denied) failure({ code: 1 });
-        else success({ coords: { latitude: 12.671, longitude: 123.875, accuracy }, timestamp: Date.now() });
+      watchPosition(success, failure) {
+        const id = { stopped: false };
+        window.activeWatches += 1;
+        window.lastWatch = id;
+        window.emitGps = accuracy => { if (!id.stopped) success({ coords: { latitude: 12.671, longitude: 123.875, accuracy }, timestamp: Date.now() }); };
+        if (denied) { setTimeout(() => failure({ code: 1 }), 0); return id; }
+        const readings = [...window.acceptanceReadings];
+        const next = () => {
+          if (id.stopped || !readings.length) return;
+          success({ coords: { latitude: 12.671, longitude: 123.875, accuracy: readings.shift() }, timestamp: Date.now() });
+          setTimeout(next, 20);
+        };
+        setTimeout(next, 20);
+        return id;
       },
+      clearWatch(id) { if (!id.stopped) { id.stopped = true; window.activeWatches -= 1; } },
     } });
     Object.defineProperty(navigator, "mediaDevices", { configurable: true, value: {
       async getUserMedia() { if (denied) throw Object.assign(new Error("denied"), { name: "NotAllowedError" });
@@ -23,8 +37,10 @@ async function installCameraMocks(page, { accuracy = 50, denied = false, cameras
     HTMLMediaElement.prototype.play = async () => {};
     HTMLCanvasElement.prototype.getContext = () => ({ drawImage() {} });
     HTMLCanvasElement.prototype.toBlob = callback => callback(new Blob([new Uint8Array([255, 216, 255, 217])], { type: "image/jpeg" }));
-  }, { accuracy, denied, cameras });
+  }, { accuracy, readings, denied, cameras });
 }
+
+const gpsWatchStarted = page => expect.poll(() => page.evaluate(() => Boolean(window.lastWatch))).toBe(true);
 
 async function continueToPermissions(page) {
   await expect(page.getByText("MENRO needs your camera")).toBeVisible();
@@ -42,12 +58,81 @@ for (const accuracy of [49, 50]) test(`accepts ${accuracy}m, captures, verifies,
   await expect.poll(() => page.evaluate(() => Boolean(window.verifiedCapture))).toBe(true);
 });
 
-test("rejects 51m accuracy and supports retry", async ({ page }) => {
+test("keeps reading GPS while accuracy improves and shows the current value", async ({ page }) => {
+  await installCameraMocks(page, { readings: [] });
+  await page.goto("/tests/e2e/fixtures/camera.html");
+  await continueToPermissions(page);
+  await gpsWatchStarted(page);
+  await expect(page.getByRole("status").filter({ hasText: "Waiting for GPS accuracy" })).toBeVisible();
+  await page.evaluate(() => window.emitGps(120));
+  await expect(page.getByRole("status").filter({ hasText: "120 m" })).toContainText("50 m or better");
+  await expect(page.getByRole("alert")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Capture", exact: true })).toHaveCount(0);
+  await page.evaluate(() => window.emitGps(80));
+  await expect(page.getByRole("status").filter({ hasText: "80 m" })).toBeVisible();
+  await page.evaluate(() => window.emitGps(30));
+  await expect(page.getByText("accuracy 30 m")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Capture", exact: true })).toBeVisible();
+  await expect.poll(() => page.evaluate(() => window.activeWatches)).toBe(0);
+});
+
+test("rejects 51m accuracy after the timeout and retry can succeed", async ({ page }) => {
+  await page.clock.install();
   await installCameraMocks(page, { accuracy: 51 });
   await page.goto("/tests/e2e/fixtures/camera.html");
   await continueToPermissions(page);
+  await gpsWatchStarted(page);
+  await page.clock.runFor(25);
+  await expect(page.getByRole("status").filter({ hasText: "51 m" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Capture", exact: true })).toHaveCount(0);
+  await page.clock.fastForward(61000);
   await expect(page.getByRole("alert")).toContainText("50 m or better");
+  await expect(page.getByRole("alert")).toContainText("Best reading was 51 m");
+  await expect.poll(() => page.evaluate(() => window.activeWatches)).toBe(0);
+  await page.evaluate(() => { window.acceptanceReadings = [40]; });
+  await page.evaluate(() => { window.lastWatch = null; });
+  await page.getByRole("button", { name: "Retry" }).click();
+  await gpsWatchStarted(page);
+  await page.clock.runFor(25);
+  await expect(page.getByText("accuracy 40 m")).toBeVisible();
+  await expect(page.getByRole("alert")).toHaveCount(0);
+});
+
+test("blank accuracy is never accepted", async ({ page }) => {
+  await page.clock.install();
+  await installCameraMocks(page, { readings: [null, "", null] });
+  await page.goto("/tests/e2e/fixtures/camera.html");
+  await continueToPermissions(page);
+  await gpsWatchStarted(page);
+  await page.clock.runFor(25);
+  await expect(page.getByRole("status").filter({ hasText: "Waiting for GPS accuracy" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Capture", exact: true })).toHaveCount(0);
+  await page.clock.fastForward(61000);
+  await expect(page.getByRole("alert")).toContainText("not reported");
   await expect(page.getByRole("button", { name: "Retry" })).toBeVisible();
+});
+
+test("cancelling during GPS search stops the watch", async ({ page }) => {
+  await installCameraMocks(page, { readings: [90] });
+  await page.goto("/tests/e2e/fixtures/camera.html");
+  await continueToPermissions(page);
+  await expect(page.getByRole("status").filter({ hasText: "90 m" })).toBeVisible();
+  await page.getByRole("button", { name: "Cancel" }).click();
+  await expect.poll(() => page.evaluate(() => window.cameraCancelled)).toBe(true);
+  await expect.poll(() => page.evaluate(() => window.activeWatches)).toBe(0);
+});
+
+test("the fresh capture fix also waits for acceptable accuracy", async ({ page }) => {
+  await installCameraMocks(page, { readings: [30] });
+  await page.goto("/tests/e2e/fixtures/camera.html");
+  await continueToPermissions(page);
+  await expect(page.getByText("accuracy 30 m")).toBeVisible();
+  await page.evaluate(() => { window.acceptanceReadings = [95, 20]; });
+  await page.getByRole("button", { name: "Capture", exact: true }).click();
+  await expect(page.getByText("accuracy 20 m")).toBeVisible();
+  await page.getByRole("button", { name: "Verify & Use Photo" }).click();
+  await expect.poll(() => page.evaluate(() => window.verifiedCapture?.descriptor?.source)).toBe("browser-camera");
+  expect(await page.evaluate(() => window.verifiedCapture.descriptor.captureSessionId)).toBe("session-1");
 });
 
 test("permission denial is clear and cancel closes without a file picker", async ({ page }) => {

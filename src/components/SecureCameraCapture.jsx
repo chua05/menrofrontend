@@ -1,11 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
+  GPS_ACQUISITION_TIMEOUT_MS,
   MAX_BROWSER_CAMERA_ACCURACY_METERS,
-  isAcceptableBrowserCameraAccuracy,
+  acquirePreciseLocation,
 } from "../utils/cameraCapturePolicy";
 import "../styles/secure-camera-capture.css";
-
-const locationOptions = { enableHighAccuracy: true, timeout: 20000, maximumAge: 0 };
 
 function locationError(error) {
   if (error?.code === 1) return "Location permission was denied. Allow precise location access and try again.";
@@ -31,11 +30,6 @@ async function permissionState(name) {
   catch { return "unknown"; }
 }
 
-const getLocation = () => new Promise((resolve, reject) => {
-  if (!navigator.geolocation) return reject(new Error("UNSUPPORTED_LOCATION"));
-  navigator.geolocation.getCurrentPosition(resolve, reject, locationOptions);
-});
-
 async function digest(file) {
   const bytes = await file.arrayBuffer();
   const value = await crypto.subtle.digest("SHA-256", bytes);
@@ -50,6 +44,7 @@ export default function SecureCameraCapture({ open, request, binding, onVerified
   const requestRef = useRef(request);
   const bindingRef = useRef(binding);
   const diagnosticRef = useRef(onDiagnostic);
+  const acquisitionRef = useRef(null);
   const [status, setStatus] = useState("idle");
   const [error, setError] = useState("");
   const [location, setLocation] = useState(null);
@@ -59,6 +54,7 @@ export default function SecureCameraCapture({ open, request, binding, onVerified
   const [devices, setDevices] = useState([]);
   const [deviceId, setDeviceId] = useState("");
   const [permissionSummary, setPermissionSummary] = useState({ camera: "unknown", location: "unknown" });
+  const [gpsSearch, setGpsSearch] = useState(null);
 
   useEffect(() => { requestRef.current = request; }, [request]);
   useEffect(() => { bindingRef.current = binding; }, [binding]);
@@ -77,6 +73,30 @@ export default function SecureCameraCapture({ open, request, binding, onVerified
     setFile(null);
   }, []);
 
+  const stopLocationSearch = useCallback(() => {
+    acquisitionRef.current?.abort();
+    acquisitionRef.current = null;
+  }, []);
+
+  const searchForLocation = useCallback(async () => {
+    acquisitionRef.current?.abort();
+    const controller = new AbortController();
+    acquisitionRef.current = controller;
+    setGpsSearch({ accuracy: null });
+    try {
+      return await acquirePreciseLocation({ signal: controller.signal,
+        onProgress: next => { if (mountedRef.current && acquisitionRef.current === controller) setGpsSearch(next); } });
+    } finally {
+      if (acquisitionRef.current === controller) acquisitionRef.current = null;
+      if (mountedRef.current) setGpsSearch(null);
+    }
+  }, []);
+
+  const reportTimedOutLocation = useCallback(reason => {
+    if (!reason?.gpsTimeout || !reason.bestLocation) return;
+    diagnosticRef.current?.({ status: "low_accuracy", location: reason.bestLocation, message: reason.message });
+  }, []);
+
   const begin = useCallback(async (selectedDeviceId = "") => {
     stopTracks();
     clearPreview();
@@ -92,19 +112,11 @@ export default function SecureCameraCapture({ open, request, binding, onVerified
       setPermissionSummary({ camera: cameraPermission, location: locationPermission });
       if (locationPermission === "denied") throw { code: 1, permission: "location" };
       if (cameraPermission === "denied") throw Object.assign(new Error("Camera permission blocked"), { name: "NotAllowedError" });
-      const position = await getLocation();
+      const position = await searchForLocation();
       if (!mountedRef.current) return;
       const nextLocation = { latitude: position.coords.latitude, longitude: position.coords.longitude,
         accuracy: position.coords.accuracy, capturedAt: new Date(position.timestamp || Date.now()).toISOString() };
       setLocation(nextLocation);
-      if (!isAcceptableBrowserCameraAccuracy(nextLocation.accuracy)) {
-        diagnosticRef.current?.({
-          status: "low_accuracy",
-          location: nextLocation,
-          message: `GPS accuracy is ${Math.round(nextLocation.accuracy || 0)} m; ${MAX_BROWSER_CAMERA_ACCURACY_METERS} m or better is required.`,
-        });
-        throw new Error(`GPS accuracy is ${Math.round(nextLocation.accuracy || 0)} m; ${MAX_BROWSER_CAMERA_ACCURACY_METERS} m or better is required.`);
-      }
       const constraints = { video: selectedDeviceId
         ? { deviceId: { exact: selectedDeviceId } }
         : { facingMode: { ideal: "environment" } }, audio: false };
@@ -121,12 +133,15 @@ export default function SecureCameraCapture({ open, request, binding, onVerified
       setDeviceId(stream.getVideoTracks()[0]?.getSettings?.().deviceId || selectedDeviceId);
       setStatus("ready");
     } catch (reason) {
+      if (reason?.name === "AbortError") return;
       stopTracks();
       setStatus("error");
+      if (reason?.bestLocation) setLocation(reason.bestLocation);
+      reportTimedOutLocation(reason);
       setError(reason?.code ? locationPermissionError(reason) : reason?.name?.includes("Error") && reason.name !== "Error"
         ? cameraError(reason) : reason?.message || "Camera capture could not be started.");
     }
-  }, [clearPreview, stopTracks]);
+  }, [clearPreview, reportTimedOutLocation, searchForLocation, stopTracks]);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -139,17 +154,16 @@ export default function SecureCameraCapture({ open, request, binding, onVerified
         setSession(null);
       });
     }
-    return () => { mountedRef.current = false; stopTracks(); clearPreview(); };
-  }, [open, begin, stopTracks, clearPreview]);
+    return () => { mountedRef.current = false; stopLocationSearch(); stopTracks(); clearPreview(); };
+  }, [open, begin, stopLocationSearch, stopTracks, clearPreview]);
 
   async function capture() {
     setStatus("capturing"); setError("");
     try {
       // A fresh, uncached fix is required for this frame, not the earlier
       // preview location. Server session/accuracy/site validation still applies.
-      const position = await getLocation();
+      const position = await searchForLocation();
       if (!mountedRef.current) return;
-      if (!isAcceptableBrowserCameraAccuracy(position.coords.accuracy)) throw new Error("GPS accuracy must be 50 meters or better. Retake after acquiring precise location.");
       setLocation({ latitude: position.coords.latitude, longitude: position.coords.longitude,
         accuracy: position.coords.accuracy, capturedAt: new Date(position.timestamp).toISOString() });
     const video = videoRef.current;
@@ -163,6 +177,8 @@ export default function SecureCameraCapture({ open, request, binding, onVerified
     const url = URL.createObjectURL(captured);
     previewRef.current = url; setPreview(url); setFile(captured); stopTracks(); setStatus("captured");
     } catch (reason) {
+      if (reason?.name === "AbortError") return;
+      reportTimedOutLocation(reason);
       setError(reason?.code ? locationPermissionError(reason) : reason.message || "Fresh capture location is unavailable.");
       setStatus("ready");
     }
@@ -202,6 +218,9 @@ export default function SecureCameraCapture({ open, request, binding, onVerified
       <p className="secure-camera-status">{location
         ? `Location acquired · accuracy ${Math.round(location.accuracy)} m`
         : "Camera and precise location permission are required."}</p>
+      {gpsSearch && <p className="secure-camera-status" role="status">{gpsSearch.accuracy === null
+        ? "Waiting for GPS accuracy…"
+        : `Current GPS accuracy: ${Math.round(gpsSearch.accuracy)} m.`} {MAX_BROWSER_CAMERA_ACCURACY_METERS} m or better is required. Searching for up to {GPS_ACQUISITION_TIMEOUT_MS / 1000} seconds.</p>}
       {error && <div className="secure-camera-error" role="alert">{error}</div>}
       {status === "idle" && <div className="secure-camera-permission-explanation">
         <p>MENRO needs your camera to capture evidence and your precise location to verify it against the assigned planting site.</p>
@@ -220,12 +239,12 @@ export default function SecureCameraCapture({ open, request, binding, onVerified
         }}>Switch Camera</button>}
         {status === "error" && <button type="button" onClick={() => begin(deviceId)}>Retry</button>}
         {location && ["error", "captured"].includes(status) &&
-          <button type="button" onClick={() => { stopTracks(); onViewLocation?.(); }}>View Detected Location</button>}
-        <button type="button" onClick={() => { stopTracks(); clearPreview(); onCancel(); }}>Cancel</button>
+          <button type="button" onClick={() => { stopLocationSearch(); stopTracks(); onViewLocation?.(); }}>View Detected Location</button>}
+        <button type="button" onClick={() => { stopLocationSearch(); stopTracks(); clearPreview(); onCancel(); }}>Cancel</button>
       </div>
       {status === "error" && (permissionSummary.camera === "denied" || permissionSummary.location === "denied") &&
         <p className="secure-camera-help">After changing the browser or device permission, return here and tap Retry once.</p>}
-      {status === "requesting" && <p>Requesting permissions…</p>}
+      {status === "requesting" && !gpsSearch && <p>Requesting permissions…</p>}
       {status === "verifying" && <p>Verifying image and location…</p>}
     </div>
   </div>;

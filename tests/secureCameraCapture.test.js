@@ -7,13 +7,14 @@ import {
 } from "../src/utils/cameraCapturePolicy.js";
 
 const component = readFileSync(new URL("../src/components/SecureCameraCapture.jsx", import.meta.url), "utf8");
+const policy = readFileSync(new URL("../src/utils/cameraCapturePolicy.js", import.meta.url), "utf8");
 const planting = readFileSync(new URL("../src/pages/PlantingPage.jsx", import.meta.url), "utf8");
 const monitoring = readFileSync(new URL("../src/pages/MonitoringPage.jsx", import.meta.url), "utf8");
 
 test("secure camera requests media and precise location and cleans every track", () => {
   assert.match(component, /mediaDevices\?\.getUserMedia/);
-  assert.match(component, /enableHighAccuracy:\s*true/);
-  assert.match(component, /isAcceptableBrowserCameraAccuracy/);
+  assert.match(policy, /enableHighAccuracy:\s*true/);
+  assert.match(component, /acquirePreciseLocation/);
   assert.match(component, /Continue to Camera &amp; Location/);
   assert.match(component, /navigator\.permissions\?\.query/);
   assert.match(component, /Android Chrome/);

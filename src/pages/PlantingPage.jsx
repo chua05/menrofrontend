@@ -18,7 +18,7 @@ import { validatePlantingReportForm } from "../utils/plantingReportForm";
 import { plantedFromLeftover } from "../utils/plantingQuantity";
 import SecureCameraCapture from "../components/SecureCameraCapture";
 import StaffPlantingReportForm, { ProtectedAttendanceButton } from "../components/StaffPlantingReportForm";
-import { buildEvidenceLocationView } from "../utils/evidenceLocationView";
+import { buildEvidenceLocationView, photoGpsMetadataLabel } from "../utils/evidenceLocationView";
 import { SITE_GPS_TOLERANCE_METERS, buildLocationPreviewStatus, calculateDistanceMeters, getFeatureBarangayName, isPointInBulanBoundary, isPointInPolygon } from "../utils/plantingLocationPreview";
 import PhotoRequirementsDialog from "../components/PhotoRequirementsDialog";
 
@@ -1421,7 +1421,7 @@ export default function PlantingPage() {
     setSelectedLocationPreviewId(preview.id);
     setEvidenceDescriptors(previous => [...previous, descriptor]);
     setCameraLocationDiagnostic(null);
-    if (photoFiles.length === 0) applyPhotoLocation(file, preview);
+    if (!hasGps) applyPhotoLocation(file, preview);
     setCameraOpen(false);
     showPopup("Verified camera evidence was attached successfully.", "success");
   }
@@ -1733,7 +1733,7 @@ export default function PlantingPage() {
       ...previous,
       latitude: String(location.latitude),
       longitude: String(location.longitude),
-      accuracy: location.accuracy || "",
+      accuracy: location.accuracy ?? "",
       locationSource: location.locationSource,
       photoCapturedAt: location.photoCapturedAt || "",
       locationCapturedAt: location.locationCapturedAt || "",
@@ -1757,6 +1757,8 @@ export default function PlantingPage() {
   async function verifyUploadedPhoto(file, preview, options = {}) {
     setSelectedLocationPreviewId(preview.id);
     const applyToForm = options.applyToForm === true;
+    // A failed upload must not remove a location another verified photo supplied.
+    const clearsFormLocation = applyToForm && (!locationPhotoSignature || locationPhotoSignature === getPhotoSignature(file));
     const announce = options.announce !== false;
     updatePhotoPreview(preview.id, {
       verificationStatus: "verifying",
@@ -1775,7 +1777,7 @@ export default function PlantingPage() {
         verificationMessage: UNREADABLE_PHOTO_MESSAGE,
         submissionBlocked: true,
       });
-      if (applyToForm) clearPhotoLocation();
+      if (clearsFormLocation) clearPhotoLocation();
       if (announce) showPopup(UNREADABLE_PHOTO_MESSAGE, "error");
       return { verified: false, message: UNREADABLE_PHOTO_MESSAGE, tone: "error" };
     }
@@ -1792,7 +1794,7 @@ export default function PlantingPage() {
         verificationMessage: UNREADABLE_METADATA_MESSAGE,
         submissionBlocked: true,
       });
-      if (applyToForm) clearPhotoLocation();
+      if (clearsFormLocation) clearPhotoLocation();
       if (announce) showPopup(UNREADABLE_METADATA_MESSAGE, "error");
       return { verified: false, message: UNREADABLE_METADATA_MESSAGE, tone: "error" };
     }
@@ -1821,7 +1823,7 @@ export default function PlantingPage() {
         gpsStatus: gps.status,
         locationSource: PHOTO_EXIF_LOCATION_SOURCE,
       });
-      if (applyToForm) clearPhotoLocation();
+      if (clearsFormLocation) clearPhotoLocation();
       if (announce) showPopup(message, "error");
       return { verified: false, message, tone: "error" };
     }
@@ -3524,11 +3526,7 @@ export default function PlantingPage() {
                   <div className="pr-info-block">
                     <div className="pr-info-label">Photo GPS Metadata</div>
                     <div className="pr-info-value">
-                      {selectedRecord.gpsMetadataPresent === true
-                        ? "Present"
-                        : selectedRecord.gpsMetadataPresent === false
-                        ? "Missing"
-                        : "—"}
+                      {photoGpsMetadataLabel(selectedRecord)}
                     </div>
                   </div>
 

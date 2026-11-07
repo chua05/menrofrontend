@@ -1,4 +1,4 @@
-import { MAX_BROWSER_CAMERA_ACCURACY_METERS } from "./cameraCapturePolicy.js";
+import { isAcceptableBrowserCameraAccuracy } from "./cameraCapturePolicy.js";
 
 export function buildEvidenceLocationView({
   gpsStatus = "missing",
@@ -20,14 +20,27 @@ export function buildEvidenceLocationView({
   if (gpsStatus === "invalid" || !coordinatesValid) {
     return { code: "invalid", label: "Invalid GPS Coordinates", marker: null };
   }
-  const numericAccuracy = Number(accuracy);
   if (gpsStatus === "low_accuracy" ||
-      (evidenceSource === "browser-camera" && Number.isFinite(numericAccuracy) &&
-        numericAccuracy > MAX_BROWSER_CAMERA_ACCURACY_METERS)) {
+      (evidenceSource === "browser-camera" && !isAcceptableBrowserCameraAccuracy(accuracy))) {
     return { code: "low_accuracy", label: "Low GPS Accuracy", marker };
   }
   if (outsideMunicipality || outsideSite) {
     return { code: "outside_site", label: "Outside Planting Site", marker };
   }
   return { code: "valid", label: "Valid", marker };
+}
+
+const VERIFIED_CAPTURE_GPS_LABEL = "Not required — verified camera capture";
+const isVerifiedCapture = evidence => evidence?.evidenceSource === "browser-camera" ||
+  evidence?.locationSource === "Browser Capture Session";
+
+// Camera captures carry a backend-verified location, not EXIF, so only uploads can be missing it.
+export function photoGpsMetadataLabel(record = {}) {
+  const photos = Array.isArray(record.photos) ? record.photos : [];
+  const uploads = photos.filter(photo => !isVerifiedCapture(photo));
+  if (photos.length && !uploads.length) return VERIFIED_CAPTURE_GPS_LABEL;
+  if (!photos.length && isVerifiedCapture(record)) return VERIFIED_CAPTURE_GPS_LABEL;
+  const present = uploads.length ? uploads.every(photo => photo.gpsMetadataPresent === true) : record.gpsMetadataPresent;
+  if (present === true) return "Present";
+  return present === false ? "Missing" : "—";
 }

@@ -859,3 +859,65 @@ for (const [sector, detail, key, requestingAs] of [
   fixture.check();
 });
 
+const noExifImage = { name: "no-exif.png", mimeType: "image/png", buffer: Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+ip1sAAAAASUVORK5CYII=", "base64") };
+async function participantEvidenceForm(page) {
+  const event = { id: "event-1", name: "event-1", type: "Tree Planting", plantingSiteId: site.id, sourceRequestId: "request-1", date: "2026-01-01", startTime: "08:00", status: "Approved", recordStatus: "Authorized" };
+  const release = { id: "release-1", requestId: "release-1", eventId: "event-1", plantingSiteId: site.id, participantId: "test-participant", status: "Released", items: [{ inventoryId: "narra", species: "Narra", releasedQuantity: 5, quantity: 5 }] };
+  const fixture = await setup(page, {
+    "GET /api/events": route => route.fulfill({ json: { success: true, data: [event] } }),
+    "GET /api/distributions/my-distributions": route => route.fulfill({ json: { success: true, data: [release] } }),
+    "POST /api/evidence-capture-sessions": route => route.fulfill({ json: { success: true, data: { captureSessionId: "mixed-session", nonce: "fixture-only" } } }),
+    "POST /api/evidence-capture-sessions/mixed-session/verify": route => route.fulfill({ json: { success: true, data: { verificationId: "verified", imageSha256: "digest", location: { latitude: site.latitude, longitude: site.longitude, accuracy: 12 } } } }),
+  });
+  await page.goto("/participant/my-planting-reports?role=participant");
+  await page.getByRole("button", { name: "Submit Planting Report", exact: true }).click();
+  await page.locator("#planting-barangay").selectOption("Bical"); await page.locator("#planting-siteId").selectOption(site.id);
+  await page.locator("#planting-eventId").selectOption("event-1"); await page.locator("#planting-distributionId").selectOption("release-1");
+  return fixture;
+}
+const takeFixturePhoto = async page => { await page.getByRole("button", { name: "Take Photo", exact: true }).click(); await page.getByRole("button", { name: "Verify fixture camera photo" }).click(); };
+const uploadFailure = page => page.locator(".pr-preview-verification strong").filter({ hasText: "Verification Failed — No GPS Metadata" });
+const cameraEvidence = page => page.locator(".pr-preview-verification strong").filter({ hasText: "Verified Browser Camera Evidence" });
+
+test("Participant upload without EXIF is rejected without touching a verified camera photo", async ({ page }) => {
+  const fixture = await participantEvidenceForm(page);
+  await takeFixturePhoto(page); await expect(cameraEvidence(page)).toHaveCount(1);
+  await page.locator("#planting-photos").setInputFiles(noExifImage);
+  await expect(uploadFailure(page)).toHaveCount(1); await expect(cameraEvidence(page)).toHaveCount(1);
+  const verifyAgain = page.locator(".pr-gps-top").getByRole("button", { name: "Verify Again", exact: true });
+  await expect(verifyAgain).toBeVisible(); await verifyAgain.click();
+  await expect(uploadFailure(page)).toHaveCount(1);
+  await expect(verifyAgain).toBeVisible();
+  await page.getByRole("button", { name: "Remove", exact: true }).last().click();
+  await expect(uploadFailure(page)).toHaveCount(0); await expect(cameraEvidence(page)).toHaveCount(1);
+  await expect(verifyAgain).toBeVisible(); fixture.check();
+});
+
+test("Participant camera photo supplies the location after an earlier upload failed", async ({ page }) => {
+  const fixture = await participantEvidenceForm(page);
+  await page.locator("#planting-photos").setInputFiles(noExifImage);
+  await expect(uploadFailure(page)).toHaveCount(1);
+  await takeFixturePhoto(page); await expect(cameraEvidence(page)).toHaveCount(1);
+  await expect(page.locator(".pr-gps-top").getByRole("button", { name: "Verify Again", exact: true })).toBeVisible();
+  await expect(uploadFailure(page)).toHaveCount(1); fixture.check();
+});
+
+test("Staff upload without EXIF is rejected and a camera photo keeps its capture descriptor", async ({ page }) => {
+  let manifest;
+  const fixture = await staffForm(page, { "PUT /api/planting-reports/official/submission-fixture/photos": (route, request) => {
+    manifest = JSON.parse(/name="evidenceManifest"\r\n\r\n(.*)\r\n/.exec(request.postDataBuffer().toString())[1]);
+    return route.fulfill({ json: { success: true, data: { hasEvidence: true, evidenceVerified: true, evidenceSubmissionId: "submission-fixture" } } });
+  } });
+  await takeFixturePhoto(page);
+  await expect(page.getByText("Backend-verified camera capture", { exact: true })).toBeVisible();
+  await page.locator(".pr-official-dialog input[type=file].pr-file-input").setInputFiles(noExifImage);
+  await page.getByRole("button", { name: "Verify Photo Location", exact: true }).click();
+  await expect(page.getByText(/This original photo has no GPS metadata/)).toBeVisible();
+  await expect(page.getByText("Backend-verified camera capture", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Submit for Admin Verification" }).click();
+  await expect(page.getByText("Add and verify original planting photos for the MENRO Field Report.")).toBeVisible();
+  await page.getByRole("button", { name: "Remove planting photo no-exif.png", exact: true }).click();
+  await page.getByRole("button", { name: "Submit for Admin Verification" }).click();
+  await expect(page.getByRole("dialog", { name: "Submit Official Planting Report" })).toHaveCount(0);
+  expect(manifest).toHaveLength(1); expect(manifest[0].source).toBe("browser-camera"); expect(manifest[0].captureSessionId).toBe("mock-session"); fixture.check();
+});
