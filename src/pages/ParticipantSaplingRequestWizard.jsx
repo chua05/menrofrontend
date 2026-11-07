@@ -379,6 +379,7 @@ export default function ParticipantSaplingRequestWizard({ currentUser, requester
     [mapValidation, setMapValidation] = useState("pending");
   const [acknowledgement, setAcknowledgement] = useState(null);
   const [receiptReference, setReceiptReference] = useState("");
+  const [assistedByName, setAssistedByName] = useState("");
   const formElement = useRef(null);
   const showErrorRef = useRef(showError);
   const submissionId = useRef(crypto.randomUUID());
@@ -548,7 +549,10 @@ export default function ParticipantSaplingRequestWizard({ currentUser, requester
         setEditing(request);
         if (request) {
           const defaultForm = fresh(walkIn ? {} : profile);
-          if (walkIn) setReceiptReference(request.walkIn?.receiptReference || "");
+          if (walkIn) {
+            setReceiptReference(request.walkIn?.receiptReference || "");
+            setAssistedByName(request.walkIn?.assistedByName || "");
+          }
           const savedWorkflow = request.workflow || {};
           const savedSector = savedWorkflow.sector || defaultForm.sector;
           // School requests created before the chooser existed were organization
@@ -614,6 +618,7 @@ export default function ParticipantSaplingRequestWizard({ currentUser, requester
       if (!String(form[k] ?? "").trim()) e[k] = m;
     };
     if (s === 1) {
+      if (walkIn && !assistedByName.trim()) e.assistedByName = "Enter the name of the assisting staff.";
       need("fullName", "Please enter your full name.");
       need("sector", "Please select a sector.");
       if (!isValidPhilippineContactNumber(form.contactNumber)) e.contactNumber = INVALID_CONTACT_NUMBER_MESSAGE;
@@ -821,7 +826,7 @@ export default function ParticipantSaplingRequestWizard({ currentUser, requester
     delete workflow.addressProvinceOther;
     delete workflow.addressMunicipalityOther;
     const payload = {
-      ...(walkIn ? { clientSubmissionId: submissionId.current, citizen: { fullName: form.fullName, contactNumber: form.contactNumber, receiptReference } } : {}),
+      ...(walkIn ? { clientSubmissionId: submissionId.current, citizen: { fullName: form.fullName, contactNumber: form.contactNumber, assistedByName: assistedByName.trim(), receiptReference } } : {}),
       items: form.trees.map((x) => ({
         inventoryId: x.inventoryId,
         quantity: Number(x.quantity),
@@ -900,7 +905,7 @@ export default function ParticipantSaplingRequestWizard({ currentUser, requester
       if (group && requestLetterCapability) setLetterUploadState("error");
       if (e.fieldErrors && Object.keys(e.fieldErrors).length) {
         const fields = backendFieldErrors(e, { proposedDate: "activityDate", proposedStartTime: "startTime", proposedEndTime: "endTime", expectedParticipants: "participants", plantingSiteId: "existingSiteId", confirmedInformation: "confirmed" });
-        const fieldStep = { organizationName: 1, positionInBarangay: 1, schoolName: 1, sectorOther: 1, receiptReference: 4, acknowledgement: 4, identificationType: 4, idNumber: 4, schoolInstitutionName: 4,
+        const fieldStep = { assistedByName: 1, organizationName: 1, positionInBarangay: 1, schoolName: 1, sectorOther: 1, receiptReference: 4, acknowledgement: 4, identificationType: 4, idNumber: 4, schoolInstitutionName: 4,
           requestLetter: 4, confirmed: 4,
           activityDate: 3, startTime: 3, endTime: 3, participants: 3,
           siteBarangay: 3, areaChoice: 3, exactArea: 3, existingSiteId: 3,
@@ -988,7 +993,7 @@ export default function ParticipantSaplingRequestWizard({ currentUser, requester
                 Requester Information
               </Title>
               <div className="sr-form-grid">
-                {walkIn && <Field label="Assisted By"><input readOnly value={currentUser?.fullName || currentUser?.name || "MENRO Staff"} /></Field>}
+                {walkIn && <Field fieldKey="assistedByName" label="Assisted By Staff *" error={errors.assistedByName}><input type="text" value={assistedByName} maxLength={160} placeholder="Name of Staff" onChange={event => { setAssistedByName(event.target.value); setErrors(current => ({ ...current, assistedByName: "" })); }} /></Field>}
                 <Field fieldKey="fullName" label="Full Name *" error={errors.fullName}>
                   <input value={form.fullName} readOnly={!walkIn} onChange={event => walkIn && put("fullName", event.target.value)} />
                 </Field>
@@ -1603,7 +1608,7 @@ export default function ParticipantSaplingRequestWizard({ currentUser, requester
             <>
               {walkIn && <div className="sr-form-grid">
                 <p className="full-width">Citizen requester and authenticated Staff encoder are recorded separately. No citizen account is created.</p>
-                <Field label="Assisted By"><input value={currentUser?.fullName || currentUser?.name || "MENRO Staff"} readOnly /></Field>
+                <Field label="Assisted By Staff"><input value={assistedByName} readOnly /></Field>
                 <Field fieldKey="receiptReference" label="Acknowledgement Receipt Reference *" error={errors.receiptReference}><input value={receiptReference} maxLength={120} onChange={event => { setReceiptReference(event.target.value); setErrors(current => ({ ...current, receiptReference: event.target.value.trim() ? "" : "Enter the acknowledgement receipt reference." })); }} /></Field>
                 <Field fieldKey="acknowledgement" label="Signed Acknowledgement *" error={errors.acknowledgement}><input type="file" accept=".pdf,.jpg,.jpeg,.png" onChange={event => { setAcknowledgement(event.target.files?.[0] || null); setErrors(current => ({ ...current, acknowledgement: "" })); }} /></Field>
               </div>}

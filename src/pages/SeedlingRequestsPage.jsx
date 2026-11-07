@@ -3044,7 +3044,7 @@ useEffect(() => {
                   ].filter(([, value]) => value).map(([label, value]) => (
                     <div className="sr-detail-tree-row" key={label}><span>{label}</span><strong>{value}</strong></div>
                   ))}
-                  {selectedRequest.walkIn && <div className="sr-detail-tree-row"><span>Walk-in Citizen / Encoded By / Receipt</span><strong>{selectedRequest.participantName} / {selectedRequest.walkIn.encodedByName || "Authorized Staff"} / {selectedRequest.walkIn.receiptReference}</strong>{selectedRequest.walkIn.acknowledgement?.storageStatus === "private_v1" && <button type="button" className="sr-secondary-btn" disabled={letterDownloadLoading} onClick={downloadAcknowledgement}>Download Signed Acknowledgement</button>}</div>}
+                  {selectedRequest.walkIn && <div className="sr-detail-tree-row"><span>Walk-in Citizen / Encoded By / Receipt</span><strong>{selectedRequest.participantName} / {selectedRequest.walkIn.assistedByName || selectedRequest.walkIn.encodedByName || "Authorized Staff"} / {selectedRequest.walkIn.receiptReference}</strong>{selectedRequest.walkIn.acknowledgement?.storageStatus === "private_v1" && <button type="button" className="sr-secondary-btn" disabled={letterDownloadLoading} onClick={downloadAcknowledgement}>Download Signed Acknowledgement</button>}</div>}
                   {hasPrivateRequestLetter(selectedRequest) && (
                     <div className="sr-detail-tree-row">
                       <span>Private Request Letter</span>

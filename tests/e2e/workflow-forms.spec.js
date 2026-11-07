@@ -374,7 +374,13 @@ test("Staff opens one assisted form with no requester mode choice and validates 
   await expect(page).toHaveURL(/staff\/request-seedlings/);
   await expect(page.getByRole("radio", { name: "For a Requester", exact: true })).toHaveCount(0);
   await expect(page.getByRole("radio", { name: "For Myself", exact: true })).toHaveCount(0);
-  await expect(page.getByLabel("Assisted By", { exact: true })).toHaveValue("Test User");
+  const assisted = page.getByLabel("Assisted By Staff *", { exact: true });
+  await expect(assisted).toHaveValue(""); await expect(assisted).toHaveAttribute("placeholder", "Name of Staff"); await expect(assisted).not.toHaveAttribute("readonly");
+  await page.getByRole("button", { name: "Next", exact: true }).click();
+  await expect(assisted).toBeFocused(); await expect(page.getByText("Enter the name of the assisting staff.", { exact: true })).toBeVisible();
+  await assisted.fill("   "); await page.getByRole("button", { name: "Next", exact: true }).click();
+  await expect(page.getByText("Enter the name of the assisting staff.", { exact: true })).toBeVisible();
+  await assisted.fill("Maria Santos"); await expect(page.getByText("Enter the name of the assisting staff.", { exact: true })).toHaveCount(0);
   await page.getByRole("button", { name: "Next", exact: true }).click();
   await expect(page.getByLabel("Full Name *", { exact: true })).toBeFocused();
   await page.getByLabel("Full Name *", { exact: true }).fill("Citizen Requester");
@@ -487,19 +493,21 @@ test("Staff walk-in wizard records an actual citizen and signed receipt, not the
   const fixture = await setup(page, {
     "POST /api/seedling-requests/walk-in": (route, request) => {
       const multipart = request.postDataBuffer().toString(); expect(multipart).toContain('name="acknowledgement"');
-      expect(multipart).toContain('"fullName":"Citizen Requester"'); expect(multipart).toContain('"receiptReference":"ACK-WALKIN-1"'); expect(multipart).toContain('"contactNumber":"0917 123 4567"');
+      expect(multipart).toContain('"fullName":"Citizen Requester"'); expect(multipart).toContain('"receiptReference":"ACK-WALKIN-1"'); expect(multipart).toContain('"contactNumber":"0917 123 4567"'); expect(multipart).toContain('"assistedByName":"Maria Santos"');
       encoded = { ...ownRequest(), id: "walkin-1", participantId: "walkin-citizen", participantName: "Citizen Requester", walkIn: { encodedBy: "test-staff", citizenHasAccount: false, receiptReference: "ACK-WALKIN-1" } };
       return route.fulfill({ status: 201, json: { success: true, data: encoded } });
     },
     "GET /api/seedling-requests": route => route.fulfill({ json: { success: true, data: encoded ? [encoded] : [] } }),
   });
   await page.goto("/staff/requests?role=staff"); await page.getByRole("button", { name: "Submit Seedling Request", exact: true }).click();
+  await page.getByLabel("Assisted By Staff *", { exact: true }).fill("Maria Santos");
   await expect(page.getByLabel("Full Name *", { exact: true })).toHaveValue(""); await page.getByLabel("Full Name *", { exact: true }).fill("Citizen Requester");
   await expect(page.getByLabel("Available Contact Number (Optional)")).toHaveCount(0);
   await expect(page.getByLabel("Contact Number *", { exact: true })).toHaveValue("");
   await page.getByLabel("Contact Number *", { exact: true }).fill("0917 123 4567");
   await requester(page, { role: "staff", navigate: false, heading: "Encode Walk-in Request" }); await plantingDetails(page);
-  await expect(page.getByLabel("Assisted By")).toHaveAttribute("readonly");
+  await expect(page.getByLabel("Assisted By Staff", { exact: true })).toHaveValue("Maria Santos");
+  await expect(page.getByLabel("Assisted By Staff", { exact: true })).toHaveAttribute("readonly");
   await page.getByRole("button", { name: "Submit Request", exact: true }).click();
   await expect(page.getByLabel("Acknowledgement Receipt Reference *")).toHaveAttribute("aria-invalid", "true");
   expect(fixture.calls.some(call => call.key === "POST /api/seedling-requests/walk-in")).toBe(false);
@@ -575,8 +583,8 @@ test("Staff assisted identity is the only new request mode and starts blank", as
   const fixture = await setup(page);
   await page.goto("/staff/request-seedlings?role=staff");
   await expect(page.getByRole("radio", { name: "For a Requester", exact: true })).toHaveCount(0);
-  await expect(page.getByLabel("Assisted By", { exact: true })).toHaveValue("Test User");
-  await expect(page.getByLabel("Assisted By", { exact: true })).toHaveAttribute("readonly");
+  await expect(page.getByLabel("Assisted By", { exact: true })).toHaveCount(0);
+  await expect(page.getByLabel("Assisted By Staff *", { exact: true })).toHaveValue("");
   await expect(page.getByLabel("Full Name *", { exact: true })).toHaveValue("");
   await expect(page.getByLabel("Full Name *", { exact: true })).not.toHaveAttribute("readonly");
   await expect(page.getByLabel("Contact Number *", { exact: true })).not.toHaveAttribute("readonly"); fixture.check();
