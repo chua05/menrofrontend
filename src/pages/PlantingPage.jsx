@@ -3196,10 +3196,11 @@ export default function PlantingPage() {
 {formErrors.remarks && <small id="planting-error-remarks" className="pr-field-error" role="alert">{formErrors.remarks}</small>}
                 </section>
                 </fieldset>
+
+                <AttendanceUpload file={attendanceFile} onChange={setAttendanceFile} error={formErrors.attendance} onError={message => setFormErrors(current => ({ ...current, attendance: message }))} disabled={submitting} />
+                {savedParticipantReport && <p role="status">Your report is already saved pending MENRO verification. This action retries only optional attendance.</p>}
               </div>
 
-              <AttendanceUpload file={attendanceFile} onChange={setAttendanceFile} error={formErrors.attendance} onError={message => setFormErrors(current => ({ ...current, attendance: message }))} disabled={submitting} />
-              {savedParticipantReport && <p role="status">Your report is already saved pending MENRO verification. This action retries only optional attendance.</p>}
               <div className="pr-modal-footer">
                 <button
                   type="button"

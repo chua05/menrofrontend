@@ -3,6 +3,7 @@ import AttendanceUpload from "./AttendanceUpload";
 import ModalDialog from "./ModalDialog";
 import { attendanceFileError } from "../utils/attendanceFile";
 import { useEffect, useRef, useState } from "react";
+import { FiFileText } from "react-icons/fi";
 import { authenticatedFetch } from "../services/authenticatedApi";
 import { backendFieldErrors, focusFirstInvalid } from "../utils/formValidation";
 import "../styles/official-planting.css";
@@ -134,8 +135,11 @@ export default function StaffPlantingReportForm({ currentUser, onClose, onSaved,
 
       </fieldset>
       {basis === "menro-field-report" && <OfficialPlantingPhotos key={selected?.requestId || "no-release"} site={selected} photos={photos} onChange={next => { setPhotos(next); photoKey.current = crypto.randomUUID(); }} error={errors.photos} onError={message => setErrors(current => ({ ...current, photos: message }))} disabled={saving || photoSaved || photoRetryBound} />}
-      <fieldset disabled={saving || Boolean(saved)} style={{ border: 0, margin: 0, padding: 0 }}><h3>Additional Information</h3>
-        <label className="pr-field">Remarks<textarea value={remarks} maxLength={2000} {...aria("remarks")} onChange={event => { setRemarks(event.target.value); setErrors(current => ({ ...current, remarks: "" })); submissionKey.current = crypto.randomUUID(); }} />{feedback("remarks")}</label>
+      <fieldset disabled={saving || Boolean(saved)} style={{ border: 0, margin: 0, padding: 0 }}>
+        <section className="pr-section pr-section-last pr-report-additional-section" aria-labelledby="official-additional-heading">
+          <div className="pr-section-header"><h3 id="official-additional-heading"><FiFileText size={15} /> Additional Information</h3></div>
+          <div className="pr-field"><label htmlFor="official-remarks" className="pr-label">Remarks</label><textarea id="official-remarks" className="pr-textarea" value={remarks} maxLength={2000} placeholder="Add notes about the planting activity, if necessary..." {...aria("remarks")} onChange={event => { setRemarks(event.target.value); setErrors(current => ({ ...current, remarks: "" })); submissionKey.current = crypto.randomUUID(); }} />{feedback("remarks")}</div>
+        </section>
       </fieldset>
       <AttendanceUpload file={file} onChange={setFile} error={errors.attendance} onError={message => setErrors(current => ({ ...current, attendance: message }))} disabled={saving} />
       <div className="pr-official-actions"><button type="button" className="pr-secondary-button" onClick={onClose} disabled={saving}>Close</button>{!saved && <button type="button" className="pr-secondary-button" onClick={refresh} disabled={saving}>Refresh Releases</button>}<button type="submit" className="pr-primary-button" disabled={saving || !options.length}>{saving ? "Saving…" : saved ? basis === "menro-field-report" && !photoSaved ? "Upload Evidence for Saved Report" : file ? "Retry Attendance Upload" : "Finish Saved Report" : "Submit for Admin Verification"}</button></div>

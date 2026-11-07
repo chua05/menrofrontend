@@ -112,7 +112,6 @@ export default function OfficialPlantingPhotos({ site, photos, onChange, error, 
       <div className="pr-section-header"><h3 id="official-location-heading"><FiNavigation size={15} /> Photo Location Verification</h3></div>
       <div className="pr-gps-card">
         <div className="pr-gps-top"><div className="pr-gps-title">Location Verification</div><button type="button" className="pr-secondary-button" disabled={disabled || verifying || !photos.length} onClick={verify}>{verifying ? "Reading Photo..." : "Verify Photo Location"}</button></div>
-        <p>Original uploads require readable EXIF GPS and timestamps. Browser camera photos use a backend-verified capture session. MENRO Field Reports require private verified evidence before Admin approval.</p>
         {diagnostic && <p role="alert">{diagnostic.message}</p>}
         {hasGps && <div className="pr-gps-captured">
           {[["Latitude", latitude.toFixed(6)], ["Longitude", longitude.toFixed(6)], ["Source", evidence.sourceLabel],

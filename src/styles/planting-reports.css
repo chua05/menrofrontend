@@ -1548,12 +1548,16 @@ button:disabled {
 .pr-photo-content > .pr-upload-box { width: 100%; box-sizing: border-box; }
 .pr-evidence-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 150px), 1fr)); gap: 12px; margin-top: 14px; min-width: 0; }
 .pr-evidence-grid > div { min-width: 0; overflow-wrap: anywhere; }
-.pr-photo-evidence-section .pr-section-header h3, .pr-photo-location-section .pr-section-header h3 { margin: 0; font: inherit; }
-.pr-official-dialog .pr-location-map { height: 300px; }
+.pr-photo-evidence-section .pr-section-header h3, .pr-photo-location-section .pr-section-header h3, .pr-report-additional-section .pr-section-header h3 { display: inline-flex; align-items: center; gap: 8px; margin: 0; font: inherit; }
+.pr-official-dialog .pr-report-additional-section { margin-top: 20px; }
+.pr-official-dialog label.pr-label { display: block; margin-bottom: 7px; }
+.pr-official-dialog .attendance-upload > label { margin-bottom: 0; }
+.pr-official-dialog textarea.pr-textarea { padding: 12px 13px; font-size: 15px; line-height: 1.6; font-family: inherit; }
+.pr-official-dialog textarea.pr-textarea:not([aria-invalid="true"]) { border-color: #dce3de; }
 .pr-official-dialog .pr-section { min-width: 0; }
 .pr-official-dialog .pr-preview-footer { display: block; }
 .pr-cohort-integration { padding: 12px; margin-bottom: 16px; }
-@media (max-width: 600px) { .pr-photo-actions > button { width: 100%; justify-content: center; } .pr-official-dialog .pr-location-map { height: 260px; } }
+@media (max-width: 600px) { .pr-photo-actions > button { width: 100%; justify-content: center; } }
 
 /* Keep embedded workflow controls inside narrow viewports. */
 .pr-official-dialog .pr-photo-evidence-section, .pr-official-dialog .pr-photo-location-section { border: 1px solid #e1e8e3; border-radius: 12px; padding: 16px; margin-top: 20px; }

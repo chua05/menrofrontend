@@ -757,3 +757,34 @@ test("Staff photo verification shows the participant map and explains Take Photo
   await expect(details.getByText("Valid", { exact: true })).toBeVisible();
   fixture.check();
 });
+
+const remarksStyle = locator => locator.evaluate(node => { const style = getComputedStyle(node); return { border: style.borderTopColor, padding: style.padding, fontSize: style.fontSize, lineHeight: style.lineHeight, minHeight: style.minHeight, placeholder: node.placeholder }; });
+
+test("Staff report headings, remarks and attendance match the Participant form", async ({ page }) => {
+  const fixture = await staffForm(page);
+  await expect(page.getByText(/Original uploads require readable EXIF GPS/)).toHaveCount(0);
+  for (const name of ["Planting Photo Evidence", "Photo Location Verification"]) {
+    const heading = page.getByRole("heading", { name, exact: true });
+    const layout = await heading.evaluate(node => { const icon = node.querySelector("svg").getBoundingClientRect(), range = document.createRange(); range.selectNodeContents(node.lastChild); const text = range.getBoundingClientRect(); return { beside: icon.right <= text.left, centerGap: Math.abs((icon.top + icon.bottom) / 2 - (text.top + text.bottom) / 2) }; });
+    expect(layout.beside).toBe(true); expect(layout.centerGap).toBeLessThanOrEqual(2);
+  }
+  await expect(page.locator(".pr-official-dialog .pr-report-additional-section .pr-section-header svg")).toHaveCount(1);
+  const mapFit = await page.locator(".pr-official-dialog .pr-location-map").evaluate(node => node.closest(".pr-location-map-wrap").clientHeight - node.clientHeight);
+  expect(mapFit).toBe(0);
+  const attendanceGap = async () => page.locator(".attendance-upload").evaluate(node => node.querySelector(".attendance-dropzone").getBoundingClientRect().top - node.querySelector("label").getBoundingClientRect().bottom);
+  const staffAttendanceGap = await attendanceGap();
+  const staffRemarks = await remarksStyle(page.getByLabel("Remarks", { exact: true }));
+  const staffLabel = await page.locator(".pr-official-dialog label.pr-label").evaluate(node => getComputedStyle(node).fontSize);
+  await page.getByRole("button", { name: "Close", exact: true }).last().click();
+  await page.goto("/participant/my-planting-reports?role=participant");
+  await page.getByRole("button", { name: "Submit Planting Report", exact: true }).click();
+  expect(staffRemarks).toEqual(await remarksStyle(page.locator("textarea.pr-textarea")));
+  expect(staffLabel).toBe(await page.locator("label[for='planting-remarks']").evaluate(node => getComputedStyle(node).fontSize));
+  const body = page.locator(".pr-submit-modal-body"), attendance = body.locator(".attendance-upload");
+  await expect(attendance).toHaveCount(1);
+  expect(staffAttendanceGap).toBe(await attendanceGap());
+  const edges = async locator => locator.evaluate(node => { const box = node.getBoundingClientRect(); return { left: box.left, right: box.right }; });
+  expect(await edges(attendance)).toEqual(await edges(page.locator(".pr-report-additional-section")));
+  fixture.check();
+});
+
