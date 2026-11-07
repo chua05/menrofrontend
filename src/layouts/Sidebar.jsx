@@ -78,11 +78,6 @@ const NAVIGATION = {
           icon: Activity,
           to: "/admin/survival-monitoring",
         },
-        {
-          label: "Verified Planting Records",
-          icon: Activity,
-          to: "/admin/verified-planting-cohorts",
-        },
         { label: "Permanent Sample Monitoring", icon: Activity, to: "/admin/permanent-sample-monitoring", cohortFeature: true },
         { label: "Permanent Sample Monitoring Analytics", icon: ChartNoAxesCombined, to: "/admin/permanent-sample-analytics", sampleAnalyticsFeature: true },
       ],
@@ -172,11 +167,6 @@ const NAVIGATION = {
           label: "Survival Monitoring",
           icon: Activity,
           to: "/staff/survival-monitoring",
-        },
-        {
-          label: "Verified Planting Records",
-          icon: Activity,
-          to: "/staff/verified-planting-cohorts",
         },
         { label: "Permanent Sample Monitoring", icon: Activity, to: "/staff/permanent-sample-monitoring", cohortFeature: true },
         { label: "Permanent Sample Monitoring Analytics", icon: ChartNoAxesCombined, to: "/staff/permanent-sample-analytics", sampleAnalyticsFeature: true },

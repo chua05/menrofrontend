@@ -2506,7 +2506,7 @@ export default function DashboardPage() {
         </h1>
       )}
 
-      <ReportingCoveragePanel requests={dashboardRequests} reports={dashboardReports} distributions={dashboardDistributions} />
+      {userRole !== "staff" && <ReportingCoveragePanel requests={dashboardRequests} reports={dashboardReports} distributions={dashboardDistributions} />}
       <div className="dashboard-filter-row">
         {!isParticipant && (
           <select

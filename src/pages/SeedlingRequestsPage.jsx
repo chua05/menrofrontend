@@ -51,7 +51,7 @@ import { downloadPrivateRequestLetter, downloadPrivateWalkInAcknowledgement, has
 
 import "../styles/seedling-requests.css";
 import ParticipantSaplingRequestWizard from "./ParticipantSaplingRequestWizard";
-import { ownsSeedlingRequest } from "../utils/requestOwnership";
+import { ownsSeedlingRequest, canProcessSeedlingRequest } from "../utils/requestOwnership";
 
 
 const TABS = [
@@ -589,6 +589,9 @@ export default function SeedlingRequestsPage() {
   const [loadingSites, setLoadingSites] = useState(false);
 
   const [activeTab, setActiveTab] = useState("all");
+  const [myRequestsOnly, setMyRequestsOnly] = useState(false);
+  const [staffRequestMode, setStaffRequestMode] = useState("assisted");
+  const [staffRequestSubmitting, setStaffRequestSubmitting] = useState(false);
 
   const [searchTerm, setSearchTerm] = useState("");
   const [barangayFilter, setBarangayFilter] =
@@ -870,6 +873,7 @@ useEffect(() => {
     );
 
     return requests.filter((request) => {
+      if (myRequestsOnly && !ownsSeedlingRequest(request, currentUser)) return false;
       if (
         activeConfig?.status &&
         request.status !== activeConfig.status
@@ -961,6 +965,8 @@ useEffect(() => {
     activeTab,
     barangayFilter,
     requestTypeFilter,
+    myRequestsOnly,
+    currentUser,
     dateFrom,
     dateTo,
     searchTerm,
@@ -1598,6 +1604,7 @@ useEffect(() => {
   };
 
   const clearFilters = () => {
+    setMyRequestsOnly(false);
     setSearchTerm("");
     setBarangayFilter("");
     setRequestTypeFilter("");
@@ -1816,13 +1823,15 @@ useEffect(() => {
 
 
   if (userRole === "participant" || (userRole === "staff" && ["/staff/request-seedlings", "/staff/walk-in-requests/new"].includes(location.pathname))) {
-    return (
-      <ParticipantSaplingRequestWizard
-        currentUser={currentUser}
-        requesterRole={userRole}
-        walkIn={location.pathname === "/staff/walk-in-requests/new"}
-      />
-    );
+    const editing = pageSearchParams.has("edit");
+    const assisted = editing ? location.pathname === "/staff/walk-in-requests/new" : staffRequestMode === "assisted";
+    return <>
+      {userRole === "staff" && !editing && <fieldset className="sr-request-mode"><legend>Submit Seedling Request</legend>
+        <label><input type="radio" name="staff-request-mode" disabled={staffRequestSubmitting} checked={assisted} onChange={() => setStaffRequestMode("assisted")} />For a Requester</label>
+        <label><input type="radio" name="staff-request-mode" disabled={staffRequestSubmitting} checked={!assisted} onChange={() => setStaffRequestMode("self")} />For Myself</label>
+      </fieldset>}
+      <ParticipantSaplingRequestWizard key={`${userRole}:${assisted}:${editing}`} currentUser={currentUser} requesterRole={userRole} walkIn={userRole === "staff" && assisted} onSubmittingChange={setStaffRequestSubmitting} />
+    </>;
   }
 
   if (loadingRequests) {
@@ -1849,8 +1858,6 @@ useEffect(() => {
           </div>
         </div>
         {userRole === "staff" && <div className="sr-header-actions">
-          <button type="button" className="sr-secondary-btn" onClick={() => navigate("/staff/my-requests")}>My Requests</button>
-          <button type="button" className="sr-secondary-btn" onClick={() => navigate("/staff/walk-in-requests/new")}>Encode Walk-in Request</button>
           <button type="button" className="sr-primary-btn" onClick={() => navigate("/staff/request-seedlings")}><Plus size={16} /> Submit Seedling Request</button>
         </div>}
 
@@ -2001,6 +2008,8 @@ useEffect(() => {
             placeholder="All Request Types"
             options={REQUEST_TYPES}
           />
+
+          {userRole === "staff" && <label className="sr-filter-btn"><input type="checkbox" checked={myRequestsOnly} onChange={event => { setMyRequestsOnly(event.target.checked); setPage(1); }} />My Requests</label>}
 
           <div
             className="sr-date-filter-wrap"
@@ -3175,7 +3184,7 @@ useEffect(() => {
                   <p>Another authorized MENRO officer must review and process your request.</p>
                   <button type="button" className="sr-secondary-btn" onClick={() => navigate(`/staff/my-requests?request=${encodeURIComponent(selectedRequest.id)}`)}>Manage My Request</button>
                 </div>}
-                {userRole === "staff" && !ownsSeedlingRequest(selectedRequest, currentUser) &&
+                {userRole === "staff" && canProcessSeedlingRequest(selectedRequest, currentUser) &&
                   selectedRequest.status === "Pending Review" && (
                     <>
                       <button
@@ -3197,7 +3206,7 @@ useEffect(() => {
                     </>
                   )}
 
-                {userRole === "admin" && !ownsSeedlingRequest(selectedRequest, currentUser) &&
+                {userRole === "admin" && canProcessSeedlingRequest(selectedRequest, currentUser) &&
                   selectedRequest.status ===
                     "Reviewed" && (
                     <>
@@ -3219,7 +3228,7 @@ useEffect(() => {
                     </>
                   )}
 
-                {userRole === "staff" && !ownsSeedlingRequest(selectedRequest, currentUser) &&
+                {userRole === "staff" && canProcessSeedlingRequest(selectedRequest, currentUser) &&
                   selectedRequest.status === "Approved" && (
                     <button
                       type="button"

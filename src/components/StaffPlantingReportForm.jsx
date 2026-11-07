@@ -28,6 +28,8 @@ export default function StaffPlantingReportForm({ currentUser, onClose, onSaved,
   const photoKey = useRef(crypto.randomUUID());
   const root = useRef(null), submissionKey = useRef(crypto.randomUUID());
   const selected = options.find(row => row.requestId === selectedId);
+  const missingRequired = selected ? ["requesterName", "requestId", "eventId", "siteId", "plantingDate"].filter(key => !String(selected[key] || "").trim()) : [];
+  if (selected && basis === "menro-field-report" && (!Number.isFinite(selected.latitude) || !Number.isFinite(selected.longitude))) missingRequired.push("site coordinates");
   const title = resumeEvidence ? "Add Verified Planting Evidence" : correction ? "Correct Official Planting Report" : "Submit Official Planting Report";
   async function refresh() {
     setLoading(true); setError("");
@@ -67,6 +69,7 @@ export default function StaffPlantingReportForm({ currentUser, onClose, onSaved,
     event.preventDefault(); if (saving) return;
     const validation = {};
     if (!selected) validation.requestId = "Select an authorized released request.";
+    else if (missingRequired.length) validation.requestId = "Required release information is missing. Ask MENRO to correct the linked record before submitting.";
     if (!saved) items.forEach((row, index) => {
       if (!whole(row.leftoverQuantity)) validation[`leftoverQuantity-${index}`] = "Enter a nonnegative whole number.";
       if (basis === "menro-field-report" && !whole(row.quantityPlanted)) validation[`quantityPlanted-${index}`] = "Enter a nonnegative whole number.";
@@ -114,8 +117,10 @@ export default function StaffPlantingReportForm({ currentUser, onClose, onSaved,
         <div className="pr-field"><label htmlFor="official-request">Seedling Release Record *</label><select id="official-request" value={selectedId} onChange={event => choose(event.target.value)} {...aria("requestId")}><option value="">Select a released request</option>{options.map(row => <option key={row.requestId} value={row.requestId}>{row.requesterName} — {row.eventName || row.requestId}</option>)}</select>{feedback("requestId")}</div>
         {nextCursor && <button type="button" className="pr-secondary-button" onClick={more} disabled={loadingMore}>{loadingMore ? "Loading More Releases…" : "Load More Releases"}</button>}
         <div className="pr-official-grid">
-          {[ ["Requester Full Name", selected?.requesterName], ["Participant Sector", selected?.participantSector], ["Request Type", selected?.requestType], ["Planting Event / Activity", selected?.eventName], ["Planting Date / Schedule", [selected?.plantingDate, selected?.startTime, selected?.endTime].filter(Boolean).join(" ")], ["Registered Planting Site", selected?.siteName], ["Barangay", selected?.barangay], ["Site Latitude", selected?.latitude], ["Site Longitude", selected?.longitude], ["Linked Request", selected?.requestNumber || selected?.requestId], ["Linked Distribution", selected?.distributionNumber || selected?.distributionId], ["Submitted By", "MENRO Staff"], ["Staff Name", currentUser?.fullName || currentUser?.name] ].map(([label, value]) => <label key={label}>{label}<input readOnly value={value ?? ""} placeholder="Missing authoritative record data ? MENRO correction required" /></label>)}
+          {[ ["Requester Full Name", selected?.requesterName], ["Participant Sector", selected?.participantSector], ["Requesting As", selected?.requestingAs || selected?.requestType], ["Organization", selected?.organizationName], ["Request Type", selected?.requestType], ["Planting Event / Activity", selected?.eventName], ["Planting Date / Schedule", [selected?.plantingDate, selected?.startTime, selected?.endTime].filter(Boolean).join(" ")], ["Registered Planting Site", selected?.siteName], ["Barangay", selected?.barangay], ["Site Latitude", selected?.latitude], ["Site Longitude", selected?.longitude], ["Linked Request", selected?.requestNumber || selected?.requestId], ["Linked Distribution", selected?.distributionNumber || selected?.distributionId], ["Submitted By", "MENRO Staff"], ["Staff Name", currentUser?.fullName || currentUser?.name] ].map(([label, value]) => <label key={label}>{label}<input readOnly value={selected ? value === null || value === undefined || String(value).trim() === "" ? "Not recorded" : value : ""} placeholder="Auto-filled after selecting a released request" /></label>)}
         </div>
+        {selected && missingRequired.length > 0 && <p role="alert">Required information not recorded: {missingRequired.join(", ")}. An authorized MENRO officer must correct the linked records before submission.</p>}
+        {selected && !missingRequired.length && (!selected.participantSector || !selected.siteName || !selected.barangay) && <p role="status">Some requester or site information is not recorded. Ask an authorized MENRO officer to correct the linked records; the form does not infer missing values.</p>}
         {selected?.reportingPolicy?.reporting === "NOT_REQUIRED" && <p role="status">Released ? No Report Required. This official report is voluntary supporting documentation.</p>}
         <label className="pr-field">Confirmation Basis<select value={basis} {...aria("confirmationBasis")} onChange={event => { setBasis(event.target.value); setErrors({}); submissionKey.current = crypto.randomUUID(); }}><option value="menro-field-report">MENRO Field Report</option>{selected?.requestType === "individual" && <option value="release-based">Individual Release-Based Confirmation</option>}</select>{feedback("confirmationBasis")}</label>
         {basis === "release-based" && <p>Planted quantity is derived by the backend from the remaining released balance, excluding declared leftovers. This is release-based confirmation, not a field observation.</p>}

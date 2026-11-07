@@ -1541,3 +1541,28 @@ button:disabled {
 .pr-page .pr-field, .pr-page .pr-invalid-field, .pr-page [aria-invalid="true"] { scroll-margin-top: 110px; }
 .pr-page .pr-upload-box.pr-invalid-field,
 .pr-page .pr-upload-button button[aria-invalid="true"] { border-color: #d83b3b; }
+
+/* Shared Participant and Staff planting evidence presentation. */
+.pr-photo-actions { display: flex; justify-content: center; flex-wrap: wrap; gap: 12px; }
+.pr-photo-content { min-width: 0; padding: 0 0 16px; }
+.pr-photo-content > .pr-upload-box { width: 100%; box-sizing: border-box; }
+.pr-evidence-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 150px), 1fr)); gap: 12px; margin-top: 14px; min-width: 0; }
+.pr-evidence-grid > div { min-width: 0; overflow-wrap: anywhere; }
+.pr-photo-evidence-section .pr-section-header h3, .pr-photo-location-section .pr-section-header h3 { margin: 0; font: inherit; }
+.pr-official-dialog .pr-location-map { height: 300px; }
+.pr-official-dialog .pr-section { min-width: 0; }
+.pr-official-dialog .pr-preview-footer { display: block; }
+.pr-cohort-integration { padding: 12px; margin-bottom: 16px; }
+@media (max-width: 600px) { .pr-photo-actions > button { width: 100%; justify-content: center; } .pr-official-dialog .pr-location-map { height: 260px; } }
+
+/* Keep embedded workflow controls inside narrow viewports. */
+.pr-official-dialog .pr-photo-evidence-section, .pr-official-dialog .pr-photo-location-section { border: 1px solid #e1e8e3; border-radius: 12px; padding: 16px; margin-top: 20px; }
+.pr-official-dialog .pr-photo-content { padding-bottom: 0; }
+.pr-official-dialog .pr-evidence-grid { grid-template-columns: 1fr; }
+.pr-official-dialog .pr-preview-card { border: 1px solid #e1e8e3; border-radius: 10px; overflow: hidden; background: #fff; }
+.pr-official-dialog .pr-preview-card img { display: block; width: 100%; height: 200px; object-fit: contain; background: #f5f9f6; }
+.pr-official-dialog .pr-preview-footer { padding: 12px; }
+.pr-official-dialog .pr-preview-verification { display: flex; flex-direction: column; gap: 6px; margin: 10px 0; }
+.pr-official-dialog .pr-gps-values { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 150px), 1fr)); gap: 12px; padding: 12px; background: #f5f9f6; border-radius: 8px; }
+.pr-official-dialog .pr-gps-values dt { font-size: 12px; color: #526159; }
+.pr-official-dialog .pr-gps-values dd { margin: 0; overflow-wrap: anywhere; }

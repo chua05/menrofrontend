@@ -1,3 +1,5 @@
+import VerifiedPlantingCohortsPage from "./VerifiedPlantingCohortsPage";
+import { resolveVerifiedPlantingCohortEnabled } from "../utils/verifiedPlantingCohort";
 import PlantingPhotoControls from "../components/PlantingPhotoControls";
 import AttendanceUpload from "../components/AttendanceUpload";
 import ModalDialog from "../components/ModalDialog";
@@ -385,6 +387,7 @@ export default function PlantingPage() {
 
   const [attendanceFile, setAttendanceFile] = useState(null);
   const [savedParticipantReport, setSavedParticipantReport] = useState(null);
+  const [showCohorts, setShowCohorts] = useState(false);
   const isParticipant = userRole === "participant";
   const canReview = ["staff", "admin"].includes(userRole);
 
@@ -401,6 +404,8 @@ export default function PlantingPage() {
   const eventsRequestSequenceRef = useRef(0);
   const noEventsAlertTimerRef = useRef(null);
   const evidenceAttempt = useRef(createEvidenceAttempt());
+  const evidenceContext = useRef(0);
+  const [cameraEpoch, setCameraEpoch] = useState(0);
 
   const [records, setRecords] = useState([]);
   const [sites, setSites] = useState([]);
@@ -1447,6 +1452,7 @@ export default function PlantingPage() {
     selectedSite, form.latitude, form.longitude]);
 
   function resetForm() {
+    evidenceContext.current += 1;
     setAttendanceFile(null); setSavedParticipantReport(null);
     setFormErrors({});
     evidenceAttempt.current.reset();
@@ -1523,10 +1529,12 @@ export default function PlantingPage() {
       return;
     }
     setCameraLocationDiagnostic(null);
+    setCameraEpoch(evidenceContext.current);
     setCameraOpen(true);
   }
 
-  function handleVerifiedCameraCapture({ file, descriptor, location }) {
+  function handleVerifiedCameraCapture({ file, descriptor, location }, capturedEpoch) {
+    if (capturedEpoch !== evidenceContext.current) return;
     if (photoFiles.length >= MAX_EVIDENCE_PHOTOS) {
       setCameraOpen(false);
       showPopup("A maximum of 10 planting evidence photos is allowed.", "error");
@@ -1589,7 +1597,21 @@ export default function PlantingPage() {
     distributionId: form.distributionId,
   }), [form.siteId, form.eventId, form.distributionId]);
 
+  function invalidateBoundEvidence() {
+    evidenceContext.current += 1;
+    setCameraOpen(false);
+    previewUrlsRef.current.forEach(url => URL.revokeObjectURL(url));
+    previewUrlsRef.current = [];
+    activePhotoPreviewIdsRef.current.clear();
+    setPhotoFiles([]); setPhotoPreviews([]); setEvidenceDescriptors([]);
+    setCameraLocationDiagnostic(null); setLocationPhotoSignature(""); setSelectedLocationPreviewId("");
+    setForm(previous => ({ ...previous, latitude: "", longitude: "", accuracy: "", locationSource: "", photoCapturedAt: "", locationCapturedAt: "" }));
+    setFormErrors(previous => ({ ...previous, photos: "" }));
+    evidenceAttempt.current.reset();
+  }
+
   function updateFormField(field, value) {
+    if (field === "barangay") invalidateBoundEvidence();
     setFormErrors(previous => ({ ...previous, [field]: "" }));
     if (field === "barangay") clearNoEventsAlert();
 
@@ -1617,6 +1639,7 @@ export default function PlantingPage() {
   }
 
   function handleDistributionChange(event) {
+    invalidateBoundEvidence();
     setFormErrors(previous => ({ ...previous, distributionId: "", distributionItemKey: "" }));
     const selectedId = event.target.value;
     const distribution = eligibleDistributions.find(
@@ -1693,6 +1716,7 @@ export default function PlantingPage() {
   }
 
   function handleSiteChange(event) {
+    invalidateBoundEvidence();
     setFormErrors(previous => ({ ...previous, siteId: "", eventId: "", plantingDate: "", distributionId: "", distributionItemKey: "", quantity: "" }));
     clearNoEventsAlert();
     const selectedId = event.target.value;
@@ -1743,6 +1767,7 @@ export default function PlantingPage() {
   }
 
   function handleEventChange(event) {
+    invalidateBoundEvidence();
     setFormErrors(previous => ({ ...previous, eventId: "", plantingDate: "", distributionId: "", distributionItemKey: "", quantity: "" }));
     const selectedId = event.target.value;
 
@@ -2592,6 +2617,10 @@ export default function PlantingPage() {
         )}
       </div>
 
+      {!isParticipant && resolveVerifiedPlantingCohortEnabled() && <section className="pr-panel pr-cohort-integration">
+        <button type="button" className="pr-secondary-button" aria-expanded={showCohorts} onClick={() => setShowCohorts(value => !value)}>Verified Planting Cohorts</button>
+        {showCohorts && <VerifiedPlantingCohortsPage embedded view="records" />}
+      </section>}
       <div className="pr-cards">
         <div className="pr-card">
           <div className="pr-card-icon"><FiFileText size={19} /></div>
@@ -3096,32 +3125,14 @@ export default function PlantingPage() {
                             </div>
                           )}
 
-                          <div className={`pr-upload-box ${formErrors.photos ? "pr-invalid-field" : ""}`}>
+                          <div className="pr-photo-content">
 
-
-                    <FiCamera size={27} className="pr-upload-icon" />
-                    <label htmlFor="planting-photos" className="pr-upload-title">Planting evidence photos</label>
-                    <div className="pr-upload-text">
-                      JPG, PNG, or WEBP • Maximum 10 MB each • 1 to 10 photos
-                    </div>
 
                     <PlantingPhotoControls inputId="planting-photos" count={photoFiles.length} max={MAX_EVIDENCE_PHOTOS} disabled={submitting} error={formErrors.photos} onCamera={startCamera} onFiles={files => handlePhotoChange({ target: { files, value: "" } })} />
-                    {formErrors.photos && <small id="planting-error-photos" className="pr-field-error" role="alert">{formErrors.photos}</small>}
 
-                    <div className="pr-helper-text" style={{ marginTop: "10px" }}>
-                      {photoFiles.length} / {MAX_EVIDENCE_PHOTOS} photos selected
-                    </div>
 
                     {photoPreviews.length > 0 && (
-                      <div
-                        style={{
-                          display: "grid",
-                          gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))",
-                          gap: "12px",
-                          width: "100%",
-                          marginTop: "14px",
-                        }}
-                      >
+                      <div className="pr-evidence-grid">
                         {photoPreviews.map((preview, index) => (
                           <div key={preview.id} className="pr-preview-footer" style={{ display: "block" }}>
                             <img
@@ -3158,9 +3169,9 @@ export default function PlantingPage() {
                               {Number.isFinite(Number(preview.distanceMeters)) && (
                                 <span>Distance from Site: {Number(preview.distanceMeters).toFixed(1)} meters</span>
                               )}
-                              {Number.isFinite(Number(preview.accuracy)) && Number(preview.accuracy) >= 0 && (
-                                <span>GPS Accuracy: {Number(preview.accuracy).toFixed(1)} meters</span>
-                              )}
+                              {optionalFiniteNumber(preview.accuracy) !== null && optionalFiniteNumber(preview.accuracy) >= 0 ? (
+                                <span>GPS Accuracy: {optionalFiniteNumber(preview.accuracy).toFixed(1)} meters</span>
+                              ) : <span>GPS Accuracy: Not provided by EXIF</span>}
                               {preview.boundaryRule && (
                                 <span>Boundary Rule: {preview.boundaryRule === "configured-radius"
                                   ? `Configured radius (${preview.boundaryLimitMeters} m)`
@@ -3869,7 +3880,7 @@ export default function PlantingPage() {
         open={cameraOpen}
         request={apiRequest}
         binding={cameraBinding}
-        onVerified={handleVerifiedCameraCapture}
+        onVerified={result => handleVerifiedCameraCapture(result, cameraEpoch)}
         onDiagnostic={handleCameraDiagnostic}
         onViewLocation={() => setCameraOpen(false)}
         onCancel={() => setCameraOpen(false)}
