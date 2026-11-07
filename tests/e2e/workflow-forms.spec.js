@@ -717,7 +717,7 @@ for (const role of ["admin", "staff", "participant"]) for (const width of [320, 
   await setup(page, Object.fromEntries(["/api/seedling-requests", "/api/seedling-requests/my", "/api/seedling-requests/my-requests"].map(path => ["GET " + path, route => route.fulfill({ json: { success: true, data: [request] } })])));
   await page.setViewportSize({ width, height: 900 }); await page.goto("/" + role + "/dashboard?role=" + role);
   await expect(page.locator(".dashboard-kpi-grid")).toBeVisible();
-  if (role === "staff") await expect(page.locator(".reporting-coverage")).toHaveCount(0);
+  if (role !== "participant") await expect(page.locator(".reporting-coverage")).toHaveCount(0);
   else { await expect(page.getByRole("region", { name: "Planting reporting coverage" })).toBeVisible(); await expect(page.locator(".reporting-coverage table")).toContainText(request.requestNumber); }
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
 });
@@ -796,6 +796,20 @@ for (const [role, canAuthor] of [["staff", false], ["admin", true]]) test(`${rol
   await expect(page.locator(".ec-details-footer").getByRole("button", { name: "Close", exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Edit event", exact: true })).toHaveCount(canAuthor ? 1 : 0);
   await expect(page.locator(".ec-event-menu-btn")).toHaveCount(1);
+  fixture.check();
+});
+
+for (const width of [390, 1440]) test(`Admin dashboard has no reporting coverage block or gap at ${width}px`, async ({ page }) => {
+  const request = { ...ownRequest("Released"), reportingPolicy: { reporting: "REQUIRED" }, releasedItems: [{ releasedQuantity: 10 }] };
+  const fixture = await setup(page, { "GET /api/seedling-requests": route => route.fulfill({ json: { success: true, data: [request] } }) });
+  await page.setViewportSize({ width, height: 900 }); await page.goto("/admin/dashboard?role=admin");
+  await expect(page.locator(".dashboard-kpi-grid")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Planting Confirmation and Reporting Coverage" })).toHaveCount(0);
+  await expect(page.locator(".reporting-coverage")).toHaveCount(0);
+  await expect(page.locator(".admin-dashboard > .dashboard-filter-row")).toBeVisible();
+  const firstIsFilters = await page.locator(".admin-dashboard").evaluate(node => node.firstElementChild.classList.contains("dashboard-filter-row"));
+  expect(firstIsFilters).toBe(true);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
   fixture.check();
 });
 
