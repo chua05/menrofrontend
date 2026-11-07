@@ -358,7 +358,7 @@ function Radios({ name, value, set, items, ...accessibility }) {
   );
 }
 
-export default function ParticipantSaplingRequestWizard({ currentUser, requesterRole = "participant", walkIn = false }) {
+export default function ParticipantSaplingRequestWizard({ currentUser, requesterRole = "participant", walkIn = false, onSubmittingChange }) {
   const navigate = useNavigate(),
     [params] = useSearchParams(),
     editId = params.get("edit") || "";
@@ -783,6 +783,7 @@ export default function ParticipantSaplingRequestWizard({ currentUser, requester
       return;
     }
     setSubmitting(true);
+    onSubmittingChange?.(true);
     const location =
       form.siteMode === "existing"
         ? `${chosenSite?.locationDescription || ""}, ${form.siteBarangay}, Bulan, Sorsogon`
@@ -921,6 +922,7 @@ export default function ParticipantSaplingRequestWizard({ currentUser, requester
     } finally {
       window.clearTimeout(timeoutId);
       setSubmitting(false);
+      onSubmittingChange?.(false);
     }
   };
   if (loading)
@@ -935,7 +937,7 @@ export default function ParticipantSaplingRequestWizard({ currentUser, requester
             <Sprout size={21} />
           </div>
           <div>
-            <h1>{editing ? "Edit Seedling Request" : walkIn ? "Encode Walk-in Request" : "Request Seedlings"}</h1>
+            <h1>{editing ? "Edit Seedling Request" : requesterRole === "staff" ? "Submit Seedling Request" : "Request Seedlings"}</h1>
             <p>Complete the four steps to submit your request.</p>
           </div>
         </div>
@@ -988,10 +990,11 @@ export default function ParticipantSaplingRequestWizard({ currentUser, requester
         >
           {step === 1 && (
             <>
-              <Title help="Your account information is used for this request.">
+              <Title help={walkIn ? "Enter the actual citizen or organization requester. Your Staff account is recorded as the assisting officer." : "Your account information is used for this request."}>
                 Requester Information
               </Title>
               <div className="sr-form-grid">
+                {walkIn && <Field label="Assisted By"><input readOnly value={currentUser?.fullName || currentUser?.name || "MENRO Staff"} /></Field>}
                 <Field fieldKey="fullName" label="Full Name *" error={errors.fullName}>
                   <input value={form.fullName} readOnly={!walkIn} onChange={event => walkIn && put("fullName", event.target.value)} />
                 </Field>
@@ -1673,7 +1676,7 @@ export default function ParticipantSaplingRequestWizard({ currentUser, requester
             <>
               {walkIn && <div className="sr-form-grid">
                 <p className="full-width">Citizen requester and authenticated Staff encoder are recorded separately. No citizen account is created.</p>
-                <Field label="Encoded By"><input value={currentUser?.fullName || currentUser?.name || "MENRO Staff"} readOnly /></Field>
+                <Field label="Assisted By"><input value={currentUser?.fullName || currentUser?.name || "MENRO Staff"} readOnly /></Field>
                 <Field fieldKey="receiptReference" label="Acknowledgement Receipt Reference *" error={errors.receiptReference}><input value={receiptReference} maxLength={120} onChange={event => { setReceiptReference(event.target.value); setErrors(current => ({ ...current, receiptReference: event.target.value.trim() ? "" : "Enter the acknowledgement receipt reference." })); }} /></Field>
                 <Field fieldKey="acknowledgement" label="Signed Acknowledgement *" error={errors.acknowledgement}><input type="file" accept=".pdf,.jpg,.jpeg,.png" onChange={event => { setAcknowledgement(event.target.files?.[0] || null); setErrors(current => ({ ...current, acknowledgement: "" })); }} /></Field>
               </div>}

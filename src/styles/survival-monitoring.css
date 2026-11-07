@@ -1796,3 +1796,5 @@
   position: relative;
   z-index: 0;
 }
+
+.sm-secondary-button.sm-cohort-toggle { max-width: 100%; min-width: 0; white-space: normal; overflow-wrap: anywhere; height: auto; text-align: center; }

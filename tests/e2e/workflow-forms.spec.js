@@ -31,7 +31,7 @@ async function setup(page, overrides = {}) {
 }
 async function requester(page, { role = "participant", navigate = true, heading = "Request Seedlings" } = {}) {
   if (navigate) await page.goto(`/${role}/request-seedlings?role=${role}`);
-  await expect(page.getByRole("heading", { name: heading, exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: role === "staff" ? "Submit Seedling Request" : heading, exact: true })).toBeVisible();
   await page.getByLabel("Requesting As *", { exact: true }).selectOption("Resident / Individual");
   await page.getByLabel("Province *", { exact: true }).selectOption("Sorsogon");
   await page.getByLabel("Municipality / City *", { exact: true }).selectOption("Bulan");
@@ -367,14 +367,15 @@ const ownRequest = (status = "Pending", owner = "test-staff") => ({
 });
 
 test("Staff opens the shared accessible four-step wizard and submits their own request to My Requests", async ({ page }) => {
-  let saved;
+  let saved, finishSubmission;
   const fixture = await setup(page, {
     "GET /api/auth/profile": route => route.fulfill({ json: { success: true, data: { uid: "test-staff", fullName: "Staff Requester", contactNumber: "09123456789", province: "Sorsogon", municipality: "Bulan", barangay: "Bical" } } }),
-    "POST /api/seedling-requests": (route, request) => {
+    "POST /api/seedling-requests": async (route, request) => {
       const body = request.postDataJSON();
       expect(body).not.toHaveProperty("participantId"); expect(body).not.toHaveProperty("status");
       expect(body.workflow.fullName).toBe("Staff Requester");
       saved = { ...ownRequest(), ...body, id: "staff-own-request", requestNumber: "REQ-2099-001", participantId: "test-staff", status: "Pending" };
+      await new Promise(resolve => { finishSubmission = resolve; });
       return route.fulfill({ status: 201, json: { success: true, data: saved } });
     },
     "GET /api/seedling-requests/my": route => route.fulfill({ json: { success: true, data: saved ? [saved] : [] } }),
@@ -382,6 +383,7 @@ test("Staff opens the shared accessible four-step wizard and submits their own r
   await page.goto("/staff/requests?role=staff");
   const trigger = page.getByRole("button", { name: "Submit Seedling Request", exact: true }); await trigger.focus(); await page.keyboard.press("Enter");
   await expect(page).toHaveURL(/staff\/request-seedlings/);
+  await page.getByRole("radio", { name: "For Myself", exact: true }).check();
   await expect(page.getByLabel("Full Name *", { exact: true })).toHaveValue("Staff Requester");
   await expect(page.getByLabel("Full Name *", { exact: true })).toHaveAttribute("readonly");
   await expect(page.getByLabel("Contact Number *", { exact: true })).toHaveAttribute("readonly");
@@ -390,6 +392,9 @@ test("Staff opens the shared accessible four-step wizard and submits their own r
   await requester(page, { role: "staff", navigate: false }); await plantingDetails(page);
   await expect(page.getByText("Review Your Request", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Submit Request", exact: true }).click();
+  await expect.poll(() => typeof finishSubmission).toBe("function");
+  await expect(page.getByRole("radio", { name: "For a Requester", exact: true })).toBeDisabled();
+  finishSubmission();
   await expect(page).toHaveURL(/staff\/my-requests/); await expect(page.getByText("REQ-2099-001", { exact: true }).first()).toBeVisible();
   expect(saved.workflow.exactArea).toBe("0.5"); expect(saved.eventProposal.latitude).toBe(site.latitude);
   expect(fixture.calls.filter(call => call.key === "POST /api/seedling-requests")).toHaveLength(1); fixture.check();
@@ -500,11 +505,11 @@ test("Staff walk-in wizard records an actual citizen and signed receipt, not the
     },
     "GET /api/seedling-requests": route => route.fulfill({ json: { success: true, data: encoded ? [encoded] : [] } }),
   });
-  await page.goto("/staff/requests?role=staff"); await page.getByRole("button", { name: "Encode Walk-in Request", exact: true }).click();
+  await page.goto("/staff/requests?role=staff"); await page.getByRole("button", { name: "Submit Seedling Request", exact: true }).click();
   await expect(page.getByLabel("Full Name *", { exact: true })).toHaveValue(""); await page.getByLabel("Full Name *", { exact: true }).fill("Citizen Requester");
   await expect(page.getByLabel("Available Contact Number (Optional)")).toHaveValue("");
   await requester(page, { role: "staff", navigate: false, heading: "Encode Walk-in Request" }); await plantingDetails(page);
-  await expect(page.getByLabel("Encoded By")).toHaveAttribute("readonly");
+  await expect(page.getByLabel("Assisted By")).toHaveAttribute("readonly");
   await page.getByRole("button", { name: "Submit Request", exact: true }).click();
   await expect(page.getByLabel("Acknowledgement Receipt Reference *")).toHaveAttribute("aria-invalid", "true");
   expect(fixture.calls.some(call => call.key === "POST /api/seedling-requests/walk-in")).toBe(false);
@@ -573,4 +578,153 @@ test("Staff proposes Other policy with a reason and Admin makes the versioned fi
   await page.getByRole("button", { name: "Confirm Approval", exact: true }).click(); await expect(page.getByText("A policy decision reason is required.", { exact: true })).toBeVisible();
   await adminPolicy.getByLabel("Policy Decision Reason").fill("Admin confirms the documented reporting and monitoring requirement"); await page.getByRole("button", { name: "Confirm Approval", exact: true }).click();
   await expect(page.getByRole("button", { name: "Confirm Approval", exact: true })).toHaveCount(0); expect(request.status).toBe("Approved"); fixture.check();
+});
+
+
+test("Staff defaults to assisted identity and safely switches to explicit personal mode", async ({ page }) => {
+  const fixture = await setup(page);
+  await page.goto("/staff/request-seedlings?role=staff");
+  await expect(page.getByRole("radio", { name: "For a Requester", exact: true })).toBeChecked();
+  await expect(page.getByLabel("Assisted By", { exact: true })).toHaveValue("Test User");
+  await expect(page.getByLabel("Assisted By", { exact: true })).toHaveAttribute("readonly");
+  await page.getByLabel("Full Name *", { exact: true }).fill("Actual Citizen");
+  await page.getByRole("radio", { name: "For Myself", exact: true }).check();
+  await expect(page.getByLabel("Full Name *", { exact: true })).toHaveValue("Workflow User");
+  await expect(page.getByLabel("Full Name *", { exact: true })).toHaveAttribute("readonly");
+  await page.getByRole("radio", { name: "For a Requester", exact: true }).check();
+  await expect(page.getByLabel("Full Name *", { exact: true })).toHaveValue(""); fixture.check();
+});
+
+test("My Requests ownership filter combines with Replacement without including assisted citizens", async ({ page }) => {
+  const records = [
+    { ...ownRequest(), id: "mine-new", requestNumber: "REQ-2099-101", requestType: "New Planting" },
+    { ...ownRequest(), id: "mine-replacement", requestNumber: "REQ-2099-102", requestType: "Replacement" },
+    { ...ownRequest("Pending", "citizen"), id: "assisted", requestNumber: "REQ-2099-103", requestType: "Replacement", walkIn: { encodedBy: "test-staff" } },
+  ];
+  const fixture = await setup(page, { "GET /api/seedling-requests": route => route.fulfill({ json: { success: true, data: records } }) });
+  await page.goto("/staff/requests?role=staff");
+  await expect(page.getByRole("button", { name: "Encode Walk-in Request", exact: true })).toHaveCount(0);
+  await expect(page.locator(".sr-header-actions").getByRole("button", { name: "My Requests", exact: true })).toHaveCount(0);
+  await page.getByRole("checkbox", { name: "My Requests", exact: true }).check();
+  await expect(page.getByRole("button", { name: "View details for REQ-2099-103", exact: true })).toHaveCount(0);
+  await page.locator("select").filter({ has: page.locator('option[value="Replacement"]') }).selectOption("Replacement");
+  await expect(page.getByRole("button", { name: "View details for REQ-2099-102", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "View details for REQ-2099-101", exact: true })).toHaveCount(0);
+  await page.getByRole("checkbox", { name: "My Requests", exact: true }).uncheck();
+  await page.getByRole("button", { name: "View details for REQ-2099-103", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Review", exact: true })).toHaveCount(0); fixture.check();
+});
+
+test("official auto-fill starts clean and explains genuinely missing coordinates without inventing them", async ({ page }) => {
+  const fixture = await setup(page, { "GET /api/planting-reports/official/options": route => route.fulfill({ json: { success: true, data: { options: [{ ...releaseOption, latitude: null, participantSector: "" }], nextCursor: null } } }) });
+  await page.goto("/staff/planting-reports?role=staff"); await page.getByRole("button", { name: "Submit Planting Report", exact: true }).click();
+  await expect(page.getByLabel("Requester Full Name", { exact: true })).toHaveAttribute("placeholder", "Auto-filled after selecting a released request");
+  await expect(page.getByText(/Missing authoritative record data/)).toHaveCount(0);
+  await page.getByLabel("Seedling Release Record *").selectOption("released-request");
+  await expect(page.getByLabel("Site Latitude", { exact: true })).toHaveValue("Not recorded");
+  await expect(page.getByLabel("Participant Sector", { exact: true })).toHaveValue("Not recorded");
+  await expect(page.getByText(/Required information not recorded: site coordinates/)).toBeVisible();
+  await expect(page.getByRole("button", { name: "Take Photo", exact: true })).toBeDisabled(); fixture.check();
+});
+
+for (const width of [390, 1440]) test(`Staff dashboard preserves cards without reporting block at ${width}px`, async ({ page }) => {
+  const request = { ...ownRequest("Released"), reportingPolicy: { reporting: "REQUIRED" }, releasedItems: [{ releasedQuantity: 10 }] };
+  const fixture = await setup(page, { "GET /api/seedling-requests": route => route.fulfill({ json: { success: true, data: [request] } }) });
+  await page.setViewportSize({ width, height: 900 }); await page.goto("/staff/dashboard?role=staff");
+  await expect(page.locator(".dashboard-kpi-grid")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Planting Confirmation and Reporting Coverage" })).toHaveCount(0);
+  const overflow = await page.evaluate(() => ({ width: window.innerWidth, scroll: document.documentElement.scrollWidth, offenders: [...document.querySelectorAll("body *")].map(node => ({ tag: node.tagName, cls: node.className?.baseVal ?? node.className, right: node.getBoundingClientRect().right, width: node.getBoundingClientRect().width })).filter(row => row.right > window.innerWidth + 1).slice(0, 20) }));
+  await page.screenshot({ path: test.info().outputPath(`staff-dashboard-${width}.png`) });
+  expect(overflow.scroll, JSON.stringify(overflow)).toBeLessThanOrEqual(overflow.width);
+  await page.screenshot({ path: test.info().outputPath(`staff-dashboard-${width}.png`) }); fixture.check();
+});
+
+for (const role of ["staff", "admin"]) test(`${role} accesses verified records inside reports and sampling inside monitoring`, async ({ page }) => {
+  const cohort = { id: "VPC-fixture", verifiedPlantedQuantity: 10, source: { plantingReportId: "report-1", siteId: "site-1" }, samplingPolicySnapshot: { percentage: 10 }, samplingReadiness: { target: null, pending: ["approved minimum"] }, samplingPlan: { status: "DRAFT", version: 0 } };
+  const fixture = await setup(page, { "GET /api/verified-planting-cohorts": route => route.fulfill({ json: { success: true, data: [cohort] } }) });
+  await page.goto(`/${role}/planting-reports?role=${role}`);
+  await page.getByRole("button", { name: "Verified Planting Cohorts", exact: true }).click();
+  await page.getByLabel("Verified cohort", { exact: true }).selectOption(cohort.id);
+  await expect(page.getByRole("heading", { name: "Verified planting record", exact: true })).toBeVisible();
+  await expect(page.getByRole("link", { name: "View source planting report", exact: true })).toHaveAttribute("href", "/" + role + "/planting-reports?report=report-1");
+  await expect(page.getByRole("link", { name: "View registered planting site", exact: true })).toHaveAttribute("href", "/" + role + "/planting-sites?site=site-1");
+  await expect(page.getByRole("heading", { name: "Sampling Plan", exact: true })).toHaveCount(0);
+  await page.getByRole("button", { name: "Open sidebar", exact: true }).click();
+  await expect(page.getByRole("link", { name: "Verified Planting Records", exact: true })).toHaveCount(0);
+  await page.goto(`/${role}/survival-monitoring?role=${role}`);
+  await page.getByRole("button", { name: "Permanent Sample Selection and Baselines", exact: true }).click();
+  await page.getByLabel("Verified cohort", { exact: true }).selectOption(cohort.id);
+  await expect(page.getByText(/MENRO decisions pending: approved minimum/)).toBeVisible();
+  if (role === "staff") await expect(page.getByRole("button", { name: "Submit plan for approval", exact: true })).toBeDisabled();
+  await expect(page.getByRole("button", { name: /Create Visit/ })).toHaveCount(0);
+  fixture.check();
+});
+
+
+test("Participant evidence is invalidated on release, event and site changes", async ({ page }) => {
+  let delayVerification = false, releaseVerification;
+  const events = ["event-1", "event-2"].map(id => ({ id, name: id, type: "Tree Planting", plantingSiteId: site.id, sourceRequestId: "request-1", date: "2026-01-01", startTime: "08:00", status: "Approved", recordStatus: "Authorized" }));
+  const distributions = ["release-1", "release-2", "release-3"].map((id, index) => ({ id, requestId: id, eventId: index === 2 ? "event-2" : "event-1", plantingSiteId: site.id, participantId: "test-participant", status: "Released", items: [{ inventoryId: "narra", species: "Narra", releasedQuantity: 10 }] }));
+  const fixture = await setup(page, {
+    "GET /api/events": route => route.fulfill({ json: { success: true, data: events } }),
+    "GET /api/distributions/my-distributions": route => route.fulfill({ json: { success: true, data: distributions } }),
+    "POST /api/evidence-capture-sessions": (route, request) => { expect(request.postDataJSON().siteId).toBe(site.id); return route.fulfill({ json: { success: true, data: { captureSessionId: "reset-session", nonce: "fixture-only" } } }); },
+    "POST /api/evidence-capture-sessions/reset-session/verify": async route => { if (delayVerification) await new Promise(resolve => { releaseVerification = resolve; }); return route.fulfill({ json: { success: true, data: { verificationId: "verified", imageSha256: "fixture-only", location: { latitude: site.latitude, longitude: site.longitude, accuracy: 5 } } } }); },
+  });
+  await page.goto("/participant/my-planting-reports?role=participant");
+  await page.getByRole("button", { name: "Submit Planting Report", exact: true }).click();
+  await page.locator("#planting-barangay").selectOption("Bical"); await page.locator("#planting-siteId").selectOption(site.id);
+  await page.locator("#planting-eventId").selectOption("event-1"); await page.locator("#planting-distributionId").selectOption("release-1");
+  async function capture() { await page.getByRole("button", { name: "Take Photo", exact: true }).click(); await page.getByRole("button", { name: "Verify fixture camera photo" }).click(); await expect(page.getByText("Verified Browser Camera Evidence", { exact: true })).toBeVisible(); }
+  async function cleared() { await expect(page.getByAltText("Planting evidence preview 1")).toHaveCount(0); await expect(page.getByText(/0 \/ 10 photos selected/)).toBeVisible(); }
+  await capture(); await page.locator("#planting-distributionId").selectOption("release-2"); await cleared();
+  await capture(); await page.locator("#planting-eventId").selectOption("event-2"); await cleared();
+  await page.locator("#planting-distributionId").selectOption("release-3"); await capture(); await page.locator("#planting-siteId").selectOption(""); await cleared();
+  await page.locator("#planting-siteId").selectOption(site.id); await page.locator("#planting-eventId").selectOption("event-1"); await page.locator("#planting-distributionId").selectOption("release-1");
+  delayVerification = true;
+  await page.getByRole("button", { name: "Take Photo", exact: true }).click(); await page.getByRole("button", { name: "Verify fixture camera photo" }).click();
+  await expect.poll(() => typeof releaseVerification).toBe("function");
+  await page.getByRole("dialog", { name: "Secure camera capture", exact: true }).getByRole("button", { name: "Cancel", exact: true }).click();
+  await page.locator("#planting-distributionId").selectOption("release-2"); await page.getByRole("button", { name: "Take Photo", exact: true }).click();
+  const oldResponse = page.waitForResponse(response => response.url().endsWith("/reset-session/verify"));
+  releaseVerification(); await (await oldResponse).finished(); await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+  await expect(page.getByAltText("Planting evidence preview 1")).toHaveCount(0);
+  await page.getByRole("dialog", { name: "Secure camera capture", exact: true }).getByRole("button", { name: "Cancel", exact: true }).click(); fixture.check();
+});
+
+for (const width of [390, 1440]) test(`Staff photo/location sections match Participant layout at ${width}px`, async ({ page }) => {
+  const fixture = await staffForm(page); await page.setViewportSize({ width, height: 900 });
+  await expect(page.locator(".pr-photo-evidence-section")).toBeVisible(); await expect(page.locator(".pr-photo-location-section")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Take Photo", exact: true })).toHaveCount(1);
+  await expect(page.getByRole("button", { name: "Upload Existing Photos", exact: true })).toHaveCount(1);
+  const metrics = await page.locator(".pr-photo-actions").evaluate(node => ({ align: getComputedStyle(node).justifyContent, right: node.getBoundingClientRect().right }));
+  expect(metrics.align).toBe("center"); expect(metrics.right).toBeLessThanOrEqual(width);
+  await expect(page.locator(".pr-photo-location-section .leaflet-control-zoom-in")).toBeVisible();
+  await page.locator(".pr-photo-evidence-section").screenshot({ path: test.info().outputPath(`staff-evidence-${width}.png`) });
+  await page.locator(".pr-photo-location-section").screenshot({ path: test.info().outputPath(`staff-location-${width}.png`) }); fixture.check();
+});
+
+
+test("disabled cohort gate hides integrated actions and preserves safe bookmarked-route denial", async ({ page }) => {
+  const fixture = await setup(page); await page.addInitScript(() => { window.__PHASE3C_GATE_ENABLED__ = "false"; });
+  await page.goto("/staff/planting-reports?role=staff"); await expect(page.getByRole("button", { name: "Verified Planting Cohorts", exact: true })).toHaveCount(0);
+  await page.goto("/staff/survival-monitoring?role=staff"); await expect(page.getByRole("button", { name: "Permanent Sample Selection and Baselines", exact: true })).toHaveCount(0);
+  await page.goto("/staff/verified-planting-cohorts?role=staff"); await expect(page.getByText("Verified planting cohort sampling is not available in this environment.", { exact: true })).toBeVisible();
+  await expect(page.getByLabel("Verified cohort", { exact: true })).toHaveCount(0); fixture.check();
+});
+
+for (const role of ["admin", "staff", "participant"]) for (const width of [320, 360, 390, 430, 768, 1440]) test(role + " populated coverage stays within " + width + "px", async ({ page }) => {
+  const request = { ...ownRequest("Released", role === "participant" ? "test-participant" : "test-staff"), reportingPolicy: { reporting: "REQUIRED" }, releasedItems: [{ releasedQuantity: 10 }] };
+  await setup(page, Object.fromEntries(["/api/seedling-requests", "/api/seedling-requests/my", "/api/seedling-requests/my-requests"].map(path => ["GET " + path, route => route.fulfill({ json: { success: true, data: [request] } })])));
+  await page.setViewportSize({ width, height: 900 }); await page.goto("/" + role + "/dashboard?role=" + role);
+  await expect(page.locator(".dashboard-kpi-grid")).toBeVisible();
+  if (role === "staff") await expect(page.locator(".reporting-coverage")).toHaveCount(0);
+  else { await expect(page.getByRole("region", { name: "Planting reporting coverage" })).toBeVisible(); await expect(page.locator(".reporting-coverage table")).toContainText(request.requestNumber); }
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+});
+test("sampling action wraps at 320px without clipping", async ({ page }) => {
+  await setup(page); await page.setViewportSize({ width: 320, height: 900 }); await page.goto("/staff/survival-monitoring?role=staff");
+  const button = page.getByRole("button", { name: "Permanent Sample Selection and Baselines", exact: true });
+  expect(await button.evaluate(node => getComputedStyle(node).whiteSpace)).toBe("normal");
+  expect(await button.evaluate(node => node.getBoundingClientRect().right)).toBeLessThanOrEqual(320);
 });

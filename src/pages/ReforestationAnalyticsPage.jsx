@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { FiAlertCircle, FiBarChart2, FiCalendar, FiGrid, FiMapPin, FiPackage, FiShield, FiTrendingUp } from "react-icons/fi";
 import { Bar, BarChart, CartesianGrid, Cell, Line, LineChart, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { useAuth } from "../context/AuthContext";
 import { authenticatedFetch } from "../services/authenticatedApi";
+import { sampleAnalyticsEnabled } from "../utils/permanentSampleFeatures";
 import AnalyticsSitesMap from "../components/analytics/AnalyticsSitesMap";
 import "../styles/reforestation-analytics.css";
 
@@ -95,6 +96,7 @@ export default function ReforestationAnalyticsPage() {
 
   return <div className="ra-page">
     <div className="ra-header"><div className="ra-heading"><div className="ra-heading-icon"><FiTrendingUp size={21} /></div><div><h1>Reforestation Analytics</h1><p>Monitor reforestation activities, evaluate progress, and identify areas that need attention.</p></div></div></div>
+    {sampleAnalyticsEnabled() && <Link className="inline-block rounded-lg border border-emerald-800 px-3 py-2 text-sm font-semibold text-emerald-900" to={`/${userRole}/permanent-sample-analytics`}>Permanent Sample Monitoring Analytics</Link>}
     {loadError && <div className="ra-error-banner" role="alert"><FiAlertCircle />{loadError}</div>}
     <div className="ra-filter-card">
       <div className="ra-filter-field"><label>Date Range</label><div className="ra-date-range"><FiCalendar size={14} /><input type="date" value={filters.dateFrom} onChange={updateFilter("dateFrom")} /><span>to</span><input type="date" value={filters.dateTo} onChange={updateFilter("dateTo")} /></div></div>

@@ -1,3 +1,5 @@
+import VerifiedPlantingCohortsPage from "./VerifiedPlantingCohortsPage";
+import { resolveVerifiedPlantingCohortEnabled } from "../utils/verifiedPlantingCohort";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createEvidenceAttempt, assertEvidenceComplete } from "../utils/evidenceAttempt";
 import { useSearchParams } from "react-router-dom";
@@ -422,6 +424,7 @@ async function apiRequest(
 }
 
 export default function MonitoringPage() {
+  const [showCohorts, setShowCohorts] = useState(false);
   const evidenceAttempt = useRef(createEvidenceAttempt());
   const [observationType, setObservationType] = useState("official");
   const { userRole, currentUser } = useAuth();
@@ -1469,6 +1472,10 @@ export default function MonitoringPage() {
 
   return (
     <div className="sm-page">
+      {resolveVerifiedPlantingCohortEnabled() && !isParticipant && <section className="cohort-card">
+        <button type="button" className="sm-secondary-button sm-cohort-toggle" aria-expanded={showCohorts} onClick={() => setShowCohorts(value => !value)}>Permanent Sample Selection and Baselines</button>
+        {showCohorts && <VerifiedPlantingCohortsPage embedded view="sampling" />}
+      </section>}
       {/* PAGE HEADER */}
       <div className="sm-header">
         <div className="sm-heading-wrap">
