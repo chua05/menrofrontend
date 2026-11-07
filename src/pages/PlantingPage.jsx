@@ -18,6 +18,8 @@ import { validatePlantingReportForm } from "../utils/plantingReportForm";
 import SecureCameraCapture from "../components/SecureCameraCapture";
 import StaffPlantingReportForm, { ProtectedAttendanceButton } from "../components/StaffPlantingReportForm";
 import { buildEvidenceLocationView } from "../utils/evidenceLocationView";
+import { SITE_GPS_TOLERANCE_METERS, buildLocationPreviewStatus, calculateDistanceMeters, getFeatureBarangayName, isPointInBulanBoundary, isPointInPolygon } from "../utils/plantingLocationPreview";
+import PhotoRequirementsDialog from "../components/PhotoRequirementsDialog";
 
 import {
   FiCamera,
@@ -59,7 +61,6 @@ const API_BASE_URL =
 const MAX_PHOTO_SIZE = 10 * 1024 * 1024;
 const MAX_EVIDENCE_PHOTOS = 10;
 const PLANTING_SUBMISSION_TIMEOUT_MS = 60_000;
-const SITE_GPS_TOLERANCE_METERS = 50;
 const OUTSIDE_SITE_WARNING =
   "The photo location is outside the selected planting site's coverage area. This report may still be submitted for MENRO Staff verification.";
 const SITE_MATCH_MESSAGE =
@@ -267,18 +268,6 @@ function getReportEventStatus(event, now = new Date()) {
   return startsAt && startsAt <= now ? "Completed" : "Upcoming";
 }
 
-function getFeatureBarangayName(feature) {
-  const properties = feature?.properties || {};
-  return (
-    properties.ADM4_EN ||
-    properties.brgy_name ||
-    properties.barangay ||
-    properties.name ||
-    properties.NAME ||
-    ""
-  );
-}
-
 function normalizeBarangayName(value) {
   return String(value || "")
     .trim()
@@ -290,59 +279,8 @@ function normalizeBarangayName(value) {
     .toLowerCase();
 }
 
-function isPointInGeoJsonRing(latitude, longitude, ring) {
-  return isPointInPolygon(
-    latitude,
-    longitude,
-    (ring || []).map((coordinate) => ({ lat: coordinate?.[1], lng: coordinate?.[0] }))
-  );
-}
-
-function isPointInGeoJsonPolygon(latitude, longitude, coordinates) {
-  if (!Array.isArray(coordinates) || coordinates.length === 0) return false;
-  if (!isPointInGeoJsonRing(latitude, longitude, coordinates[0])) return false;
-  return !coordinates.slice(1).some((hole) =>
-    isPointInGeoJsonRing(latitude, longitude, hole)
-  );
-}
-
-function isPointInBulanBoundary(latitude, longitude, geoJson) {
-  if (geoJson?.type !== "FeatureCollection" || !Array.isArray(geoJson.features)) return false;
-  return geoJson.features.some((feature) => {
-    const geometry = feature?.geometry;
-    if (geometry?.type === "Polygon") {
-      return isPointInGeoJsonPolygon(latitude, longitude, geometry.coordinates);
-    }
-    if (geometry?.type === "MultiPolygon") {
-      return geometry.coordinates.some((polygon) =>
-        isPointInGeoJsonPolygon(latitude, longitude, polygon)
-      );
-    }
-    return false;
-  });
-}
-
 function getDistributionReference(distribution) {
   return distribution?.requestNumber || distribution?.distributionNumber || "Released distribution";
-}
-
-function calculateDistanceMeters(lat1, lng1, lat2, lng2) {
-  const toRadians = (value) => (value * Math.PI) / 180;
-  const earthRadiusMeters = 6371000;
-
-  const latitude1 = toRadians(Number(lat1));
-  const latitude2 = toRadians(Number(lat2));
-  const latitudeDelta = toRadians(Number(lat2) - Number(lat1));
-  const longitudeDelta = toRadians(Number(lng2) - Number(lng1));
-
-  const a =
-    Math.sin(latitudeDelta / 2) ** 2 +
-    Math.cos(latitude1) *
-      Math.cos(latitude2) *
-      Math.sin(longitudeDelta / 2) ** 2;
-
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-  return earthRadiusMeters * c;
 }
 
 function getPhotoSignature(file) {
@@ -356,29 +294,6 @@ function canRenderImage(previewUrl) {
     image.onerror = () => resolve(false);
     image.src = previewUrl;
   });
-}
-
-function isPointInPolygon(latitude, longitude, polygon) {
-  if (!Array.isArray(polygon) || polygon.length < 3) return false;
-
-  let inside = false;
-  for (let index = 0, previous = polygon.length - 1; index < polygon.length; previous = index++) {
-    const currentLatitude = Number(polygon[index]?.lat);
-    const currentLongitude = Number(polygon[index]?.lng);
-    const previousLatitude = Number(polygon[previous]?.lat);
-    const previousLongitude = Number(polygon[previous]?.lng);
-
-    if (![currentLatitude, currentLongitude, previousLatitude, previousLongitude].every(Number.isFinite)) {
-      return false;
-    }
-
-    const intersects = currentLatitude > latitude !== previousLatitude > latitude &&
-      longitude < ((previousLongitude - currentLongitude) * (latitude - currentLatitude)) /
-        (previousLatitude - currentLatitude) + currentLongitude;
-    if (intersects) inside = !inside;
-  }
-
-  return inside;
 }
 
 export default function PlantingPage() {
@@ -1337,80 +1252,19 @@ export default function PlantingPage() {
           capturedSiteDistance <= SITE_GPS_TOLERANCE_METERS)
   );
 
-  const locationPreviewStatus = useMemo(() => {
-    if (!form.siteId) {
-      return {
-        type: "waiting",
-        label: "Select a registered planting site first.",
-      };
-    }
-
-    if (!evidenceMapHasGps) {
-      return {
-        type: "waiting",
-        label: primaryLocationPreview?.verificationLabel || (photoFiles.length === 0
-          ? "Upload or take a photo first."
-          : "Photo GPS metadata is unavailable."),
-      };
-    }
-
-    if (primaryLocationPreview?.gpsStatus === "low_accuracy") {
-      return {
-        type: "flagged",
-        label: `Low GPS Accuracy — ${Math.round(evidenceMapAccuracy)} m reported; 50 m or better is required.`,
-      };
-    }
-
-    if (municipalityScopeStatus === "checking") {
-      return { type: "waiting", label: "Checking Municipality of Bulan boundary..." };
-    }
-
-    if (municipalityScopeStatus === "outside") {
-      return { type: "flagged", label: "Outside Municipality of Bulan" };
-    }
-
-    if (
-      siteCoverageRadiusMeters !== null &&
-      capturedSiteDistance !== null &&
-      capturedSiteDistance <= siteCoverageRadiusMeters
-    ) {
-      return {
-        type: "valid",
-        label: `Within registered site coverage (${capturedSiteDistance.toFixed(1)} m from center; ${siteCoverageRadiusMeters} m radius).`,
-      };
-    }
-
-    if (capturedInsideSitePolygon === true) {
-      return {
-        type: "valid",
-        label: "Photo location is inside the legacy registered site boundary.",
-      };
-    }
-
-    if (siteCoverageRadiusMeters === null && capturedInsideSitePolygon === null && capturedSiteDistance !== null &&
-        capturedSiteDistance <= SITE_GPS_TOLERANCE_METERS) {
-      return {
-        type: "valid",
-        label: `Within registered site tolerance (${capturedSiteDistance.toFixed(1)} m away).`,
-      };
-    }
-
-    if (capturedInsideSitePolygon === null && capturedSiteDistance === null) {
-      return {
-        type: "warning",
-        label: "Unable to compare GPS with the registered site coordinates.",
-      };
-    }
-
-    return {
-      type: "warning",
-      label: siteCoverageRadiusMeters !== null
-        ? `Photo location is ${capturedSiteDistance.toFixed(1)} m from the site center and outside its ${siteCoverageRadiusMeters} m coverage.`
-        : capturedInsideSitePolygon === false
-          ? "Photo location is outside the legacy registered site boundary."
-          : `Photo location is ${capturedSiteDistance.toFixed(1)} m from the registered site.`,
-    };
-  }, [form.siteId, evidenceMapHasGps, evidenceMapAccuracy, municipalityScopeStatus,
+  const locationPreviewStatus = useMemo(() => buildLocationPreviewStatus({
+    hasSite: Boolean(form.siteId),
+    hasGps: evidenceMapHasGps,
+    waitingLabel: primaryLocationPreview?.verificationLabel || (photoFiles.length === 0
+      ? "Upload or take a photo first."
+      : "Photo GPS metadata is unavailable."),
+    gpsStatus: primaryLocationPreview?.gpsStatus,
+    accuracy: evidenceMapAccuracy,
+    municipalityStatus: municipalityScopeStatus,
+    distanceMeters: capturedSiteDistance,
+    radiusMeters: siteCoverageRadiusMeters,
+    insidePolygon: capturedInsideSitePolygon,
+  }), [form.siteId, evidenceMapHasGps, evidenceMapAccuracy, municipalityScopeStatus,
     capturedSiteDistance, capturedInsideSitePolygon, siteCoverageRadiusMeters,
     photoFiles.length, primaryLocationPreview]);
 
@@ -3374,39 +3228,7 @@ export default function PlantingPage() {
       )}
 
       {showPhotoRequirements && (
-        <ModalDialog label="Photo Verification Requirements" onClose={() => setShowPhotoRequirements(false)}>
-        <div className="pr-requirements-backdrop" role="presentation">
-          <div
-            className="pr-requirements-dialog"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="photo-requirements-title"
-          >
-            <button
-              type="button"
-              className="pr-requirements-close"
-              onClick={() => setShowPhotoRequirements(false)}
-              aria-label="Close photo verification requirements"
-            >
-              <FiX size={18} />
-            </button>
-            <h2 id="photo-requirements-title">Photo Verification Requirements</h2>
-            <ul>
-              <li><FiCheckCircle /> Turn ON your phone&apos;s Location/GPS.</li>
-              <li><FiCheckCircle /> Enable location tags in Camera settings.</li>
-              <li><FiCheckCircle /> Allow Camera to access your location.</li>
-              <li><FiCheckCircle /> Take the photo at the actual planting site.</li>
-              <li><FiCheckCircle /> Upload the original, unedited photo.</li>
-            </ul>
-            <div className="pr-requirements-note">
-              <strong>Important:</strong> Turning on GPS alone does not guarantee that location information will be saved in the photo.
-            </div>
-            <button type="button" className="pr-primary-button" onClick={startCamera} autoFocus>
-              <FiCamera size={15} /> I Understand — Take Photo
-            </button>
-          </div>
-        </div>
-        </ModalDialog>
+        <PhotoRequirementsDialog onClose={() => setShowPhotoRequirements(false)} onTakePhoto={startCamera} />
       )}
 
       {showViewModal && selectedRecord && (

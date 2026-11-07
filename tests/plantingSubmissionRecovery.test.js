@@ -16,7 +16,7 @@ test("missing EXIF accuracy is not displayed as perfect accuracy", () => {
 });
 
 test("planting location metadata uses the 50 metre fallback consistently", () => {
-  assert.match(plantingPage, /const SITE_GPS_TOLERANCE_METERS = 50/);
+  assert.match(readFileSync(new URL("../src/utils/plantingLocationPreview.js", import.meta.url), "utf8"), /const SITE_GPS_TOLERANCE_METERS = 50/);
   assert.match(plantingPage, /"50m-fallback"/);
   assert.doesNotMatch(plantingPage, /"20m-fallback"/);
 });

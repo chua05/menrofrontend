@@ -728,3 +728,32 @@ test("sampling action wraps at 320px without clipping", async ({ page }) => {
   expect(await button.evaluate(node => getComputedStyle(node).whiteSpace)).toBe("normal");
   expect(await button.evaluate(node => node.getBoundingClientRect().right)).toBeLessThanOrEqual(320);
 });
+
+test("Staff photo verification shows the participant map and explains Take Photo before a release is selected", async ({ page }) => {
+  const fixture = await setup(page, { "GET /api/planting-reports/official/options": route => route.fulfill({ json: { success: true, data: { options: [releaseOption], nextCursor: null } } }),
+    "POST /api/evidence-capture-sessions": route => route.fulfill({ json: { success: true, data: { captureSessionId: "mock-session", nonce: "mock-nonce" } } }),
+    "POST /api/evidence-capture-sessions/mock-session/verify": route => route.fulfill({ json: { success: true, data: { verificationId: "mock-verification", imageSha256: "mock-digest", location: { latitude: site.latitude, longitude: site.longitude, accuracy: 12 } } } }) });
+  await page.goto("/staff/planting-reports?role=staff");
+  await page.getByRole("button", { name: "Submit Planting Report", exact: true }).click();
+  const map = page.locator(".pr-official-dialog .pr-location-map"), status = page.locator(".pr-official-dialog .pr-location-status");
+  await expect(map).toBeVisible();
+  await expect(status).toHaveText("Select a registered planting site first.");
+  await expect(page.getByText(/Authoritative registered-site coordinates are required/)).toHaveCount(0);
+  await page.getByRole("button", { name: "Take Photo", exact: true }).click();
+  await expect(page.getByRole("alert").filter({ hasText: "Select a released request before adding planting photos." })).toBeVisible();
+  await expect(page.getByRole("dialog", { name: "Secure planting camera", exact: true })).toHaveCount(0);
+  await page.getByRole("combobox", { name: "Seedling Release Record *" }).selectOption("released-request");
+  await expect(status).toHaveText("Upload or take a photo first.");
+  await expect(map.locator(".pr-map-barangay-label").filter({ hasText: "Bical" })).toBeVisible();
+  await expect(map.locator(".leaflet-tile-pane img").first()).toBeAttached();
+  await page.getByRole("button", { name: "Reminder", exact: true }).click();
+  await page.getByRole("button", { name: "I Understand — Take Photo", exact: true }).click();
+  await page.getByRole("button", { name: "Verify fixture camera photo" }).click();
+  await expect(status).toHaveText(/Within registered site coverage/);
+  const details = page.locator(".pr-official-dialog .pr-gps-captured");
+  await expect(details.getByText("Distance from Site", { exact: true })).toBeVisible();
+  await expect(details.getByText("12.0 m", { exact: true })).toBeVisible();
+  await expect(details.getByText("Configured radius (50 m)", { exact: true })).toBeVisible();
+  await expect(details.getByText("Valid", { exact: true })).toBeVisible();
+  fixture.check();
+});
