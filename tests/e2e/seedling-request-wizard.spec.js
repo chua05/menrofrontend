@@ -156,10 +156,6 @@ async function fillStep3(page, { group, frozen = false }) {
   if (group) await page.getByLabel("End Time *").fill(frozen ? "06:00" : "11:00");
   await page.getByLabel(group ? "Expected Participants *" : "Planned Number of Planters *")
     .fill(group ? "30" : "1");
-  await page.getByLabel("Who will be responsible for caring for the planted seedlings? *").fill("Browser Test Organization");
-  await page.getByLabel("How often do you plan to check the planted seedlings? *").selectOption("Weekly");
-  await page.getByLabel("How will you care for and maintain the seedlings after planting? *")
-    .fill("Water, protect, and monitor the seedlings every week.");
   await page.getByRole("button", { name: /Next/ }).click();
   await expect(page.getByRole("heading", { name: "Review Your Request", exact: true })).toBeVisible();
 }
@@ -283,12 +279,6 @@ test("same-day release and event schedule advances to Step 4 before planting sta
   await page.getByLabel("Start Time *").fill("17:00");
   await page.getByLabel("End Time *").fill("18:00");
   await page.getByLabel("Expected Participants *").fill("40");
-  await page.getByLabel("Who will be responsible for caring for the planted seedlings? *")
-    .fill("Community Care Team");
-  await page.getByLabel("How often do you plan to check the planted seedlings? *")
-    .selectOption("Weekly");
-  await page.getByLabel("How will you care for and maintain the seedlings after planting? *")
-    .fill("Water, protect, and monitor the seedlings every week.");
 
   await page.getByRole("button", { name: /Next/ }).click();
   await expect(page.getByRole("heading", { name: "Review Your Request", exact: true })).toBeVisible();
@@ -315,12 +305,6 @@ test("expired same-day start shows focused mobile validation without clearing va
   await page.getByLabel("Start Time *").fill("17:00");
   await page.getByLabel("End Time *").fill("18:00");
   await page.getByLabel("Expected Participants *").fill("40");
-  await page.getByLabel("Who will be responsible for caring for the planted seedlings? *")
-    .fill("Community Care Team");
-  await page.getByLabel("How often do you plan to check the planted seedlings? *")
-    .selectOption("Weekly");
-  await page.getByLabel("How will you care for and maintain the seedlings after planting? *")
-    .fill("Water, protect, and monitor the seedlings every week.");
 
   await page.getByRole("button", { name: /Next/ }).click();
   await expectValidation(page, "The event start time must be in the future.");

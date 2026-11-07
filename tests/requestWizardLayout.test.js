@@ -14,8 +14,6 @@ const styles = readFileSync(
 test("request wizard uses shared section layout hooks for conditional content", () => {
   for (const className of [
     "participant-coordinate-grid",
-    "participant-care-section",
-    "participant-care-grid",
     "participant-supporting-section",
     "participant-review-section",
   ]) {
@@ -54,4 +52,9 @@ test("review and submitted workflow use resolved custom address values", () => {
   assert.match(source, /addressMunicipality: form\.addressMunicipality === "Other"[\s\S]*form\.addressMunicipalityOther\.trim\(\)/);
   assert.match(source, /addressBarangay: form\.addressBarangay\.trim\(\)/);
   assert.doesNotMatch(source, /\{form\.addressBarangay\}, Bulan, Sorsogon/);
+});
+
+test("request wizard no longer collects planting care information", () => {
+  assert.doesNotMatch(source, /Planting Care Information|caretaker|carePlan|monitoringFrequency|monitoringOther/);
+  assert.doesNotMatch(styles, /participant-care/);
 });

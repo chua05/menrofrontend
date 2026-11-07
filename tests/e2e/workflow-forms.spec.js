@@ -265,9 +265,8 @@ async function plantingDetails(page, { proposed = false, blankArea = false } = {
   await page.getByLabel("Planned Planting Date *").fill("2099-01-02");
   await page.getByLabel(/Start Time/).fill("08:00");
   await page.getByLabel("Planned Number of Planters *").fill("1");
-  await page.getByLabel(/Who will be responsible/).fill("Fixture caretaker");
-  await page.getByLabel(/How often do you plan/).selectOption("Weekly");
-  await page.getByLabel(/How will you care/).fill("Water and protect trees");
+  await expect(page.getByText("Planting Care Information", { exact: true })).toHaveCount(0);
+  await expect(page.getByLabel(/Who will be responsible|How often do you plan|How will you care/)).toHaveCount(0);
   await page.getByRole("button", { name: "Next", exact: true }).click();
   await expect(page.getByLabel("Identification Type *")).toBeVisible();
   await page.getByLabel("Identification Type *").selectOption("national_id");
@@ -280,6 +279,7 @@ test("corrected exact area submits the authoritative coordinates and selected va
   await page.getByRole("button", { name: "Submit Request", exact: true }).click();
   await expect(page).toHaveURL(/participant\/my-requests/);
   const submission = fixture.calls.find(call => call.key === "POST /api/seedling-requests").body;
+  for (const field of ["caretaker", "carePlan", "monitoringFrequency", "monitoringOther"]) expect(submission.workflow).not.toHaveProperty(field);
   expect(submission.workflow.exactArea).toBe("0.5"); expect(submission.eventProposal.latitude).toBe(site.latitude); expect(submission.eventProposal.longitude).toBe(site.longitude);
   fixture.check();
 });
@@ -427,7 +427,7 @@ test(`${role} returned request reopens the same wizard and resubmits with its au
     "GET /api/seedling-requests/my": route => route.fulfill({ json: { success: true, data: [{ ...request, status: edited ? "Pending" : "Returned" }] } }),
     "GET /api/seedling-requests/staff-own-request": route => route.fulfill({ json: { success: true, data: request } }),
     "PATCH /api/seedling-requests/staff-own-request/resubmit": (route, req) => {
-      expect(req.postDataJSON().expectedVersion).toBe(3); edited = true;
+      expect(req.postDataJSON().expectedVersion).toBe(3); expect(req.postDataJSON().workflow.carePlan).toBe("Water weekly"); edited = true;
       return route.fulfill({ json: { success: true, data: { ...request, status: "Pending", requestVersion: 4 } } });
     },
   });
@@ -436,7 +436,6 @@ test(`${role} returned request reopens the same wizard and resubmits with its au
   await page.getByRole("button", { name: "Next", exact: true }).click();
   await expect(page.getByLabel("Preferred Release Date *")).toHaveValue("2099-01-01");
   await page.getByRole("button", { name: "Next", exact: true }).click();
-  await page.getByLabel(/How will you care/).fill("Water and protect the seedlings daily");
   await page.getByRole("button", { name: "Next", exact: true }).click();
   await expect(page.getByLabel("Identification Type *")).toHaveCount(0);
   await page.getByRole("checkbox", { name: /confirm that the information/ }).check();
@@ -785,6 +784,18 @@ test("Staff report headings, remarks and attendance match the Participant form",
   expect(staffAttendanceGap).toBe(await attendanceGap());
   const edges = async locator => locator.evaluate(node => { const box = node.getBoundingClientRect(); return { left: box.left, right: box.right }; });
   expect(await edges(attendance)).toEqual(await edges(page.locator(".pr-report-additional-section")));
+  fixture.check();
+});
+
+const calendarEvent = { id: "event-1", eventId: "EVT-2099-001", type: "Tree Planting", title: "Fixture planting", eventName: "Fixture planting", date: "2099-01-02", startTime: "08:00", endTime: "10:00", status: "Upcoming", plantingSiteId: "site-1", siteName: "Fixture site", barangay: "Bical" };
+for (const [role, canAuthor] of [["staff", false], ["admin", true]]) test(`${role} event calendar ${canAuthor ? "keeps" : "removes"} manual add and edit`, async ({ page }) => {
+  const fixture = await setup(page, { "GET /api/events": route => route.fulfill({ json: { success: true, data: [calendarEvent] } }) });
+  await page.goto(`/${role}/event-calendar?role=${role}&event=event-1`);
+  await expect(page.getByText("Total Events", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Add Event", exact: true })).toHaveCount(canAuthor ? 1 : 0);
+  await expect(page.locator(".ec-details-footer").getByRole("button", { name: "Close", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Edit event", exact: true })).toHaveCount(canAuthor ? 1 : 0);
+  await expect(page.locator(".ec-event-menu-btn")).toHaveCount(1);
   fixture.check();
 });
 

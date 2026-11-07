@@ -173,10 +173,6 @@ const fresh = (p) => ({
   endTime: "",
   participants: "",
   requestLetter: null,
-  caretaker: "",
-  carePlan: "",
-  monitoringFrequency: "",
-  monitoringOther: "",
   identificationType: "",
   idNumber: "",
   schoolInstitutionName: "",
@@ -474,9 +470,6 @@ export default function ParticipantSaplingRequestWizard({ currentUser, requester
         ...(key === "landType" && value !== "Other"
           ? { landTypeOther: "" }
           : {}),
-        ...(key === "monitoringFrequency" && value !== "Other"
-          ? { monitoringOther: "" }
-          : {}),
         ...(key === "areaChoice"
           ? { exactArea: "" }
           : {}),
@@ -509,7 +502,6 @@ export default function ParticipantSaplingRequestWizard({ currentUser, requester
         : {}),
       ...(key === "areaChoice" ? { exactArea: "" } : {}),
       ...(key === "landType" ? { landTypeOther: "" } : {}),
-      ...(key === "monitoringFrequency" ? { monitoringOther: "" } : {}),
       ...(key === "addressProvince"
         ? { addressProvinceOther: "", addressMunicipality: "", addressMunicipalityOther: "", addressBarangay: "" }
         : {}),
@@ -713,11 +705,6 @@ export default function ParticipantSaplingRequestWizard({ currentUser, requester
       if (group) {
         need("eventName", "Enter an event name.");
       }
-      need("caretaker");
-      need("carePlan");
-      need("monitoringFrequency", "Select a monitoring frequency.");
-      if (form.monitoringFrequency === "Other")
-        need("monitoringOther", "Specify the monitoring frequency.");
     }
     if (s === 4 && walkIn) {
       if (!receiptReference.trim()) e.receiptReference = "Enter the acknowledgement receipt reference.";
@@ -912,7 +899,7 @@ export default function ParticipantSaplingRequestWizard({ currentUser, requester
           siteBarangay: 3, areaChoice: 3, exactArea: 3, existingSiteId: 3,
           siteName: 3, specificLocation: 3, latitude: 3, longitude: 3, niyogan: 3,
           landType: 3, landTypeOther: 3, currentCondition: 3, releaseMethod: 3,
-          eventName: 3, caretaker: 3, carePlan: 3, monitoringFrequency: 3, monitoringOther: 3,
+          eventName: 3,
           preferredReleaseDate: 2, trees: 2, purpose: 2, purposeOther: 2 };
         const targetStep = Math.min(...Object.keys(fields).map((key) => fieldStep[key] || 1));
         setErrors((current) => ({ ...current, ...fields }));
@@ -1609,67 +1596,6 @@ export default function ParticipantSaplingRequestWizard({ currentUser, requester
                     : { latitude: form.latitude, longitude: form.longitude }
                 }
               />
-              <div className="participant-care-section">
-                <Title>Planting Care Information</Title>
-                <div className="sr-form-grid participant-care-grid">
-                  <Field fieldKey="caretaker"
-                    label="Who will be responsible for caring for the planted seedlings? *"
-                    error={errors.caretaker}
-                  >
-                    <input
-                      value={form.caretaker}
-                      onChange={(e) => put("caretaker", e.target.value)}
-                      placeholder="Enter the person, group, or organization responsible"
-                    />
-                  </Field>
-                  <div className="sr-address-field-group">
-                  <Field fieldKey="monitoringFrequency"
-                    label="How often do you plan to check the planted seedlings? *"
-                    error={errors.monitoringFrequency}
-                  >
-                    <select
-                      value={form.monitoringFrequency}
-                      onChange={(e) => put("monitoringFrequency", e.target.value)}
-                    >
-                      <option value="">Select monitoring frequency</option>
-                      {[
-                        "Daily",
-                        "Several times a week",
-                        "Weekly",
-                        "Every two weeks",
-                        "Monthly",
-                        "Other",
-                      ].map((x) => (
-                        <option key={x}>{x}</option>
-                      ))}
-                    </select>
-                  </Field>
-                  {form.monitoringFrequency === "Other" && (
-                    <Field fieldKey="monitoringOther"
-                      label="Please Specify *"
-                      error={errors.monitoringOther}
-                    >
-                      <input
-                        value={form.monitoringOther}
-                        onChange={(e) => put("monitoringOther", e.target.value)}
-                        placeholder="Specify how often the seedlings will be checked"
-                      />
-                    </Field>
-                  )}
-                  </div>
-                  <Field fieldKey="carePlan"
-                    label="How will you care for and maintain the seedlings after planting? *"
-                    error={errors.carePlan}
-                    wide
-                  >
-                    <textarea
-                      value={form.carePlan}
-                      onChange={(e) => put("carePlan", e.target.value)}
-                      placeholder="Describe how the seedlings will be watered, protected, checked, and maintained after planting."
-                    />
-                  </Field>
-                </div>
-              </div>
             </>
           )}
           {step === 4 && (

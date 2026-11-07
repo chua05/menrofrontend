@@ -230,6 +230,8 @@ export default function EventSchedulePage() {
   const canManage =
     userRole === "admin" ||
     userRole === "staff";
+  // Staff events come from the request workflows, not manual entry here.
+  const canAuthorEvents = userRole === "admin";
 
   const [events, setEvents] =
     useState([]);
@@ -1252,7 +1254,7 @@ export default function EventSchedulePage() {
           </div>
         </div>
 
-        {canManage && (
+        {canAuthorEvents && (
           <div className="ec-header-actions">
             <button
               type="button"
@@ -2067,7 +2069,7 @@ export default function EventSchedulePage() {
 
               <div className="ec-modal-footer ec-details-footer">
                 <div className="ec-detail-footer-actions">
-                  {canManage && (
+                  {canAuthorEvents && (
                     <button
                       type="button"
                       className="ec-secondary-btn ec-edit-icon-btn"

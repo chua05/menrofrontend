@@ -1914,7 +1914,6 @@
   margin-top: var(--participant-content-gap, 20px);
 }
 
-.participant-care-section,
 .participant-supporting-section,
 .participant-review-section {
   margin-top: var(--participant-section-gap, 26px);
@@ -1924,14 +1923,9 @@
   margin-top: 0;
 }
 
-.participant-care-section > .participant-section-title,
 .participant-supporting-section > .participant-section-title,
 .participant-review-section > .participant-section-title {
   margin-top: 0;
-}
-
-.participant-care-grid > .sr-form-field:nth-child(-n + 2) > span {
-  min-height: 40px;
 }
 
 .participant-review-section .participant-confirmation-row {
@@ -2815,10 +2809,6 @@
 
   .participant-confirmation span {
     font-size: 14px;
-  }
-
-  .participant-care-grid > .sr-form-field:nth-child(-n + 2) > span {
-    min-height: 0;
   }
 
   .participant-form-footer {
