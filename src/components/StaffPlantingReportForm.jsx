@@ -2,6 +2,7 @@ import OfficialPlantingPhotos from "./OfficialPlantingPhotos";
 import AttendanceUpload from "./AttendanceUpload";
 import ModalDialog from "./ModalDialog";
 import { attendanceFileError } from "../utils/attendanceFile";
+import { leftoverQuantityError, plantedFromLeftover } from "../utils/plantingQuantity";
 import { useEffect, useRef, useState } from "react";
 import { FiFileText } from "react-icons/fi";
 import { authenticatedFetch } from "../services/authenticatedApi";
@@ -12,7 +13,6 @@ async function api(path, options) {
   if (!response.ok || body?.success !== true) throw Object.assign(new Error(response.status >= 500 ? "Official planting reporting is temporarily unavailable." : body?.message || "Unable to save the official report."), { status: response.status, fieldErrors: body?.fieldErrors });
   return body?.data;
 }
-const whole = value => /^\d+$/.test(String(value).trim()) && Number.isSafeInteger(Number(value));
 async function optionsPage(path) {
   const page = await api(path);
   if (!Array.isArray(page?.options) || page.options.some(row => !row.requestId || !Array.isArray(row.items)) || page.nextCursor !== null && typeof page.nextCursor !== "string") throw new Error("Authorized releases could not be loaded. Please retry.");
@@ -31,6 +31,8 @@ export default function StaffPlantingReportForm({ currentUser, onClose, onSaved,
   const selected = options.find(row => row.requestId === selectedId);
   const missingRequired = selected ? ["requesterName", "requestId", "eventId", "siteId", "plantingDate"].filter(key => !String(selected[key] || "").trim()) : [];
   if (selected && basis === "menro-field-report" && (!Number.isFinite(selected.latitude) || !Number.isFinite(selected.longitude))) missingRequired.push("site coordinates");
+  // A resumed report already reserved its quantity, so the balance no longer includes it.
+  const plantedFor = row => resumeEvidence ? Number(row.quantityPlanted || 0) : plantedFromLeftover(row.availableQuantity, row.leftoverQuantity);
   const title = resumeEvidence ? "Add Verified Planting Evidence" : correction ? "Correct Official Planting Report" : "Submit Official Planting Report";
   async function refresh() {
     setLoading(true); setError("");
@@ -57,7 +59,7 @@ export default function StaffPlantingReportForm({ currentUser, onClose, onSaved,
     catch (failure) { setError(failure.message); } finally { setLoadingMore(false); }
   }
   function choose(id) {
-    setSelectedId(id); setItems((options.find(row => row.requestId === id)?.items || []).filter(row => !correction || row.inventoryId === correction.inventoryId).map(row => ({ ...row, quantityPlanted: "0", leftoverQuantity: "0" })));
+    setSelectedId(id); setItems((options.find(row => row.requestId === id)?.items || []).filter(row => !correction || row.inventoryId === correction.inventoryId).map(row => ({ ...row, leftoverQuantity: "0" })));
     setErrors({}); setBasis("menro-field-report"); setPhotos([]); setPhotoSaved(false); photoKey.current = crypto.randomUUID(); submissionKey.current = crypto.randomUUID();
   }
   const aria = key => ({ "aria-invalid": errors[key] ? "true" : undefined, "aria-describedby": errors[key] ? `official-error-${key}` : undefined });
@@ -72,11 +74,10 @@ export default function StaffPlantingReportForm({ currentUser, onClose, onSaved,
     if (!selected) validation.requestId = "Select an authorized released request.";
     else if (missingRequired.length) validation.requestId = "Required release information is missing. Ask MENRO to correct the linked record before submitting.";
     if (!saved) items.forEach((row, index) => {
-      if (!whole(row.leftoverQuantity)) validation[`leftoverQuantity-${index}`] = "Enter a nonnegative whole number.";
-      if (basis === "menro-field-report" && !whole(row.quantityPlanted)) validation[`quantityPlanted-${index}`] = "Enter a nonnegative whole number.";
-      if ((basis === "release-based" ? 0 : Number(row.quantityPlanted)) + Number(row.leftoverQuantity) > row.availableQuantity) validation[`${basis === "release-based" ? "leftoverQuantity" : "quantityPlanted"}-${index}`] = "Planted plus leftovers exceed the available balance.";
+      const message = leftoverQuantityError(row.leftoverQuantity, row.availableQuantity);
+      if (message) validation[`leftoverQuantity-${index}`] = message;
     });
-    if (!saved && selected && items.every(row => Number(row.quantityPlanted) + Number(row.leftoverQuantity) === 0) && basis !== "release-based") validation.items = "Enter at least one planted or leftover quantity.";
+    if (!saved && selected && items.every(row => Number(row.availableQuantity) === 0)) validation.items = "No seedlings remain available for reporting on this release.";
     if (basis === "menro-field-report" && !photoSaved && (!photos.length || photos.some(photo => !["ready", "verified"].includes(photo.status)))) validation.photos = "Add and verify original planting photos for the MENRO Field Report.";
     if (attendanceFileError(file) || errors.attendance) validation.attendance = attendanceFileError(file) || errors.attendance;
     setErrors(validation);
@@ -85,7 +86,7 @@ export default function StaffPlantingReportForm({ currentUser, onClose, onSaved,
     let report = saved;
     try {
       if (!report) {
-        report = await api("/planting-reports/official", { method: "POST", body: JSON.stringify({ requestId: selected.requestId, items: items.map(row => ({ inventoryId: row.inventoryId, quantityPlanted: Number(row.quantityPlanted), leftoverQuantity: Number(row.leftoverQuantity) })), confirmationBasis: basis, remarks, expectedVersion: selected.expectedVersion, clientSubmissionId: submissionKey.current, ...(correction ? { correctionOf: correction.id } : {}) }) });
+        report = await api("/planting-reports/official", { method: "POST", body: JSON.stringify({ requestId: selected.requestId, items: items.map(row => ({ inventoryId: row.inventoryId, quantityPlanted: plantedFor(row), leftoverQuantity: Number(row.leftoverQuantity) })), confirmationBasis: basis, remarks, expectedVersion: selected.expectedVersion, clientSubmissionId: submissionKey.current, ...(correction ? { correctionOf: correction.id } : {}) }) });
         setSaved(report);
       }
       if (basis === "menro-field-report" && !photoSaved) {
@@ -104,7 +105,7 @@ export default function StaffPlantingReportForm({ currentUser, onClose, onSaved,
     } catch (failure) {
       if ([400, 422].includes(failure.status) && !photoSaved) setPhotoRetryBound(false);
       const fields = backendFieldErrors(failure);
-      if (fields.items && items.length) { fields[`${basis === "release-based" ? "leftoverQuantity" : "quantityPlanted"}-0`] = fields.items; delete fields.items; }
+      if (fields.items && items.length) { fields["leftoverQuantity-0"] = fields.items; delete fields.items; }
       if (Object.keys(fields).length) { setErrors(fields); focusFirstInvalid(() => root.current); }
       else setError(report ? `The report is saved pending Admin verification. ${failure.message} Retry the same evidence with the same upload intent; do not submit the quantities again.` : failure.status === 409 ? `${failure.message} Refresh releases before correcting the report.` : failure.message);
     } finally { setSaving(false); }
@@ -128,8 +129,8 @@ export default function StaffPlantingReportForm({ currentUser, onClose, onSaved,
         {items.map((row, index) => <section className="pr-official-species" key={row.inventoryId} aria-labelledby={`official-species-${index}`}><h3 id={`official-species-${index}`}>{row.species}</h3>
           <div className="pr-official-grid">
             <label>Quantity Released<input readOnly value={row.quantityReleased} /></label><label>Seedlings Available for Reporting<input readOnly value={row.availableQuantity} /></label>
-            <div className="pr-field"><label htmlFor={`official-planted-${index}`}>Quantity Planted *</label><input id={`official-planted-${index}`} type="number" min="0" step="1" readOnly={basis === "release-based"} value={basis === "release-based" ? Math.max(0, row.availableQuantity - Number(row.leftoverQuantity || 0)) : row.quantityPlanted} onChange={event => changeItem(index, "quantityPlanted", event.target.value)} {...aria(errors.items ? "items" : `quantityPlanted-${index}`)} />{feedback(`quantityPlanted-${index}`)}{index === 0 && feedback("items")}</div>
-            <div className="pr-field"><label htmlFor={`official-leftover-${index}`}>Leftover Seedlings (Not Planted) *</label><input id={`official-leftover-${index}`} type="number" min="0" step="1" value={row.leftoverQuantity} onChange={event => changeItem(index, "leftoverQuantity", event.target.value)} {...aria(`leftoverQuantity-${index}`)} />{feedback(`leftoverQuantity-${index}`)}</div>
+            <div className="pr-field"><label htmlFor={`official-planted-${index}`}>Quantity Planted *</label><input id={`official-planted-${index}`} readOnly value={plantedFor(row)} {...aria(errors.items ? "items" : `quantityPlanted-${index}`)} />{index === 0 && feedback("items")}</div>
+            <div className="pr-field"><label htmlFor={`official-leftover-${index}`}>Final Leftover Seedlings (Not Planted)</label><input id={`official-leftover-${index}`} type="number" min="0" max={row.availableQuantity} step="1" value={row.leftoverQuantity} onChange={event => changeItem(index, "leftoverQuantity", event.target.value)} {...aria(`leftoverQuantity-${index}`)} />{feedback(`leftoverQuantity-${index}`)}</div>
           </div>
         </section>)}
 

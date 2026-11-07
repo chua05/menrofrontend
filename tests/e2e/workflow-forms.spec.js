@@ -96,12 +96,15 @@ test("Staff official reporting derives read-only identity/release data and submi
   await expect(page.getByLabel("Requester Full Name", { exact: true })).toHaveAttribute("readonly");
   await expect(page.getByLabel("Submitted By", { exact: true })).toHaveValue("MENRO Staff");
   await expect(page.getByLabel("Quantity Released", { exact: true })).toHaveValue("10");
-  await page.getByLabel("Quantity Planted *", { exact: true }).fill("9");
-  await page.getByLabel("Leftover Seedlings (Not Planted) *", { exact: true }).fill("2");
+  const planted = page.getByLabel("Quantity Planted *", { exact: true }), leftover = page.getByLabel("Final Leftover Seedlings (Not Planted)", { exact: true });
+  await expect(leftover).toHaveValue("0"); await expect(planted).toHaveValue("8"); await expect(planted).toHaveAttribute("readonly");
+  await leftover.fill("9"); await expect(planted).toHaveValue("0");
   await page.getByRole("button", { name: "Submit for Admin Verification" }).click();
-  await expect(page.getByLabel("Quantity Planted *", { exact: true })).toHaveAttribute("aria-invalid", "true");
-  await expect(page.getByLabel("Quantity Planted *", { exact: true })).toBeFocused();
-  await page.getByLabel("Quantity Planted *", { exact: true }).fill("6");
+  await expect(page.getByText("Leftover cannot exceed the 8 seedlings available.", { exact: true })).toBeVisible();
+  await expect(leftover).toHaveAttribute("aria-invalid", "true"); await expect(leftover).toBeFocused();
+  await leftover.fill("-1"); await page.getByRole("button", { name: "Submit for Admin Verification" }).click();
+  await expect(page.getByText("Enter a nonnegative whole number.", { exact: true })).toBeVisible();
+  await leftover.fill("2"); await expect(planted).toHaveValue("6");
   await page.getByRole("button", { name: "Take Photo", exact: true }).click();
   await page.getByRole("button", { name: "Verify fixture camera photo" }).click();
   await expect(page.getByText("Backend-verified camera capture", { exact: true })).toBeVisible();
@@ -117,7 +120,7 @@ test("individual release-based preview excludes leftovers and optional attendanc
     return route.fulfill({ json: { success: true, data: { hasAttendance: true } } });
   } });
   await page.getByLabel("Confirmation Basis").selectOption("release-based");
-  await page.getByLabel("Leftover Seedlings (Not Planted) *").fill("2");
+  await page.getByLabel("Final Leftover Seedlings (Not Planted)").fill("2");
   await expect(page.getByLabel("Quantity Planted *")).toHaveValue("6"); await expect(page.getByLabel("Quantity Planted *")).toHaveAttribute("readonly");
   await page.getByLabel("Attendance Photo/File (Optional)").setInputFiles({ name: "attendance.pdf", mimeType: "application/pdf", buffer: Buffer.from("test-boundary-file; backend validates actual PDF in separate tests") });
   await page.getByRole("button", { name: "Submit for Admin Verification" }).click();
@@ -130,7 +133,6 @@ test("field report requires verified photos and keeps authoritative identity rea
   await expect(page.getByRole("heading", { name: "Narra", exact: true })).toBeVisible();
   await expect(page.getByLabel("Barangay", { exact: true })).toHaveValue("Bical");
   await expect(page.getByLabel("Site Latitude", { exact: true })).toHaveAttribute("readonly");
-  await page.getByLabel("Quantity Planted *").fill("2");
   await page.getByRole("button", { name: "Submit for Admin Verification" }).click();
   await expect(page.getByRole("alert").filter({ hasText: "Add and verify original" })).toBeVisible();
   expect(fixture.calls.filter(call => call.key === "POST /api/planting-reports/official")).toHaveLength(0);
@@ -177,7 +179,6 @@ test("interrupted Staff photo upload retries the same intent without submitting 
     keys.push(request.headers()["idempotency-key"]); attempts++;
     return route.fulfill(attempts === 1 ? { status: 503, json: { success: false, message: "Storage unavailable" } } : { json: { success: true, data: { evidenceVerified: true } } });
   } });
-  await page.getByLabel("Quantity Planted *").fill("2");
   await page.getByRole("button", { name: "Take Photo", exact: true }).click();
   await page.getByRole("button", { name: "Verify fixture camera photo" }).click();
   await page.getByRole("button", { name: "Submit for Admin Verification" }).click();
@@ -226,7 +227,6 @@ test("login toast is fixed below topbar, dismissible and does not reappear on re
 });
 test("stale reportable balance displays a general conflict and never silently changes expectedVersion", async ({ page }) => {
   const fixture = await staffForm(page, { "POST /api/planting-reports/official": route => route.fulfill({ status: 409, json: { success: false, message: "The reportable balance changed." } }) });
-  await page.getByLabel("Quantity Planted *").fill("2");
   await page.getByRole("button", { name: "Take Photo", exact: true }).click();
   await page.getByRole("button", { name: "Verify fixture camera photo" }).click();
   await page.getByRole("button", { name: "Submit for Admin Verification" }).click();
@@ -333,6 +333,8 @@ test("Participant form retains planting fields and traps keyboard focus with opt
   const trigger = page.getByRole("button", { name: "Submit Planting Report", exact: true }); await trigger.click();
   const dialog = page.getByRole("dialog", { name: "Submit Planting Report", exact: true }); await expect(dialog).toBeVisible();
   await expect(page.getByLabel("Final Leftover Seedlings (Not Planted)", { exact: true })).toHaveValue("0");
+  await expect(page.locator("#planting-quantity")).toHaveAttribute("readonly");
+  await expect(page.locator("#planting-confirmation-mode")).toHaveCount(0);
   await expect(page.getByLabel("Attendance Photo/File (Optional)")).toHaveCount(1);
   const close = dialog.getByRole("button", { name: "Close", exact: true }); await close.focus();
   await page.keyboard.press("Shift+Tab"); await expect(dialog.getByRole("button", { name: "Submit Report", exact: true })).toBeFocused();
@@ -492,8 +494,8 @@ test("Staff walk-in wizard records an actual citizen and signed receipt, not the
   let encoded;
   const fixture = await setup(page, {
     "POST /api/seedling-requests/walk-in": (route, request) => {
-      const multipart = request.postDataBuffer().toString(); expect(multipart).toContain('name="acknowledgement"');
-      expect(multipart).toContain('"fullName":"Citizen Requester"'); expect(multipart).toContain('"receiptReference":"ACK-WALKIN-1"'); expect(multipart).toContain('"contactNumber":"0917 123 4567"'); expect(multipart).toContain('"assistedByName":"Maria Santos"');
+      const multipart = request.postDataBuffer().toString(); expect(multipart).not.toContain('name="acknowledgement"'); expect(multipart).not.toContain('"receiptReference"');
+      expect(multipart).toContain('"fullName":"Citizen Requester"'); expect(multipart).toContain('"contactNumber":"0917 123 4567"'); expect(multipart).toContain('"assistedByName":"Maria Santos"');
       encoded = { ...ownRequest(), id: "walkin-1", participantId: "walkin-citizen", participantName: "Citizen Requester", walkIn: { encodedBy: "test-staff", citizenHasAccount: false, receiptReference: "ACK-WALKIN-1" } };
       return route.fulfill({ status: 201, json: { success: true, data: encoded } });
     },
@@ -508,12 +510,8 @@ test("Staff walk-in wizard records an actual citizen and signed receipt, not the
   await requester(page, { role: "staff", navigate: false, heading: "Encode Walk-in Request" }); await plantingDetails(page);
   await expect(page.getByLabel("Assisted By Staff", { exact: true })).toHaveValue("Maria Santos");
   await expect(page.getByLabel("Assisted By Staff", { exact: true })).toHaveAttribute("readonly");
-  await page.getByRole("button", { name: "Submit Request", exact: true }).click();
-  await expect(page.getByLabel("Acknowledgement Receipt Reference *")).toHaveAttribute("aria-invalid", "true");
-  expect(fixture.calls.some(call => call.key === "POST /api/seedling-requests/walk-in")).toBe(false);
-  await page.getByLabel("Acknowledgement Receipt Reference *").fill("ACK-WALKIN-1");
-  await expect(page.getByLabel("Acknowledgement Receipt Reference *")).not.toHaveAttribute("aria-invalid", "true");
-  await page.getByLabel("Signed Acknowledgement *").setInputFiles({ name: "signed.png", mimeType: "image/png", buffer: Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aWQkAAAAASUVORK5CYII=", "base64") });
+  await expect(page.getByLabel("Acknowledgement Receipt Reference *")).toHaveCount(0);
+  await expect(page.getByLabel("Signed Acknowledgement *")).toHaveCount(0);
   await page.getByRole("button", { name: "Submit Request", exact: true }).click();
   await expect(page).toHaveURL(/staff\/requests/, { timeout: 10000 }); expect(encoded.participantName).toBe("Citizen Requester"); fixture.check();
 });

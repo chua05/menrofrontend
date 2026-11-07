@@ -42,7 +42,7 @@ test("participant leftover validation preserves zero and bounds planted plus lef
   const form = { quantity: "6", leftoverQuantity: "2", remainingQuantity: 8 };
   let errors = validatePlantingReportForm(form);
   assert.equal(errors.quantity, undefined); assert.equal(errors.leftoverQuantity, undefined);
-  errors = validatePlantingReportForm({ ...form, leftoverQuantity: "3" }); assert.ok(errors.quantity);
+  errors = validatePlantingReportForm({ ...form, leftoverQuantity: "9" }); assert.ok(errors.leftoverQuantity);
   for (const leftoverQuantity of ["", "-1", "1.5", Infinity]) assert.ok(validatePlantingReportForm({ ...form, leftoverQuantity }).leftoverQuantity);
   assert.equal(validatePlantingReportForm({ ...form, leftoverQuantity: "0" }).leftoverQuantity, undefined);
 });

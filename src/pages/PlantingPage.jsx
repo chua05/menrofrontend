@@ -15,6 +15,7 @@ import { extractGpsCoordinates } from "../utils/exifGps";
 import PageLoadingState from "../components/PageLoadingState";
 import { focusFirstInvalid, backendFieldErrors } from "../utils/formValidation";
 import { validatePlantingReportForm } from "../utils/plantingReportForm";
+import { plantedFromLeftover } from "../utils/plantingQuantity";
 import SecureCameraCapture from "../components/SecureCameraCapture";
 import StaffPlantingReportForm, { ProtectedAttendanceButton } from "../components/StaffPlantingReportForm";
 import { buildEvidenceLocationView } from "../utils/evidenceLocationView";
@@ -381,7 +382,6 @@ export default function PlantingPage() {
     remainingQuantity: "",
     quantity: "",
     leftoverQuantity: "0",
-    confirmationMode: "partial",
     plantingDate: "",
     siteId: "",
     siteName: "",
@@ -1328,7 +1328,6 @@ export default function PlantingPage() {
       remainingQuantity: "",
       quantity: "",
     leftoverQuantity: "0",
-    confirmationMode: "partial",
       plantingDate: "",
       siteId: "",
       siteName: "",
@@ -1512,7 +1511,6 @@ export default function PlantingPage() {
         remainingQuantity: "",
         quantity: "",
     leftoverQuantity: "0",
-    confirmationMode: "partial",
       }));
       return;
     }
@@ -1539,7 +1537,6 @@ export default function PlantingPage() {
     setForm((previous) => ({
       ...previous,
       distributionId: distribution.id,
-      confirmationMode: distribution.reportingPolicy ? "final" : "partial",
       distributionItemKey: item ? String(item.inventoryId || item.species) : "",
       inventoryId: item?.inventoryId || "",
       species: item?.species || "",
@@ -1595,7 +1592,6 @@ export default function PlantingPage() {
         remainingQuantity: "",
         quantity: "",
     leftoverQuantity: "0",
-    confirmationMode: "partial",
       }));
       return;
     }
@@ -1616,7 +1612,6 @@ export default function PlantingPage() {
       remainingQuantity: "",
       quantity: "",
     leftoverQuantity: "0",
-    confirmationMode: "partial",
     }));
   }
 
@@ -1640,7 +1635,6 @@ export default function PlantingPage() {
         remainingQuantity: "",
         quantity: "",
     leftoverQuantity: "0",
-    confirmationMode: "partial",
       }));
       return;
     }
@@ -1663,7 +1657,6 @@ export default function PlantingPage() {
       remainingQuantity: "",
       quantity: "",
     leftoverQuantity: "0",
-    confirmationMode: "partial",
     }));
   }
 
@@ -2164,10 +2157,10 @@ export default function PlantingPage() {
       return;
     }
 
-    const quantity = form.confirmationMode === "final" ? Number(form.remainingQuantity) - Number(form.leftoverQuantity || 0) : Number(form.quantity);
+    const quantity = Number(form.remainingQuantity) - Number(form.leftoverQuantity || 0);
     const remainingQuantity = Number(form.remainingQuantity);
 
-    if (!Number.isInteger(quantity) || (form.confirmationMode === "final" ? quantity < 0 : quantity <= 0)) {
+    if (!Number.isInteger(quantity) || quantity < 0) {
       showPopup("Please enter a valid quantity of planted seedlings.", "error");
       return;
     }
@@ -2234,7 +2227,7 @@ export default function PlantingPage() {
     payload.append("siteId", form.siteId);
     payload.append("barangay", form.barangay);
     payload.append("quantityPlanted", String(quantity));
-    payload.append("confirmationMode", form.confirmationMode || "partial");
+    payload.append("confirmationMode", "final");
     payload.append("leftoverQuantity", String(form.leftoverQuantity ?? "0"));
     payload.append("plantingDate", form.plantingDate);
     payload.append("plantingLocation", form.siteName);
@@ -2881,7 +2874,6 @@ export default function PlantingPage() {
 {formErrors.distributionItemKey && <small id="planting-error-distributionItemKey" className="pr-field-error" role="alert">{formErrors.distributionItemKey}</small>}
                     </div>
 
-<div className="pr-full-width"><label htmlFor="planting-confirmation-mode">Planting Confirmation</label><select id="planting-confirmation-mode" className="pr-input" value={form.confirmationMode || "partial"} onChange={event => updateFormField("confirmationMode", event.target.value)}><option value="final">Final confirmation of the remaining release</option><option value="partial">Partial planting (balance may be planted later)</option></select><p>Final: planted = remaining reportable quantity minus final leftovers. Partial balances stay available for future planting.</p></div>
                     <div>
                       <label htmlFor="planting-quantityReleased" className="pr-label">Quantity Released</label>
                       <input {...fieldAccessibility("quantityReleased")} className="pr-input pr-readonly" value={form.quantityReleased} readOnly />
@@ -2896,15 +2888,12 @@ export default function PlantingPage() {
 
                     <div>
                       <label htmlFor="planting-quantity" className="pr-label">Quantity Planted <span className="pr-required">*</span></label>
-                      <input {...fieldAccessibility("quantity")} type="number" min={form.confirmationMode === "final" ? "0" : "1"} step="1" max={form.remainingQuantity || undefined}
-                        className="pr-input" readOnly={form.confirmationMode === "final"} value={form.confirmationMode === "final" ? Math.max(0, Number(form.remainingQuantity || 0) - Number(form.leftoverQuantity || 0)) : form.quantity}
-                        onChange={(event) => updateFormField("quantity", event.target.value)}
-                        placeholder="Enter quantity" />
+                      <input {...fieldAccessibility("quantity")} className="pr-input pr-readonly" readOnly value={plantedFromLeftover(form.remainingQuantity, form.leftoverQuantity)} />
 {formErrors.quantity && <small id="planting-error-quantity" className="pr-field-error" role="alert">{formErrors.quantity}</small>}
                     </div>
                     <div>
                       <label htmlFor="planting-leftoverQuantity" className="pr-label">Final Leftover Seedlings (Not Planted)</label>
-                      <input {...fieldAccessibility("leftoverQuantity")} className="pr-input" type="number" min="0" step="1" value={form.leftoverQuantity ?? "0"} onChange={event => { setForm(current => ({ ...current, leftoverQuantity: event.target.value })); setFormErrors(current => ({ ...current, leftoverQuantity: "", quantity: "" })); }} />
+                      <input {...fieldAccessibility("leftoverQuantity")} className="pr-input" type="number" min="0" max={form.remainingQuantity || undefined} step="1" value={form.leftoverQuantity ?? "0"} onChange={event => { setForm(current => ({ ...current, leftoverQuantity: event.target.value })); setFormErrors(current => ({ ...current, leftoverQuantity: "", quantity: "" })); }} />
                       {formErrors.leftoverQuantity && <small id="planting-error-leftoverQuantity" className="pr-field-error" role="alert">{formErrors.leftoverQuantity}</small>}
                     </div>
 

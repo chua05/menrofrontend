@@ -59,7 +59,7 @@ test("real Staff draft-free official report, private attendance, Admin return, c
   await staff.goto("/staff/planting-reports"); await staff.getByRole("button", { name: "Submit Planting Report", exact: true }).click();
   await staff.getByRole("combobox", { name: "Seedling Release Record *" }).selectOption(data.requestId);
   await expect(staff.getByLabel("Requester Full Name", { exact: true })).toHaveValue("Disposable requester");
-  await staff.getByLabel("Quantity Planted *").fill("6"); await staff.getByLabel("Leftover Seedlings (Not Planted) *").fill("2");
+  await staff.getByLabel("Final Leftover Seedlings (Not Planted)").fill("2");
   await captureOfficialPhoto(staff, .2);
   const png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aWQkAAAAASUVORK5CYII=", "base64");
   await staff.getByLabel("Attendance Photo/File (Optional)").setInputFiles({ name: "fixture-attendance.png", mimeType: "image/png", buffer: png });
