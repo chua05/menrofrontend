@@ -69,7 +69,7 @@ test("wizard clears incompatible purpose and schedule values when request type c
   assert.match(wizardSource, /eventName: "",\s*activityDate: "",\s*startTime: "",\s*endTime: "",\s*participants: "",\s*requestLetter: null/);
   assert.match(wizardSource, /clearPurpose \? \{ purpose: "", purposeOther: "" \}/);
   assert.match(wizardSource, /effectiveRequestType: requestType/);
-  assert.match(wizardSource, /REQUEST_TYPE_SELECTABLE_SECTORS\.has\(form\.sector\)/);
+  assert.match(wizardSource, /form\.sector === "School \/ Student"/);
   assert.match(wizardSource, /Individual \/ Student/);
   assert.match(wizardSource, /School \/ Organization Representative/);
 });

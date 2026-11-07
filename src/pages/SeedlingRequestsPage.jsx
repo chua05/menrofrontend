@@ -51,6 +51,7 @@ import { downloadPrivateRequestLetter, downloadPrivateWalkInAcknowledgement, has
 
 import "../styles/seedling-requests.css";
 import ParticipantSaplingRequestWizard from "./ParticipantSaplingRequestWizard";
+import { getRequesterDetailField } from "../utils/requesterDetails";
 import { ownsSeedlingRequest, canProcessSeedlingRequest } from "../utils/requestOwnership";
 
 
@@ -590,8 +591,6 @@ export default function SeedlingRequestsPage() {
 
   const [activeTab, setActiveTab] = useState("all");
   const [myRequestsOnly, setMyRequestsOnly] = useState(false);
-  const [staffRequestMode, setStaffRequestMode] = useState("assisted");
-  const [staffRequestSubmitting, setStaffRequestSubmitting] = useState(false);
 
   const [searchTerm, setSearchTerm] = useState("");
   const [barangayFilter, setBarangayFilter] =
@@ -1824,14 +1823,11 @@ useEffect(() => {
 
   if (userRole === "participant" || (userRole === "staff" && ["/staff/request-seedlings", "/staff/walk-in-requests/new"].includes(location.pathname))) {
     const editing = pageSearchParams.has("edit");
-    const assisted = editing ? location.pathname === "/staff/walk-in-requests/new" : staffRequestMode === "assisted";
-    return <>
-      {userRole === "staff" && !editing && <fieldset className="sr-request-mode"><legend>Submit Seedling Request</legend>
-        <label><input type="radio" name="staff-request-mode" disabled={staffRequestSubmitting} checked={assisted} onChange={() => setStaffRequestMode("assisted")} />For a Requester</label>
-        <label><input type="radio" name="staff-request-mode" disabled={staffRequestSubmitting} checked={!assisted} onChange={() => setStaffRequestMode("self")} />For Myself</label>
-      </fieldset>}
-      <ParticipantSaplingRequestWizard key={`${userRole}:${assisted}:${editing}`} currentUser={currentUser} requesterRole={userRole} walkIn={userRole === "staff" && assisted} onSubmittingChange={setStaffRequestSubmitting} />
-    </>;
+    // Staff personal requests from before the single assisted form still reopen for editing.
+    const assisted = !editing || location.pathname === "/staff/walk-in-requests/new";
+    return (
+      <ParticipantSaplingRequestWizard key={`${userRole}:${assisted}:${editing}`} currentUser={currentUser} requesterRole={userRole} walkIn={userRole === "staff" && assisted} />
+    );
   }
 
   if (loadingRequests) {
@@ -3027,6 +3023,7 @@ useEffect(() => {
                   <h3>Request Information</h3>
                   {[
                     ["Sector", selectedRequest.workflow.sector],
+                    [getRequesterDetailField(selectedRequest.workflow.sector, selectedRequest.workflow.requestingAs)?.label, selectedRequest.workflow[getRequesterDetailField(selectedRequest.workflow.sector, selectedRequest.workflow.requestingAs)?.key]],
                     ["Request Address", `${selectedRequest.workflow.street || ""}, ${selectedRequest.workflow.addressBarangay || ""}, ${selectedRequest.workflow.addressMunicipality || "Bulan"}, ${selectedRequest.workflow.addressProvince || "Sorsogon"}`],
                     ["Preferred Release Method", selectedRequest.workflow.releaseMethod],
                     ["Planting Site Type", selectedRequest.workflow.siteMode === "proposed" ? "Proposed Site" : "Existing Site"],

@@ -29,10 +29,11 @@ async function setup(page, overrides = {}) {
   });
   return { calls, check() { expect(unexpected).toEqual([]); expect(external.filter(origin => !/cartocdn|openstreetmap/.test(origin))).toEqual([]); } };
 }
-async function requester(page, { role = "participant", navigate = true, heading = "Request Seedlings" } = {}) {
+async function requester(page, { role = "participant", navigate = true, heading = "Request Seedlings", sector = "Resident / Individual", detail } = {}) {
   if (navigate) await page.goto(`/${role}/request-seedlings?role=${role}`);
   await expect(page.getByRole("heading", { name: role === "staff" ? "Submit Seedling Request" : heading, exact: true })).toBeVisible();
-  await page.getByLabel("Requesting As *", { exact: true }).selectOption("Resident / Individual");
+  await page.getByLabel("Requesting As *", { exact: true }).selectOption(sector);
+  if (detail) await page.getByLabel(detail.label, { exact: true }).fill(detail.value);
   await page.getByLabel("Province *", { exact: true }).selectOption("Sorsogon");
   await page.getByLabel("Municipality / City *", { exact: true }).selectOption("Bulan");
   await page.getByLabel("Barangay *", { exact: true }).selectOption("Bical");
@@ -366,38 +367,25 @@ const ownRequest = (status = "Pending", owner = "test-staff") => ({
   eventProposal: { eventName: "Individual planting schedule", barangay: "Bical", plantingSiteId: "site-1", proposedDate: "2099-01-02", proposedStartTime: "08:00", proposedEndTime: "", expectedParticipants: 1 },
 });
 
-test("Staff opens the shared accessible four-step wizard and submits their own request to My Requests", async ({ page }) => {
-  let saved, finishSubmission;
-  const fixture = await setup(page, {
-    "GET /api/auth/profile": route => route.fulfill({ json: { success: true, data: { uid: "test-staff", fullName: "Staff Requester", contactNumber: "09123456789", province: "Sorsogon", municipality: "Bulan", barangay: "Bical" } } }),
-    "POST /api/seedling-requests": async (route, request) => {
-      const body = request.postDataJSON();
-      expect(body).not.toHaveProperty("participantId"); expect(body).not.toHaveProperty("status");
-      expect(body.workflow.fullName).toBe("Staff Requester");
-      saved = { ...ownRequest(), ...body, id: "staff-own-request", requestNumber: "REQ-2099-001", participantId: "test-staff", status: "Pending" };
-      await new Promise(resolve => { finishSubmission = resolve; });
-      return route.fulfill({ status: 201, json: { success: true, data: saved } });
-    },
-    "GET /api/seedling-requests/my": route => route.fulfill({ json: { success: true, data: saved ? [saved] : [] } }),
-  });
+test("Staff opens one assisted form with no requester mode choice and validates required requester fields", async ({ page }) => {
+  const fixture = await setup(page);
   await page.goto("/staff/requests?role=staff");
   const trigger = page.getByRole("button", { name: "Submit Seedling Request", exact: true }); await trigger.focus(); await page.keyboard.press("Enter");
   await expect(page).toHaveURL(/staff\/request-seedlings/);
-  await page.getByRole("radio", { name: "For Myself", exact: true }).check();
-  await expect(page.getByLabel("Full Name *", { exact: true })).toHaveValue("Staff Requester");
-  await expect(page.getByLabel("Full Name *", { exact: true })).toHaveAttribute("readonly");
-  await expect(page.getByLabel("Contact Number *", { exact: true })).toHaveAttribute("readonly");
+  await expect(page.getByRole("radio", { name: "For a Requester", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("radio", { name: "For Myself", exact: true })).toHaveCount(0);
+  await expect(page.getByLabel("Assisted By", { exact: true })).toHaveValue("Test User");
   await page.getByRole("button", { name: "Next", exact: true }).click();
-  await expect(page.getByLabel("Requesting As *", { exact: true })).toBeFocused();
-  await requester(page, { role: "staff", navigate: false }); await plantingDetails(page);
-  await expect(page.getByText("Review Your Request", { exact: true })).toBeVisible();
-  await page.getByRole("button", { name: "Submit Request", exact: true }).click();
-  await expect.poll(() => typeof finishSubmission).toBe("function");
-  await expect(page.getByRole("radio", { name: "For a Requester", exact: true })).toBeDisabled();
-  finishSubmission();
-  await expect(page).toHaveURL(/staff\/my-requests/); await expect(page.getByText("REQ-2099-001", { exact: true }).first()).toBeVisible();
-  expect(saved.workflow.exactArea).toBe("0.5"); expect(saved.eventProposal.latitude).toBe(site.latitude);
-  expect(fixture.calls.filter(call => call.key === "POST /api/seedling-requests")).toHaveLength(1); fixture.check();
+  await expect(page.getByLabel("Full Name *", { exact: true })).toBeFocused();
+  await page.getByLabel("Full Name *", { exact: true }).fill("Citizen Requester");
+  const contact = page.getByLabel("Contact Number *", { exact: true });
+  await page.getByRole("button", { name: "Next", exact: true }).click();
+  await expect(page.getByText("Enter a valid Philippine mobile or landline number.")).toBeVisible();
+  await contact.fill("12345"); await page.getByRole("button", { name: "Next", exact: true }).click();
+  await expect(page.getByText("Enter a valid Philippine mobile or landline number.")).toBeVisible();
+  await contact.fill("(056) 211-1234"); await page.getByRole("button", { name: "Next", exact: true }).click();
+  await expect(page.getByText("Enter a valid Philippine mobile or landline number.")).toHaveCount(0);
+  await expect(page.getByLabel("Requesting As *", { exact: true })).toBeFocused(); fixture.check();
 });
 
 for (const [role, status] of [["staff", "Pending"], ["staff", "Approved"], ["admin", "Reviewed"]]) {
@@ -481,6 +469,7 @@ test("Requesting As preserves all sectors except the school split and shares pur
   expect(await sector.locator("option").evaluateAll(options => options.map(option => option.value).filter(Boolean))).toEqual(["Resident / Individual", "Barangay Official", "Student (Individual)", "School Organization Representative", "Private Sector / Business", "Civic Organization / NGO", "Government Agency", "Other (please specify)"]);
   await sector.selectOption("Student (Individual)");
   await expect(page.getByLabel("School / Organization Name *")).toHaveCount(0);
+  await page.getByLabel("School Name *", { exact: true }).fill("Fixture school");
   await expect(page.getByRole("radio", { name: "Individual / Student", exact: true })).toHaveCount(0);
   await page.getByLabel("Province *", { exact: true }).selectOption("Sorsogon"); await page.getByLabel("Municipality / City *", { exact: true }).selectOption("Bulan"); await page.getByLabel("Barangay *", { exact: true }).selectOption("Bical"); await page.getByLabel("Street / Purok / Sitio *").fill("Fixture street");
   await page.getByRole("button", { name: "Next", exact: true }).click();
@@ -488,7 +477,7 @@ test("Requesting As preserves all sectors except the school split and shares pur
   expect(purposes).toEqual(["Household / Backyard", "Agroforestry / Fruit Tree", "Reforestation / Mangrove / Riverbank / Slope", "School / Community / Roadside Greening", "Replacement Planting", "Special Occasion", "Other"]);
   await page.getByRole("button", { name: "Back", exact: true }).click(); await sector.selectOption("School Organization Representative");
   await expect(page.getByLabel("School / Organization Name *")).toBeVisible(); await page.getByLabel("School / Organization Name *").fill("Fixture school organization");
-  await expect(page.getByLabel("Representative Full Name")).toHaveAttribute("readonly");
+  await expect(page.getByLabel("Representative Full Name")).toHaveCount(0);
   await page.getByRole("button", { name: "Next", exact: true }).click();
   expect(await page.getByLabel("Purpose of Request *").locator("option").evaluateAll(options => options.map(option => option.value).filter(Boolean))).toEqual(purposes); fixture.check();
 });
@@ -498,7 +487,7 @@ test("Staff walk-in wizard records an actual citizen and signed receipt, not the
   const fixture = await setup(page, {
     "POST /api/seedling-requests/walk-in": (route, request) => {
       const multipart = request.postDataBuffer().toString(); expect(multipart).toContain('name="acknowledgement"');
-      expect(multipart).toContain('"fullName":"Citizen Requester"'); expect(multipart).toContain('"receiptReference":"ACK-WALKIN-1"');
+      expect(multipart).toContain('"fullName":"Citizen Requester"'); expect(multipart).toContain('"receiptReference":"ACK-WALKIN-1"'); expect(multipart).toContain('"contactNumber":"0917 123 4567"');
       encoded = { ...ownRequest(), id: "walkin-1", participantId: "walkin-citizen", participantName: "Citizen Requester", walkIn: { encodedBy: "test-staff", citizenHasAccount: false, receiptReference: "ACK-WALKIN-1" } };
       return route.fulfill({ status: 201, json: { success: true, data: encoded } });
     },
@@ -506,7 +495,9 @@ test("Staff walk-in wizard records an actual citizen and signed receipt, not the
   });
   await page.goto("/staff/requests?role=staff"); await page.getByRole("button", { name: "Submit Seedling Request", exact: true }).click();
   await expect(page.getByLabel("Full Name *", { exact: true })).toHaveValue(""); await page.getByLabel("Full Name *", { exact: true }).fill("Citizen Requester");
-  await expect(page.getByLabel("Available Contact Number (Optional)")).toHaveValue("");
+  await expect(page.getByLabel("Available Contact Number (Optional)")).toHaveCount(0);
+  await expect(page.getByLabel("Contact Number *", { exact: true })).toHaveValue("");
+  await page.getByLabel("Contact Number *", { exact: true }).fill("0917 123 4567");
   await requester(page, { role: "staff", navigate: false, heading: "Encode Walk-in Request" }); await plantingDetails(page);
   await expect(page.getByLabel("Assisted By")).toHaveAttribute("readonly");
   await page.getByRole("button", { name: "Submit Request", exact: true }).click();
@@ -580,18 +571,15 @@ test("Staff proposes Other policy with a reason and Admin makes the versioned fi
 });
 
 
-test("Staff defaults to assisted identity and safely switches to explicit personal mode", async ({ page }) => {
+test("Staff assisted identity is the only new request mode and starts blank", async ({ page }) => {
   const fixture = await setup(page);
   await page.goto("/staff/request-seedlings?role=staff");
-  await expect(page.getByRole("radio", { name: "For a Requester", exact: true })).toBeChecked();
+  await expect(page.getByRole("radio", { name: "For a Requester", exact: true })).toHaveCount(0);
   await expect(page.getByLabel("Assisted By", { exact: true })).toHaveValue("Test User");
   await expect(page.getByLabel("Assisted By", { exact: true })).toHaveAttribute("readonly");
-  await page.getByLabel("Full Name *", { exact: true }).fill("Actual Citizen");
-  await page.getByRole("radio", { name: "For Myself", exact: true }).check();
-  await expect(page.getByLabel("Full Name *", { exact: true })).toHaveValue("Workflow User");
-  await expect(page.getByLabel("Full Name *", { exact: true })).toHaveAttribute("readonly");
-  await page.getByRole("radio", { name: "For a Requester", exact: true }).check();
-  await expect(page.getByLabel("Full Name *", { exact: true })).toHaveValue(""); fixture.check();
+  await expect(page.getByLabel("Full Name *", { exact: true })).toHaveValue("");
+  await expect(page.getByLabel("Full Name *", { exact: true })).not.toHaveAttribute("readonly");
+  await expect(page.getByLabel("Contact Number *", { exact: true })).not.toHaveAttribute("readonly"); fixture.check();
 });
 
 test("My Requests ownership filter combines with Replacement without including assisted citizens", async ({ page }) => {
@@ -810,6 +798,58 @@ for (const width of [390, 1440]) test(`Admin dashboard has no reporting coverage
   const firstIsFilters = await page.locator(".admin-dashboard").evaluate(node => node.firstElementChild.classList.contains("dashboard-filter-row"));
   expect(firstIsFilters).toBe(true);
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+  fixture.check();
+});
+
+const requesterFields = [
+  ["Resident / Individual", null],
+  ["Barangay Official", "Position in Barangay *"],
+  ["Student (Individual)", "School Name *"],
+  ["School Organization Representative", "School / Organization Name *"],
+  ["Private Sector / Business", "Business / Company Name *"],
+  ["Civic Organization / NGO", "Organization Name *"],
+  ["Government Agency", "Government Agency / Office Name *"],
+  ["Other (please specify)", "Specify Requester Type *"],
+];
+for (const [role, path] of [["participant", "/participant/request-seedlings?role=participant"], ["staff", "/staff/request-seedlings?role=staff"]]) test(`${role} form shows only the typed field for each Requesting As`, async ({ page }) => {
+  const fixture = await setup(page); await page.goto(path);
+  const sector = page.getByLabel("Requesting As *", { exact: true });
+  await expect(sector).toBeVisible();
+  const labels = requesterFields.map(([, label]) => label).filter(Boolean);
+  for (const [value, label] of requesterFields) {
+    await sector.selectOption(value);
+    for (const other of labels) await expect(page.getByLabel(other, { exact: true })).toHaveCount(other === label ? 1 : 0);
+    await expect(page.getByLabel("Representative Full Name")).toHaveCount(0);
+    await expect(page.getByRole("radio", { name: "Group / Organization", exact: true })).toHaveCount(0);
+    if (label) {
+      const input = page.getByLabel(label, { exact: true });
+      expect(await input.evaluate(node => [node.tagName, node.type])).toEqual(["INPUT", "text"]);
+      await expect(input).toHaveValue(""); await input.fill("Typed value"); await expect(input).toHaveValue("Typed value");
+    }
+  }
+  fixture.check();
+});
+
+test("Requesting As fields are required and shown as errors on the same step", async ({ page }) => {
+  const fixture = await setup(page); await page.goto("/participant/request-seedlings?role=participant");
+  await page.getByLabel("Requesting As *", { exact: true }).selectOption("Barangay Official");
+  await page.getByRole("button", { name: "Next", exact: true }).click();
+  await expect(page.getByText("Enter the Position in Barangay.", { exact: true })).toBeVisible();
+  await page.getByLabel("Requesting As *", { exact: true }).selectOption("Resident / Individual");
+  await expect(page.getByText("Enter the Position in Barangay.", { exact: true })).toHaveCount(0); fixture.check();
+});
+
+for (const [sector, detail, key, requestingAs] of [
+  ["Student (Individual)", { label: "School Name *", value: "  Bulan National High School " }, "schoolName", ""],
+  ["Other (please specify)", { label: "Specify Requester Type *", value: "Farmer Cooperative" }, "sectorOther", "individual"],
+]) test(`${sector} saves only its typed requester value`, async ({ page }) => {
+  const fixture = await setup(page); await requester(page, { sector, detail }); await plantingDetails(page);
+  await expect(page.getByText(detail.value.trim(), { exact: false }).first()).toBeVisible();
+  await page.getByRole("button", { name: "Submit Request", exact: true }).click();
+  await expect(page).toHaveURL(/participant\/my-requests/);
+  const { workflow } = fixture.calls.find(call => call.key === "POST /api/seedling-requests").body;
+  expect(workflow[key]).toBe(detail.value.trim()); expect(workflow.sector).toBe(sector); expect(workflow.requestingAs).toBe(requestingAs);
+  for (const other of ["positionInBarangay", "schoolName", "organizationName", "sectorOther"].filter(field => field !== key)) expect(workflow[other]).toBe("");
   fixture.check();
 });
 

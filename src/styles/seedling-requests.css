@@ -3673,5 +3673,3 @@
   .sr-header-actions > button { flex: 1 1 200px; }
 }
 
-.sr-request-mode { display: flex; flex-wrap: wrap; gap: 16px; border: 1px solid #dfe6e1; border-radius: 10px; padding: 12px 16px; margin: 0 0 16px; background: #fff; }
-.sr-request-mode label { display: flex; align-items: center; gap: 8px; }

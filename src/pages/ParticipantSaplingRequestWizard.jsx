@@ -24,6 +24,8 @@ import {
 import { useToast } from "../context/ToastContext";
 import PageLoadingState from "../components/PageLoadingState";
 import { backendFieldErrors, focusFirstInvalid } from "../utils/formValidation";
+import { REQUESTER_DETAIL_RESET, getRequesterDetailField, keepOnlyRequesterDetail } from "../utils/requesterDetails";
+import { INVALID_CONTACT_NUMBER_MESSAGE, isValidPhilippineContactNumber } from "../utils/philippineContact";
 import { BULAN_BARANGAYS } from "../utils/userTypes";
 import { IDENTIFICATION_DOCUMENTS, validateIdentificationForm } from "../utils/identificationDocuments";
 import { createLeafletResizeScheduler } from "../utils/leafletLifecycle";
@@ -63,6 +65,7 @@ const STEPS = [
   "Identification & Review",
 ];
 const SECTORS = REQUEST_SECTORS;
+const OTHER_SECTOR = "Other (please specify)";
 const PROVINCES = getPhilippineProvinces();
 const AREAS = [
   "Less than 1 hectare",
@@ -141,7 +144,9 @@ const fresh = (p) => ({
   sector: "",
   sectorOther: "",
   requestingAs: "",
-  organizationName: p?.organization || p?.affiliationName || "",
+  organizationName: "",
+  positionInBarangay: "",
+  schoolName: "",
   addressProvince: "",
   addressProvinceOther: "",
   addressMunicipality: "",
@@ -381,6 +386,7 @@ export default function ParticipantSaplingRequestWizard({ currentUser, requester
     showErrorRef.current = showError;
   }, [showError]);
   const requestType = getEffectiveRequestType(form.sector, form.requestingAs);
+  const requesterDetail = getRequesterDetailField(form.sector, form.requestingAs);
   const group = requestType === "organization";
   const sharedPurposes = getPurposeOptions();
   const legacyPurpose = editing?.workflow?.purpose || editing?.purpose;
@@ -417,9 +423,11 @@ export default function ParticipantSaplingRequestWizard({ currentUser, requester
       const requestingAs =
         key === "requestingAs"
           ? value
-          : key === "sector" && !REQUEST_TYPE_SELECTABLE_SECTORS.has(value)
-            ? ""
-            : old.requestingAs;
+          : key === "sector" && value === OTHER_SECTOR
+            ? "individual"
+            : key === "sector" && !REQUEST_TYPE_SELECTABLE_SECTORS.has(value)
+              ? ""
+              : old.requestingAs;
       const sector = key === "sector" ? value : old.sector;
       const nextRequestType = getEffectiveRequestType(sector, requestingAs);
       const nextIsGroup = nextRequestType === "organization";
@@ -434,6 +442,8 @@ export default function ParticipantSaplingRequestWizard({ currentUser, requester
         ...old,
         [key]: value,
         requestingAs,
+        ...(key === "sector" ? REQUESTER_DETAIL_RESET : {}),
+        ...(key === "requestingAs" ? { organizationName: "" } : {}),
         ...(key === "addressProvince"
           ? { addressProvinceOther: "", addressMunicipality: "", addressMunicipalityOther: "", addressBarangay: "" }
           : {}),
@@ -496,6 +506,7 @@ export default function ParticipantSaplingRequestWizard({ currentUser, requester
       [key]: "",
       ...(["sector", "requestingAs"].includes(key)
         ? {
+            ...REQUESTER_DETAIL_RESET,
             purpose: "", purposeOther: "", eventName: "", activityDate: "",
             startTime: "", endTime: "", participants: "", requestLetter: "",
           }
@@ -559,7 +570,7 @@ export default function ParticipantSaplingRequestWizard({ currentUser, requester
             ...defaultForm,
             ...savedWorkflow,
             sector: savedSector,
-            requestingAs: savedRequestingAs,
+            requestingAs: savedRequestingAs || (savedSector === OTHER_SECTOR ? "individual" : ""),
             purpose,
             purposeOther: savedWorkflow.purposeOther || (isOtherPurpose(purpose) ? savedPurpose : ""),
             preferredReleaseDate: request.preferredReleaseDate || savedWorkflow.preferredReleaseDate || "",
@@ -603,12 +614,9 @@ export default function ParticipantSaplingRequestWizard({ currentUser, requester
       if (!String(form[k] ?? "").trim()) e[k] = m;
     };
     if (s === 1) {
-      if (group) need("organizationName", "Enter the school or organization name.");
       need("fullName", "Please enter your full name.");
       need("sector", "Please select a sector.");
-      if (!walkIn) need("contactNumber", "Please enter a valid contact number.");
-      if (form.contactNumber && !/^(?:\+63|0)9\d{9}$/.test(String(form.contactNumber).replace(/[\s-]/g, "")))
-        e.contactNumber = "Please enter a valid contact number.";
+      if (!isValidPhilippineContactNumber(form.contactNumber)) e.contactNumber = INVALID_CONTACT_NUMBER_MESSAGE;
       need("addressProvince", "Please select a province.");
       if (form.addressProvince === "Other")
         need("addressProvinceOther", "Please enter a province name.");
@@ -617,10 +625,8 @@ export default function ParticipantSaplingRequestWizard({ currentUser, requester
         need("addressMunicipalityOther", "Please enter a municipality or city name.");
       if (!addressBarangays.includes(form.addressBarangay)) e.addressBarangay = "Select a barangay belonging to the selected municipality.";
       need("street", "Please enter your street, purok, or sitio.");
-      if (REQUEST_TYPE_SELECTABLE_SECTORS.has(form.sector)) {
-        if (form.sector === "Other (please specify)") need("sectorOther");
-        need("requestingAs", "Select how you are requesting.");
-      }
+      if (form.sector === "School / Student") need("requestingAs", "Select how you are requesting.");
+      if (requesterDetail) need(requesterDetail.key, `Enter the ${requesterDetail.label}.`);
     }
     if (s === 2) {
       need("purpose", "Select a purpose.");
@@ -809,6 +815,7 @@ export default function ParticipantSaplingRequestWizard({ currentUser, requester
       workflow.currentCondition = "";
     }
     if (!editing && form.siteMode === "proposed") delete workflow.siteNotes;
+    Object.assign(workflow, keepOnlyRequesterDetail(form, form.sector, form.requestingAs));
     delete workflow.trees;
     delete workflow.idNumber;
     delete workflow.addressProvinceOther;
@@ -893,7 +900,7 @@ export default function ParticipantSaplingRequestWizard({ currentUser, requester
       if (group && requestLetterCapability) setLetterUploadState("error");
       if (e.fieldErrors && Object.keys(e.fieldErrors).length) {
         const fields = backendFieldErrors(e, { proposedDate: "activityDate", proposedStartTime: "startTime", proposedEndTime: "endTime", expectedParticipants: "participants", plantingSiteId: "existingSiteId", confirmedInformation: "confirmed" });
-        const fieldStep = { organizationName: 1, receiptReference: 4, acknowledgement: 4, identificationType: 4, idNumber: 4, schoolInstitutionName: 4,
+        const fieldStep = { organizationName: 1, positionInBarangay: 1, schoolName: 1, sectorOther: 1, receiptReference: 4, acknowledgement: 4, identificationType: 4, idNumber: 4, schoolInstitutionName: 4,
           requestLetter: 4, confirmed: 4,
           activityDate: 3, startTime: 3, endTime: 3, participants: 3,
           siteBarangay: 3, areaChoice: 3, exactArea: 3, existingSiteId: 3,
@@ -997,34 +1004,28 @@ export default function ParticipantSaplingRequestWizard({ currentUser, requester
                     ))}
                   </select>
                 </Field>
-                    {form.sector === "Other (please specify)" && (
-                      <Field fieldKey="sectorOther" label="Please Specify *" error={errors.sectorOther}>
-                        <input value={form.sectorOther} onChange={(e) => put("sectorOther", e.target.value)} />
+                    {requesterDetail && (
+                      <Field key={requesterDetail.label} fieldKey={requesterDetail.key} label={`${requesterDetail.label} *`} error={errors[requesterDetail.key]}>
+                        <input type="text" value={form[requesterDetail.key]} maxLength={160} onChange={(e) => put(requesterDetail.key, e.target.value)} />
                       </Field>
                     )}
                 </div>
-                {REQUEST_TYPE_SELECTABLE_SECTORS.has(form.sector) && (
+                {form.sector === "School / Student" && (
                   <>
-                    <Field fieldKey="requestingAs" label="Request Type (Legacy / Other) *" error={errors.requestingAs}>
+                    <Field fieldKey="requestingAs" label="Request Type (Legacy) *" error={errors.requestingAs}>
                       <Radios
                         name="requestingAs"
                         value={form.requestingAs}
                         set={(v) => put("requestingAs", v)}
-                        items={form.sector === "School / Student"
-                          ? [["individual", "Individual / Student"], ["group", "School / Organization Representative"]]
-                          : [["individual", "Individual"], ["group", "Group / Organization"]]}
+                        items={[["individual", "Individual / Student"], ["group", "School / Organization Representative"]]}
                       />
                     </Field>
                   </>
                 )}
-                <Field fieldKey="contactNumber" label={walkIn ? "Available Contact Number (Optional)" : "Contact Number *"} error={errors.contactNumber}>
-                  <input value={form.contactNumber} readOnly={!walkIn} onChange={event => walkIn && put("contactNumber", event.target.value)} />
+                <Field fieldKey="contactNumber" label="Contact Number *" error={errors.contactNumber}>
+                  <input type="tel" value={form.contactNumber} readOnly={!walkIn} placeholder={walkIn ? "09XX XXX XXXX or (056) XXX XXXX" : undefined} onChange={event => walkIn && put("contactNumber", event.target.value)} />
                 </Field>
               </div>
-              {group && <div className="sr-form-grid">
-                <Field fieldKey="organizationName" label="School / Organization Name *" error={errors.organizationName}><input value={form.organizationName} maxLength={160} onChange={event => put("organizationName", event.target.value)} /></Field>
-                <Field label="Representative Full Name"><input value={form.fullName} readOnly /></Field>
-              </div>}
               <Title>Address Information</Title>
               <div className="sr-form-grid">
                 <div className="sr-address-field-group">
@@ -1672,7 +1673,7 @@ export default function ParticipantSaplingRequestWizard({ currentUser, requester
                 <Title>Review Your Request</Title>
                 <div className="sr-wizard-review">
                 <p>
-                  <strong>Requester:</strong> {form.fullName} · {form.sector}
+                  <strong>Requester:</strong> {form.fullName} · {form.sector}{requesterDetail && form[requesterDetail.key] ? ` · ${form[requesterDetail.key]}` : ""}
                 </p>
                 <p>
                   <strong>Address:</strong> {form.street},{" "}
