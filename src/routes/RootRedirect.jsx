@@ -1,3 +1,4 @@
+import AuthLoading from "../components/AuthLoading";
 import { Navigate, useLocation } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { dashboardPathForRole } from "../utils/roleRoutes";
@@ -15,7 +16,7 @@ function useEffectiveAuth() {
 // bare site URL into a new tab.
 export function RootRedirect() {
   const { effectiveUser, effectiveRole, authLoading } = useEffectiveAuth();
-  if (authLoading) return null;
+  if (authLoading) return <AuthLoading />;
 
   if (effectiveUser) {
     if (effectiveRole === "participant" && effectiveUser.profileComplete === false) {
@@ -32,7 +33,7 @@ export function RootRedirect() {
 export function GuestOnlyRoute({ children }) {
   const { effectiveUser, effectiveRole, authLoading } = useEffectiveAuth();
   const location = useLocation();
-  if (authLoading) return null;
+  if (authLoading) return <AuthLoading />;
 
   if (effectiveUser) {
     if (isInteractiveLoginPending()) return children;

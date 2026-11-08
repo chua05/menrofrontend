@@ -1,3 +1,4 @@
+import AuthLoading from "../components/AuthLoading";
 import { Navigate, Outlet, useLocation } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 
@@ -5,7 +6,7 @@ export default function ProtectedRoute({ allowedRoles }) {
   const { currentUser: effectiveUser, userRole: effectiveRole, authLoading } = useAuth();
   const location = useLocation();
 
-  if (authLoading) return null;
+  if (authLoading) return <AuthLoading />;
 
   if (!effectiveUser) {
     const from = `${location.pathname}${location.search}${location.hash}`;

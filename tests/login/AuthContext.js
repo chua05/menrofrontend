@@ -11,6 +11,6 @@ export function AuthProvider({ children }) {
   }, []);
   const login = user => { sessionStorage.setItem("fixture-session", JSON.stringify(user)); setUser(user); };
   const logout = async () => { clearSuccessfulLogin(); sessionStorage.removeItem("fixture-session"); setUser(null); };
-  return createElement(Context.Provider, { value: { currentUser, userRole: currentUser?.role, authLoading: false, login, logout } }, children);
+  return createElement(Context.Provider, { value: { currentUser, userRole: currentUser?.role, authLoading: sessionStorage.getItem("fixture-auth-loading") === "true", login, logout } }, children);
 }
 export const useAuth = () => useContext(Context);
