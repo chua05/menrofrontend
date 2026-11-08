@@ -16,9 +16,16 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta name="apple-mobile-web-app-title" content="MENRO Bulan" />
     <title>MENRO Bulan</title>
+    <!-- A normal load replaces this fallback before it is shown; keep in sync with src/styles/startup.css. -->
+    <style>
+      .startup-delayed { visibility: hidden; animation: menro-startup-reveal 0s linear 2s forwards; }
+      .startup-reload-hint { visibility: hidden; animation: menro-startup-reveal 0s linear 10s forwards; }
+      @keyframes menro-startup-reveal { to { visibility: visible; } }
+    </style>
+    <noscript><style>.startup-delayed, .startup-reload-hint { visibility: visible; animation: none; }</style></noscript>
   </head>
   <body>
-    <div id="root"><section class="startup-panel" role="status"><h1>Loading MENRO</h1><p>If loading does not finish, <a href="">reload this page</a>.</p><noscript>JavaScript is required to use MENRO. Enable it and reload.</noscript></section></div>
+    <div id="root"><section class="startup-panel startup-delayed" role="status"><h1>Loading MENRO</h1><p class="startup-reload-hint">If loading does not finish, <a href="">reload this page</a>.</p><noscript>JavaScript is required to use MENRO. Enable it and reload.</noscript></section></div>
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>
