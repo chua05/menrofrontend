@@ -1,5 +1,5 @@
 import { auth } from "../firebase/config";
-import { createAuthSessionRequest } from "./authSessionRequest";
+import { createAuthSessionRequest, requestWithTimeout } from "./authSessionRequest";
 import {
   assertFrontendIntegrationTokenAudience,
   validateFrontendIntegrationEnvironment,
@@ -38,7 +38,11 @@ const backendErrorCode = (status) => {
   return "BACKEND_REJECTED";
 };
 
-async function requestBackendSession(firebaseUser) {
+// Long enough for a sleeping server to wake up, short enough that sign-in
+// reports an unresponsive server instead of staying on "Continuing...".
+const SESSION_VERIFY_TIMEOUT_MS = 60000;
+
+async function verifyBackendSession(firebaseUser, signal) {
   const token = await firebaseUser.getIdToken();
   assertFrontendIntegrationTokenAudience(token, integration);
   let response;
@@ -52,9 +56,11 @@ async function requestBackendSession(firebaseUser) {
           "Content-Type": "application/json",
         },
         body: "{}",
+        signal,
       });
       break;
     } catch (error) {
+      if (signal.aborted) throw error;
       if (attempt === 0 && navigator.onLine !== false) {
         await wait(750);
         continue;
@@ -78,6 +84,17 @@ async function requestBackendSession(firebaseUser) {
   }
   return payload.data;
 }
+
+const requestBackendSession = firebaseUser => requestWithTimeout(
+  signal => verifyBackendSession(firebaseUser, signal),
+  {
+    timeoutMs: SESSION_VERIFY_TIMEOUT_MS,
+    timeoutError: () => new MenroApiError(
+      "The MENRO server could not be reached.",
+      { code: "BACKEND_UNAVAILABLE" }
+    ),
+  }
+);
 
 const authSessionRequest = createAuthSessionRequest(requestBackendSession);
 
