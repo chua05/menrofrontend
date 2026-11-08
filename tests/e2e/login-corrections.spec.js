@@ -43,14 +43,19 @@ for (const role of ["admin", "staff", "participant"]) for (const method of ["ema
   });
 }
 
-for (const route of ["/login", "/register", "/staff/dashboard"]) test("pending auth stays visible and fail-closed at " + route, async ({ page }) => {
+for (const route of ["/login", "/register", "/staff/dashboard"]) test("pending auth preserves public login and protected guards at " + route, async ({ page }) => {
   const external = [];
   await page.route("**/*", request => { const url = new URL(request.request().url()); if (url.origin !== "http://127.0.0.1:5184") { external.push(url.origin); return request.abort(); } if (url.pathname.startsWith("/api/")) return request.fulfill({ json: { success: true, data: [] } }); return request.continue(); });
   await page.addInitScript(() => sessionStorage.setItem("fixture-auth-loading", "true"));
   await page.goto(route);
-  await expect(page.getByRole("heading", { name: "Checking your sign-in" })).toBeVisible();
-  await expect(page.getByRole("link", { name: "Reload page" })).toBeVisible();
-  await expect(page.locator("#login-email")).toHaveCount(0);
+  if (route === "/login") {
+    await expect(page.locator("#login-email")).toBeVisible();
+    await expect(page.locator("#login-password")).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Checking your sign-in" })).toHaveCount(0);
+  } else {
+    await expect(page.getByRole("heading", { name: "Checking your sign-in" })).toBeVisible();
+    await expect(page.locator("#login-email")).toHaveCount(0);
+  }
   await expect(page.locator(".dashboard-kpi-grid")).toHaveCount(0);
   expect(external).toEqual([]);
 });

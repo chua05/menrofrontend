@@ -30,10 +30,10 @@ export function RootRedirect() {
 
 // Wraps public-only pages (login, register): if you're already signed
 // in, skip straight to your dashboard instead of showing the form again.
-export function GuestOnlyRoute({ children }) {
+export function GuestOnlyRoute({ children, showWhileRestoring = false }) {
   const { effectiveUser, effectiveRole, authLoading } = useEffectiveAuth();
   const location = useLocation();
-  if (authLoading) return <AuthLoading />;
+  if (authLoading) return showWhileRestoring ? children : <AuthLoading />;
 
   if (effectiveUser) {
     if (isInteractiveLoginPending()) return children;

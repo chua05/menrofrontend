@@ -78,7 +78,7 @@ function App() {
           <Route
             path="/login"
             element={
-              <GuestOnlyRoute>
+              <GuestOnlyRoute showWhileRestoring>
                 <LoginPage />
               </GuestOnlyRoute>
             }
