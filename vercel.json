@@ -1,7 +1,7 @@
 {
   "headers": [
     {
-      "source": "/(.*)",
+      "source": "/((?!__/auth/).*)",
       "headers": [
         {
           "key": "Cross-Origin-Opener-Policy",
