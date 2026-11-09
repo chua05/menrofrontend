@@ -14,7 +14,7 @@ Design diagrams for the Web-Based Geo-Tagged Reforestation Monitoring System (ME
 
 Colours mean the same thing in every diagram.
 
-| Colour | People and services | Areas of the system (use case and ERD) |
+| Colour | People and services | Areas of the system (use case) |
 |---|---|---|
 | Blue | Participant | Seedling requests |
 | Grey | Guest Planter | Shared use cases, notes |
@@ -29,8 +29,8 @@ Colours mean the same thing in every diagram.
 ## Notation
 
 - **DFD:** Gane and Sarson style. Rounded green boxes are processes, open-ended yellow boxes are data stores (D1 to D13), and square boxes are external entities. In Level 1, people and data stores are repeated on each row so that no data flows cross; processes share data only through the data stores.
-- **Use case:** UML. The Administrator inherits every MENRO Staff use case (hollow arrow) and also has the Administrator-only group. «include» means one use case is always part of another.
-- **ERD:** crow's-foot notation. Firestore is a document database, so a "FK" field stores another document's ID. References to the person who acted (`createdBy`, `actorId`, `authenticatedSubmitterUid`) and the capture session's `siteId` are listed as fields rather than drawn as lines. Technical collections (image hashes, quotas, counters, audit logs and upload intents) are left out.
+- **Use case:** UML. The Administrator inherits every MENRO Staff use case (hollow arrow) and also has the Administrator-only group. Dashed arrows show «include» (the base use case always performs the included one; the arrow points from the base to the included use case) and «extend» (optional behaviour added to the base use case under a condition; the arrow points from the extension to the base). Supporting use cases sit in the middle column, level with their base use case.
+- **ERD:** crow's-foot notation in plain table form: each entity lists its keys first (PK / FK column, bold and underlined), then its other fields, and every line is labelled 1, 0..1 or M at each end. Firestore is a document database, so a "FK" field stores another document's ID. References to the person who acted (`createdBy`, `actorId`, `authenticatedSubmitterUid`) and the capture session's `siteId` are listed as fields rather than drawn as lines. Technical collections (image hashes, quotas, counters, audit logs and upload intents) are left out.
 - **Activity:** UML swimlanes. Each column is the role that performs the step, and decisions are diamonds with Yes / No branches.
 
 ## Sources
