@@ -22,6 +22,13 @@ import { buildEvidenceLocationView, photoGpsMetadataLabel } from "../utils/evide
 import { SITE_GPS_TOLERANCE_METERS, buildLocationPreviewStatus, calculateDistanceMeters, getFeatureBarangayName, isPointInBulanBoundary, isPointInPolygon } from "../utils/plantingLocationPreview";
 import PhotoRequirementsDialog from "../components/PhotoRequirementsDialog";
 import PlantingEvidenceMap from "../components/PlantingEvidenceMap";
+import {
+  latestSubmittedAt,
+  photoAvailabilityMessage,
+  reportHistory,
+  reportReviewStatus,
+  reportSubmissionStatus,
+} from "../utils/plantingReportView";
 import { useToast } from "../context/ToastContext";
 import {
   DECISIONS,
@@ -120,6 +127,8 @@ const VERIFICATION_CLASSES = {
   Rejected: "pr-status-rejected",
   Invalid: "pr-status-rejected",
   "Awaiting Submission": "pr-status-reviewed",
+  Submitted: "pr-status-approved",
+  "Not Submitted": "pr-status-reviewed",
   Partial: "pr-status-reviewed",
   "Fully Reported — Awaiting Review": "pr-status-reviewed",
   Completed: "pr-status-approved",
@@ -518,6 +527,15 @@ export default function PlantingPage() {
       requestError.status = response.status;
       requestError.fieldErrors = payload.fieldErrors;
       throw requestError;
+    }
+
+    // A 2xx with success:false (e.g. 202 "evidence processing in progress")
+    // means nothing was saved yet; never report it as a successful submission.
+    if (payload?.success === false) {
+      const pendingError = new Error(payload.message || "The request was not completed. Please try again.");
+      pendingError.code = payload.code || "";
+      pendingError.status = response.status;
+      throw pendingError;
     }
 
     return payload;
@@ -2345,6 +2363,22 @@ export default function PlantingPage() {
     setSelectedSubmission(null);
     setVerificationRemarks("");
     setShowViewModal(true);
+    refreshSelectedRecord(record.id);
+  }
+
+  // The list may be stale (e.g. a Participant submitted after Staff loaded the
+  // page). Re-read the single report so status, submissions and photo indexes
+  // reflect what is actually saved. Backend RBAC/redaction still applies.
+  async function refreshSelectedRecord(reportId) {
+    if (!reportId) return;
+    try {
+      const response = await apiRequest(`/planting-reports/${encodeURIComponent(reportId)}`);
+      if (!response?.data) return;
+      setSelectedRecord((current) => (current && current.id === reportId ? response.data : current));
+      setRecords((current) => current.map((item) => (item.id === reportId ? response.data : item)));
+    } catch {
+      // Keep the list copy; the drawer still renders it.
+    }
   }
 
   function closeRecordModal() {
@@ -2711,7 +2745,13 @@ export default function PlantingPage() {
                       )}
                     </td>
                     <td className="pr-td">{formatDate(record.plantingDate)}</td>
-                    <td className="pr-td">{renderStatusBadge(record.reportType === "parent" ? record.reportingProgress : record.verificationStatus)}</td>
+                    <td className="pr-td">
+                      {renderStatusBadge(reportSubmissionStatus(record))}
+                      <div className="pr-table-sub">
+                        Review: {reportReviewStatus(record)}
+                        {record.reportType === "parent" && record.reportingProgress ? ` · ${record.reportingProgress}` : ""}
+                      </div>
+                    </td>
                     <td className="pr-td pr-center">
                       <button
                         type="button"
@@ -3352,7 +3392,8 @@ export default function PlantingPage() {
               <div>
                 <h2 className="pr-drawer-title">Planting Report Details</h2>
                 <div className="pr-drawer-heading-meta">
-                  {renderStatusBadge(selectedRecord.reportType === "parent" ? selectedRecord.reportingProgress : selectedRecord.verificationStatus)}
+                  {renderStatusBadge(reportSubmissionStatus(selectedRecord))}
+                  {Object.values(WORKFLOW_STATUS).includes(reportReviewStatus(selectedRecord)) ? renderWorkflowBadge(reportReviewStatus(selectedRecord)) : renderStatusBadge(reportReviewStatus(selectedRecord))}
                   <span className="pr-drawer-report-id">{formatDisplayId("RPT", selectedRecord.reportNumber, selectedRecord.reportId, selectedRecord.id)}</span>
                 </div>
               </div>
@@ -3445,8 +3486,12 @@ export default function PlantingPage() {
                   </div>
 
                   <div className="pr-info-block">
-                    <div className="pr-info-label">Submitted</div>
-                    <div className="pr-info-value">{formatDateTime(selectedRecord.createdAt)}</div>
+                    <div className="pr-info-label">Last Submitted</div>
+                    <div className="pr-info-value">
+                      {latestSubmittedAt(selectedRecord)
+                        ? formatDateTime(latestSubmittedAt(selectedRecord))
+                        : "Not yet submitted"}
+                    </div>
                   </div>
                 </div>
 
@@ -3571,9 +3616,9 @@ export default function PlantingPage() {
                   <div className="pr-photo-unavailable">
                     <FiImage size={22} />
                     <div>
-                      <div className="pr-photo-unavailable-title">Photo unavailable</div>
+                      <div className="pr-photo-unavailable-title">{photoAvailabilityMessage(selectedRecord).title}</div>
                       <div className="pr-photo-unavailable-text">
-                        No accessible photo URL is currently stored for this report.
+                        {photoAvailabilityMessage(selectedRecord).text}
                       </div>
                     </div>
                   </div>
@@ -3877,18 +3922,20 @@ export default function PlantingPage() {
                     {canReview && verificationLogs.reportId === selectedRecord.id && verificationLogs.status === "error" && (
                       <div className="pr-history-unavailable" role="status">The decision history could not be loaded. Submission statuses and reasons above remain current.</div>
                     )}
-                    <div className="pr-history-item">
-                      <div className="pr-history-marker"><FiCheck size={13} /></div>
-                      <div className="pr-history-content">
-                        <div className="pr-history-title">Submitted</div>
-                        <div className="pr-history-meta">
-                          {formatDateTime(selectedRecord.createdAt)}
-                          {selectedRecord.submittedByName || selectedRecord.participantName
-                            ? ` by ${selectedRecord.submittedByName || selectedRecord.participantName}`
-                            : ""}
+                    {reportHistory(selectedRecord)
+                      .filter((item) => ["opened", "submitted", "awaiting"].includes(item.kind))
+                      .map((item, index) => (
+                        <div className="pr-history-item" key={`base-${item.kind}-${item.submissionId || "report"}-${index}`}>
+                          <div className="pr-history-marker">{item.kind === "submitted" ? <FiCheck size={13} /> : <FiClock size={13} />}</div>
+                          <div className="pr-history-content">
+                            <div className="pr-history-title">{item.title}</div>
+                            <div className="pr-history-meta">
+                              {item.at ? formatDateTime(item.at) : "Pending"}
+                              {item.by ? ` by ${item.by}` : ""}
+                            </div>
+                          </div>
                         </div>
-                      </div>
-                    </div>
+                      ))}
                     {submissionsWithPhotoIndexes.map((submission) => {
                       const stage = submissionWorkflowStatus(submission);
                       if ([WORKFLOW_STATUS.PENDING_REVIEW, WORKFLOW_STATUS.PENDING_ADMIN_APPROVAL].includes(stage)) return null;
