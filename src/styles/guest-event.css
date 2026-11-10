@@ -314,3 +314,14 @@
   .guest-event-secondary-button { width: 100%; }
   .guest-event-map { height: 230px; }
 }
+
+/* Attendance-only registration */
+.guest-event-field-error {
+  display: block;
+  margin: -6px 0 4px;
+  color: #b91c1c;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.guest-attendance-success h2 { color: #15803d; }

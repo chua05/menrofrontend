@@ -1888,3 +1888,143 @@ ol.pr-history { margin: 0; padding: 0; list-style: none; }
   .pr-kpi-card { min-height: 96px; padding: 12px; }
   .pr-kpi-value { font-size: 24px; }
 }
+
+/* =====================================================
+   FINAL PLANTING REPORT FORM (all released types, leftovers + reasons)
+===================================================== */
+.pr-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.pr-final-report {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.pr-final-report > legend {
+  padding: 0;
+}
+
+.pr-final-report-table-wrap {
+  max-width: 100%;
+  margin-top: 8px;
+  overflow-x: auto;
+  border: 1px solid #e4e9e6;
+  border-radius: 10px;
+}
+
+.pr-final-report-table {
+  width: 100%;
+  min-width: 520px;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.pr-final-report-table th,
+.pr-final-report-table td {
+  padding: 10px 12px;
+  border-bottom: 1px solid #eef2ef;
+  text-align: left;
+  vertical-align: top;
+}
+
+.pr-final-report-table thead th {
+  color: #5f6b64;
+  background: #f7faf8;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.pr-final-report-table tbody th { color: #1f2937; font-weight: 600; }
+.pr-final-report-table tfoot th,
+.pr-final-report-table tfoot td { border-bottom: 0; background: #f7faf8; font-weight: 700; }
+
+.pr-final-leftover { max-width: 120px; }
+
+.pr-final-reason-label {
+  display: block;
+  margin-top: 8px;
+  color: #374151;
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.pr-final-reason { width: 100%; min-width: 180px; margin-top: 4px; }
+
+.pr-final-planted { color: #15803d; font-variant-numeric: tabular-nums; }
+
+/* =====================================================
+   FIELD-SPECIFIC RETURN FOR CORRECTION
+===================================================== */
+.pr-correction-fields {
+  margin: 14px 0 0;
+  padding: 12px;
+  border: 1px solid #fde68a;
+  border-radius: 10px;
+  background: #fffbeb;
+}
+
+.pr-correction-fields > legend { padding: 0 4px; }
+
+.pr-correction-field {
+  padding: 8px 0;
+  border-top: 1px solid #fef3c7;
+}
+
+.pr-correction-field:first-of-type { border-top: 0; }
+
+.pr-correction-field-toggle {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  cursor: pointer;
+  color: #1f2937;
+  font-size: 14px;
+}
+
+.pr-correction-field-toggle input { margin-top: 3px; }
+
+.pr-correction-field-value {
+  display: block;
+  margin-top: 2px;
+  color: #6b7280;
+  font-size: 12.5px;
+  overflow-wrap: anywhere;
+}
+
+.pr-correction-comment { width: 100%; margin-top: 6px; }
+
+.pr-correction-request {
+  margin-top: 10px;
+  padding: 10px 12px;
+  border-left: 3px solid #c2410c;
+  border-radius: 6px;
+  background: #fff7ed;
+  font-size: 13.5px;
+}
+
+.pr-correction-request ul,
+.pr-correction-banner-fields {
+  margin: 6px 0 0;
+  padding-left: 18px;
+}
+
+.pr-correction-comment-note {
+  display: block;
+  margin-top: 4px;
+  color: #9a3412;
+  font-size: 12.5px;
+  font-weight: 600;
+}

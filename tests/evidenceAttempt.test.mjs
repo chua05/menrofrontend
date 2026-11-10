@@ -37,15 +37,14 @@ test("in-progress response cannot reset a keyed form or report success", () => {
   assert.doesNotThrow(() => assertEvidenceComplete({ ok: true, status: 201 }, { success: true }, { "Idempotency-Key": "synthetic-key" }));
   assert.doesNotThrow(() => assertEvidenceComplete({ ok: true, status: 202 }, {}, {}));
 });
-for (const page of ["PlantingPage", "MonitoringPage", "GuestEventPage"]) test(`${page} wires stable keys and completion validation`, () => {
+for (const page of ["PlantingPage", "MonitoringPage"]) test(`${page} wires stable keys and completion validation`, () => {
   const source = fs.readFileSync(new URL(`../src/pages/${page}.jsx`, import.meta.url), "utf8");
   assert.match(source, /headers: evidenceAttempt.current.headers\(/);
   assert.match(source, /assertEvidenceComplete\(response, payload, options.headers\)/);
   assert.match(source, /evidenceAttempt.current.reset\(\)/);
 });
-test("guest retry remains available when its own contribution consumed the last allocation", () => {
+test("the guest event page is attendance-only: no planting quantities, photos or contribution endpoints", () => {
   const source = fs.readFileSync(new URL("../src/pages/GuestEventPage.jsx", import.meta.url), "utf8");
-  assert.match(source, /!recovering && quantity > Number\(latestAllocation.remaining\)/);
-  assert.match(source, /!evidenceRecovery && \(selectedAllocation.remaining <= 0 \|\| allRecorded\)/);
-  assert.match(source, /if \(evidenceAttempt.current.enabled\) setEvidenceRecovery\(true\)/);
+  assert.match(source, /\/attendance`/);
+  for (const retired of [/contributions/, /photos/i, /quantity/i, /evidence/i, /exifr/, /sessionToken/]) assert.doesNotMatch(source, retired);
 });

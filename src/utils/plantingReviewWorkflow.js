@@ -124,7 +124,9 @@ export function waitingMessage(submission, role) {
 // every saved GPS, site and timestamp check passed.
 export function evidenceState(photo = {}, submission = {}) {
   const status = submissionWorkflowStatus(submission);
-  if (status === WORKFLOW_STATUS.REJECTED || status === WORKFLOW_STATUS.RETURNED || submission.verificationStatus === "Invalid") return "rejected";
+  // Verified evidence carried forward to a corrected revision is still current evidence.
+  const carried = status === WORKFLOW_STATUS.RETURNED && Boolean(submission.evidenceCarriedForwardTo);
+  if (!carried && (status === WORKFLOW_STATUS.REJECTED || status === WORKFLOW_STATUS.RETURNED) || submission.verificationStatus === "Invalid") return "rejected";
   const checks = [photo.gpsValid, photo.siteGpsValid, photo.timestampValid];
   if (checks.every((value) => value === true)) return "verified";
   if (photo.automatedStatus === "Passed Automated Check" && !checks.includes(false)) return "verified";
@@ -186,4 +188,72 @@ export function historyEntries(logs = []) {
     createdAt: log.createdAt || null,
     tone: /reject/i.test(log.action || "") ? "rejected" : /return/i.test(log.action || "") ? "returned" : "default",
   }));
+}
+
+// One final Planting Report (v4) is stored as one row per seedling type that
+// share `finalReportGroupId` and are decided together. Decisions and the
+// correction action are offered once, on the group's first row.
+export function finalReportGroupRows(submission, submissions = []) {
+  if (!submission?.finalReportGroupId) return [submission].filter(Boolean);
+  return submissions
+    .filter((row) => row.finalReportGroupId === submission.finalReportGroupId)
+    .sort((a, b) => Number(a.finalReportGroupIndex || 0) - Number(b.finalReportGroupIndex || 0) || String(a.id).localeCompare(String(b.id)));
+}
+
+export function isFinalReportGroupLead(submission, submissions = []) {
+  if (!submission?.finalReportGroupId) return true;
+  return finalReportGroupRows(submission, submissions)[0]?.id === submission.id;
+}
+
+// --------------------------------------------------------------------------
+// Field-specific Admin Return for Correction (Staff-submitted final reports).
+// Mirrors the backend rules; the backend remains the authority.
+// --------------------------------------------------------------------------
+export const MAX_CORRECTION_COMMENT_LENGTH = 1000;
+export const EVIDENCE_FIELD_PATHS = Object.freeze(["confirmationBasis", "evidence.photos", "evidence.attendance"]);
+const BASIS_LABEL = { "menro-field-report": "MENRO Field Report", "release-based": "Individual Release-Based Confirmation" };
+
+// The submitted fields Admin may return, built from the report's own rows.
+export function staffCorrectableFields(groupRows = []) {
+  const fields = [];
+  for (const row of groupRows) {
+    const species = row.species || "Seedling";
+    fields.push({ path: `items.${row.inventoryId}.leftoverQuantity`, label: `${species} — Final Leftovers`, value: String(Number(row.leftoverQuantity || 0)) });
+    if (Number(row.leftoverQuantity || 0) > 0) fields.push({ path: `items.${row.inventoryId}.leftoverReason`, label: `${species} — Leftover Reason`, value: row.leftoverReason || "" });
+  }
+  const lead = groupRows[0] || {};
+  fields.push({ path: "confirmationBasis", label: "Confirmation Basis", value: BASIS_LABEL[lead.confirmationBasis] || lead.confirmationBasis || "—", evidence: true });
+  fields.push({ path: "remarks", label: "Remarks", value: lead.remarks || "—" });
+  if (lead.confirmationBasis === "menro-field-report" && lead.hasVerifiedPlantingEvidence) fields.push({ path: "evidence.photos", label: "Planting Evidence Photos", value: "Verified evidence on file", evidence: true });
+  if (lead.attendanceAvailable || lead.attendanceCarriedFromSubmissionId) fields.push({ path: "evidence.attendance", label: "Attendance Documentation", value: "Attendance on file", evidence: true });
+  return fields;
+}
+
+// selections: { [path]: comment }. At least one field, each with a comment.
+export function correctionSelectionErrors(selections = {}) {
+  const errors = {};
+  const entries = Object.entries(selections);
+  if (!entries.length) errors.fields = "Select at least one field that needs correction.";
+  for (const [path, comment] of entries) {
+    const text = String(comment || "").trim();
+    if (!text) errors[`fieldComment-${path}`] = "Enter what needs to be corrected.";
+    else if (text.length > MAX_CORRECTION_COMMENT_LENGTH) errors[`fieldComment-${path}`] = `Use at most ${MAX_CORRECTION_COMMENT_LENGTH} characters.`;
+  }
+  return errors;
+}
+
+// Fields the Staff submitter may edit: the returned ones, plus the reason of a returned leftover.
+export function editableCorrectionPaths(correctionRequest) {
+  const selected = (correctionRequest?.fields || []).map((field) => field.path);
+  const editable = new Set(selected);
+  for (const path of selected) {
+    const match = /^items\.([A-Za-z0-9_-]{1,128})\.leftoverQuantity$/.exec(path);
+    if (match) editable.add(`items.${match[1]}.leftoverReason`);
+  }
+  return editable;
+}
+
+export function evidenceCarriedForward(correctionRequest, lead = {}) {
+  const selected = (correctionRequest?.fields || []).map((field) => field.path);
+  return Boolean(correctionRequest) && !selected.some((path) => EVIDENCE_FIELD_PATHS.includes(path)) && lead.hasVerifiedPlantingEvidence === true;
 }

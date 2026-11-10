@@ -14,19 +14,29 @@ import * as exifr from "exifr";
 import { extractGpsCoordinates } from "../utils/exifGps";
 import PageLoadingState from "../components/PageLoadingState";
 import { focusFirstInvalid, backendFieldErrors } from "../utils/formValidation";
-import { validatePlantingReportForm } from "../utils/plantingReportForm";
-import { plantedFromLeftover } from "../utils/plantingQuantity";
+import {
+  MAX_LEFTOVER_REASON_LENGTH,
+  finalReportFieldErrors,
+  finalReportItems,
+  finalReportRows,
+  validatePlantingReportForm,
+} from "../utils/plantingReportForm";
 import SecureCameraCapture from "../components/SecureCameraCapture";
 import StaffPlantingReportForm, { ProtectedAttendanceButton } from "../components/StaffPlantingReportForm";
 import { buildEvidenceLocationView, photoGpsMetadataLabel } from "../utils/evidenceLocationView";
 import { SITE_GPS_TOLERANCE_METERS, buildLocationPreviewStatus, calculateDistanceMeters, getFeatureBarangayName, isPointInBulanBoundary, isPointInPolygon } from "../utils/plantingLocationPreview";
 import PhotoRequirementsDialog from "../components/PhotoRequirementsDialog";
 import PlantingEvidenceMap from "../components/PlantingEvidenceMap";
+import EventAttendancePanel from "../components/EventAttendancePanel";
 import {
   REPORT_KPIS,
+  REPORT_STATUS_FILTERS,
+  currentReports,
   latestSubmittedAt,
   photoAvailabilityMessage,
   reportKpiCounts,
+  reportMatchesStatusFilter,
+  reportReviewStages,
   reportSeedlingItems,
   reportHistory,
   reportReviewStatus,
@@ -42,8 +52,13 @@ import {
   availableDecisions,
   buildEvidenceMarkers,
   decisionReasonError,
+  MAX_CORRECTION_COMMENT_LENGTH,
+  correctionSelectionErrors,
   evidenceState,
+  finalReportGroupRows,
+  staffCorrectableFields,
   historyEntries,
+  isFinalReportGroupLead,
   photoCoordinates,
   submissionWorkflowStatus,
   waitingMessage,
@@ -116,13 +131,6 @@ function optionalFiniteNumber(value) {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
-const STATUS_OPTIONS = [
-  "Awaiting Submission",
-  "Partial",
-  "Fully Reported — Awaiting Review",
-  "Completed",
-];
-
 const VERIFICATION_CLASSES = {
   Pending: "pr-status-reviewed",
   "Pending Review": "pr-status-pending",
@@ -132,6 +140,7 @@ const VERIFICATION_CLASSES = {
   "Awaiting Submission": "pr-status-reviewed",
   Submitted: "pr-status-approved",
   "Not Submitted": "pr-status-reviewed",
+  "Awaiting Remaining Report": "pr-status-default",
   Partial: "pr-status-reviewed",
   "Fully Reported — Awaiting Review": "pr-status-reviewed",
   Completed: "pr-status-approved",
@@ -385,6 +394,12 @@ export default function PlantingPage() {
   const decisionReasonRef = useRef(null);
   const [verificationLogs, setVerificationLogs] = useState({ reportId: "", status: "idle", entries: [] });
   const [correctionTarget, setCorrectionTarget] = useState(null);
+  // Field-specific return: { [fieldPath]: comment } chosen by Admin, plus their errors.
+  const [correctionSelections, setCorrectionSelections] = useState({});
+  const [correctionErrors, setCorrectionErrors] = useState({});
+  // Final leftovers (and reasons) per released type, kept for one distribution:
+  // { distributionId, entries: { [inventoryId]: { leftoverQuantity, leftoverReason } } }.
+  const [finalEntries, setFinalEntries] = useState({ distributionId: "", entries: {} });
   const [historyVersion, setHistoryVersion] = useState(0);
   const toast = useToast();
   const submitModalOpenRef = useRef(false);
@@ -1166,7 +1181,9 @@ export default function PlantingPage() {
 
   const visibleRecords = useMemo(() => {
     // The participant endpoint already scopes records to the authenticated user.
-    return records;
+    // A legacy report replaced by its corrected resubmission stays stored but is
+    // shown only through its correction.
+    return currentReports(records);
   }, [records]);
 
   const eligibleDistributions = useMemo(() => {
@@ -1212,6 +1229,21 @@ export default function PlantingPage() {
     });
   }, [eligibleDistributions, events, form.distributionId, form.eventId]);
 
+  // One final report: every released type with a remaining balance.
+  // Entries typed for another release never carry over.
+  const finalRows = useMemo(() => finalReportRows(eligibleDistributionItems,
+    finalEntries.distributionId === String(form.distributionId || "") ? finalEntries.entries : {}),
+  [eligibleDistributionItems, finalEntries, form.distributionId]);
+
+  function updateFinalEntry(inventoryId, field, value) {
+    const distributionId = String(form.distributionId || "");
+    setFinalEntries((current) => {
+      const entries = current.distributionId === distributionId ? current.entries : {};
+      return { distributionId, entries: { ...entries, [inventoryId]: { ...(entries[inventoryId] || {}), [field]: value } } };
+    });
+    setFormErrors((current) => ({ ...current, [`${field}-${inventoryId}`]: "", finalItems: "" }));
+  }
+
   const responsibleDistribution = useMemo(() =>
     eligibleDistributions.find((entry) => String(entry.id) === String(form.distributionId)) || null,
   [eligibleDistributions, form.distributionId]);
@@ -1224,8 +1256,7 @@ export default function PlantingPage() {
     const search = searchTerm.trim().toLowerCase();
 
     return visibleRecords.filter((record) => {
-      const matchesStatus =
-        statusFilter === "All" || (record.reportingProgress || "Awaiting Submission") === statusFilter;
+      const matchesStatus = reportMatchesStatusFilter(record, statusFilter);
 
       const searchableText = [
         record.id,
@@ -1609,24 +1640,6 @@ export default function PlantingPage() {
       requestedQuantity: item?.requestedQuantity ?? "",
       quantityReleased: releasedQuantity,
       remainingQuantity,
-      quantity: "",
-    leftoverQuantity: "0",
-    }));
-  }
-
-  function handleSaplingChange(event) {
-    setFormErrors(previous => ({ ...previous, distributionItemKey: "", quantity: "" }));
-    const selectedId = event.target.value;
-    const item = eligibleDistributionItems.find((entry) =>
-      String(entry.optionId) === String(selectedId));
-    setForm((previous) => ({
-      ...previous,
-      distributionItemKey: item?.optionId || "",
-      inventoryId: item?.inventoryId || "",
-      species: item?.species || "",
-      requestedQuantity: item?.requestedQuantity ?? "",
-      quantityReleased: item?.releasedQuantity ?? "",
-      remainingQuantity: item?.remainingQuantity ?? "",
       quantity: "",
     leftoverQuantity: "0",
     }));
@@ -2173,7 +2186,7 @@ export default function PlantingPage() {
       } finally { setSubmitting(false); }
       return;
     }
-    const errors = validatePlantingReportForm(form, { distributions, photos: photoFiles, previews: photoPreviews, hasGps, municipalityScopeStatus });
+    const errors = validatePlantingReportForm(form, { distributions, photos: photoFiles, previews: photoPreviews, hasGps, municipalityScopeStatus, finalRows });
     const attendanceError = attendanceFileError(attendanceFile) || formErrors.attendance;
     if (attendanceError) errors.attendance = attendanceError;
     setFormErrors(errors);
@@ -2209,11 +2222,6 @@ export default function PlantingPage() {
       return;
     }
 
-    if (!form.inventoryId) {
-      showPopup("Please select a seedling tree.", "error");
-      return;
-    }
-
     const selectedDistribution = distributions.find((item) =>
       String(item.id) === String(form.distributionId));
     if (!selectedDistribution || selectedDistribution.status !== "Released") {
@@ -2222,19 +2230,6 @@ export default function PlantingPage() {
     }
     if (!form.plantingDate) {
       showPopup("The selected planting event does not have a valid event date.", "error");
-      return;
-    }
-
-    const quantity = Number(form.remainingQuantity) - Number(form.leftoverQuantity || 0);
-    const remainingQuantity = Number(form.remainingQuantity);
-
-    if (!Number.isInteger(quantity) || quantity < 0) {
-      showPopup("Please enter a valid quantity of planted seedlings.", "error");
-      return;
-    }
-
-    if (Number.isFinite(remainingQuantity) && quantity > remainingQuantity) {
-      showPopup(`Quantity exceeds the remaining reportable quantity. Only ${remainingQuantity} trees remain available for reporting.`, "error");
       return;
     }
 
@@ -2291,12 +2286,12 @@ export default function PlantingPage() {
     payload.append("submittedByName", form.submittedByName.trim());
     payload.append("submittedBySector", form.submittedBySector);
     payload.append("submittedByContactNumber", form.submittedByContactNumber.trim());
-    if (form.inventoryId) payload.append("inventoryId", form.inventoryId);
     payload.append("siteId", form.siteId);
     payload.append("barangay", form.barangay);
-    payload.append("quantityPlanted", String(quantity));
+    // One final report for every released type: leftovers + reasons per type;
+    // the backend computes Final Planted = Remaining - Leftovers.
+    payload.append("items", JSON.stringify(finalReportItems(finalRows)));
     payload.append("confirmationMode", "final");
-    payload.append("leftoverQuantity", String(form.leftoverQuantity ?? "0"));
     payload.append("plantingDate", form.plantingDate);
     payload.append("plantingLocation", form.siteName);
     payload.append("eventId", form.eventId || "");
@@ -2339,7 +2334,7 @@ export default function PlantingPage() {
 
       void Promise.all([loadReports(), loadMyDistributions(), loadEvents()]).catch(() => showPopup("Your report was submitted, but the latest lists could not be refreshed. You can refresh this page when your connection is available.", "warning"));
     } catch (error) {
-      const fields = backendFieldErrors(error, { quantityPlanted: "quantity", inventoryId: "distributionItemKey", evidence: "photos", files: "photos" });
+      const fields = finalReportFieldErrors(backendFieldErrors(error, { quantityPlanted: "quantity", inventoryId: "finalItems", items: "finalItems", evidence: "photos", files: "photos" }), finalRows);
       if (Object.keys(fields).length) { setFormErrors(fields); focusFirstInvalid(() => reportFormRef.current); }
       else showPopup((savedResponse ? "The report is already saved. Retry attendance only. " : "") + (error.message || "Unable to submit the planting report. Please try again."), "error");
     } finally {
@@ -2407,7 +2402,24 @@ export default function PlantingPage() {
     setVerificationRemarks("");
     setDecisionFieldError("");
     setDecisionError("");
+    setCorrectionSelections({});
+    setCorrectionErrors({});
     setDecision(nextDecision);
+  }
+
+  // Admin returns a final Staff report by naming the submitted fields to correct.
+  function fieldReturnFor(submission, nextDecision = decision) {
+    if (nextDecision !== "return" || submission?.officialStaffReport !== true || !submission?.finalReportGroupId) return [];
+    return staffCorrectableFields(finalReportGroupRows(submission, selectedRecord?.submissions || []));
+  }
+
+  function toggleCorrectionField(path, checked) {
+    setCorrectionSelections((current) => {
+      const next = { ...current };
+      if (checked) next[path] = next[path] ?? ""; else delete next[path];
+      return next;
+    });
+    setCorrectionErrors((current) => ({ ...current, fields: "", [`fieldComment-${path}`]: "" }));
   }
 
   function closeDecision() {
@@ -2424,23 +2436,32 @@ export default function PlantingPage() {
     if (!config || !selectedRecord || !selectedSubmission || decisionInFlightRef.current) return;
     if (!availableDecisions(selectedSubmission, userRole).includes(decision)) return;
     const reasonError = decisionReasonError(decision, verificationRemarks);
-    if (reasonError) {
+    const returnFields = fieldReturnFor(selectedSubmission);
+    const selectionErrors = returnFields.length ? correctionSelectionErrors(correctionSelections) : {};
+    setCorrectionErrors(selectionErrors);
+    if (reasonError || Object.keys(selectionErrors).length) {
       setDecisionFieldError(reasonError);
       focusFirstInvalid(() => document.querySelector(".pr-decision-modal"));
       return;
     }
+    const fields = returnFields.length
+      ? returnFields.filter((field) => Object.hasOwn(correctionSelections, field.path))
+        .map((field) => ({ path: field.path, comment: correctionSelections[field.path].trim() }))
+      : undefined;
     decisionInFlightRef.current = true;
     setActionLoading(true);
     setDecisionError("");
     try {
       const response = await apiRequest(
         `/planting-reports/${encodeURIComponent(selectedSubmission.id)}/${config.endpoint}`,
-        { method: "PATCH", body: JSON.stringify({ remarks: verificationRemarks.trim() }) }
+        { method: "PATCH", body: JSON.stringify({ remarks: verificationRemarks.trim(), ...(fields ? { fields } : {}) }) }
       );
       setSelectedRecord(response.data);
       setSelectedSubmission(null);
       setVerificationRemarks("");
       setDecisionFieldError("");
+      setCorrectionSelections({});
+      setCorrectionErrors({});
       setDecision("");
       setHistoryVersion((version) => version + 1);
       toast.success(response.message || config.success);
@@ -2448,6 +2469,7 @@ export default function PlantingPage() {
     } catch (error) {
       const fieldMessage = error?.fieldErrors?.remarks;
       if (fieldMessage) setDecisionFieldError(fieldMessage);
+      if (error?.fieldErrors && Object.keys(error.fieldErrors).some((key) => key === "fields" || key.startsWith("fieldComment-"))) setCorrectionErrors(error.fieldErrors);
       setDecisionError(error?.message || "The decision could not be saved. Please try again.");
     } finally {
       decisionInFlightRef.current = false;
@@ -2624,8 +2646,8 @@ export default function PlantingPage() {
                 className="pr-select"
               >
                 <option value="All">All Status</option>
-                {STATUS_OPTIONS.map((status) => (
-                  <option key={status} value={status}>{status}</option>
+                {REPORT_STATUS_FILTERS.map((option) => (
+                  <option key={option.key} value={option.key}>{option.label}</option>
                 ))}
               </select>
             </div>
@@ -2715,8 +2737,8 @@ export default function PlantingPage() {
                     <td className="pr-td">{formatDate(record.plantingDate)}</td>
                     <td className="pr-td">
                       {renderStatusBadge(reportSubmissionStatus(record))}
-                      <div className="pr-review-line" data-review-status={reportReviewStatus(record)}>
-                        Review Status: <span className="pr-review-value">{reportReviewStatus(record)}</span>
+                      <div className="pr-review-line" data-review-status={reportReviewStatus(record)} data-review-stages={reportReviewStages(record).join("|")}>
+                        Review Status: <span className="pr-review-value">{reportReviewStages(record).length > 1 ? reportReviewStages(record).join(" · ") : reportReviewStatus(record)}</span>
                       </div>
                     </td>
                     <td className="pr-td pr-center">
@@ -2776,7 +2798,7 @@ export default function PlantingPage() {
 
             <form ref={reportFormRef} noValidate onSubmit={handleSubmit} onBlur={event => {
               const field = event.target.id?.replace(/^planting-/, "");
-              if (field && Object.hasOwn(formErrors, field)) setFormErrors(current => ({ ...current, [field]: validatePlantingReportForm(form, { distributions, photos: photoFiles, previews: photoPreviews, hasGps, municipalityScopeStatus })[field] || "" }));
+              if (field && Object.hasOwn(formErrors, field)) setFormErrors(current => ({ ...current, [field]: validatePlantingReportForm(form, { distributions, photos: photoFiles, previews: photoPreviews, hasGps, municipalityScopeStatus, finalRows })[field] || "" }));
             }}>
               <div className="pr-modal-body pr-submit-modal-body">
                 <fieldset disabled={submitting || Boolean(savedParticipantReport)} style={{ border: 0, margin: 0, padding: 0, minWidth: 0 }}>
@@ -2975,47 +2997,75 @@ export default function PlantingPage() {
                       )}
                     </div>
 
-                    <div>
-                      <label htmlFor="planting-distributionItemKey" className="pr-label">Seedling Tree <span className="pr-required">*</span></label>
-                      <select {...fieldAccessibility("distributionItemKey")}
-                        className="pr-input"
-                        value={form.distributionItemKey}
-                        onChange={handleSaplingChange}
-                        disabled={!form.distributionId || eligibleDistributionItems.length <= 1}
-                      >
-                        <option value="">
-                          {!form.distributionId ? "Select released distribution first" : "Select seedling tree"}
-                        </option>
-                        {eligibleDistributionItems.map((item) => (
-                          <option key={item.optionId} value={item.optionId} disabled={item.remainingQuantity <= 0}>
-                            {item.species || "Seedling"} — {item.remainingQuantity} remaining
-                          </option>
-                        ))}
-                      </select>
-{formErrors.distributionItemKey && <small id="planting-error-distributionItemKey" className="pr-field-error" role="alert">{formErrors.distributionItemKey}</small>}
-                    </div>
-
-                    <div>
-                      <label htmlFor="planting-quantityReleased" className="pr-label">Quantity Released</label>
-                      <input {...fieldAccessibility("quantityReleased")} className="pr-input pr-readonly" value={form.quantityReleased} readOnly />
-{formErrors.quantityReleased && <small id="planting-error-quantityReleased" className="pr-field-error" role="alert">{formErrors.quantityReleased}</small>}
-                    </div>
-
-                    <div>
-                      <label htmlFor="planting-remainingQuantity" className="pr-label">Seedlings Available for Reporting</label>
-                      <input {...fieldAccessibility("remainingQuantity")} className="pr-input pr-readonly" value={form.remainingQuantity} readOnly />
-{formErrors.remainingQuantity && <small id="planting-error-remainingQuantity" className="pr-field-error" role="alert">{formErrors.remainingQuantity}</small>}
-                    </div>
-
-                    <div>
-                      <label htmlFor="planting-quantity" className="pr-label">Quantity Planted <span className="pr-required">*</span></label>
-                      <input {...fieldAccessibility("quantity")} className="pr-input pr-readonly" readOnly value={plantedFromLeftover(form.remainingQuantity, form.leftoverQuantity)} />
-{formErrors.quantity && <small id="planting-error-quantity" className="pr-field-error" role="alert">{formErrors.quantity}</small>}
-                    </div>
-                    <div>
-                      <label htmlFor="planting-leftoverQuantity" className="pr-label">Final Leftover Seedlings (Not Planted)</label>
-                      <input {...fieldAccessibility("leftoverQuantity")} className="pr-input" type="number" min="0" max={form.remainingQuantity || undefined} step="1" value={form.leftoverQuantity ?? "0"} onChange={event => { setForm(current => ({ ...current, leftoverQuantity: event.target.value })); setFormErrors(current => ({ ...current, leftoverQuantity: "", quantity: "" })); }} />
-                      {formErrors.leftoverQuantity && <small id="planting-error-leftoverQuantity" className="pr-field-error" role="alert">{formErrors.leftoverQuantity}</small>}
+                    <div className="pr-full-width">
+                      <fieldset className="pr-final-report" aria-describedby="planting-final-help">
+                        <legend className="pr-label">Final Planting Report — All Released Seedling Types <span className="pr-required">*</span></legend>
+                        <p id="planting-final-help" className="pr-helper-text">
+                          One final report covers every released seedling type. Enter the final leftover seedlings (not planted) for each type;
+                          Final Planted = Available − Leftovers. Leftovers are recorded for documentation only.
+                        </p>
+                        {!form.distributionId ? (
+                          <div className="pr-helper-text" role="status">Select the released seedling distribution first.</div>
+                        ) : finalRows.length === 0 ? (
+                          <div className="pr-helper-text" role="status">No seedlings remain to be reported for this planting event.</div>
+                        ) : (
+                          <div className="pr-final-report-table-wrap">
+                            <table className="pr-final-report-table">
+                              <thead>
+                                <tr>
+                                  <th scope="col">Seedling Type</th>
+                                  <th scope="col">Released</th>
+                                  <th scope="col">Available</th>
+                                  <th scope="col">Final Leftovers</th>
+                                  <th scope="col">Final Planted</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {finalRows.map((row) => {
+                                  const leftoverKey = `leftoverQuantity-${row.inventoryId}`, reasonKey = `leftoverReason-${row.inventoryId}`;
+                                  return (
+                                    <tr key={row.inventoryId} data-inventory-id={row.inventoryId}>
+                                      <th scope="row">{row.species}</th>
+                                      <td>{row.releasedQuantity}</td>
+                                      <td>{row.remaining}</td>
+                                      <td>
+                                        <label className="pr-sr-only" htmlFor={`planting-${leftoverKey}`}>Final leftover {row.species} seedlings</label>
+                                        <input id={`planting-${leftoverKey}`} className="pr-input pr-final-leftover" type="number" min="0" max={row.remaining} step="1"
+                                          value={row.leftoverQuantity} aria-invalid={formErrors[leftoverKey] ? "true" : undefined}
+                                          aria-describedby={formErrors[leftoverKey] ? `planting-error-${leftoverKey}` : undefined}
+                                          onChange={(event) => updateFinalEntry(row.inventoryId, "leftoverQuantity", event.target.value)} />
+                                        {formErrors[leftoverKey] && <small id={`planting-error-${leftoverKey}`} className="pr-field-error" role="alert">{formErrors[leftoverKey]}</small>}
+                                        {row.needsReason && (
+                                          <>
+                                            <label className="pr-final-reason-label" htmlFor={`planting-${reasonKey}`}>Reason for leftovers <span className="pr-required">*</span></label>
+                                            <textarea id={`planting-${reasonKey}`} className="pr-textarea pr-final-reason" rows={2} maxLength={MAX_LEFTOVER_REASON_LENGTH}
+                                              value={row.leftoverReason} aria-required="true" aria-invalid={formErrors[reasonKey] ? "true" : undefined}
+                                              aria-describedby={formErrors[reasonKey] ? `planting-error-${reasonKey}` : undefined}
+                                              placeholder="e.g. seedlings damaged in transport"
+                                              onChange={(event) => updateFinalEntry(row.inventoryId, "leftoverReason", event.target.value)} />
+                                            {formErrors[reasonKey] && <small id={`planting-error-${reasonKey}`} className="pr-field-error" role="alert">{formErrors[reasonKey]}</small>}
+                                          </>
+                                        )}
+                                      </td>
+                                      <td><strong className="pr-final-planted">{row.planted ?? "—"}</strong></td>
+                                    </tr>
+                                  );
+                                })}
+                              </tbody>
+                              <tfoot>
+                                <tr>
+                                  <th scope="row">Total</th>
+                                  <td>{finalRows.reduce((sum, row) => sum + row.releasedQuantity, 0)}</td>
+                                  <td>{finalRows.reduce((sum, row) => sum + row.remaining, 0)}</td>
+                                  <td>{finalRows.reduce((sum, row) => sum + (Number(row.leftoverQuantity) || 0), 0)}</td>
+                                  <td><strong>{finalRows.every((row) => row.planted !== null) ? finalRows.reduce((sum, row) => sum + row.planted, 0) : "—"}</strong></td>
+                                </tr>
+                              </tfoot>
+                            </table>
+                          </div>
+                        )}
+                        {formErrors.finalItems && <small id="planting-error-finalItems" className="pr-field-error" role="alert">{formErrors.finalItems}</small>}
+                      </fieldset>
                     </div>
 
                     <div className="pr-full-width">
@@ -3750,10 +3800,13 @@ export default function PlantingPage() {
                     <div className="pr-submission-list">
                       {submissionsWithPhotoIndexes.map((submission) => {
                         const stage = submissionWorkflowStatus(submission);
-                        const actions = availableDecisions(submission, userRole);
-                        const waiting = actions.length ? "" : waitingMessage(submission, userRole);
+                        // A final report's types are decided together: actions live on its first row.
+                        const groupLead = isFinalReportGroupLead(submission, submissionsWithPhotoIndexes);
+                        const groupSize = finalReportGroupRows(submission, submissionsWithPhotoIndexes).length;
+                        const actions = groupLead ? availableDecisions(submission, userRole) : [];
+                        const waiting = !groupLead || actions.length ? "" : waitingMessage(submission, userRole);
                         const ownSubmission = (submission.authenticatedSubmitterUid || submission.contributorId || submission.participantId) === currentUser?.uid;
-                        const correctable = (submission.correctionAllowed ?? (stage === WORKFLOW_STATUS.RETURNED && !submission.correctedBySubmission)) === true;
+                        const correctable = groupLead && (submission.correctionAllowed ?? (stage === WORKFLOW_STATUS.RETURNED && !submission.correctedBySubmission)) === true;
                         const returnReason = stage === WORKFLOW_STATUS.RETURNED ? submission.returnReason || submission.rejectionReason || submission.reviewRemarks : "";
                         return (
                         <article className={`pr-submission-item pr-submission-${stage.toLowerCase().replace(/[^a-z]+/g, "-")}`} key={submission.id} aria-label={`Submission ${submission.id}`}>
@@ -3769,7 +3822,8 @@ export default function PlantingPage() {
                             <div className="pr-info-block"><div className="pr-info-label">User ID</div><div className="pr-info-value">{submission.contributorId || submission.participantId || "—"}</div></div>
                             <div className="pr-info-block"><div className="pr-info-label">Tree Species</div><div className="pr-info-value">{submission.species || "—"}</div></div>
                             <div className="pr-info-block"><div className="pr-info-label">Quantity Planted</div><div className="pr-info-value">{submission.quantity ?? "—"}</div></div>
-                            {(submission.officialStaffReport || Number(submission.leftoverQuantity) > 0) && <div className="pr-info-block"><div className="pr-info-label">Leftover Seedlings (Not Planted)</div><div className="pr-info-value">{submission.leftoverQuantity || 0}</div></div>}
+                            {(submission.officialStaffReport || submission.finalReportGroupId || Number(submission.leftoverQuantity) > 0) && <div className="pr-info-block"><div className="pr-info-label">Leftover Seedlings (Not Planted)</div><div className="pr-info-value">{submission.leftoverQuantity || 0}</div></div>}
+                            {Number(submission.leftoverQuantity) > 0 && submission.leftoverReason && <div className="pr-info-block pr-full-width"><div className="pr-info-label">Reason for Leftovers</div><div className="pr-info-value pr-leftover-reason">{submission.leftoverReason}</div></div>}
                             {submission.officialStaffReport && <>
                               <div className="pr-info-block"><div className="pr-info-label">Confirmation Basis</div><div className="pr-info-value">{submission.confirmationBasis === "release-based" ? "Individual Release-Based Confirmation" : "MENRO Field Report"}</div></div>
                               <div className="pr-info-block"><div className="pr-info-label">Submitted By / Revision</div><div className="pr-info-value">MENRO Staff — {submission.submittedByName} / {submission.revision || 0}</div></div>
@@ -3782,7 +3836,7 @@ export default function PlantingPage() {
                             <div className="pr-info-block"><div className="pr-info-label">Verification Details</div><div className="pr-info-value">{(submission.verificationDetails || submission.suspiciousFlags || []).join(", ") || "No concerns recorded"}</div></div>
                             {submission.staffReviewedBy && <div className="pr-info-block"><div className="pr-info-label">Staff Review</div><div className="pr-info-value">{submission.staffReviewedByName || submission.staffReviewedBy} / {formatDateTime(submission.staffReviewedAt)}</div>{submission.staffReviewRemarks && <div className="pr-info-subvalue">{submission.staffReviewRemarks}</div>}</div>}
                             {(submission.adminDecisionBy || (stage === WORKFLOW_STATUS.COMPLETED && submission.reviewedBy)) && <div className="pr-info-block"><div className="pr-info-label">{stage === WORKFLOW_STATUS.REJECTED ? "Rejected By / At" : stage === WORKFLOW_STATUS.RETURNED ? "Returned By / At" : "Approved By / At"}</div><div className="pr-info-value">{submission.adminDecisionByName || submission.reviewedByName || submission.adminDecisionBy || submission.reviewedBy} / {formatDateTime(submission.adminDecisionAt || submission.reviewedAt)}</div></div>}
-                            {submission.attendanceAvailable && (userRole === "admin" || userRole === "staff" || submission.authenticatedSubmitterUid === currentUser?.uid) && <ProtectedAttendanceButton submissionId={submission.id} official={submission.officialStaffReport === true} />}
+                            {(submission.attendanceAvailable || submission.attendanceCarriedFromSubmissionId) && (userRole === "admin" || userRole === "staff" || submission.authenticatedSubmitterUid === currentUser?.uid) && <ProtectedAttendanceButton submissionId={submission.attendanceAvailable ? submission.id : submission.attendanceCarriedFromSubmissionId} official={submission.officialStaffReport === true} />}
                           </div>
                           {returnReason && <div className="pr-decision-reason pr-decision-reason-returned"><div className="pr-info-label">Reason for Return</div><p>{returnReason}</p>{submission.returnedByName && <span>— {submission.returnedByName}</span>}</div>}
                           {stage === WORKFLOW_STATUS.REJECTED && submission.rejectionReason && <div className="pr-decision-reason pr-decision-reason-rejected"><div className="pr-info-label">Reason for Rejection</div><p>{submission.rejectionReason}</p></div>}
@@ -3807,6 +3861,26 @@ export default function PlantingPage() {
                               })}
                             </div>
                           )}
+                          {groupLead && submission.correctionRequest?.fields?.length > 0 && (
+                            <div className="pr-correction-request" role="note" aria-label="Fields returned for correction">
+                              <div className="pr-info-label">Fields returned for correction{submission.correctionRequest.requestedByName ? ` by ${submission.correctionRequest.requestedByName}` : ""}</div>
+                              <ul>
+                                {submission.correctionRequest.fields.map((field) => (
+                                  <li key={field.path}><strong>{field.label}:</strong> {field.comment}</li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+                          {groupLead && submission.evidenceCarriedFromSubmissionId && (
+                            <div className="pr-submission-waiting" role="note">Verified evidence from the previous revision is carried forward unchanged.</div>
+                          )}
+                          {submission.finalReportGroupId && groupSize > 1 && (
+                            <div className="pr-submission-waiting pr-final-group-note" role="note">
+                              {groupLead
+                                ? `Final report revision ${Number(submission.finalReportRevision || 0) + 1}: ${groupSize} seedling types are reviewed together. A decision here applies to all of them.`
+                                : "Reviewed together with the first seedling type of this final report."}
+                            </div>
+                          )}
                           {actions.length > 0 && (
                             <div className="pr-drawer-verification-actions" role="group" aria-label={`Decision for submission ${submission.id}`}>
                               {actions.includes("forward") && <button type="button" className="pr-primary-button" onClick={() => openDecision(submission, "forward")} disabled={actionLoading}><FiSend size={14} />Forward to Admin</button>}
@@ -3817,7 +3891,7 @@ export default function PlantingPage() {
                           )}
                           {waiting && canReview && <div className="pr-submission-waiting" role="status">{waiting}</div>}
                           {correctable && ownSubmission && submission.officialStaffReport && userRole === "staff" && (
-                            <div className="pr-drawer-verification-actions"><button type="button" className="pr-secondary-button" onClick={() => { setOfficialForm({ correction: submission }); setShowViewModal(false); }}><FiRotateCcw size={14} />Correct Official Submission</button></div>
+                            <div className="pr-drawer-verification-actions"><button type="button" className="pr-secondary-button" onClick={() => { setOfficialForm({ correction: { ...submission, groupRows: finalReportGroupRows(submission, submissionsWithPhotoIndexes) } }); setShowViewModal(false); }}><FiRotateCcw size={14} />Correct Official Submission</button></div>
                           )}
                           {correctable && ownSubmission && !submission.officialStaffReport && isParticipant && (
                             <div className="pr-drawer-verification-actions"><button type="button" className="pr-primary-button" onClick={() => startCorrection(submission)}><FiRotateCcw size={14} />Correct and Resubmit</button></div>
@@ -3849,6 +3923,11 @@ export default function PlantingPage() {
                   </div>
                 )}
               </section>
+
+              {selectedRecord.reportType === "parent" && selectedRecord.eventId && (canReview || selectedRecord.participantId === currentUser?.uid) && (
+                <EventAttendancePanel eventId={selectedRecord.eventId} canManageReservations={canReview}
+                  onReservationReleased={() => refreshSelectedRecord(selectedRecord.id)} />
+              )}
 
               <section className="pr-drawer-section pr-drawer-section-last">
                 <div className="pr-drawer-section-title">
@@ -4009,6 +4088,39 @@ export default function PlantingPage() {
                   : <span />}
                 <small id="pr-decision-count" className="pr-decision-count">{decisionReasonLength}/{MAX_DECISION_REASON_LENGTH}</small>
               </div>
+              {fieldReturnFor(selectedSubmission).length > 0 && (
+                <fieldset className="pr-correction-fields" aria-describedby="pr-correction-fields-help">
+                  <legend className="pr-label">Fields that need correction <span className="pr-required">*</span></legend>
+                  <p id="pr-correction-fields-help" className="pr-helper-text">
+                    Only the selected fields will be editable by the Staff submitter. Selecting an evidence-related field requires the evidence to be verified again; otherwise verified evidence is kept.
+                  </p>
+                  {correctionErrors.fields && <small className="pr-field-error" role="alert">{correctionErrors.fields}</small>}
+                  {fieldReturnFor(selectedSubmission).map((field) => {
+                    const id = `pr-correction-${field.path.replace(/[^A-Za-z0-9_-]/g, "-")}`;
+                    const checked = Object.hasOwn(correctionSelections, field.path);
+                    const commentError = correctionErrors[`fieldComment-${field.path}`];
+                    return (
+                      <div className="pr-correction-field" key={field.path} data-field-path={field.path}>
+                        <label className="pr-correction-field-toggle" htmlFor={id}>
+                          <input id={id} type="checkbox" checked={checked} disabled={actionLoading}
+                            onChange={(event) => toggleCorrectionField(field.path, event.target.checked)} />
+                          <span><strong>{field.label}</strong>{field.evidence ? " (evidence)" : ""}<small className="pr-correction-field-value">Submitted: {field.value}</small></span>
+                        </label>
+                        {checked && (
+                          <>
+                            <label className="pr-sr-only" htmlFor={`${id}-comment`}>Comment for {field.label}</label>
+                            <textarea id={`${id}-comment`} className="pr-textarea pr-correction-comment" rows={2} maxLength={MAX_CORRECTION_COMMENT_LENGTH}
+                              value={correctionSelections[field.path]} aria-required="true" aria-invalid={commentError ? "true" : undefined}
+                              placeholder="What needs to be corrected?" disabled={actionLoading}
+                              onChange={(event) => { const value = event.target.value; setCorrectionSelections((current) => ({ ...current, [field.path]: value })); setCorrectionErrors((current) => ({ ...current, [`fieldComment-${field.path}`]: "" })); }} />
+                            {commentError && <small className="pr-field-error" role="alert">{commentError}</small>}
+                          </>
+                        )}
+                      </div>
+                    );
+                  })}
+                </fieldset>
+              )}
               <div className="pr-modal-footer pr-decision-footer">
                 <button type="button" className="pr-secondary-button" onClick={closeDecision} disabled={actionLoading}>Cancel</button>
                 <button

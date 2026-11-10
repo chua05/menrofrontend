@@ -1,4 +1,5 @@
 
+import EventAttendancePanel from "../components/EventAttendancePanel";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
@@ -1653,6 +1654,9 @@ export default function MyRequestsPage() {
               )}
               {invitationError && Number(selectedRequest.expectedParticipants) > 0 && (
                 <p role="status">{invitationError}</p>
+              )}
+              {selectedRequest.eventId && ["Approved", "Saplings Released"].includes(selectedRequest.status) && Number(selectedRequest.expectedParticipants) > 0 && (
+                <EventAttendancePanel eventId={selectedRequest.eventId} />
               )}
 
               {selectedRequest.preApprovalSchedule?.status === "AwaitingRequesterConfirmation" && (
