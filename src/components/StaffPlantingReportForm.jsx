@@ -112,6 +112,9 @@ export default function StaffPlantingReportForm({ currentUser, onClose, onSaved,
   }
   return <ModalDialog className="pr-official-backdrop" label={title} onClose={onClose} dismissible={!saving} busy={saving}><section className="pr-official-dialog">
     <h2 id="official-planting-title">{title}</h2>
+    {correction && (correction.returnReason || correction.rejectionReason) && <div className="pr-correction-banner" role="note" aria-label="Correction details">
+      <div><strong>MENRO Admin returned this report for correction</strong><p><span>Reason:</span> {correction.returnReason || correction.rejectionReason}</p><p>Your corrected report goes directly to the MENRO Admin for approval.</p></div>
+    </div>}
     {loading ? <p role="status">Loading authorized releases…</p> : <form ref={root} onSubmit={save} noValidate>
       {error && <p role="alert">{error}</p>}
       {!options.length && <p>No eligible released requests are available. An existing authorized release is required.</p>}
