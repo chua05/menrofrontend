@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   reportSubmissionStatus, reportReviewStatus, reportHistory,
-  photoAvailabilityMessage, latestSubmittedAt,
+  photoAvailabilityMessage, latestSubmittedAt, reportSeedlingItems, reportKpiCounts,
 } from "../src/utils/plantingReportView.js";
 
 const emptyParent = { id: "event_EVT-1", reportType: "parent", createdAt: "2026-11-09T13:07:00Z",
@@ -54,4 +54,39 @@ test("history does not present the release-time report shell as a submission", (
 test("photo message distinguishes not-yet-submitted from missing evidence", () => {
   assert.equal(photoAvailabilityMessage(emptyParent).title, "No evidence submitted yet");
   assert.equal(photoAvailabilityMessage(submitted).title, "Photo unavailable");
+});
+
+test("seedling column lists every released type and quantity from the linked allocation", () => {
+  const multi = { ...emptyParent, species: "", allocationSummary: [
+    { inventoryId: "i1", species: "Narra", allocated: 10, recorded: 0 },
+    { inventoryId: "i2", species: "Mahogany", allocated: 5, recorded: 0 },
+  ] };
+  assert.deepEqual(reportSeedlingItems(multi), [
+    { species: "Narra", quantity: 10 }, { species: "Mahogany", quantity: 5 }]);
+  // Single-type release with no submission still shows its real type (never "—").
+  const single = { ...emptyParent, species: "", allocationSummary: [{ species: "Narra", allocated: 25 }] };
+  assert.deepEqual(reportSeedlingItems(single), [{ species: "Narra", quantity: 25 }]);
+  // Without allocation data, fall back to saved submissions, then stored species text.
+  assert.deepEqual(reportSeedlingItems({ ...submitted, allocationSummary: [] }), [
+    { species: "Narra", quantity: 10 }, { species: "Mahogany", quantity: 5 }]);
+  assert.deepEqual(reportSeedlingItems({ ...emptyParent, species: "Narra, Molave" }), [
+    { species: "Narra", quantity: null }, { species: "Molave", quantity: null }]);
+  assert.deepEqual(reportSeedlingItems({ ...emptyParent, species: "" }), []);
+});
+
+test("KPI counts follow submission and review stages without double counting", () => {
+  const withStage = (stage) => ({ ...submitted, reviewStatus: stage });
+  const records = [
+    emptyParent, emptyParent,
+    submitted, // derives Pending Review
+    withStage("Reviewed"), withStage("Pending Admin Approval"),
+    withStage("Returned for Correction"),
+    withStage("Completed"),
+    withStage("Rejected"),
+  ];
+  assert.deepEqual(reportKpiCounts(records), {
+    total: 8, awaiting: 2, pendingReview: 1, pendingApproval: 2, returned: 1, completed: 1,
+  });
+  assert.deepEqual(reportKpiCounts([]), {
+    total: 0, awaiting: 0, pendingReview: 0, pendingApproval: 0, returned: 0, completed: 0 });
 });

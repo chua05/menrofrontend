@@ -112,7 +112,7 @@
 
 .pr-cards {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: 14px;
   margin-bottom: 20px;
 }
@@ -1794,3 +1794,97 @@ ol.pr-history { margin: 0; padding: 0; list-style: none; }
 .pr-species-breakdown thead th { color: #5f6d65; font-size: 12px; font-weight: 650; }
 .pr-species-breakdown th[scope="row"], .pr-species-breakdown thead th:first-child { text-align: left; color: #1f2d25; white-space: normal; overflow-wrap: anywhere; }
 .pr-species-breakdown tbody tr:last-child > * { border-bottom: 0; }
+
+/* =====================================================
+   KPI CARDS (compact, icon-free) + TABLE STATUS / SEEDLING CELLS
+   Colors follow the review-workflow palette above.
+===================================================== */
+.pr-kpi-card {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 6px;
+  min-width: 0;
+  min-height: 112px;
+  padding: 14px 16px;
+  background: #ffffff;
+  border: 1px solid #e4e9e6;
+  border-radius: 10px;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.03);
+}
+
+.pr-kpi-title {
+  color: #5f6b64;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  line-height: 1.3;
+  text-transform: uppercase;
+}
+
+.pr-kpi-value {
+  font-size: 28px;
+  font-weight: 700;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+}
+
+.pr-kpi-description {
+  color: #7a857e;
+  font-size: 12.5px;
+  line-height: 1.35;
+}
+
+.pr-kpi-total .pr-kpi-value { color: #1f5136; }
+.pr-kpi-awaiting .pr-kpi-value { color: #4b5563; }
+.pr-kpi-review .pr-kpi-value { color: #b45309; }
+.pr-kpi-approval .pr-kpi-value { color: #1d4ed8; }
+.pr-kpi-returned .pr-kpi-value { color: #c2410c; }
+.pr-kpi-completed .pr-kpi-value { color: #15803d; }
+
+.pr-review-line {
+  margin-top: 6px;
+  color: #66736b;
+  font-size: 12.5px;
+  white-space: nowrap;
+}
+
+.pr-review-value { font-weight: 700; color: #4b5563; }
+.pr-review-line[data-review-status="Pending Review"] .pr-review-value { color: #b45309; }
+.pr-review-line[data-review-status="Reviewed"] .pr-review-value,
+.pr-review-line[data-review-status="Pending Admin Approval"] .pr-review-value { color: #1d4ed8; }
+.pr-review-line[data-review-status="Returned for Correction"] .pr-review-value { color: #c2410c; }
+.pr-review-line[data-review-status="Completed"] .pr-review-value { color: #15803d; }
+.pr-review-line[data-review-status="Rejected"] .pr-review-value { color: #b91c1c; }
+
+.pr-seedling-list {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.pr-seedling-item {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.pr-seedling-name { color: #1f2937; }
+
+.pr-seedling-qty {
+  color: #66736b;
+  font-size: 12.5px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.pr-seedling-qty::before { content: "× "; font-weight: 400; }
+
+@media (max-width: 640px) {
+  .pr-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  .pr-kpi-card { min-height: 96px; padding: 12px; }
+  .pr-kpi-value { font-size: 24px; }
+}

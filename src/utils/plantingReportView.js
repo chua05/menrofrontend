@@ -110,3 +110,58 @@ export function photoAvailabilityMessage(record) {
     text: "This submission has no stored evidence photo. Treat it as missing evidence until it is resubmitted.",
   };
 }
+
+// Seedling types and quantities for the table. Parent reports carry the linked
+// release allocation (event.seedlingItems) as `allocationSummary`; fall back to
+// saved submissions, then to the stored species text, so real data never shows "—".
+export function reportSeedlingItems(record) {
+  if (!record) return [];
+  const merge = (entries) => {
+    const bySpecies = new Map();
+    for (const { species, quantity } of entries) {
+      const name = String(species || "").trim();
+      if (!name) continue;
+      const current = bySpecies.get(name);
+      const amount = Number.isFinite(Number(quantity)) && quantity !== null && quantity !== "" ? Number(quantity) : null;
+      bySpecies.set(name, { species: name,
+        quantity: !current ? amount
+          : current.quantity === null && amount === null ? null : (current.quantity ?? 0) + (amount ?? 0) });
+    }
+    return [...bySpecies.values()];
+  };
+  const allocated = merge((Array.isArray(record.allocationSummary) ? record.allocationSummary : [])
+    .map((item) => ({ species: item.species, quantity: item.allocated ?? item.quantity })));
+  if (allocated.length) return allocated;
+  const submitted = merge(reportSubmissions(record)
+    .filter((entry) => entry.verificationStatus !== "Invalid")
+    .map((entry) => ({ species: entry.species, quantity: entry.quantity })));
+  if (submitted.length) return submitted;
+  const names = String(record.species || "").split(",").map((name) => name.trim()).filter(Boolean);
+  const single = names.length === 1 && record.reportType !== "parent" ? record.quantityPlanted : null;
+  return names.map((species) => ({ species, quantity: single ?? null }));
+}
+
+// KPI counts come from the same submission/review helpers the table uses, so
+// cards and rows always agree.
+export const REPORT_KPIS = Object.freeze([
+  { key: "total", title: "Total Reports", description: "All planting reports on record", tone: "total" },
+  { key: "awaiting", title: "Awaiting Submission", description: "No participant submission yet", tone: "awaiting" },
+  { key: "pendingReview", title: "Pending Review", description: "Waiting for Staff review", tone: "review" },
+  { key: "pendingApproval", title: "Pending Approval", description: "Waiting for Admin approval", tone: "approval" },
+  { key: "returned", title: "Returned for Correction", description: "Sent back for correction", tone: "returned" },
+  { key: "completed", title: "Completed", description: "Approved and finalized", tone: "completed" },
+]);
+
+export function reportKpiCounts(records) {
+  const list = Array.isArray(records) ? records : [];
+  const counts = { total: list.length, awaiting: 0, pendingReview: 0, pendingApproval: 0, returned: 0, completed: 0 };
+  for (const record of list) {
+    if (reportSubmissionStatus(record) !== "Submitted") { counts.awaiting += 1; continue; }
+    const review = reportReviewStatus(record);
+    if (review === "Pending Review") counts.pendingReview += 1;
+    else if (review === "Reviewed" || review === "Pending Admin Approval") counts.pendingApproval += 1;
+    else if (review === "Returned for Correction") counts.returned += 1;
+    else if (review === "Completed") counts.completed += 1;
+  }
+  return counts;
+}

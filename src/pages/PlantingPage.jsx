@@ -23,8 +23,11 @@ import { SITE_GPS_TOLERANCE_METERS, buildLocationPreviewStatus, calculateDistanc
 import PhotoRequirementsDialog from "../components/PhotoRequirementsDialog";
 import PlantingEvidenceMap from "../components/PlantingEvidenceMap";
 import {
+  REPORT_KPIS,
   latestSubmittedAt,
   photoAvailabilityMessage,
+  reportKpiCounts,
+  reportSeedlingItems,
   reportHistory,
   reportReviewStatus,
   reportSubmissionStatus,
@@ -1230,6 +1233,7 @@ export default function PlantingPage() {
         record.siteName,
         record.barangay,
         record.species,
+        ...reportSeedlingItems(record).map((item) => item.species),
         record.eventName,
         record.verificationStatus,
         record.reportingProgress,
@@ -1242,23 +1246,8 @@ export default function PlantingPage() {
     });
   }, [visibleRecords, searchTerm, statusFilter]);
 
-  const summary = useMemo(() => {
-    const total = visibleRecords.length;
-
-    const progressCount = (progress) => visibleRecords.filter((record) =>
-      (record.reportType === "parent"
-        ? record.reportingProgress
-        : displayReportStatus(record.verificationStatus)) === progress
-    ).length;
-
-    return {
-      total,
-      awaiting: progressCount("Awaiting Submission"),
-      partial: progressCount("Partial"),
-      awaitingReview: progressCount("Fully Reported — Awaiting Review"),
-      completed: progressCount("Completed"),
-    };
-  }, [visibleRecords]);
+  // Counts use the same submission/review status helpers as the table rows.
+  const summary = useMemo(() => reportKpiCounts(visibleRecords), [visibleRecords]);
 
   const capturedSiteDistance = useMemo(() => {
     if (!evidenceMapHasGps || !selectedSite) return null;
@@ -2467,7 +2456,7 @@ export default function PlantingPage() {
   }
 
   function getStatusIcon(status) {
-    if (["Approved", "Completed", "Verified", "Accepted", "Not Required"].includes(status)) {
+    if (["Approved", "Submitted", "Completed", "Verified", "Accepted", "Not Required"].includes(status)) {
       return <FiCheckCircle size={12} />;
     }
 
@@ -2601,46 +2590,14 @@ export default function PlantingPage() {
         <button type="button" className="pr-secondary-button" aria-expanded={showCohorts} onClick={() => setShowCohorts(value => !value)}>Verified Planting Cohorts</button>
         {showCohorts && <VerifiedPlantingCohortsPage embedded view="records" />}
       </section>}
-      <div className="pr-cards">
-        <div className="pr-card">
-          <div className="pr-card-icon"><FiFileText size={19} /></div>
-          <div>
-            <div className="pr-card-value">{summary.total}</div>
-            <div className="pr-card-label">Total Reports</div>
+      <div className="pr-cards" role="list" aria-label="Planting report summary">
+        {REPORT_KPIS.map((kpi) => (
+          <div key={kpi.key} className={`pr-kpi-card pr-kpi-${kpi.tone}`} role="listitem" data-kpi={kpi.key}>
+            <div className="pr-kpi-title">{kpi.title}</div>
+            <div className="pr-kpi-value">{summary[kpi.key]}</div>
+            <div className="pr-kpi-description">{kpi.description}</div>
           </div>
-        </div>
-
-        <div className="pr-card">
-          <div className="pr-card-icon"><FiClock size={19} /></div>
-          <div>
-            <div className="pr-card-value">{summary.awaiting}</div>
-            <div className="pr-card-label">Awaiting Submission</div>
-          </div>
-        </div>
-
-        <div className="pr-card">
-          <div className="pr-card-icon"><FiGitBranch size={19} /></div>
-          <div>
-            <div className="pr-card-value">{summary.partial}</div>
-            <div className="pr-card-label">Partial</div>
-          </div>
-        </div>
-
-        <div className="pr-card">
-          <div className="pr-card-icon"><FiClock size={19} /></div>
-          <div>
-            <div className="pr-card-value">{summary.awaitingReview}</div>
-            <div className="pr-card-label">Fully Reported — Awaiting Review</div>
-          </div>
-        </div>
-
-        <div className="pr-card">
-          <div className="pr-card-icon"><FiCheckCircle size={19} /></div>
-          <div>
-            <div className="pr-card-value">{summary.completed}</div>
-            <div className="pr-card-label">Completed</div>
-          </div>
-        </div>
+        ))}
       </div>
 
       <div className="pr-panel">
@@ -2735,7 +2692,18 @@ export default function PlantingPage() {
                       )}
                     </td>
                     {isParticipant && <td className="pr-td">{record.barangay || "—"}</td>}
-                    <td className="pr-td">{record.species || "—"}</td>
+                    <td className="pr-td">
+                      {reportSeedlingItems(record).length > 0 ? (
+                        <ul className="pr-seedling-list">
+                          {reportSeedlingItems(record).map((item) => (
+                            <li key={item.species} className="pr-seedling-item">
+                              <span className="pr-seedling-name">{item.species}</span>
+                              {item.quantity !== null && <span className="pr-seedling-qty">{item.quantity}</span>}
+                            </li>
+                          ))}
+                        </ul>
+                      ) : "—"}
+                    </td>
                     <td className="pr-td">
                       <strong>{record.reportType === "parent"
                         ? `${record.activeSubmittedQuantity ?? "Not reported"} reported planted / ${record.quantityReleased ?? "Unavailable"} released`
@@ -2747,9 +2715,8 @@ export default function PlantingPage() {
                     <td className="pr-td">{formatDate(record.plantingDate)}</td>
                     <td className="pr-td">
                       {renderStatusBadge(reportSubmissionStatus(record))}
-                      <div className="pr-table-sub">
-                        Review: {reportReviewStatus(record)}
-                        {record.reportType === "parent" && record.reportingProgress ? ` · ${record.reportingProgress}` : ""}
+                      <div className="pr-review-line" data-review-status={reportReviewStatus(record)}>
+                        Review Status: <span className="pr-review-value">{reportReviewStatus(record)}</span>
                       </div>
                     </td>
                     <td className="pr-td pr-center">
