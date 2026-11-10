@@ -229,3 +229,8 @@ export async function authenticatedFetch(path, options = {}) {
 export async function publicApiFetch(path) {
   throw new Error(`Unregistered test API: ${path}`);
 }
+
+export async function authenticatedJson(path, options = {}) {
+  const response = await authenticatedFetch(path, options);
+  return { response, body: await response.json().catch(() => null) };
+}

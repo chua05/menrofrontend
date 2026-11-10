@@ -7,11 +7,13 @@ import { MAX_LEFTOVER_REASON_LENGTH } from "../utils/plantingReportForm";
 import { editableCorrectionPaths, evidenceCarriedForward } from "../utils/plantingReviewWorkflow";
 import { useEffect, useRef, useState } from "react";
 import { FiFileText } from "react-icons/fi";
-import { authenticatedFetch } from "../services/authenticatedApi";
+import { authenticatedFetch, authenticatedJson } from "../services/authenticatedApi";
+import { READ_TIMEOUT_MS, UPLOAD_TIMEOUT_MS, WRITE_TIMEOUT_MS, isAmbiguousWriteFailure } from "../utils/requestTimeout";
 import { backendFieldErrors, focusFirstInvalid } from "../utils/formValidation";
 import "../styles/official-planting.css";
-async function api(path, options) {
-  const response = await authenticatedFetch(path, options), body = await response.json().catch(() => null);
+// Every call is bounded so "Saving…" and "Loading…" always recover.
+async function api(path, options = {}, timeoutMs = READ_TIMEOUT_MS) {
+  const { response, body } = await authenticatedJson(path, options, { timeoutMs });
   if (!response.ok || body?.success !== true) throw Object.assign(new Error(response.status >= 500 ? "Official planting reporting is temporarily unavailable." : body?.message || "Unable to save the official report."), { status: response.status, fieldErrors: body?.fieldErrors });
   return body?.data;
 }
@@ -24,7 +26,11 @@ const BASIS_HELP = {
   "menro-field-report": "MENRO Staff confirmed the planting at the site. Original planting photos taken at the site are required.",
   "release-based": "Confirms planting from the release record of an individual requester. Site photos are not required.",
 };
-export default function StaffPlantingReportForm({ currentUser, onClose, onSaved, correction, resumeEvidence }) {
+// pending: a report save that timed out earlier (kept by the page, so it
+// survives closing this form or reloading). It is replayed with its original
+// body and submission key, which MENRO answers with the saved report if the
+// first attempt reached it, so the report is never created twice.
+export default function StaffPlantingReportForm({ currentUser, onClose, onSaved, correction, resumeEvidence, pending = null, onPendingChange = () => {} }) {
   const reference = correction || resumeEvidence;
   // Field-specific correction: only the fields MENRO Admin returned are editable
   // (the backend enforces the same rule). Older returns leave every field editable.
@@ -40,6 +46,13 @@ export default function StaffPlantingReportForm({ currentUser, onClose, onSaved,
   const [file, setFile] = useState(null), [errors, setErrors] = useState({}), [error, setError] = useState(""), [saving, setSaving] = useState(false), [saved, setSaved] = useState(resumeEvidence ? { officialSubmissionIds: [resumeEvidence.id] } : null);
   const [photos, setPhotos] = useState([]), [photoSaved, setPhotoSaved] = useState(false);
   const [photoRetryBound, setPhotoRetryBound] = useState(false);
+  // Set when a save timed out after it was sent: the outcome is unknown, so the
+  // form stays locked and the next attempt replays the same submission keys,
+  // which MENRO answers with the already-saved report instead of a duplicate.
+  const [unconfirmed, setUnconfirmed] = useState(false);
+  // Opened with an earlier unconfirmed save: show the check panel first. A save
+  // that times out while this form is open keeps using the form itself.
+  const [openedWithPending] = useState(() => Boolean(pending?.body));
   const photoKey = useRef(crypto.randomUUID());
   const root = useRef(null), submissionKey = useRef(crypto.randomUUID());
   const selected = options.find(row => row.requestId === selectedId);
@@ -104,10 +117,16 @@ export default function StaffPlantingReportForm({ currentUser, onClose, onSaved,
     setErrors(validation);
     if (Object.keys(validation).length) return focusFirstInvalid(() => root.current);
     setSaving(true); setError("");
-    let report = saved;
+    let report = saved, completed = false;
     try {
       if (!report) {
-        report = await api("/planting-reports/official", { method: "POST", body: JSON.stringify({ requestId: selected.requestId, items: items.map(row => ({ inventoryId: row.inventoryId, quantityPlanted: plantedFor(row), leftoverQuantity: Number(row.leftoverQuantity), ...(Number(row.leftoverQuantity) > 0 ? { leftoverReason: String(row.leftoverReason || "").trim() } : {}) })), confirmationBasis: basis, remarks, expectedVersion: selected.expectedVersion, clientSubmissionId: submissionKey.current, ...(correction ? { correctionOf: correction.id } : {}) }) });
+        const body = { requestId: selected.requestId, items: items.map(row => ({ inventoryId: row.inventoryId, quantityPlanted: plantedFor(row), leftoverQuantity: Number(row.leftoverQuantity), ...(Number(row.leftoverQuantity) > 0 ? { leftoverReason: String(row.leftoverReason || "").trim() } : {}) })), confirmationBasis: basis, remarks, expectedVersion: selected.expectedVersion, clientSubmissionId: submissionKey.current, ...(correction ? { correctionOf: correction.id } : {}) };
+        try { report = await api("/planting-reports/official", { method: "POST", body: JSON.stringify(body) }, WRITE_TIMEOUT_MS); }
+        catch (failure) {
+          if (isAmbiguousWriteFailure(failure)) onPendingChange({ body, needsEvidence: basis === "menro-field-report" && !evidenceCarried, attendancePending: Boolean(file && !attendanceCarried), correction: Boolean(correction) });
+          throw failure;
+        }
+        onPendingChange(null);
         setSaved(report);
       }
       if (basis === "menro-field-report" && !photoSaved && !evidenceCarried) {
@@ -115,15 +134,16 @@ export default function StaffPlantingReportForm({ currentUser, onClose, onSaved,
         const photoData = new FormData(); photos.forEach(photo => photoData.append("photos", photo.file));
         photoData.append("evidenceManifest", JSON.stringify(photos.map(photo => photo.descriptor)));
         photoData.append("expectedRevision", String(resumeEvidence ? Number(resumeEvidence.revision || 0) : correction ? Number(correction.revision || 0) + 1 : 0));
-        await api(`/planting-reports/official/${encodeURIComponent(report.officialSubmissionIds[0])}/photos`, { method: "PUT", body: photoData, headers: { "Idempotency-Key": photoKey.current } });
+        await api(`/planting-reports/official/${encodeURIComponent(report.officialSubmissionIds[0])}/photos`, { method: "PUT", body: photoData, headers: { "Idempotency-Key": photoKey.current } }, UPLOAD_TIMEOUT_MS);
         setPhotoSaved(true);
       }
       if (file && !attendanceCarried) {
         const data = new FormData(); data.append("attendance", file);
-        await api(`/planting-reports/official/${encodeURIComponent(report.officialSubmissionIds[0])}/attendance`, { method: "PUT", body: data });
+        await api(`/planting-reports/official/${encodeURIComponent(report.officialSubmissionIds[0])}/attendance`, { method: "PUT", body: data }, UPLOAD_TIMEOUT_MS);
       }
-      await onSaved(report); onClose();
+      completed = true; setUnconfirmed(false);
     } catch (failure) {
+      if (isAmbiguousWriteFailure(failure)) { setUnconfirmed(true); setError(failure.message); return; }
       if ([400, 422].includes(failure.status) && !photoSaved) setPhotoRetryBound(false);
       const fields = backendFieldErrors(failure);
       // "field-<path>" errors name a field that was not returned for correction.
@@ -137,7 +157,40 @@ export default function StaffPlantingReportForm({ currentUser, onClose, onSaved,
       if (Object.keys(fields).length) { setErrors(fields); focusFirstInvalid(() => root.current); }
       else setError(report ? `The report is saved pending Admin verification. ${failure.message} Retry the same evidence with the same upload intent; do not submit the quantities again.` : failure.status === 409 ? `${failure.message} Refresh releases before correcting the report.` : failure.message);
     } finally { setSaving(false); }
+    if (!completed) return;
+    // The save is confirmed. Refreshing the list is the parent's job and must
+    // never turn a confirmed save into an error or keep this form open.
+    onClose();
+    try { onSaved?.(report); } catch { /* the parent reports refresh problems */ }
   }
+  async function checkPending() {
+    if (saving) return;
+    setSaving(true); setError("");
+    let report;
+    try { report = await api("/planting-reports/official", { method: "POST", body: JSON.stringify(pending.body) }, WRITE_TIMEOUT_MS); }
+    catch (failure) {
+      if (isAmbiguousWriteFailure(failure)) setError(failure.message);
+      else {
+        // MENRO answered definitively: the earlier report was not saved.
+        onPendingChange(null);
+        setError(`The earlier report was not saved. ${failure.message}`);
+      }
+      return;
+    } finally { setSaving(false); }
+    const info = { evidencePending: pending.needsEvidence, attendancePending: pending.attendancePending, correction: pending.correction };
+    onPendingChange(null);
+    onClose();
+    try { onSaved?.(report, info); } catch { /* the parent reports refresh problems */ }
+  }
+  if (openedWithPending && pending?.body) return <ModalDialog className="pr-official-backdrop" label="Unconfirmed Official Planting Report" onClose={onClose} dismissible={!saving} busy={saving}><section className="pr-official-dialog">
+    <h2 id="official-planting-title">Unconfirmed Official Planting Report</h2>
+    <div className="pr-correction-banner" role="note" aria-label="Unconfirmed submission">
+      <div><strong>An earlier submission was not confirmed by MENRO</strong>
+        <p>Release {pending.body.requestId}{pending.correction ? " (correction)" : ""} may already be saved. Select Check Submission to confirm it. The same report is sent again only if MENRO has not saved it, so it cannot be created twice.</p></div>
+    </div>
+    {error && <p role="alert">{error}</p>}
+    <div className="pr-official-actions"><button type="button" className="pr-secondary-button" onClick={onClose} disabled={saving}>Close</button><button type="button" className="pr-primary-button" onClick={checkPending} disabled={saving}>{saving ? "Checking…" : "Check Submission"}</button></div>
+  </section></ModalDialog>;
   return <ModalDialog className="pr-official-backdrop" label={title} onClose={onClose} dismissible={!saving} busy={saving}><section className="pr-official-dialog">
     <h2 id="official-planting-title">{title}</h2>
     {correction && (correction.returnReason || correction.rejectionReason) && <div className="pr-correction-banner" role="note" aria-label="Correction details">
@@ -149,7 +202,7 @@ export default function StaffPlantingReportForm({ currentUser, onClose, onSaved,
     {loading ? <p role="status">Loading authorized releases…</p> : <form ref={root} onSubmit={save} noValidate>
       {error && <p role="alert">{error}</p>}
       {!options.length && <p>No eligible released requests are available. An existing authorized release is required.</p>}
-      <fieldset disabled={saving || Boolean(saved)}>
+      <fieldset disabled={saving || unconfirmed || Boolean(saved)}>
         <div className="pr-field"><label htmlFor="official-request">Seedling Release Record *</label><select id="official-request" value={selectedId} onChange={event => choose(event.target.value)} {...aria("requestId")}><option value="">Select a released request</option>{options.map(row => <option key={row.requestId} value={row.requestId}>{row.requesterName} — {row.eventName || row.requestId}</option>)}</select>{feedback("requestId")}</div>
         {nextCursor && <button type="button" className="pr-secondary-button" onClick={more} disabled={loadingMore}>{loadingMore ? "Loading More Releases…" : "Load More Releases"}</button>}
         <div className="pr-official-grid">
@@ -182,15 +235,15 @@ export default function StaffPlantingReportForm({ currentUser, onClose, onSaved,
       </fieldset>
       {basis === "menro-field-report" && evidenceCarried && <p className="pr-helper-text pr-carried-evidence" role="status">Verified planting evidence from the returned report is carried forward unchanged.</p>}
       {basis === "menro-field-report" && !evidenceCarried && <OfficialPlantingPhotos key={selected?.requestId || "no-release"} site={selected} photos={photos} onChange={next => { setPhotos(next); photoKey.current = crypto.randomUUID(); }} error={errors.photos} onError={message => setErrors(current => ({ ...current, photos: message }))} disabled={saving || photoSaved || photoRetryBound} />}
-      <fieldset disabled={saving || Boolean(saved)} style={{ border: 0, margin: 0, padding: 0 }}>
+      <fieldset disabled={saving || unconfirmed || Boolean(saved)} style={{ border: 0, margin: 0, padding: 0 }}>
         <section className="pr-section pr-section-last pr-report-additional-section" aria-labelledby="official-additional-heading">
           <div className="pr-section-header"><h3 id="official-additional-heading"><FiFileText size={15} /> Additional Information</h3></div>
           <div className="pr-field"><label htmlFor="official-remarks" className="pr-label">Remarks</label><textarea id="official-remarks" className="pr-textarea" value={remarks} readOnly={!canEdit("remarks")} maxLength={2000} placeholder="Add notes about the planting activity, if necessary..." {...aria("remarks")} onChange={event => { setRemarks(event.target.value); setErrors(current => ({ ...current, remarks: "" })); submissionKey.current = crypto.randomUUID(); }} />{commentFor("remarks") && <small className="pr-correction-comment-note">Admin: {commentFor("remarks")}</small>}{feedback("remarks")}</div>
         </section>
       </fieldset>
       {attendanceCarried && <p className="pr-helper-text" role="status">Attendance documentation from the returned report is kept.</p>}
-      {!attendanceCarried && <AttendanceUpload file={file} onChange={setFile} error={errors.attendance} onError={message => setErrors(current => ({ ...current, attendance: message }))} disabled={saving} />}
-      <div className="pr-official-actions"><button type="button" className="pr-secondary-button" onClick={onClose} disabled={saving}>Close</button>{!saved && <button type="button" className="pr-secondary-button" onClick={refresh} disabled={saving}>Refresh Releases</button>}<button type="submit" className="pr-primary-button" disabled={saving || !options.length}>{saving ? "Saving…" : saved ? basis === "menro-field-report" && !photoSaved ? "Upload Evidence for Saved Report" : file ? "Retry Attendance Upload" : "Finish Saved Report" : "Submit for Admin Verification"}</button></div>
+      {!attendanceCarried && <AttendanceUpload file={file} onChange={setFile} error={errors.attendance} onError={message => setErrors(current => ({ ...current, attendance: message }))} disabled={saving || unconfirmed} />}
+      <div className="pr-official-actions"><button type="button" className="pr-secondary-button" onClick={onClose} disabled={saving}>Close</button>{!saved && !unconfirmed && <button type="button" className="pr-secondary-button" onClick={refresh} disabled={saving}>Refresh Releases</button>}<button type="submit" className="pr-primary-button" disabled={saving || !options.length}>{saving ? "Saving…" : unconfirmed ? "Check Submission" : saved ? basis === "menro-field-report" && !photoSaved ? "Upload Evidence for Saved Report" : file ? "Retry Attendance Upload" : "Finish Saved Report" : "Submit for Admin Verification"}</button></div>
     </form>}
   </section></ModalDialog>;
 }
