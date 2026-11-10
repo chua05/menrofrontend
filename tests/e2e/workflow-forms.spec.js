@@ -1265,7 +1265,7 @@ test("View Report shows every seedling type of a multi-type report and resuming 
     "GET /api/planting-reports/report-fixture/verification-logs": route => route.fulfill({ json: { success: true, data: [] } }) });
   await page.getByRole("button", { name: "Close", exact: true }).click();
   await page.goto("/staff/planting-reports?role=staff&report=report-fixture");
-  await expect(page.locator(".pr-info-block").filter({ hasText: "Tree Species" }).locator(".pr-info-value")).toHaveText("Narra, Molave");
+  await expect(page.locator(".pr-info-block").filter({ hasText: "Tree Species" }).first().locator(".pr-info-value")).toHaveText("Narra, Molave");
   await expect(page.locator(".pr-info-block").filter({ hasText: "Released Quantity" }).locator(".pr-info-value")).toHaveText("16");
   const breakdown = page.getByRole("table", { name: "Seedlings per Type" });
   await expect(breakdown.getByRole("row")).toHaveCount(3);

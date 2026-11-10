@@ -1568,7 +1568,7 @@ button:disabled {
 .pr-official-dialog .pr-preview-footer { padding: 12px; }
 .pr-official-dialog .pr-preview-verification { display: flex; flex-direction: column; gap: 6px; margin: 10px 0; }
 
-/* ==============================================
+/* =====================================================
    PLANTING REPORT REVIEW WORKFLOW
    Pending Review / Returned: amber · Reviewed / Pending Admin Approval: blue
    Completed: green · Rejected: red
@@ -1784,7 +1784,8 @@ ol.pr-history { margin: 0; padding: 0; list-style: none; }
   .pr-decision-footer button { width: 100%; }
   .pr-decision-summary .pr-status-badge { margin-left: 0; }
 }
-=======
+
+
 /* View Report: per-seedling-type breakdown for multi-type releases */
 .pr-species-breakdown { margin-top: 14px; padding: 14px; border: 1px solid #e2e7e4; border-radius: 9px; background: #fafbfa; }
 .pr-species-breakdown-scroll { margin: 8px 0; overflow-x: auto; }
