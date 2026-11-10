@@ -6,6 +6,9 @@ import {
   canNavigateToStep,
   getPlantingAreaError,
   getPlantingAreaHectares,
+  formatHectares,
+  registeredSiteAreaHectares,
+  requestPlantingAreaLabel,
   getEffectiveRequestType,
   getPurposeOptions,
   REQUEST_TYPE_SELECTABLE_SECTORS,
@@ -214,4 +217,18 @@ test("normalizes Arabic and Roman Zone barangay aliases", () => {
   assert.equal(normalizeBarangayName(" Zone VIII "), "zone viii");
   assert.equal(normalizeBarangayName("ZoneVIIIPoblacion"), "zone viii");
   assert.equal(normalizeBarangayName("Zone VIII Poblacion"), "zone viii");
+});
+
+test("registered site area is used only when positive and finite, and details label every area source", () => {
+  assert.equal(registeredSiteAreaHectares({ areaHectares: 2.5 }), 2.5);
+  assert.equal(registeredSiteAreaHectares({ areaHectares: "3" }), 3);
+  for (const areaHectares of [0, -1, "", null, undefined, "abc", Infinity]) assert.equal(registeredSiteAreaHectares({ areaHectares }), null);
+  assert.equal(registeredSiteAreaHectares(undefined), null);
+  assert.equal(formatHectares(1.5), "1.5 ha"); assert.equal(formatHectares(0.123456), "0.1235 ha"); assert.equal(formatHectares(null), "");
+  assert.equal(requestPlantingAreaLabel({ siteMode: "existing", areaSource: "registered-site", areaHectares: 4 }), "4 ha (registered site area)");
+  assert.equal(requestPlantingAreaLabel({ siteMode: "existing", areaSource: "registered-site", areaHectares: null }), "Not recorded for the registered site");
+  assert.equal(requestPlantingAreaLabel({ siteMode: "proposed", areaChoice: "2 hectares", areaHectares: 2 }), "2 ha");
+  assert.equal(requestPlantingAreaLabel({ siteMode: "proposed", areaChoice: "" }), "Not provided");
+  assert.equal(requestPlantingAreaLabel({ siteMode: "existing", areaChoice: "1 hectare" }), "1 hectare");
+  assert.equal(requestPlantingAreaLabel(null), "");
 });

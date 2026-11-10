@@ -37,7 +37,7 @@ import {
 
 import { useAuth } from "../context/AuthContext";
 import { focusFirstInvalid } from "../utils/formValidation";
-import { getPlantingAreaError } from "../utils/saplingRequestWorkflow";
+import { getPlantingAreaError, requestPlantingAreaLabel } from "../utils/saplingRequestWorkflow";
 import { useToast } from "../context/ToastContext";
 import {
   IDENTIFICATION_DOCUMENTS,
@@ -3027,7 +3027,7 @@ useEffect(() => {
                     ["Request Address", `${selectedRequest.workflow.street || ""}, ${selectedRequest.workflow.addressBarangay || ""}, ${selectedRequest.workflow.addressMunicipality || "Bulan"}, ${selectedRequest.workflow.addressProvince || "Sorsogon"}`],
                     ["Preferred Release Method", selectedRequest.workflow.releaseMethod],
                     ["Planting Site Type", selectedRequest.workflow.siteMode === "proposed" ? "Proposed Site" : "Existing Site"],
-                    ["Planting Area", selectedRequest.workflow.areaChoice],
+                    ["Planting Area", requestPlantingAreaLabel(selectedRequest.workflow)],
                     ["Niyogan Status", selectedRequest.workflow.siteMode === "proposed"
                       ? selectedRequest.workflow.niyogan === "unsure"
                         ? "Requires MENRO Verification"
