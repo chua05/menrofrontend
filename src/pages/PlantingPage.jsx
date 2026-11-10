@@ -51,8 +51,11 @@ import {
   availableDecisions,
   buildEvidenceMarkers,
   decisionReasonError,
+  MAX_CORRECTION_COMMENT_LENGTH,
+  correctionSelectionErrors,
   evidenceState,
   finalReportGroupRows,
+  staffCorrectableFields,
   historyEntries,
   isFinalReportGroupLead,
   photoCoordinates,
@@ -390,6 +393,9 @@ export default function PlantingPage() {
   const decisionReasonRef = useRef(null);
   const [verificationLogs, setVerificationLogs] = useState({ reportId: "", status: "idle", entries: [] });
   const [correctionTarget, setCorrectionTarget] = useState(null);
+  // Field-specific return: { [fieldPath]: comment } chosen by Admin, plus their errors.
+  const [correctionSelections, setCorrectionSelections] = useState({});
+  const [correctionErrors, setCorrectionErrors] = useState({});
   // Final leftovers (and reasons) per released type, kept for one distribution:
   // { distributionId, entries: { [inventoryId]: { leftoverQuantity, leftoverReason } } }.
   const [finalEntries, setFinalEntries] = useState({ distributionId: "", entries: {} });
@@ -2395,7 +2401,24 @@ export default function PlantingPage() {
     setVerificationRemarks("");
     setDecisionFieldError("");
     setDecisionError("");
+    setCorrectionSelections({});
+    setCorrectionErrors({});
     setDecision(nextDecision);
+  }
+
+  // Admin returns a final Staff report by naming the submitted fields to correct.
+  function fieldReturnFor(submission, nextDecision = decision) {
+    if (nextDecision !== "return" || submission?.officialStaffReport !== true || !submission?.finalReportGroupId) return [];
+    return staffCorrectableFields(finalReportGroupRows(submission, selectedRecord?.submissions || []));
+  }
+
+  function toggleCorrectionField(path, checked) {
+    setCorrectionSelections((current) => {
+      const next = { ...current };
+      if (checked) next[path] = next[path] ?? ""; else delete next[path];
+      return next;
+    });
+    setCorrectionErrors((current) => ({ ...current, fields: "", [`fieldComment-${path}`]: "" }));
   }
 
   function closeDecision() {
@@ -2412,23 +2435,32 @@ export default function PlantingPage() {
     if (!config || !selectedRecord || !selectedSubmission || decisionInFlightRef.current) return;
     if (!availableDecisions(selectedSubmission, userRole).includes(decision)) return;
     const reasonError = decisionReasonError(decision, verificationRemarks);
-    if (reasonError) {
+    const returnFields = fieldReturnFor(selectedSubmission);
+    const selectionErrors = returnFields.length ? correctionSelectionErrors(correctionSelections) : {};
+    setCorrectionErrors(selectionErrors);
+    if (reasonError || Object.keys(selectionErrors).length) {
       setDecisionFieldError(reasonError);
       focusFirstInvalid(() => document.querySelector(".pr-decision-modal"));
       return;
     }
+    const fields = returnFields.length
+      ? returnFields.filter((field) => Object.hasOwn(correctionSelections, field.path))
+        .map((field) => ({ path: field.path, comment: correctionSelections[field.path].trim() }))
+      : undefined;
     decisionInFlightRef.current = true;
     setActionLoading(true);
     setDecisionError("");
     try {
       const response = await apiRequest(
         `/planting-reports/${encodeURIComponent(selectedSubmission.id)}/${config.endpoint}`,
-        { method: "PATCH", body: JSON.stringify({ remarks: verificationRemarks.trim() }) }
+        { method: "PATCH", body: JSON.stringify({ remarks: verificationRemarks.trim(), ...(fields ? { fields } : {}) }) }
       );
       setSelectedRecord(response.data);
       setSelectedSubmission(null);
       setVerificationRemarks("");
       setDecisionFieldError("");
+      setCorrectionSelections({});
+      setCorrectionErrors({});
       setDecision("");
       setHistoryVersion((version) => version + 1);
       toast.success(response.message || config.success);
@@ -2436,6 +2468,7 @@ export default function PlantingPage() {
     } catch (error) {
       const fieldMessage = error?.fieldErrors?.remarks;
       if (fieldMessage) setDecisionFieldError(fieldMessage);
+      if (error?.fieldErrors && Object.keys(error.fieldErrors).some((key) => key === "fields" || key.startsWith("fieldComment-"))) setCorrectionErrors(error.fieldErrors);
       setDecisionError(error?.message || "The decision could not be saved. Please try again.");
     } finally {
       decisionInFlightRef.current = false;
@@ -3802,7 +3835,7 @@ export default function PlantingPage() {
                             <div className="pr-info-block"><div className="pr-info-label">Verification Details</div><div className="pr-info-value">{(submission.verificationDetails || submission.suspiciousFlags || []).join(", ") || "No concerns recorded"}</div></div>
                             {submission.staffReviewedBy && <div className="pr-info-block"><div className="pr-info-label">Staff Review</div><div className="pr-info-value">{submission.staffReviewedByName || submission.staffReviewedBy} / {formatDateTime(submission.staffReviewedAt)}</div>{submission.staffReviewRemarks && <div className="pr-info-subvalue">{submission.staffReviewRemarks}</div>}</div>}
                             {(submission.adminDecisionBy || (stage === WORKFLOW_STATUS.COMPLETED && submission.reviewedBy)) && <div className="pr-info-block"><div className="pr-info-label">{stage === WORKFLOW_STATUS.REJECTED ? "Rejected By / At" : stage === WORKFLOW_STATUS.RETURNED ? "Returned By / At" : "Approved By / At"}</div><div className="pr-info-value">{submission.adminDecisionByName || submission.reviewedByName || submission.adminDecisionBy || submission.reviewedBy} / {formatDateTime(submission.adminDecisionAt || submission.reviewedAt)}</div></div>}
-                            {submission.attendanceAvailable && (userRole === "admin" || userRole === "staff" || submission.authenticatedSubmitterUid === currentUser?.uid) && <ProtectedAttendanceButton submissionId={submission.id} official={submission.officialStaffReport === true} />}
+                            {(submission.attendanceAvailable || submission.attendanceCarriedFromSubmissionId) && (userRole === "admin" || userRole === "staff" || submission.authenticatedSubmitterUid === currentUser?.uid) && <ProtectedAttendanceButton submissionId={submission.attendanceAvailable ? submission.id : submission.attendanceCarriedFromSubmissionId} official={submission.officialStaffReport === true} />}
                           </div>
                           {returnReason && <div className="pr-decision-reason pr-decision-reason-returned"><div className="pr-info-label">Reason for Return</div><p>{returnReason}</p>{submission.returnedByName && <span>— {submission.returnedByName}</span>}</div>}
                           {stage === WORKFLOW_STATUS.REJECTED && submission.rejectionReason && <div className="pr-decision-reason pr-decision-reason-rejected"><div className="pr-info-label">Reason for Rejection</div><p>{submission.rejectionReason}</p></div>}
@@ -3827,6 +3860,19 @@ export default function PlantingPage() {
                               })}
                             </div>
                           )}
+                          {groupLead && submission.correctionRequest?.fields?.length > 0 && (
+                            <div className="pr-correction-request" role="note" aria-label="Fields returned for correction">
+                              <div className="pr-info-label">Fields returned for correction{submission.correctionRequest.requestedByName ? ` by ${submission.correctionRequest.requestedByName}` : ""}</div>
+                              <ul>
+                                {submission.correctionRequest.fields.map((field) => (
+                                  <li key={field.path}><strong>{field.label}:</strong> {field.comment}</li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+                          {groupLead && submission.evidenceCarriedFromSubmissionId && (
+                            <div className="pr-submission-waiting" role="note">Verified evidence from the previous revision is carried forward unchanged.</div>
+                          )}
                           {submission.finalReportGroupId && groupSize > 1 && (
                             <div className="pr-submission-waiting pr-final-group-note" role="note">
                               {groupLead
@@ -3844,7 +3890,7 @@ export default function PlantingPage() {
                           )}
                           {waiting && canReview && <div className="pr-submission-waiting" role="status">{waiting}</div>}
                           {correctable && ownSubmission && submission.officialStaffReport && userRole === "staff" && (
-                            <div className="pr-drawer-verification-actions"><button type="button" className="pr-secondary-button" onClick={() => { setOfficialForm({ correction: submission }); setShowViewModal(false); }}><FiRotateCcw size={14} />Correct Official Submission</button></div>
+                            <div className="pr-drawer-verification-actions"><button type="button" className="pr-secondary-button" onClick={() => { setOfficialForm({ correction: { ...submission, groupRows: finalReportGroupRows(submission, submissionsWithPhotoIndexes) } }); setShowViewModal(false); }}><FiRotateCcw size={14} />Correct Official Submission</button></div>
                           )}
                           {correctable && ownSubmission && !submission.officialStaffReport && isParticipant && (
                             <div className="pr-drawer-verification-actions"><button type="button" className="pr-primary-button" onClick={() => startCorrection(submission)}><FiRotateCcw size={14} />Correct and Resubmit</button></div>
@@ -4036,6 +4082,39 @@ export default function PlantingPage() {
                   : <span />}
                 <small id="pr-decision-count" className="pr-decision-count">{decisionReasonLength}/{MAX_DECISION_REASON_LENGTH}</small>
               </div>
+              {fieldReturnFor(selectedSubmission).length > 0 && (
+                <fieldset className="pr-correction-fields" aria-describedby="pr-correction-fields-help">
+                  <legend className="pr-label">Fields that need correction <span className="pr-required">*</span></legend>
+                  <p id="pr-correction-fields-help" className="pr-helper-text">
+                    Only the selected fields will be editable by the Staff submitter. Selecting an evidence-related field requires the evidence to be verified again; otherwise verified evidence is kept.
+                  </p>
+                  {correctionErrors.fields && <small className="pr-field-error" role="alert">{correctionErrors.fields}</small>}
+                  {fieldReturnFor(selectedSubmission).map((field) => {
+                    const id = `pr-correction-${field.path.replace(/[^A-Za-z0-9_-]/g, "-")}`;
+                    const checked = Object.hasOwn(correctionSelections, field.path);
+                    const commentError = correctionErrors[`fieldComment-${field.path}`];
+                    return (
+                      <div className="pr-correction-field" key={field.path} data-field-path={field.path}>
+                        <label className="pr-correction-field-toggle" htmlFor={id}>
+                          <input id={id} type="checkbox" checked={checked} disabled={actionLoading}
+                            onChange={(event) => toggleCorrectionField(field.path, event.target.checked)} />
+                          <span><strong>{field.label}</strong>{field.evidence ? " (evidence)" : ""}<small className="pr-correction-field-value">Submitted: {field.value}</small></span>
+                        </label>
+                        {checked && (
+                          <>
+                            <label className="pr-sr-only" htmlFor={`${id}-comment`}>Comment for {field.label}</label>
+                            <textarea id={`${id}-comment`} className="pr-textarea pr-correction-comment" rows={2} maxLength={MAX_CORRECTION_COMMENT_LENGTH}
+                              value={correctionSelections[field.path]} aria-required="true" aria-invalid={commentError ? "true" : undefined}
+                              placeholder="What needs to be corrected?" disabled={actionLoading}
+                              onChange={(event) => { const value = event.target.value; setCorrectionSelections((current) => ({ ...current, [field.path]: value })); setCorrectionErrors((current) => ({ ...current, [`fieldComment-${field.path}`]: "" })); }} />
+                            {commentError && <small className="pr-field-error" role="alert">{commentError}</small>}
+                          </>
+                        )}
+                      </div>
+                    );
+                  })}
+                </fieldset>
+              )}
               <div className="pr-modal-footer pr-decision-footer">
                 <button type="button" className="pr-secondary-button" onClick={closeDecision} disabled={actionLoading}>Cancel</button>
                 <button

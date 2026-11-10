@@ -4,6 +4,7 @@ import ModalDialog from "./ModalDialog";
 import { attendanceFileError } from "../utils/attendanceFile";
 import { leftoverQuantityError, plantedFromLeftover } from "../utils/plantingQuantity";
 import { MAX_LEFTOVER_REASON_LENGTH } from "../utils/plantingReportForm";
+import { editableCorrectionPaths, evidenceCarriedForward } from "../utils/plantingReviewWorkflow";
 import { useEffect, useRef, useState } from "react";
 import { FiFileText } from "react-icons/fi";
 import { authenticatedFetch } from "../services/authenticatedApi";
@@ -25,9 +26,17 @@ const BASIS_HELP = {
 };
 export default function StaffPlantingReportForm({ currentUser, onClose, onSaved, correction, resumeEvidence }) {
   const reference = correction || resumeEvidence;
+  // Field-specific correction: only the fields MENRO Admin returned are editable
+  // (the backend enforces the same rule). Older returns leave every field editable.
+  const correctionRequest = correction?.correctionRequest || null;
+  const editable = correctionRequest ? editableCorrectionPaths(correctionRequest) : null;
+  const canEdit = path => !editable || editable.has(path);
+  const commentFor = path => correctionRequest?.fields?.find(field => field.path === path)?.comment || "";
+  const evidenceCarried = evidenceCarriedForward(correctionRequest, correction || {});
+  const attendanceCarried = Boolean(correctionRequest) && !canEdit("evidence.attendance") && Boolean(correction?.attendanceAvailable || correction?.attendanceCarriedFromSubmissionId);
   const [options, setOptions] = useState([]), [loading, setLoading] = useState(true), [selectedId, setSelectedId] = useState(reference?.requestId || "");
   const [nextCursor, setNextCursor] = useState(null), [loadingMore, setLoadingMore] = useState(false);
-  const [items, setItems] = useState([]), [basis, setBasis] = useState("menro-field-report"), [remarks, setRemarks] = useState("");
+  const [items, setItems] = useState([]), [basis, setBasis] = useState(correction?.confirmationBasis || "menro-field-report"), [remarks, setRemarks] = useState(correction?.remarks || "");
   const [file, setFile] = useState(null), [errors, setErrors] = useState({}), [error, setError] = useState(""), [saving, setSaving] = useState(false), [saved, setSaved] = useState(resumeEvidence ? { officialSubmissionIds: [resumeEvidence.id] } : null);
   const [photos, setPhotos] = useState([]), [photoSaved, setPhotoSaved] = useState(false);
   const [photoRetryBound, setPhotoRetryBound] = useState(false);
@@ -53,12 +62,13 @@ export default function StaffPlantingReportForm({ currentUser, onClose, onSaved,
       if (reference) {
         const source = rows.find(row => row.requestId === reference.requestId);
         // Evidence covers every seedling type saved together, so a resumed report lists all of them.
-        const savedRows = resumeEvidence?.operationRows?.length ? resumeEvidence.operationRows : [reference];
-        setItems(savedRows.map(entry => { const row = (source?.items || []).find(item => item.inventoryId === entry.inventoryId); return row && { ...row, quantityPlanted: String(entry.quantity || 0), leftoverQuantity: String(entry.leftoverQuantity || 0) }; }).filter(Boolean));
+        // A correction starts from every type of the returned report with its submitted values.
+        const savedRows = resumeEvidence?.operationRows?.length ? resumeEvidence.operationRows : correction?.groupRows?.length ? correction.groupRows : [reference];
+        setItems(savedRows.map(entry => { const row = (source?.items || []).find(item => item.inventoryId === entry.inventoryId); return row && { ...row, quantityPlanted: String(entry.quantity || 0), leftoverQuantity: String(entry.leftoverQuantity || 0), leftoverReason: entry.leftoverReason || "" }; }).filter(Boolean));
       }
     }).catch(failure => { if (active) setError(failure.message); }).finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
-  }, [reference, resumeEvidence]);
+  }, [reference, resumeEvidence, correction]);
   async function more() {
     if (!nextCursor || loadingMore) return;
     setLoadingMore(true); setError("");
@@ -89,7 +99,7 @@ export default function StaffPlantingReportForm({ currentUser, onClose, onSaved,
       else if (reason.length > MAX_LEFTOVER_REASON_LENGTH) validation[`leftoverReason-${index}`] = `Use at most ${MAX_LEFTOVER_REASON_LENGTH} characters.`;
     });
     if (!saved && selected && items.every(row => Number(row.availableQuantity) === 0)) validation.items = "No seedlings remain available for reporting on this release.";
-    if (basis === "menro-field-report" && !photoSaved && (!photos.length || photos.some(photo => !["ready", "verified"].includes(photo.status)))) validation.photos = "Add and verify original planting photos for the MENRO Field Report.";
+    if (basis === "menro-field-report" && !photoSaved && !evidenceCarried && (!photos.length || photos.some(photo => !["ready", "verified"].includes(photo.status)))) validation.photos = "Add and verify original planting photos for the MENRO Field Report.";
     if (attendanceFileError(file) || errors.attendance) validation.attendance = attendanceFileError(file) || errors.attendance;
     setErrors(validation);
     if (Object.keys(validation).length) return focusFirstInvalid(() => root.current);
@@ -100,7 +110,7 @@ export default function StaffPlantingReportForm({ currentUser, onClose, onSaved,
         report = await api("/planting-reports/official", { method: "POST", body: JSON.stringify({ requestId: selected.requestId, items: items.map(row => ({ inventoryId: row.inventoryId, quantityPlanted: plantedFor(row), leftoverQuantity: Number(row.leftoverQuantity), ...(Number(row.leftoverQuantity) > 0 ? { leftoverReason: String(row.leftoverReason || "").trim() } : {}) })), confirmationBasis: basis, remarks, expectedVersion: selected.expectedVersion, clientSubmissionId: submissionKey.current, ...(correction ? { correctionOf: correction.id } : {}) }) });
         setSaved(report);
       }
-      if (basis === "menro-field-report" && !photoSaved) {
+      if (basis === "menro-field-report" && !photoSaved && !evidenceCarried) {
         setPhotoRetryBound(true);
         const photoData = new FormData(); photos.forEach(photo => photoData.append("photos", photo.file));
         photoData.append("evidenceManifest", JSON.stringify(photos.map(photo => photo.descriptor)));
@@ -108,7 +118,7 @@ export default function StaffPlantingReportForm({ currentUser, onClose, onSaved,
         await api(`/planting-reports/official/${encodeURIComponent(report.officialSubmissionIds[0])}/photos`, { method: "PUT", body: photoData, headers: { "Idempotency-Key": photoKey.current } });
         setPhotoSaved(true);
       }
-      if (file) {
+      if (file && !attendanceCarried) {
         const data = new FormData(); data.append("attendance", file);
         await api(`/planting-reports/official/${encodeURIComponent(report.officialSubmissionIds[0])}/attendance`, { method: "PUT", body: data });
       }
@@ -116,6 +126,13 @@ export default function StaffPlantingReportForm({ currentUser, onClose, onSaved,
     } catch (failure) {
       if ([400, 422].includes(failure.status) && !photoSaved) setPhotoRetryBound(false);
       const fields = backendFieldErrors(failure);
+      // "field-<path>" errors name a field that was not returned for correction.
+      for (const key of Object.keys(fields)) {
+        const match = /^field-items\.([A-Za-z0-9_-]+)\.(leftoverQuantity|leftoverReason)$/.exec(key);
+        const index = match ? items.findIndex(row => row.inventoryId === match[1]) : -1;
+        if (index >= 0) { fields[`${match[2]}-${index}`] = fields[key]; delete fields[key]; }
+        else if (key === "field-confirmationBasis" || key === "field-remarks") { fields[key.slice(6)] = fields[key]; delete fields[key]; }
+      }
       if (fields.items && items.length === 1) { fields["leftoverQuantity-0"] = fields.items; delete fields.items; }
       if (Object.keys(fields).length) { setErrors(fields); focusFirstInvalid(() => root.current); }
       else setError(report ? `The report is saved pending Admin verification. ${failure.message} Retry the same evidence with the same upload intent; do not submit the quantities again.` : failure.status === 409 ? `${failure.message} Refresh releases before correcting the report.` : failure.message);
@@ -124,7 +141,10 @@ export default function StaffPlantingReportForm({ currentUser, onClose, onSaved,
   return <ModalDialog className="pr-official-backdrop" label={title} onClose={onClose} dismissible={!saving} busy={saving}><section className="pr-official-dialog">
     <h2 id="official-planting-title">{title}</h2>
     {correction && (correction.returnReason || correction.rejectionReason) && <div className="pr-correction-banner" role="note" aria-label="Correction details">
-      <div><strong>MENRO Admin returned this report for correction</strong><p><span>Reason:</span> {correction.returnReason || correction.rejectionReason}</p><p>Your corrected report goes directly to the MENRO Admin for approval.</p></div>
+      <div><strong>MENRO Admin returned this report for correction</strong><p><span>Reason:</span> {correction.returnReason || correction.rejectionReason}</p>
+        {correctionRequest?.fields?.length > 0 && <><p>Only these fields can be changed:</p><ul className="pr-correction-banner-fields">{correctionRequest.fields.map(field => <li key={field.path}><strong>{field.label}:</strong> {field.comment}</li>)}</ul></>}
+        {evidenceCarried && <p>Your verified planting evidence is kept and does not need to be uploaded again.</p>}
+        <p>Your corrected report goes directly to the MENRO Admin for approval.</p></div>
     </div>}
     {loading ? <p role="status">Loading authorized releases…</p> : <form ref={root} onSubmit={save} noValidate>
       {error && <p role="alert">{error}</p>}
@@ -138,7 +158,7 @@ export default function StaffPlantingReportForm({ currentUser, onClose, onSaved,
         {selected && missingRequired.length > 0 && <p role="alert">Required information not recorded: {missingRequired.join(", ")}. An authorized MENRO officer must correct the linked records before submission.</p>}
         {selected && !missingRequired.length && (!selected.participantSector || !selected.siteName || !selected.barangay) && <p role="status">Some requester or site information is not recorded. Ask an authorized MENRO officer to correct the linked records; the form does not infer missing values.</p>}
         {selected?.reportingPolicy?.reporting === "NOT_REQUIRED" && <p role="status">Released ? No Report Required. This official report is voluntary supporting documentation.</p>}
-        <label className="pr-field">Confirmation Basis<select value={basis} {...aria("confirmationBasis")} aria-describedby={["official-basis-help", errors.confirmationBasis && "official-error-confirmationBasis"].filter(Boolean).join(" ")} onChange={event => { setBasis(event.target.value); setErrors({}); submissionKey.current = crypto.randomUUID(); }}><option value="menro-field-report">MENRO Field Report</option>{selected?.requestType === "individual" && <option value="release-based">Individual Release-Based Confirmation</option>}</select><small id="official-basis-help" className="pr-helper-text">{BASIS_HELP[basis]}</small>{feedback("confirmationBasis")}</label>
+        <label className="pr-field">Confirmation Basis<select value={basis} disabled={!canEdit("confirmationBasis")} {...aria("confirmationBasis")} aria-describedby={["official-basis-help", errors.confirmationBasis && "official-error-confirmationBasis"].filter(Boolean).join(" ")} onChange={event => { setBasis(event.target.value); setErrors({}); submissionKey.current = crypto.randomUUID(); }}><option value="menro-field-report">MENRO Field Report</option>{selected?.requestType === "individual" && <option value="release-based">Individual Release-Based Confirmation</option>}</select><small id="official-basis-help" className="pr-helper-text">{BASIS_HELP[basis]}</small>{commentFor("confirmationBasis") && <small className="pr-correction-comment-note">Admin: {commentFor("confirmationBasis")}</small>}{feedback("confirmationBasis")}</label>
         {items.length > 0 && <div className="pr-official-quantities-intro">
           <h3>Seedlings Planted{items.length > 1 ? ` (${items.length} seedling types)` : ""}</h3>
           <p id="official-quantity-help" className="pr-helper-text">Enter any leftover seedlings for each type. Quantity Planted is calculated automatically: released seedlings minus leftovers.</p>
@@ -148,8 +168,8 @@ export default function StaffPlantingReportForm({ currentUser, onClose, onSaved,
             <label>Quantity Released<input readOnly value={row.quantityReleased} /></label><label>Seedlings Available for Reporting<input readOnly value={row.availableQuantity} /></label>
             {!saved && Number(row.availableQuantity) === 0 && <p className="pr-helper-text pr-official-species-note" role="status">All released {row.species || "seedlings"} are already reported. Nothing more to record for this type.</p>}
             <div className="pr-field"><label htmlFor={`official-planted-${index}`}>Quantity Planted *</label><input id={`official-planted-${index}`} readOnly value={plantedFor(row)} {...aria(errors.items ? "items" : `quantityPlanted-${index}`)} />{index === 0 && items.length === 1 && feedback("items")}</div>
-            <div className="pr-field"><label htmlFor={`official-leftover-${index}`}>Final Leftover Seedlings (Not Planted)</label><input id={`official-leftover-${index}`} type="number" min="0" max={row.availableQuantity} step="1" value={row.leftoverQuantity} readOnly={!saved && Number(row.availableQuantity) === 0} onChange={event => changeItem(index, "leftoverQuantity", event.target.value)} {...aria(`leftoverQuantity-${index}`)} aria-describedby={[errors[`leftoverQuantity-${index}`] && `official-error-leftoverQuantity-${index}`, "official-quantity-help"].filter(Boolean).join(" ")} />{feedback(`leftoverQuantity-${index}`)}</div>
-            {Number(row.leftoverQuantity) > 0 && !leftoverQuantityError(row.leftoverQuantity, row.availableQuantity) && <div className="pr-field pr-official-leftover-reason"><label htmlFor={`official-leftoverReason-${index}`}>Reason for Leftover Seedlings *</label><textarea id={`official-leftoverReason-${index}`} rows={2} maxLength={MAX_LEFTOVER_REASON_LENGTH} value={row.leftoverReason || ""} readOnly={Boolean(saved)} aria-required="true" placeholder="e.g. seedlings damaged in transport" onChange={event => changeItem(index, "leftoverReason", event.target.value)} {...aria(`leftoverReason-${index}`)} />{feedback(`leftoverReason-${index}`)}</div>}
+            <div className="pr-field"><label htmlFor={`official-leftover-${index}`}>Final Leftover Seedlings (Not Planted)</label><input id={`official-leftover-${index}`} type="number" min="0" max={row.availableQuantity} step="1" value={row.leftoverQuantity} readOnly={!saved && Number(row.availableQuantity) === 0 || !canEdit(`items.${row.inventoryId}.leftoverQuantity`)} onChange={event => changeItem(index, "leftoverQuantity", event.target.value)} {...aria(`leftoverQuantity-${index}`)} aria-describedby={[errors[`leftoverQuantity-${index}`] && `official-error-leftoverQuantity-${index}`, "official-quantity-help"].filter(Boolean).join(" ")} />{commentFor(`items.${row.inventoryId}.leftoverQuantity`) && <small className="pr-correction-comment-note">Admin: {commentFor(`items.${row.inventoryId}.leftoverQuantity`)}</small>}{feedback(`leftoverQuantity-${index}`)}</div>
+            {Number(row.leftoverQuantity) > 0 && !leftoverQuantityError(row.leftoverQuantity, row.availableQuantity) && <div className="pr-field pr-official-leftover-reason"><label htmlFor={`official-leftoverReason-${index}`}>Reason for Leftover Seedlings *</label><textarea id={`official-leftoverReason-${index}`} rows={2} maxLength={MAX_LEFTOVER_REASON_LENGTH} value={row.leftoverReason || ""} readOnly={Boolean(saved) || !canEdit(`items.${row.inventoryId}.leftoverReason`)} aria-required="true" placeholder="e.g. seedlings damaged in transport" onChange={event => changeItem(index, "leftoverReason", event.target.value)} {...aria(`leftoverReason-${index}`)} />{commentFor(`items.${row.inventoryId}.leftoverReason`) && <small className="pr-correction-comment-note">Admin: {commentFor(`items.${row.inventoryId}.leftoverReason`)}</small>}{feedback(`leftoverReason-${index}`)}</div>}
           </div>
         </section>)}
         {items.length > 1 && <dl className="pr-official-totals" aria-label="Report totals">
@@ -160,14 +180,16 @@ export default function StaffPlantingReportForm({ currentUser, onClose, onSaved,
         </dl>}
         {items.length > 1 && feedback("items")}
       </fieldset>
-      {basis === "menro-field-report" && <OfficialPlantingPhotos key={selected?.requestId || "no-release"} site={selected} photos={photos} onChange={next => { setPhotos(next); photoKey.current = crypto.randomUUID(); }} error={errors.photos} onError={message => setErrors(current => ({ ...current, photos: message }))} disabled={saving || photoSaved || photoRetryBound} />}
+      {basis === "menro-field-report" && evidenceCarried && <p className="pr-helper-text pr-carried-evidence" role="status">Verified planting evidence from the returned report is carried forward unchanged.</p>}
+      {basis === "menro-field-report" && !evidenceCarried && <OfficialPlantingPhotos key={selected?.requestId || "no-release"} site={selected} photos={photos} onChange={next => { setPhotos(next); photoKey.current = crypto.randomUUID(); }} error={errors.photos} onError={message => setErrors(current => ({ ...current, photos: message }))} disabled={saving || photoSaved || photoRetryBound} />}
       <fieldset disabled={saving || Boolean(saved)} style={{ border: 0, margin: 0, padding: 0 }}>
         <section className="pr-section pr-section-last pr-report-additional-section" aria-labelledby="official-additional-heading">
           <div className="pr-section-header"><h3 id="official-additional-heading"><FiFileText size={15} /> Additional Information</h3></div>
-          <div className="pr-field"><label htmlFor="official-remarks" className="pr-label">Remarks</label><textarea id="official-remarks" className="pr-textarea" value={remarks} maxLength={2000} placeholder="Add notes about the planting activity, if necessary..." {...aria("remarks")} onChange={event => { setRemarks(event.target.value); setErrors(current => ({ ...current, remarks: "" })); submissionKey.current = crypto.randomUUID(); }} />{feedback("remarks")}</div>
+          <div className="pr-field"><label htmlFor="official-remarks" className="pr-label">Remarks</label><textarea id="official-remarks" className="pr-textarea" value={remarks} readOnly={!canEdit("remarks")} maxLength={2000} placeholder="Add notes about the planting activity, if necessary..." {...aria("remarks")} onChange={event => { setRemarks(event.target.value); setErrors(current => ({ ...current, remarks: "" })); submissionKey.current = crypto.randomUUID(); }} />{commentFor("remarks") && <small className="pr-correction-comment-note">Admin: {commentFor("remarks")}</small>}{feedback("remarks")}</div>
         </section>
       </fieldset>
-      <AttendanceUpload file={file} onChange={setFile} error={errors.attendance} onError={message => setErrors(current => ({ ...current, attendance: message }))} disabled={saving} />
+      {attendanceCarried && <p className="pr-helper-text" role="status">Attendance documentation from the returned report is kept.</p>}
+      {!attendanceCarried && <AttendanceUpload file={file} onChange={setFile} error={errors.attendance} onError={message => setErrors(current => ({ ...current, attendance: message }))} disabled={saving} />}
       <div className="pr-official-actions"><button type="button" className="pr-secondary-button" onClick={onClose} disabled={saving}>Close</button>{!saved && <button type="button" className="pr-secondary-button" onClick={refresh} disabled={saving}>Refresh Releases</button>}<button type="submit" className="pr-primary-button" disabled={saving || !options.length}>{saving ? "Saving…" : saved ? basis === "menro-field-report" && !photoSaved ? "Upload Evidence for Saved Report" : file ? "Retry Attendance Upload" : "Finish Saved Report" : "Submit for Admin Verification"}</button></div>
     </form>}
   </section></ModalDialog>;

@@ -1964,3 +1964,67 @@ ol.pr-history { margin: 0; padding: 0; list-style: none; }
 .pr-final-reason { width: 100%; min-width: 180px; margin-top: 4px; }
 
 .pr-final-planted { color: #15803d; font-variant-numeric: tabular-nums; }
+
+/* =====================================================
+   FIELD-SPECIFIC RETURN FOR CORRECTION
+===================================================== */
+.pr-correction-fields {
+  margin: 14px 0 0;
+  padding: 12px;
+  border: 1px solid #fde68a;
+  border-radius: 10px;
+  background: #fffbeb;
+}
+
+.pr-correction-fields > legend { padding: 0 4px; }
+
+.pr-correction-field {
+  padding: 8px 0;
+  border-top: 1px solid #fef3c7;
+}
+
+.pr-correction-field:first-of-type { border-top: 0; }
+
+.pr-correction-field-toggle {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  cursor: pointer;
+  color: #1f2937;
+  font-size: 14px;
+}
+
+.pr-correction-field-toggle input { margin-top: 3px; }
+
+.pr-correction-field-value {
+  display: block;
+  margin-top: 2px;
+  color: #6b7280;
+  font-size: 12.5px;
+  overflow-wrap: anywhere;
+}
+
+.pr-correction-comment { width: 100%; margin-top: 6px; }
+
+.pr-correction-request {
+  margin-top: 10px;
+  padding: 10px 12px;
+  border-left: 3px solid #c2410c;
+  border-radius: 6px;
+  background: #fff7ed;
+  font-size: 13.5px;
+}
+
+.pr-correction-request ul,
+.pr-correction-banner-fields {
+  margin: 6px 0 0;
+  padding-left: 18px;
+}
+
+.pr-correction-comment-note {
+  display: block;
+  margin-top: 4px;
+  color: #9a3412;
+  font-size: 12.5px;
+  font-weight: 600;
+}

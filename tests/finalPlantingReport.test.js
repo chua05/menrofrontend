@@ -55,3 +55,31 @@ test("a final report's types are decided once, on its first row", () => {
   assert.equal(isFinalReportGroupLead(rows[2], rows), true, "legacy rows are decided individually");
   assert.deepEqual(availableDecisions(rows[1], "staff"), ["forward", "return"]);
 });
+
+import { staffCorrectableFields, correctionSelectionErrors, editableCorrectionPaths, evidenceCarriedForward, evidenceState } from "../src/utils/plantingReviewWorkflow.js";
+
+test("Admin can return only actual submitted fields; each selected field needs a comment", () => {
+  const rows = [
+    { inventoryId: "narra", species: "Narra", leftoverQuantity: 2, leftoverReason: "Wilted", confirmationBasis: "menro-field-report", remarks: "R", hasVerifiedPlantingEvidence: true },
+    { inventoryId: "molave", species: "Molave", leftoverQuantity: 0 },
+  ];
+  assert.deepEqual(staffCorrectableFields(rows).map((field) => field.path),
+    ["items.narra.leftoverQuantity", "items.narra.leftoverReason", "items.molave.leftoverQuantity", "confirmationBasis", "remarks", "evidence.photos"]);
+  assert.equal(staffCorrectableFields([{ ...rows[0], hasVerifiedPlantingEvidence: false }]).some((field) => field.path === "evidence.photos"), false);
+  assert.equal(correctionSelectionErrors({}).fields, "Select at least one field that needs correction.");
+  assert.deepEqual(Object.keys(correctionSelectionErrors({ remarks: " ", "items.narra.leftoverQuantity": "Recount" })), ["fieldComment-remarks"]);
+  assert.ok(correctionSelectionErrors({ remarks: "x".repeat(1001) })["fieldComment-remarks"]);
+});
+
+test("only returned fields are editable; unchanged verified evidence is carried forward", () => {
+  const request = { fields: [{ path: "items.narra.leftoverQuantity" }, { path: "remarks" }] };
+  assert.deepEqual([...editableCorrectionPaths(request)].sort(), ["items.narra.leftoverQuantity", "items.narra.leftoverReason", "remarks"]);
+  assert.equal(evidenceCarriedForward(request, { hasVerifiedPlantingEvidence: true }), true);
+  assert.equal(evidenceCarriedForward({ fields: [{ path: "evidence.photos" }] }, { hasVerifiedPlantingEvidence: true }), false);
+  assert.equal(evidenceCarriedForward({ fields: [{ path: "confirmationBasis" }] }, { hasVerifiedPlantingEvidence: true }), false);
+  assert.equal(evidenceCarriedForward(null, { hasVerifiedPlantingEvidence: true }), false, "older returns re-verify as before");
+  const photo = { gpsValid: true, siteGpsValid: true, timestampValid: true };
+  assert.equal(evidenceState(photo, { workflowStatus: "Returned for Correction" }), "rejected");
+  assert.equal(evidenceState(photo, { workflowStatus: "Returned for Correction", evidenceCarriedForwardTo: "next" }), "verified", "carried evidence stays current on the map");
+  assert.equal(evidenceState(photo, { workflowStatus: "Rejected", evidenceCarriedForwardTo: "next" }), "rejected");
+});
