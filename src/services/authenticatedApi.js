@@ -4,6 +4,13 @@ import {
   assertFrontendIntegrationTokenAudience,
   validateFrontendIntegrationEnvironment,
 } from "../config/integrationEnvironment";
+import {
+  AUTH_TIMEOUT_MESSAGE,
+  AUTH_TIMEOUT_MS,
+  RequestTimeoutError,
+  fetchJsonWithDeadline,
+  withDeadline,
+} from "../utils/requestTimeout";
 
 const configuredApiUrl = import.meta.env.VITE_API_URL?.trim().replace(/\/$/, "");
 const integration = validateFrontendIntegrationEnvironment(import.meta.env);
@@ -115,15 +122,35 @@ export function resetMenroSessionRequest() {
   authSessionRequest.reset();
 }
 
+// Bounded: restoring the session or refreshing the ID token can stall offline.
 export async function getAuthToken(forceRefresh = false) {
-  if (typeof auth.authStateReady === "function") await auth.authStateReady();
-  const firebaseUser = auth.currentUser;
-  if (!firebaseUser) {
-    throw new Error("Your session has expired. Please sign in again.");
-  }
-  const token = await firebaseUser.getIdToken(forceRefresh);
-  assertFrontendIntegrationTokenAudience(token, integration);
-  return token;
+  return withDeadline((async () => {
+    if (typeof auth.authStateReady === "function") await auth.authStateReady();
+    const firebaseUser = auth.currentUser;
+    if (!firebaseUser) {
+      throw new Error("Your session has expired. Please sign in again.");
+    }
+    const token = await firebaseUser.getIdToken(forceRefresh);
+    assertFrontendIntegrationTokenAudience(token, integration);
+    return token;
+  })(), AUTH_TIMEOUT_MS, () => new RequestTimeoutError(AUTH_TIMEOUT_MESSAGE));
+}
+
+// Authenticated request whose sign-in, response and body share one bounded
+// wait. Returns { response, body }; a stalled write rejects with an
+// ambiguous RequestTimeoutError so callers reconcile before retrying.
+export async function authenticatedJson(path, options = {}, { timeoutMs, forceRefresh = false } = {}) {
+  const token = await getAuthToken(forceRefresh);
+  const result = await fetchJsonWithDeadline(path.startsWith("http") ? path : `${API_BASE_URL}${path}`, {
+    ...options,
+    headers: {
+      ...(options.body instanceof FormData ? {} : options.body ? { "Content-Type": "application/json" } : {}),
+      ...(options.headers || {}),
+      Authorization: `Bearer ${token}`,
+    },
+  }, { timeoutMs });
+  if (result.response.status === 401 && !forceRefresh) return authenticatedJson(path, options, { timeoutMs, forceRefresh: true });
+  return result;
 }
 
 export async function authenticatedFetch(path, options = {}, forceRefresh = false) {

@@ -9,6 +9,9 @@ import { useSearchParams } from "react-router-dom";
 import L from "leaflet";
 import { boundaryLayerOptions } from "../utils/barangayMap";
 import { createEvidenceAttempt, assertEvidenceComplete } from "../utils/evidenceAttempt";
+import { AMBIGUOUS_WRITE_MESSAGE, AUTH_TIMEOUT_MESSAGE, AUTH_TIMEOUT_MS, READ_TIMEOUT_MESSAGE, READ_TIMEOUT_MS, RequestTimeoutError, UPLOAD_TIMEOUT_MS, WRITE_TIMEOUT_MS, isAmbiguousWriteFailure, isWriteMethod, withDeadline } from "../utils/requestTimeout";
+import { findOwnPendingSubmission, findReconciledSubmission, ownSubmissionIdsForEvent } from "../utils/plantingSubmissionReconcile";
+import { clearPendingSubmission, loadPendingSubmission, savePendingSubmission } from "../utils/pendingPlantingSubmission";
 import "leaflet/dist/leaflet.css";
 import * as exifr from "exifr";
 import { extractGpsCoordinates } from "../utils/exifGps";
@@ -373,6 +376,13 @@ export default function PlantingPage() {
   const [referenceLoading, setReferenceLoading] = useState(false);
   const [eventsLoadStatus, setEventsLoadStatus] = useState("idle");
   const [submitting, setSubmitting] = useState(false);
+  // { eventId, knownSubmissionIds, contributorId } after a submission timed out
+  // once it was sent. The form stays locked until MENRO confirms the outcome.
+  const [unconfirmedSubmission, setUnconfirmedSubmission] = useState(null);
+  // A Staff official report whose save timed out; survives closing the form.
+  // undefined until changed in this page: then the tab's stored value is used.
+  const [pendingOfficialSubmission, setPendingOfficialSubmission] = useState(undefined);
+  const pendingRestoreCheckedRef = useRef(false);
   const [actionLoading, setActionLoading] = useState(false);
 
   const [showSubmitModal, setShowSubmitModal] = useState(false);
@@ -470,7 +480,12 @@ export default function PlantingPage() {
     setNoEventsAlertSiteId("");
   }
 
-  async function getAuthToken(forceRefresh = false) {
+  // Bounded: restoring the session or refreshing the token can stall offline.
+  function getAuthToken(forceRefresh = false) {
+    return withDeadline(readAuthToken(forceRefresh), AUTH_TIMEOUT_MS, () => new RequestTimeoutError(AUTH_TIMEOUT_MESSAGE));
+  }
+
+  async function readAuthToken(forceRefresh) {
     // Wait until Firebase finishes restoring
     // the signed-in user after a page reload.
     if (typeof auth.authStateReady === "function") {
@@ -505,7 +520,10 @@ export default function PlantingPage() {
       ...(options.headers || {}),
     });
 
-    const { timeoutMs, ...requestOptions } = options;
+    const { timeoutMs: requestedTimeout, ...requestOptions } = options;
+    // Every request is bounded; uploads get longer than list reads.
+    const write = isWriteMethod(requestOptions.method);
+    const timeoutMs = requestedTimeout ?? (!write ? READ_TIMEOUT_MS : requestOptions.body instanceof FormData ? UPLOAD_TIMEOUT_MS : WRITE_TIMEOUT_MS);
     const timeoutController = Number.isFinite(timeoutMs) && timeoutMs > 0 && !requestOptions.signal ? new AbortController() : null;
     const timeoutId = timeoutController ? window.setTimeout(() => timeoutController.abort(), timeoutMs) : null;
     let response;
@@ -557,7 +575,13 @@ export default function PlantingPage() {
     }
 
     return payload;
-    } catch (error) { if (timeoutController?.signal.aborted) throw new Error("The report submission timed out before MENRO could confirm it. Your draft and evidence remain available; retry once without changing them.", { cause: error }); throw error; } finally { if (timeoutId !== null) window.clearTimeout(timeoutId); }
+    } catch (error) {
+      // A write that timed out or lost its connection after sending has an
+      // unknown outcome; callers reconcile it before sending anything again.
+      if (timeoutController?.signal.aborted) throw new RequestTimeoutError(write ? AMBIGUOUS_WRITE_MESSAGE : READ_TIMEOUT_MESSAGE, { ambiguous: write, cause: error });
+      if (error instanceof TypeError) throw write ? new RequestTimeoutError(AMBIGUOUS_WRITE_MESSAGE, { ambiguous: true, cause: error }) : new Error("The MENRO server could not be reached. Check your connection and try again.", { cause: error });
+      throw error;
+    } finally { if (timeoutId !== null) window.clearTimeout(timeoutId); }
   }
 
   function isSessionError(error) {
@@ -567,9 +591,10 @@ export default function PlantingPage() {
     );
   }
 
-  async function loadReports() {
-    setLoading(true);
-    setReportError("");
+  // background: refresh after a confirmed save. A failure keeps the current
+  // list and reports false instead of replacing the page with an error.
+  async function loadReports({ background = false } = {}) {
+    if (!background) { setLoading(true); setReportError(""); }
 
     try {
       const endpoint = isParticipant
@@ -577,14 +602,27 @@ export default function PlantingPage() {
         : "/planting-reports";
 
       const response = await apiRequest(endpoint);
-      setRecords(Array.isArray(response.data) ? response.data : []);
+      const rows = Array.isArray(response.data) ? response.data : [];
+      setRecords(rows);
+      return rows;
     } catch (error) {
+      if (background) return null;
       setRecords([]);
       setReportError(isSessionError(error)
         ? error.message
         : "Unable to load planting reports. Please try again.");
+      return null;
     } finally {
-      setLoading(false);
+      if (!background) setLoading(false);
+    }
+  }
+
+  // Refreshes the lists after a confirmed save without hiding its success.
+  async function refreshAfterSave(successMessage) {
+    showPopup(successMessage);
+    const results = await Promise.all([loadReports({ background: true }), loadMyDistributions({ quiet: true }), loadEvents({ quiet: true })]);
+    if (results.some(result => result === null || result === false)) {
+      showPopup(`${successMessage} The latest lists could not be refreshed; refresh this page when your connection is available.`, "warning");
     }
   }
 
@@ -612,9 +650,9 @@ export default function PlantingPage() {
     }
   }
 
-  async function loadEvents() {
+  async function loadEvents({ quiet = false } = {}) {
     const requestSequence = ++eventsRequestSequenceRef.current;
-    setEventsLoadStatus("loading");
+    if (!quiet) setEventsLoadStatus("loading");
 
     try {
       const response = await apiRequest("/events");
@@ -631,8 +669,10 @@ export default function PlantingPage() {
         )
       );
       setEventsLoadStatus("success");
+      return true;
     } catch (error) {
       if (requestSequence !== eventsRequestSequenceRef.current) return;
+      if (quiet) return false;
       setEvents([]);
       setEventsLoadStatus("error");
 
@@ -645,8 +685,8 @@ export default function PlantingPage() {
     }
   }
 
-  async function loadMyDistributions() {
-    if (!isParticipant) return;
+  async function loadMyDistributions({ quiet = false } = {}) {
+    if (!isParticipant) return true;
 
     try {
       const response = await apiRequest("/distributions/my-distributions");
@@ -669,7 +709,9 @@ export default function PlantingPage() {
       }));
 
       setDistributions(normalized);
+      return true;
     } catch (error) {
+      if (quiet) return false;
       setDistributions([]);
 
       if (!isSessionError(error)) {
@@ -773,6 +815,22 @@ export default function PlantingPage() {
       .catch(() => { if (active) setVerificationLogs({ reportId: historyReportId, status: "error", entries: [] }); });
     return () => { active = false; };
   }, [historyReportId, historyVersion]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // After a reload, a submission left unconfirmed in this tab is checked once
+  // against the freshly loaded list: either it was saved, or it was not and
+  // can be submitted again. Nothing is resent automatically.
+  useEffect(() => {
+    if (!isParticipant || loading || reportError || pendingRestoreCheckedRef.current || unconfirmedSubmission) return;
+    pendingRestoreCheckedRef.current = true;
+    const uid = auth.currentUser?.uid;
+    const stored = loadPendingSubmission("participant", uid);
+    if (!stored?.eventId) return;
+    clearPendingSubmission("participant", uid);
+    const saved = findReconciledSubmission(records, stored);
+    showPopup(saved
+      ? "Your earlier planting report was saved and is awaiting MENRO Staff verification. Do not submit it again."
+      : "Your earlier planting report submission was not saved by MENRO. You can submit it again.", saved ? "success" : "warning");
+  }, [isParticipant, loading, reportError, records, unconfirmedSubmission]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!popup.message) return undefined;
@@ -1451,7 +1509,28 @@ export default function PlantingPage() {
     if (uploadInputRef.current) uploadInputRef.current.value = "";
   }
 
+  // Staff: an official report save that timed out is kept outside the form
+  // (and in this tab's session) until Check Submission resolves it.
+  function updatePendingOfficialSubmission(value) {
+    const uid = auth.currentUser?.uid || currentUser?.uid;
+    setPendingOfficialSubmission(value || null);
+    if (value) savePendingSubmission("staff", uid, value); else clearPendingSubmission("staff", uid);
+  }
+
+  // Resolves a timed-out participant submission (saved or not saved).
+  function resolveUnconfirmedSubmission() {
+    setUnconfirmedSubmission(null);
+    clearPendingSubmission("participant", auth.currentUser?.uid);
+  }
+
   async function openSubmitModal(options) {
+    // A submission awaiting confirmation is reopened exactly as it was sent,
+    // so it can be checked instead of being replaced by a new one.
+    if (unconfirmedSubmission) {
+      setPopup({ message: "", type: "success" });
+      setShowSubmitModal(true);
+      return;
+    }
     if (options?.correction !== true) setCorrectionTarget(null);
     resetForm();
     setPopup({ message: "", type: "success" });
@@ -1461,6 +1540,12 @@ export default function PlantingPage() {
 
   function closeSubmitModal() {
     if (submitting) return;
+    if (unconfirmedSubmission) {
+      // Keep the unconfirmed submission (fields, evidence, key) for Check Submission.
+      setShowSubmitModal(false);
+      setPopup({ message: "", type: "success" });
+      return;
+    }
     setShowSubmitModal(false);
     setCorrectionTarget(null);
     resetForm();
@@ -2177,14 +2262,40 @@ export default function PlantingPage() {
           const data = new FormData(); data.append("attendance", attendanceFile);
           await apiRequest(`/planting-reports/submissions/${encodeURIComponent(id)}/attendance`, { method: "PUT", body: data });
         }
-        resetForm(); showPopup("Your planting report is saved pending MENRO verification.");
-        void loadReports();
+        resetForm();
+        void refreshAfterSave("Your planting report is saved pending MENRO verification.");
       } catch (error) {
         const fields = backendFieldErrors(error);
         if (Object.keys(fields).length) { setFormErrors(fields); focusFirstInvalid(() => reportFormRef.current); }
-        else showPopup(`Your report is already saved. ${error.message || "Retry only the same optional attendance file."}`, "error");
+        else showPopup(`Your report is already saved. ${isAmbiguousWriteFailure(error) ? "The attendance upload was not confirmed in time; retry the same attendance file." : error.message || "Retry only the same optional attendance file."}`, "error");
       } finally { setSubmitting(false); }
       return;
+    }
+    // A timed-out submission is reconciled before anything is sent again: if
+    // MENRO saved it, the report is kept; otherwise the same submission (same
+    // evidence and Idempotency-Key) is sent once more.
+    if (unconfirmedSubmission) {
+      setPopup({ message: "", type: "success" });
+      setSubmitting(true);
+      let rows;
+      try { rows = await loadReports({ background: true }); } finally { setSubmitting(false); }
+      if (!rows) {
+        showPopup("MENRO could not be reached to confirm the earlier submission. Nothing was sent again; select Check Submission to try again.", "error");
+        return;
+      }
+      const match = findReconciledSubmission(rows, unconfirmedSubmission);
+      if (match) {
+        resolveUnconfirmedSubmission();
+        setSavedParticipantReport({ data: { participantSubmissionId: match.id } });
+        if (attendanceFile) {
+          showPopup("Your planting report was saved. Select Retry Attendance Upload to send the attendance file; do not resubmit the report.", "warning");
+          return;
+        }
+        resetForm(); setCorrectionTarget(null);
+        void refreshAfterSave("Your planting report was saved and is awaiting MENRO Staff verification. Status: Pending Review.");
+        return;
+      }
+      resolveUnconfirmedSubmission();
     }
     const errors = validatePlantingReportForm(form, { distributions, photos: photoFiles, previews: photoPreviews, hasGps, municipalityScopeStatus, finalRows });
     const attendanceError = attendanceFileError(attendanceFile) || formErrors.attendance;
@@ -2307,6 +2418,7 @@ export default function PlantingPage() {
     if (correctionOf) payload.append("correctionOf", correctionOf);
 
     setSubmitting(true);
+    const knownSubmissionIds = ownSubmissionIdsForEvent(records, form.eventId);
 
     let savedResponse = null;
     try {
@@ -2327,13 +2439,31 @@ export default function PlantingPage() {
       }
       resetForm();
       setCorrectionTarget(null);
-      showPopup(correctionOf
+      void refreshAfterSave(correctionOf
         ? "Corrected Planting Report Resubmitted — MENRO Staff will review your correction. Status: Pending Review."
         : `Planting Report Submitted Successfully — ${response.message ||
           "Your planting report has been submitted and is awaiting MENRO Staff verification."} Status: Pending Review.`);
-
-      void Promise.all([loadReports(), loadMyDistributions(), loadEvents()]).catch(() => showPopup("Your report was submitted, but the latest lists could not be refreshed. You can refresh this page when your connection is available.", "warning"));
     } catch (error) {
+      if (isAmbiguousWriteFailure(error)) {
+        if (!savedResponse) {
+          const pending = { eventId: form.eventId, knownSubmissionIds, contributorId: auth.currentUser?.uid || "" };
+          setUnconfirmedSubmission(pending);
+          savePendingSubmission("participant", pending.contributorId, pending);
+          showPopup(error.message, "error");
+        } else showPopup("The report is already saved. The attendance upload was not confirmed in time; retry the same attendance file.", "error");
+        return;
+      }
+      // A refusal because this participant already has a report for the event
+      // awaiting review (for example one saved by an earlier, unconfirmed
+      // attempt) is reported as that, not as a changed balance.
+      if (!savedResponse && error?.status === 409) {
+        const rows = await loadReports({ background: true });
+        if (rows && findOwnPendingSubmission(rows, { eventId: form.eventId, contributorId: auth.currentUser?.uid || "" })) {
+          resetForm(); setCorrectionTarget(null);
+          void refreshAfterSave("Your planting report for this event is already saved and awaiting MENRO Staff verification. It was not submitted again.");
+          return;
+        }
+      }
       const fields = finalReportFieldErrors(backendFieldErrors(error, { quantityPlanted: "quantity", inventoryId: "finalItems", items: "finalItems", evidence: "photos", files: "photos" }), finalRows);
       if (Object.keys(fields).length) { setFormErrors(fields); focusFirstInvalid(() => reportFormRef.current); }
       else showPopup((savedResponse ? "The report is already saved. Retry attendance only. " : "") + (error.message || "Unable to submit the planting report. Please try again."), "error");
@@ -2382,6 +2512,12 @@ export default function PlantingPage() {
   // returned submission and the backend requires the same event and seedling.
   function startCorrection(submission) {
     if (!submission || !selectedRecord) return;
+    if (unconfirmedSubmission) {
+      // Resolve the unconfirmed submission first; it must not be relinked.
+      setShowViewModal(false);
+      openSubmitModal();
+      return;
+    }
     setCorrectionTarget({
       id: submission.id,
       reason: submission.returnReason || submission.reviewRemarks || "",
@@ -2765,7 +2901,9 @@ export default function PlantingPage() {
         )}
       </div>
 
-      {officialForm && userRole === "staff" && <StaffPlantingReportForm currentUser={currentUser} correction={officialForm.correction} resumeEvidence={officialForm.resumeEvidence} onClose={() => setOfficialForm(null)} onSaved={async () => { await loadReports(); showPopup(officialForm.correction ? "Corrected official planting report resubmitted to the MENRO Admin for approval." : "Official planting report submitted to the MENRO Admin for approval."); }} />}
+      {officialForm && userRole === "staff" && <StaffPlantingReportForm currentUser={currentUser} correction={officialForm.correction} resumeEvidence={officialForm.resumeEvidence}
+        pending={pendingOfficialSubmission === undefined ? loadPendingSubmission("staff", auth.currentUser?.uid || currentUser?.uid) : pendingOfficialSubmission} onPendingChange={updatePendingOfficialSubmission} onClose={() => setOfficialForm(null)}
+        onSaved={(_report, info) => { void refreshAfterSave(`${(info ? info.correction : officialForm.correction) ? "Corrected official planting report resubmitted to the MENRO Admin for approval." : "Official planting report submitted to the MENRO Admin for approval."}${info?.evidencePending ? " Its planting photos were not uploaded: add them with Add Verified Planting Evidence on the report." : ""}${info?.attendancePending ? " The optional attendance file was not uploaded." : ""}`); }} />}
       {showSubmitModal && isParticipant && (
         <ModalDialog label="Submit Planting Report" onClose={closeSubmitModal} dismissible={!submitting} busy={submitting}>
         <PlantingReportFormErrorBoundary
@@ -2801,7 +2939,7 @@ export default function PlantingPage() {
               if (field && Object.hasOwn(formErrors, field)) setFormErrors(current => ({ ...current, [field]: validatePlantingReportForm(form, { distributions, photos: photoFiles, previews: photoPreviews, hasGps, municipalityScopeStatus, finalRows })[field] || "" }));
             }}>
               <div className="pr-modal-body pr-submit-modal-body">
-                <fieldset disabled={submitting || Boolean(savedParticipantReport)} style={{ border: 0, margin: 0, padding: 0, minWidth: 0 }}>
+                <fieldset disabled={submitting || Boolean(unconfirmedSubmission) || Boolean(savedParticipantReport)} style={{ border: 0, margin: 0, padding: 0, minWidth: 0 }}>
                 <div
                   className="pr-submit-alert-slot"
                   aria-live={popup.type === "error" ? "assertive" : "polite"}
@@ -3142,7 +3280,7 @@ export default function PlantingPage() {
                           <div className="pr-photo-content">
 
 
-                    <PlantingPhotoControls inputId="planting-photos" count={photoFiles.length} max={MAX_EVIDENCE_PHOTOS} disabled={submitting} error={formErrors.photos} onCamera={startCamera} onFiles={files => handlePhotoChange({ target: { files, value: "" } })} />
+                    <PlantingPhotoControls inputId="planting-photos" count={photoFiles.length} max={MAX_EVIDENCE_PHOTOS} disabled={submitting || Boolean(unconfirmedSubmission)} error={formErrors.photos} onCamera={startCamera} onFiles={files => handlePhotoChange({ target: { files, value: "" } })} />
 
 
                     {photoPreviews.length > 0 && (
@@ -3357,11 +3495,12 @@ export default function PlantingPage() {
                 </section>
                 </fieldset>
 
-                <AttendanceUpload file={attendanceFile} onChange={setAttendanceFile} error={formErrors.attendance} onError={message => setFormErrors(current => ({ ...current, attendance: message }))} disabled={submitting} />
+                <AttendanceUpload file={attendanceFile} onChange={setAttendanceFile} error={formErrors.attendance} onError={message => setFormErrors(current => ({ ...current, attendance: message }))} disabled={submitting || Boolean(unconfirmedSubmission)} />
                 {savedParticipantReport && <p role="status">Your report is already saved pending MENRO verification. This action retries only optional attendance.</p>}
               </div>
 
               <div className="pr-modal-footer">
+                {unconfirmedSubmission && !submitting && <p className="pr-submit-unconfirmed" role="status">Not yet confirmed by MENRO. Select Check Submission; the report is sent again only if MENRO has not saved it.</p>}
                 <button
                   type="button"
                   className="pr-secondary-button"
@@ -3378,7 +3517,7 @@ export default function PlantingPage() {
                     Boolean(form.eventId && eligibleDistributions.length === 0)}
                 >
                   <FiSend size={14} />
-                  {submitting ? "Submitting..." : "Submit Report"}
+                  {submitting ? (unconfirmedSubmission ? "Checking..." : "Submitting...") : unconfirmedSubmission ? "Check Submission" : savedParticipantReport ? "Retry Attendance Upload" : "Submit Report"}
                 </button>
               </div>
             </form>
