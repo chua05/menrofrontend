@@ -21,6 +21,23 @@ import StaffPlantingReportForm, { ProtectedAttendanceButton } from "../component
 import { buildEvidenceLocationView, photoGpsMetadataLabel } from "../utils/evidenceLocationView";
 import { SITE_GPS_TOLERANCE_METERS, buildLocationPreviewStatus, calculateDistanceMeters, getFeatureBarangayName, isPointInBulanBoundary, isPointInPolygon } from "../utils/plantingLocationPreview";
 import PhotoRequirementsDialog from "../components/PhotoRequirementsDialog";
+import PlantingEvidenceMap from "../components/PlantingEvidenceMap";
+import { useToast } from "../context/ToastContext";
+import {
+  DECISIONS,
+  EVIDENCE_STATE_LABEL,
+  MAX_DECISION_REASON_LENGTH,
+  WORKFLOW_STATUS,
+  WORKFLOW_STATUS_CLASS,
+  availableDecisions,
+  buildEvidenceMarkers,
+  decisionReasonError,
+  evidenceState,
+  historyEntries,
+  photoCoordinates,
+  submissionWorkflowStatus,
+  waitingMessage,
+} from "../utils/plantingReviewWorkflow";
 
 import {
   FiCamera,
@@ -37,6 +54,7 @@ import {
   FiNavigation,
   FiPlus,
   FiRefreshCw,
+  FiRotateCcw,
   FiSearch,
   FiSend,
   FiTrash2,
@@ -97,9 +115,10 @@ const STATUS_OPTIONS = [
 
 const VERIFICATION_CLASSES = {
   Pending: "pr-status-reviewed",
-  "Pending Review": "pr-status-reviewed",
+  "Pending Review": "pr-status-pending",
   Approved: "pr-status-approved",
   Rejected: "pr-status-rejected",
+  Invalid: "pr-status-rejected",
   "Awaiting Submission": "pr-status-reviewed",
   Partial: "pr-status-reviewed",
   "Fully Reported — Awaiting Review": "pr-status-reviewed",
@@ -349,6 +368,14 @@ export default function PlantingPage() {
   const [verificationRemarks, setVerificationRemarks] = useState("");
   const [decision, setDecision] = useState("");
   const [decisionFieldError, setDecisionFieldError] = useState("");
+  const [decisionError, setDecisionError] = useState("");
+  const decisionInFlightRef = useRef(false);
+  const decisionReasonRef = useRef(null);
+  const [verificationLogs, setVerificationLogs] = useState({ reportId: "", status: "idle", entries: [] });
+  const [correctionTarget, setCorrectionTarget] = useState(null);
+  const [historyVersion, setHistoryVersion] = useState(0);
+  const toast = useToast();
+  const submitModalOpenRef = useRef(false);
   const [reportError, setReportError] = useState("");
   const [noEventsAlertSiteId, setNoEventsAlertSiteId] = useState("");
 
@@ -396,8 +423,16 @@ export default function PlantingPage() {
     remarks: "",
   });
 
+  // The submit form keeps its inline alert slot; every other page message uses
+  // the shared MENRO toast, which anchors inside an open drawer or modal.
   function showPopup(message, type = "success") {
-    setPopup({ message: String(message || "").trim(), type });
+    const text = String(message || "").trim();
+    if (!text) return;
+    if (submitModalOpenRef.current) {
+      setPopup({ message: text, type });
+      return;
+    }
+    toast.showToast(text, { type: ["success", "error", "warning", "info"].includes(type) ? type : "info" });
   }
 
   function clearNoEventsAlert() {
@@ -680,6 +715,28 @@ export default function PlantingPage() {
     }, 0);
     return () => window.clearTimeout(openTimer);
   }, [loading, pageSearchParams, records]);
+
+  // showPopup reads this to keep submit-form messages in the form's alert slot.
+  useEffect(() => {
+    submitModalOpenRef.current = showSubmitModal;
+  }, [showSubmitModal]);
+
+  useEffect(() => {
+    if (!decision) return undefined;
+    const timer = window.setTimeout(() => decisionReasonRef.current?.focus({ preventScroll: true }), 0);
+    return () => window.clearTimeout(timer);
+  }, [decision]);
+
+  // Staff and Admin see the authoritative per-submission decision history.
+  const historyReportId = showViewModal && canReview ? selectedRecord?.id || "" : "";
+  useEffect(() => {
+    if (!historyReportId) return undefined;
+    let active = true;
+    apiRequest(`/planting-reports/${encodeURIComponent(historyReportId)}/verification-logs`)
+      .then((response) => { if (active) setVerificationLogs({ reportId: historyReportId, status: "ready", entries: historyEntries(response.data) }); })
+      .catch(() => { if (active) setVerificationLogs({ reportId: historyReportId, status: "error", entries: [] }); });
+    return () => { active = false; };
+  }, [historyReportId, historyVersion]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!popup.message) return undefined;
@@ -1356,7 +1413,8 @@ export default function PlantingPage() {
     if (uploadInputRef.current) uploadInputRef.current.value = "";
   }
 
-  async function openSubmitModal() {
+  async function openSubmitModal(options) {
+    if (options?.correction !== true) setCorrectionTarget(null);
     resetForm();
     setPopup({ message: "", type: "success" });
     setShowSubmitModal(true);
@@ -1366,6 +1424,7 @@ export default function PlantingPage() {
   function closeSubmitModal() {
     if (submitting) return;
     setShowSubmitModal(false);
+    setCorrectionTarget(null);
     resetForm();
     setPopup({ message: "", type: "success" });
   }
@@ -2242,6 +2301,8 @@ export default function PlantingPage() {
       payload.append("photos", file);
     });
     payload.append("evidenceManifest", JSON.stringify(evidenceDescriptors));
+    const correctionOf = correctionTarget?.id || "";
+    if (correctionOf) payload.append("correctionOf", correctionOf);
 
     setSubmitting(true);
 
@@ -2263,8 +2324,11 @@ export default function PlantingPage() {
         await apiRequest(`/planting-reports/submissions/${encodeURIComponent(id)}/attendance`, { method: "PUT", body: attendance });
       }
       resetForm();
-      showPopup(`Planting Report Submitted Successfully — ${response.message ||
-        "Your planting report has been submitted and is awaiting MENRO Staff verification."} Status: Pending Review.`);
+      setCorrectionTarget(null);
+      showPopup(correctionOf
+        ? "Corrected Planting Report Resubmitted — MENRO Staff will review your correction. Status: Pending Review."
+        : `Planting Report Submitted Successfully — ${response.message ||
+          "Your planting report has been submitted and is awaiting MENRO Staff verification."} Status: Pending Review.`);
 
       void Promise.all([loadReports(), loadMyDistributions(), loadEvents()]).catch(() => showPopup("Your report was submitted, but the latest lists could not be refreshed. You can refresh this page when your connection is available.", "warning"));
     } catch (error) {
@@ -2284,89 +2348,86 @@ export default function PlantingPage() {
   }
 
   function closeRecordModal() {
-    if (actionLoading) return;
+    if (actionLoading || decisionInFlightRef.current) return;
     openedReportFromSearchRef.current = "";
     setSelectedRecord(null);
     setSelectedSubmission(null);
     setVerificationRemarks("");
     setDecision("");
+    setDecisionFieldError("");
+    setDecisionError("");
     setShowViewModal(false);
   }
 
-  async function approveRecord() {
-    if (
-      !selectedRecord ||
-      !selectedSubmission ||
-      !canReview ||
-      selectedSubmission.staffReviewStatus !== "Pending Review"
-    ) {
-      return;
-    }
-
-    setActionLoading(true);
-
-    try {
-      const remarksToSend = verificationRemarks.trim() || "Requirements met";
-
-      const response = await apiRequest(
-        `/planting-reports/${selectedSubmission.id}/approve`,
-        {
-          method: "PATCH",
-          body: JSON.stringify({ remarks: remarksToSend }),
-        }
-      );
-
-      setSelectedRecord(response.data);
-      setSelectedSubmission(null);
-      setVerificationRemarks("");
-      setDecision("");
-      showPopup(response.message || "Planting report approved successfully.");
-      await loadReports();
-    } catch (error) {
-      showPopup(error.message || "Failed to approve planting report.", "error");
-    } finally {
-      setActionLoading(false);
-    }
+  // A participant corrects their own returned submission. The normal submit
+  // form opens with the return reason; the resubmission is linked to the
+  // returned submission and the backend requires the same event and seedling.
+  function startCorrection(submission) {
+    if (!submission || !selectedRecord) return;
+    setCorrectionTarget({
+      id: submission.id,
+      reason: submission.returnReason || submission.reviewRemarks || "",
+      species: submission.species || "",
+      eventName: selectedRecord.eventName || "",
+      siteName: selectedRecord.siteName || "",
+    });
+    openedReportFromSearchRef.current = "";
+    setShowViewModal(false);
+    setSelectedRecord(null);
+    setSelectedSubmission(null);
+    openSubmitModal({ correction: true });
   }
 
-  async function rejectRecord() {
-    if (
-      !selectedRecord ||
-      !selectedSubmission ||
-      !canReview ||
-      selectedSubmission.staffReviewStatus !== "Pending Review"
-    ) {
+  function openDecision(submission, nextDecision) {
+    if (actionLoading || decisionInFlightRef.current) return;
+    setSelectedSubmission(submission);
+    setVerificationRemarks("");
+    setDecisionFieldError("");
+    setDecisionError("");
+    setDecision(nextDecision);
+  }
+
+  function closeDecision() {
+    if (actionLoading || decisionInFlightRef.current) return;
+    setDecision("");
+    setDecisionFieldError("");
+    setDecisionError("");
+  }
+
+  // One handler for Forward, Return, Approve and Reject. The modal closes only
+  // after the backend accepts the decision; a synchronous guard blocks repeats.
+  async function submitDecision() {
+    const config = DECISIONS[decision];
+    if (!config || !selectedRecord || !selectedSubmission || decisionInFlightRef.current) return;
+    if (!availableDecisions(selectedSubmission, userRole).includes(decision)) return;
+    const reasonError = decisionReasonError(decision, verificationRemarks);
+    if (reasonError) {
+      setDecisionFieldError(reasonError);
+      focusFirstInvalid(() => document.querySelector(".pr-decision-modal"));
       return;
     }
-
-    const reason = verificationRemarks.trim();
-
-    if (!reason) {
-      setDecisionFieldError("Enter a reason for rejecting this planting report.");
-      focusFirstInvalid(document.querySelector(".pr-modal-small"));
-      return;
-    }
-
+    decisionInFlightRef.current = true;
     setActionLoading(true);
-
+    setDecisionError("");
     try {
       const response = await apiRequest(
-        `/planting-reports/${selectedSubmission.id}/reject`,
-        {
-          method: "PATCH",
-          body: JSON.stringify({ remarks: reason }),
-        }
+        `/planting-reports/${encodeURIComponent(selectedSubmission.id)}/${config.endpoint}`,
+        { method: "PATCH", body: JSON.stringify({ remarks: verificationRemarks.trim() }) }
       );
-
       setSelectedRecord(response.data);
       setSelectedSubmission(null);
       setVerificationRemarks("");
+      setDecisionFieldError("");
       setDecision("");
-      showPopup(response.message || "Planting report rejected successfully.");
+      setHistoryVersion((version) => version + 1);
+      toast.success(response.message || config.success);
       await loadReports();
     } catch (error) {
-      showPopup(error.message || "Failed to reject planting report.", "error");
+      const fieldMessage = error?.fieldErrors?.remarks;
+      if (fieldMessage) setDecisionFieldError(fieldMessage);
+      setDecisionError(error?.message || "The decision could not be saved. Please try again.");
     } finally {
+      decisionInFlightRef.current = false;
       setActionLoading(false);
     }
   }
@@ -2392,6 +2453,29 @@ export default function PlantingPage() {
     );
   }
 
+  // Review-stage badge for one submission (not the legacy report label mapper).
+  function renderWorkflowBadge(status) {
+    const icon = status === WORKFLOW_STATUS.COMPLETED ? <FiCheckCircle size={12} />
+      : status === WORKFLOW_STATUS.REJECTED ? <FiXCircle size={12} />
+        : status === WORKFLOW_STATUS.RETURNED ? <FiRotateCcw size={12} /> : <FiClock size={12} />;
+    return (
+      <span className={`pr-status-badge ${WORKFLOW_STATUS_CLASS[status] || "pr-status-default"}`} data-workflow-status={status}>
+        {icon}
+        {status}
+      </span>
+    );
+  }
+
+  function renderVerificationCheck(label, value) {
+    const state = value === true ? "pass" : value === false ? "fail" : "unknown";
+    return (
+      <span className={`pr-evidence-check pr-evidence-check-${state}`}>
+        {state === "pass" ? <FiCheck size={12} /> : state === "fail" ? <FiX size={12} /> : <FiInfo size={12} />}
+        {label}: {state === "pass" ? "Passed" : state === "fail" ? "Failed" : "Not recorded"}
+      </span>
+    );
+  }
+
   const visibleVerificationIssues = Array.isArray(selectedRecord?.suspiciousFlags)
     ? selectedRecord.suspiciousFlags
     : [];
@@ -2406,8 +2490,33 @@ export default function PlantingPage() {
       reportPhotoIndex: nextSubmissionPhotoIndex++,
     })),
   }));
-  const staffCanReviewSelected = selectedSubmission?.staffReviewStatus === "Pending Review" &&
-    (selectedSubmission?.adminApprovalRequired === true ? userRole === "admin" : selectedSubmission?.staffApprovalRequired === true ? userRole === "staff" : canReview);
+  // Older standalone reports are reviewed as one record (the backend accepts its report ID).
+  const standaloneReview = selectedRecord && selectedRecord.reportType !== "parent" && selectedRecord.workflowStatus
+    ? { ...selectedRecord, officialStaffReport: false } : null;
+  // Memoized so the read-only map keeps the viewer's pan and zoom between renders.
+  const evidenceMarkers = useMemo(() => {
+    if (!selectedRecord) return [];
+    let photoIndex = 0;
+    const rows = Array.isArray(selectedRecord.submissions) && selectedRecord.submissions.length
+      ? selectedRecord.submissions.map((submission) => ({ ...submission,
+        indexedPhotos: (submission.photos || []).map((photo) => ({ ...photo, reportPhotoIndex: photoIndex++ })) }))
+      : selectedRecord.reportType !== "parent"
+        ? [{ ...selectedRecord, officialStaffReport: false, indexedPhotos: (selectedRecord.photos || []).map((photo, index) => ({ ...photo, reportPhotoIndex: index })) }]
+        : [];
+    return buildEvidenceMarkers(rows);
+  }, [selectedRecord]);
+  const viewSiteId = selectedRecord?.siteId, viewSiteName = selectedRecord?.siteName, viewBarangay = selectedRecord?.barangay;
+  const mapSite = useMemo(() => {
+    const registered = viewSiteId ? sites.find((site) => String(getSiteId(site)) === String(viewSiteId)) : null;
+    return registered || (viewSiteName ? { siteName: viewSiteName, barangay: viewBarangay || "" } : null);
+  }, [sites, viewSiteId, viewSiteName, viewBarangay]);
+  const standaloneActions = standaloneReview ? availableDecisions(standaloneReview, userRole) : [];
+  const standaloneWaiting = standaloneReview && !standaloneActions.length ? waitingMessage(standaloneReview, userRole) : "";
+  // Report-level photo index -> the submission that saved it (same order as the backend).
+  const photoOwners = new Map(submissionsWithPhotoIndexes.flatMap((submission) =>
+    submission.indexedPhotos.map((photo) => [photo.reportPhotoIndex, submission])));
+  const activeDecision = DECISIONS[decision] || null;
+  const decisionReasonLength = verificationRemarks.trim().length;
 
   if (loading) {
     return <div className="pr-page"><PageLoadingState message="Loading planting reports..." /></div>;
@@ -2419,18 +2528,6 @@ export default function PlantingPage() {
 
   return (
     <div className="pr-page">
-      {popup.message && !showSubmitModal && (
-        <div
-          className={`pr-popup-message ${
-            popup.type === "error" ? "pr-popup-error" : "pr-popup-success"
-          }`}
-          role={popup.type === "error" ? "alert" : "status"}
-          aria-live={popup.type === "error" ? "assertive" : "polite"}
-        >
-          {popup.message}
-        </div>
-      )}
-
       <div className="pr-header">
         <div className="pr-heading-wrap">
           <div className="pr-heading-icon">
@@ -2639,7 +2736,7 @@ export default function PlantingPage() {
         )}
       </div>
 
-      {officialForm && userRole === "staff" && <StaffPlantingReportForm currentUser={currentUser} correction={officialForm.correction} resumeEvidence={officialForm.resumeEvidence} onClose={() => setOfficialForm(null)} onSaved={async () => { await loadReports(); showPopup("Official planting report saved for Admin verification."); }} />}
+      {officialForm && userRole === "staff" && <StaffPlantingReportForm currentUser={currentUser} correction={officialForm.correction} resumeEvidence={officialForm.resumeEvidence} onClose={() => setOfficialForm(null)} onSaved={async () => { await loadReports(); showPopup(officialForm.correction ? "Corrected official planting report resubmitted to the MENRO Admin for approval." : "Official planting report submitted to the MENRO Admin for approval."); }} />}
       {showSubmitModal && isParticipant && (
         <ModalDialog label="Submit Planting Report" onClose={closeSubmitModal} dismissible={!submitting} busy={submitting}>
         <PlantingReportFormErrorBoundary
@@ -2689,6 +2786,21 @@ export default function PlantingPage() {
                     </div>
                   )}
                 </div>
+
+                {correctionTarget && (
+                  <div className="pr-correction-banner" role="note" aria-label="Correction details">
+                    <FiRotateCcw size={16} aria-hidden="true" />
+                    <div>
+                      <strong>Correcting a returned planting report</strong>
+                      {correctionTarget.reason && <p><span>MENRO Staff reason:</span> {correctionTarget.reason}</p>}
+                      <p>
+                        Select the same planting event{correctionTarget.eventName ? ` (${correctionTarget.eventName})` : ""}
+                        {correctionTarget.species ? ` and seedling (${correctionTarget.species})` : ""}, then attach new geotagged photos.
+                        Your corrected report returns to MENRO Staff for review.
+                      </p>
+                    </div>
+                  </div>
+                )}
 
                 <section className="pr-section pr-report-information-section">
                   <div className="pr-section-header">
@@ -3256,6 +3368,8 @@ export default function PlantingPage() {
               </button>
             </div>
 
+            <div className="menro-toast-anchor" data-menro-toast-anchor />
+
             <div className="pr-drawer-body">
               <section className="pr-drawer-section">
                 <div className="pr-drawer-section-title">
@@ -3404,6 +3518,29 @@ export default function PlantingPage() {
                             </strong>
                           </div>
                         )}
+                        {(() => {
+                          const owner = photoOwners.get(index) || standaloneReview || {};
+                          const state = evidenceState(photo, owner);
+                          const accuracy = photoCoordinates(photo)?.accuracy;
+                          return (
+                            <div className="pr-photo-evidence-details" data-evidence-state={state}>
+                              <span className={`pr-evidence-state pr-evidence-state-${state}`}>{EVIDENCE_STATE_LABEL[state]}</span>
+                              <dl>
+                                <div><dt>GPS Accuracy</dt><dd>{Number.isFinite(accuracy) ? `± ${Math.round(accuracy)} m` : "—"}</dd></div>
+                                <div><dt>Photo Captured</dt><dd>{formatDateTime(photo.photoCapturedAt || photo.metadata?.capturedAt)}</dd></div>
+                                <div><dt>Location Captured</dt><dd>{formatDateTime(photo.locationCapturedAt)}</dd></div>
+                                {Number.isFinite(Number(photo.siteGpsDistanceMeters ?? photo.gpsDistanceMeters)) && photo.siteGpsDistanceMeters !== null && (
+                                  <div><dt>Distance from Site</dt><dd>{Number(photo.siteGpsDistanceMeters ?? photo.gpsDistanceMeters).toFixed(1)} m</dd></div>
+                                )}
+                              </dl>
+                              <div className="pr-evidence-checks">
+                                {renderVerificationCheck("GPS", photo.gpsValid)}
+                                {renderVerificationCheck("Site", photo.siteGpsValid)}
+                                {renderVerificationCheck("Timestamp", photo.timestampValid)}
+                              </div>
+                            </div>
+                          );
+                        })()}
                       </div>
                     ))}
                   </div>
@@ -3496,6 +3633,19 @@ export default function PlantingPage() {
                 </div>
               </section>
 
+              <section className="pr-drawer-section" aria-labelledby="pr-evidence-map-title">
+                <div className="pr-drawer-section-title" id="pr-evidence-map-title">
+                  <FiNavigation size={15} />
+                  Evidence Location Map
+                </div>
+                <PlantingEvidenceMap
+                  site={mapSite}
+                  barangay={selectedRecord.barangay}
+                  markers={evidenceMarkers}
+                  formatDateTime={formatDateTime}
+                />
+              </section>
+
               <section className="pr-drawer-section">
                 <div className="pr-drawer-section-title">
                   <FiCheckCircle size={15} />
@@ -3521,6 +3671,7 @@ export default function PlantingPage() {
                   </>}
                   <div className="pr-info-block"><div className="pr-info-label">Pending Review</div><div className="pr-info-value">{selectedRecord.pendingReviewQuantity ?? "—"}</div></div>
                   <div className="pr-info-block"><div className="pr-info-label">Rejected</div><div className="pr-info-value">{selectedRecord.rejectedQuantity ?? "—"}</div></div>
+                  {Number(selectedRecord.returnedQuantity) > 0 && <div className="pr-info-block"><div className="pr-info-label">Returned for Correction</div><div className="pr-info-value">{selectedRecord.returnedQuantity}</div></div>}
                   <div className="pr-info-block"><div className="pr-info-label">Remaining Available</div><div className="pr-info-value">{selectedRecord.remainingAvailableQuantity ?? "—"}</div></div>
 
                   <div className="pr-info-block">
@@ -3562,38 +3713,51 @@ export default function PlantingPage() {
                     <div className="pr-photo-unavailable-text">No individual submissions are available for this report.</div>
                   ) : (
                     <div className="pr-submission-list">
-                      {submissionsWithPhotoIndexes.map((submission) => (
-                        <article className="pr-submission-item" key={submission.id}>
+                      {submissionsWithPhotoIndexes.map((submission) => {
+                        const stage = submissionWorkflowStatus(submission);
+                        const actions = availableDecisions(submission, userRole);
+                        const waiting = actions.length ? "" : waitingMessage(submission, userRole);
+                        const ownSubmission = (submission.authenticatedSubmitterUid || submission.contributorId || submission.participantId) === currentUser?.uid;
+                        const correctable = (submission.correctionAllowed ?? (stage === WORKFLOW_STATUS.RETURNED && !submission.correctedBySubmission)) === true;
+                        const returnReason = stage === WORKFLOW_STATUS.RETURNED ? submission.returnReason || submission.rejectionReason || submission.reviewRemarks : "";
+                        return (
+                        <article className={`pr-submission-item pr-submission-${stage.toLowerCase().replace(/[^a-z]+/g, "-")}`} key={submission.id} aria-label={`Submission ${submission.id}`}>
                           <div className="pr-submission-heading">
                             <strong>{submission.id}</strong>
-                            <span>{formatDateTime(submission.recordedAt || submission.submittedAt)}</span>
+                            <span>{formatDateTime(submission.recordedAt || submission.submittedAt || submission.createdAt)}</span>
+                            {renderWorkflowBadge(stage)}
                           </div>
                           <div className="pr-info-grid">
                             <div className="pr-info-block"><div className="pr-info-label">Submitted By</div><div className="pr-info-value">{submission.submittedByName || submission.contributorName || submission.participantName || "—"}</div></div>
-                            <div className="pr-info-block"><div className="pr-info-label">Submitter Sector</div><div className="pr-info-value">{submission.submittedBySector || submission.participantUserType || "—"}</div></div>
+                            <div className="pr-info-block"><div className="pr-info-label">Submitter Sector</div><div className="pr-info-value">{submission.submittedBySector || submission.participantUserType || submission.submittedByType || "—"}</div></div>
                             <div className="pr-info-block"><div className="pr-info-label">Submitter Contact</div><div className="pr-info-value">{submission.submittedByContactNumber || "—"}</div></div>
                             <div className="pr-info-block"><div className="pr-info-label">User ID</div><div className="pr-info-value">{submission.contributorId || submission.participantId || "—"}</div></div>
+                            <div className="pr-info-block"><div className="pr-info-label">Tree Species</div><div className="pr-info-value">{submission.species || "—"}</div></div>
                             <div className="pr-info-block"><div className="pr-info-label">Quantity Planted</div><div className="pr-info-value">{submission.quantity ?? "—"}</div></div>
+                            {(submission.officialStaffReport || Number(submission.leftoverQuantity) > 0) && <div className="pr-info-block"><div className="pr-info-label">Leftover Seedlings (Not Planted)</div><div className="pr-info-value">{submission.leftoverQuantity || 0}</div></div>}
                             {submission.officialStaffReport && <>
-                              <div className="pr-info-block"><div className="pr-info-label">Leftover Seedlings (Not Planted)</div><div className="pr-info-value">{submission.leftoverQuantity || 0}</div></div>
                               <div className="pr-info-block"><div className="pr-info-label">Confirmation Basis</div><div className="pr-info-value">{submission.confirmationBasis === "release-based" ? "Individual Release-Based Confirmation" : "MENRO Field Report"}</div></div>
                               <div className="pr-info-block"><div className="pr-info-label">Submitted By / Revision</div><div className="pr-info-value">MENRO Staff — {submission.submittedByName} / {submission.revision || 0}</div></div>
-                              {submission.attendanceAvailable && (userRole === "admin" || userRole === "staff" || submission.authenticatedSubmitterUid === currentUser?.uid) && <ProtectedAttendanceButton submissionId={submission.id} official={submission.officialStaffReport === true} />}
-                              {submission.staffReviewStatus === "Rejected" && !submission.correctedBySubmission && userRole === "staff" && submission.authenticatedSubmitterUid === currentUser?.uid && <button type="button" className="pr-secondary-button" onClick={() => { setOfficialForm({ correction: submission }); setShowViewModal(false); }}>Correct Official Submission</button>}
-                              {submission.officialStaffReport && submission.confirmationBasis === "menro-field-report" && submission.staffReviewStatus === "Pending Review" && !submission.hasVerifiedPlantingEvidence && userRole === "staff" && submission.authenticatedSubmitterUid === currentUser?.uid && <button type="button" className="pr-secondary-button" onClick={() => { setOfficialForm({ resumeEvidence: submission }); setShowViewModal(false); }}>Add Verified Planting Evidence</button>}
                             </>}
+                            {!submission.officialStaffReport && Number(submission.revision) > 0 && <div className="pr-info-block"><div className="pr-info-label">Revision</div><div className="pr-info-value">{submission.revision}{submission.correctionOf ? ` (corrects ${submission.correctionOf})` : ""}</div></div>}
                             <div className="pr-info-block"><div className="pr-info-label">Site / Event / Distribution</div><div className="pr-info-value">{selectedRecord.siteName || "—"} / {selectedRecord.eventName || submission.eventId || "—"} / {submission.requestId || selectedRecord.distributionId || "—"}</div></div>
                             <div className="pr-info-block"><div className="pr-info-label">Photo Coordinates</div><div className="pr-info-value">{submission.latitude ?? "—"}, {submission.longitude ?? "—"}</div></div>
-                            <div className="pr-info-block"><div className="pr-info-label">Verification</div><div className="pr-info-value">{submission.verificationStatus || "Needs Review"}</div></div>
-                            <div className="pr-info-block"><div className="pr-info-label">Staff Review</div><div className="pr-info-value">{submission.staffReviewStatus || "Pending Review"}</div></div>
+                            <div className="pr-info-block"><div className="pr-info-label">GPS Accuracy</div><div className="pr-info-value">{submission.gpsAccuracyMeters !== null && submission.gpsAccuracyMeters !== undefined && Number.isFinite(Number(submission.gpsAccuracyMeters)) ? `± ${Math.round(Number(submission.gpsAccuracyMeters))} m` : "—"}</div></div>
+                            <div className="pr-info-block"><div className="pr-info-label">Automated Verification</div><div className="pr-info-value">{submission.verificationStatus || "Needs Review"}</div></div>
                             <div className="pr-info-block"><div className="pr-info-label">Verification Details</div><div className="pr-info-value">{(submission.verificationDetails || submission.suspiciousFlags || []).join(", ") || "No concerns recorded"}</div></div>
-                            {submission.rejectionReason && <div className="pr-info-block"><div className="pr-info-label">Rejection Reason</div><div className="pr-info-value">{submission.rejectionReason}</div></div>}
-                            {submission.reviewedBy && <div className="pr-info-block"><div className="pr-info-label">Reviewed By / At</div><div className="pr-info-value">{submission.reviewedByName || submission.reviewedBy} / {formatDateTime(submission.reviewedAt)}</div></div>}
+                            {submission.staffReviewedBy && <div className="pr-info-block"><div className="pr-info-label">Staff Review</div><div className="pr-info-value">{submission.staffReviewedByName || submission.staffReviewedBy} / {formatDateTime(submission.staffReviewedAt)}</div>{submission.staffReviewRemarks && <div className="pr-info-subvalue">{submission.staffReviewRemarks}</div>}</div>}
+                            {(submission.adminDecisionBy || (stage === WORKFLOW_STATUS.COMPLETED && submission.reviewedBy)) && <div className="pr-info-block"><div className="pr-info-label">{stage === WORKFLOW_STATUS.REJECTED ? "Rejected By / At" : stage === WORKFLOW_STATUS.RETURNED ? "Returned By / At" : "Approved By / At"}</div><div className="pr-info-value">{submission.adminDecisionByName || submission.reviewedByName || submission.adminDecisionBy || submission.reviewedBy} / {formatDateTime(submission.adminDecisionAt || submission.reviewedAt)}</div></div>}
+                            {submission.attendanceAvailable && (userRole === "admin" || userRole === "staff" || submission.authenticatedSubmitterUid === currentUser?.uid) && <ProtectedAttendanceButton submissionId={submission.id} official={submission.officialStaffReport === true} />}
                           </div>
+                          {returnReason && <div className="pr-decision-reason pr-decision-reason-returned"><div className="pr-info-label">Reason for Return</div><p>{returnReason}</p>{submission.returnedByName && <span>— {submission.returnedByName}</span>}</div>}
+                          {stage === WORKFLOW_STATUS.REJECTED && submission.rejectionReason && <div className="pr-decision-reason pr-decision-reason-rejected"><div className="pr-info-label">Reason for Rejection</div><p>{submission.rejectionReason}</p></div>}
+                          {submission.correctedBySubmission && <div className="pr-info-subvalue">Corrected by submission {submission.correctedBySubmission}.</div>}
                           {submission.indexedPhotos.length > 0 && (
                             <div className="pr-submission-photos">
-                              {submission.indexedPhotos.map((photo) => (
-                                <div key={`${submission.id}-${photo.reportPhotoIndex}`}>
+                              {submission.indexedPhotos.map((photo) => {
+                                const state = evidenceState(photo, submission);
+                                return (
+                                <div key={`${submission.id}-${photo.reportPhotoIndex}`} data-evidence-state={state}>
                                   <div className="pr-drawer-photo-wrap">
                                     <ProtectedEvidenceImage
                                       endpoint={`/evidence/planting-reports/${encodeURIComponent(selectedRecord.id)}/photos/${photo.reportPhotoIndex}`}
@@ -3602,85 +3766,140 @@ export default function PlantingPage() {
                                     />
                                   </div>
                                   <div className="pr-photo-caption">Photo GPS: {photo.latitude ?? photo.metadata?.latitude ?? "—"}, {photo.longitude ?? photo.metadata?.longitude ?? "—"}</div>
+                                  <span className={`pr-evidence-state pr-evidence-state-${state}`}>{EVIDENCE_STATE_LABEL[state]}</span>
                                 </div>
-                              ))}
+                                );
+                              })}
                             </div>
                           )}
-                          {submission.staffReviewStatus === "Pending Review" &&
-                            (submission.adminApprovalRequired === true ? userRole === "admin" : submission.staffApprovalRequired === true ? userRole === "staff" : canReview) && (
-                            <div className="pr-drawer-verification-actions">
-                              <button type="button" className="pr-secondary-button" onClick={() => { setSelectedSubmission(submission); setDecision("approve"); }}>Review</button>
-                              <button type="button" className="pr-danger-button" onClick={() => { setSelectedSubmission(submission); setDecision("reject"); }}>Reject</button>
+                          {actions.length > 0 && (
+                            <div className="pr-drawer-verification-actions" role="group" aria-label={`Decision for submission ${submission.id}`}>
+                              {actions.includes("forward") && <button type="button" className="pr-primary-button" onClick={() => openDecision(submission, "forward")} disabled={actionLoading}><FiSend size={14} />Forward to Admin</button>}
+                              {actions.includes("approve") && <button type="button" className="pr-primary-button" onClick={() => openDecision(submission, "approve")} disabled={actionLoading}><FiCheckCircle size={14} />Approve</button>}
+                              {actions.includes("return") && <button type="button" className="pr-warning-button" onClick={() => openDecision(submission, "return")} disabled={actionLoading}><FiRotateCcw size={14} />Return for Correction</button>}
+                              {actions.includes("reject") && <button type="button" className="pr-danger-button" onClick={() => openDecision(submission, "reject")} disabled={actionLoading}><FiXCircle size={14} />Reject</button>}
                             </div>
+                          )}
+                          {waiting && canReview && <div className="pr-submission-waiting" role="status">{waiting}</div>}
+                          {correctable && ownSubmission && submission.officialStaffReport && userRole === "staff" && (
+                            <div className="pr-drawer-verification-actions"><button type="button" className="pr-secondary-button" onClick={() => { setOfficialForm({ correction: submission }); setShowViewModal(false); }}><FiRotateCcw size={14} />Correct Official Submission</button></div>
+                          )}
+                          {correctable && ownSubmission && !submission.officialStaffReport && isParticipant && (
+                            <div className="pr-drawer-verification-actions"><button type="button" className="pr-primary-button" onClick={() => startCorrection(submission)}><FiRotateCcw size={14} />Correct and Resubmit</button></div>
+                          )}
+                          {submission.officialStaffReport && submission.confirmationBasis === "menro-field-report" && stage === WORKFLOW_STATUS.PENDING_ADMIN_APPROVAL && !submission.hasVerifiedPlantingEvidence && userRole === "staff" && submission.authenticatedSubmitterUid === currentUser?.uid && (
+                            <div className="pr-drawer-verification-actions"><button type="button" className="pr-secondary-button" onClick={() => { setOfficialForm({ resumeEvidence: submission }); setShowViewModal(false); }}>Add Verified Planting Evidence</button></div>
                           )}
                         </article>
-                      ))}
+                        );
+                      })}
                     </div>
                   )}
                 </section>
 
-                {staffCanReviewSelected && <div className="pr-info-value">Selected submission is pending MENRO {selectedSubmission?.adminApprovalRequired ? "Admin verification" : "Staff review"}.</div>}
+                {standaloneReview && (
+                  <div className="pr-standalone-review">
+                    <div className="pr-info-label">Review Status</div>
+                    {renderWorkflowBadge(submissionWorkflowStatus(standaloneReview))}
+                    {standaloneReview.returnReason && <div className="pr-decision-reason pr-decision-reason-returned"><div className="pr-info-label">Reason for Return</div><p>{standaloneReview.returnReason}</p></div>}
+                    {standaloneActions.length > 0 && (
+                      <div className="pr-drawer-verification-actions" role="group" aria-label="Decision for this planting report">
+                        {standaloneActions.includes("forward") && <button type="button" className="pr-primary-button" onClick={() => openDecision(standaloneReview, "forward")} disabled={actionLoading}><FiSend size={14} />Forward to Admin</button>}
+                        {standaloneActions.includes("approve") && <button type="button" className="pr-primary-button" onClick={() => openDecision(standaloneReview, "approve")} disabled={actionLoading}><FiCheckCircle size={14} />Approve</button>}
+                        {standaloneActions.includes("return") && <button type="button" className="pr-warning-button" onClick={() => openDecision(standaloneReview, "return")} disabled={actionLoading}><FiRotateCcw size={14} />Return for Correction</button>}
+                        {standaloneActions.includes("reject") && <button type="button" className="pr-danger-button" onClick={() => openDecision(standaloneReview, "reject")} disabled={actionLoading}><FiXCircle size={14} />Reject</button>}
+                      </div>
+                    )}
+                    {standaloneWaiting && canReview && <div className="pr-submission-waiting" role="status">{standaloneWaiting}</div>}
+                  </div>
+                )}
               </section>
 
               <section className="pr-drawer-section pr-drawer-section-last">
                 <div className="pr-drawer-section-title">
                   <FiClock size={15} />
-                  Verification History
+                  Submission History
                 </div>
 
-                <div className="pr-history">
-                  <div className="pr-history-item">
-                    <div className="pr-history-marker"><FiCheck size={13} /></div>
-                    <div className="pr-history-content">
-                      <div className="pr-history-title">Submitted</div>
-                      <div className="pr-history-meta">
-                        {formatDateTime(selectedRecord.createdAt)}
-                        {selectedRecord.submittedByName || selectedRecord.participantName
-                          ? ` by ${selectedRecord.submittedByName || selectedRecord.participantName}`
-                          : ""}
+                {canReview && verificationLogs.reportId === selectedRecord.id && verificationLogs.status === "ready" && verificationLogs.entries.length > 0 ? (
+                  <ol className="pr-history" aria-label="Submission and decision history">
+                    <li className="pr-history-item">
+                      <div className="pr-history-marker"><FiCheck size={13} /></div>
+                      <div className="pr-history-content">
+                        <div className="pr-history-title">Report Created</div>
+                        <div className="pr-history-meta">{formatDateTime(selectedRecord.createdAt)}</div>
+                      </div>
+                    </li>
+                    {verificationLogs.entries.map((entry) => (
+                      <li className="pr-history-item" key={entry.id}>
+                        <div className={`pr-history-marker${entry.tone === "rejected" ? " is-rejected" : entry.tone === "returned" ? " is-returned" : ""}`}>
+                          {entry.tone === "rejected" ? <FiX size={13} /> : entry.tone === "returned" ? <FiRotateCcw size={13} /> : <FiCheck size={13} />}
+                        </div>
+                        <div className="pr-history-content">
+                          <div className="pr-history-title">{entry.action}</div>
+                          <div className="pr-history-meta">
+                            {formatDateTime(entry.createdAt)}
+                            {entry.by ? ` by ${entry.by}` : ""}
+                            {entry.role ? ` (${entry.role.charAt(0).toUpperCase()}${entry.role.slice(1)})` : ""}
+                            {entry.from && entry.to ? ` • ${entry.from} → ${entry.to}` : entry.to ? ` • ${entry.to}` : ""}
+                            {entry.submissionId ? ` • Submission ${entry.submissionId}` : ""}
+                          </div>
+                          {entry.remarks && <div className="pr-history-remarks">{entry.remarks}</div>}
+                        </div>
+                      </li>
+                    ))}
+                  </ol>
+                ) : (
+                  <div className="pr-history">
+                    {canReview && verificationLogs.reportId === selectedRecord.id && verificationLogs.status === "error" && (
+                      <div className="pr-history-unavailable" role="status">The decision history could not be loaded. Submission statuses and reasons above remain current.</div>
+                    )}
+                    <div className="pr-history-item">
+                      <div className="pr-history-marker"><FiCheck size={13} /></div>
+                      <div className="pr-history-content">
+                        <div className="pr-history-title">Submitted</div>
+                        <div className="pr-history-meta">
+                          {formatDateTime(selectedRecord.createdAt)}
+                          {selectedRecord.submittedByName || selectedRecord.participantName
+                            ? ` by ${selectedRecord.submittedByName || selectedRecord.participantName}`
+                            : ""}
+                        </div>
                       </div>
                     </div>
+                    {submissionsWithPhotoIndexes.map((submission) => {
+                      const stage = submissionWorkflowStatus(submission);
+                      if ([WORKFLOW_STATUS.PENDING_REVIEW, WORKFLOW_STATUS.PENDING_ADMIN_APPROVAL].includes(stage)) return null;
+                      const when = stage === WORKFLOW_STATUS.REVIEWED ? submission.staffReviewedAt : submission.adminDecisionAt || submission.returnedAt || submission.reviewedAt;
+                      return (
+                        <div className="pr-history-item" key={`history-${submission.id}`}>
+                          <div className={`pr-history-marker${stage === WORKFLOW_STATUS.REJECTED ? " is-rejected" : stage === WORKFLOW_STATUS.RETURNED ? " is-returned" : ""}`}>{stage === WORKFLOW_STATUS.REJECTED ? <FiX size={13} /> : stage === WORKFLOW_STATUS.RETURNED ? <FiRotateCcw size={13} /> : <FiCheck size={13} />}</div>
+                          <div className="pr-history-content">
+                            <div className="pr-history-title">{stage}</div>
+                            <div className="pr-history-meta">{formatDateTime(when)} • Submission {submission.id}</div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                    {!submissionsWithPhotoIndexes.length && selectedRecord.approvedAt && (
+                      <div className="pr-history-item">
+                        <div className="pr-history-marker"><FiCheck size={13} /></div>
+                        <div className="pr-history-content">
+                          <div className="pr-history-title">Approved</div>
+                          <div className="pr-history-meta">{formatDateTime(selectedRecord.approvedAt)}</div>
+                        </div>
+                      </div>
+                    )}
+                    {!submissionsWithPhotoIndexes.length && selectedRecord.rejectedAt && (
+                      <div className="pr-history-item">
+                        <div className="pr-history-marker is-rejected"><FiX size={13} /></div>
+                        <div className="pr-history-content">
+                          <div className="pr-history-title">Rejected</div>
+                          <div className="pr-history-meta">{formatDateTime(selectedRecord.rejectedAt)}</div>
+                        </div>
+                      </div>
+                    )}
                   </div>
-
-                  {selectedRecord.reviewedAt && (
-                    <div className="pr-history-item">
-                      <div className="pr-history-marker"><FiCheck size={13} /></div>
-                      <div className="pr-history-content">
-                        <div className="pr-history-title">Reviewed</div>
-                        <div className="pr-history-meta">
-                          {formatDateTime(selectedRecord.reviewedAt)}
-                          {selectedRecord.reviewedBy ? ` by ${selectedRecord.reviewedBy}` : ""}
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {selectedRecord.approvedAt && (
-                    <div className="pr-history-item">
-                      <div className="pr-history-marker"><FiCheck size={13} /></div>
-                      <div className="pr-history-content">
-                        <div className="pr-history-title">Approved</div>
-                        <div className="pr-history-meta">
-                          {formatDateTime(selectedRecord.approvedAt)}
-                          {selectedRecord.approvedBy ? ` by ${selectedRecord.approvedBy}` : ""}
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {selectedRecord.rejectedAt && (
-                    <div className="pr-history-item">
-                      <div className="pr-history-marker is-rejected"><FiX size={13} /></div>
-                      <div className="pr-history-content">
-                        <div className="pr-history-title">Rejected</div>
-                        <div className="pr-history-meta">
-                          {formatDateTime(selectedRecord.rejectedAt)}
-                          {selectedRecord.rejectedBy ? ` by ${selectedRecord.rejectedBy}` : ""}
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                </div>
+                )}
               </section>
             </div>
           </aside>
@@ -3695,31 +3914,76 @@ export default function PlantingPage() {
         onViewLocation={() => setCameraOpen(false)}
         onCancel={() => setCameraOpen(false)}
       /></ModalDialog>}
-      {decision && selectedRecord && (
+      {activeDecision && selectedRecord && selectedSubmission && (
         <div className="pr-overlay pr-decision-overlay" onMouseDown={(event) => {
-          if (event.target === event.currentTarget && !actionLoading) setDecision("");
+          if (event.target === event.currentTarget) closeDecision();
         }}>
-          <div className="pr-modal-small" role="dialog" aria-modal="true" aria-label={decision === "approve" ? "Approve planting report" : "Reject planting report"}>
+          <div
+            className={`pr-modal-small pr-decision-modal pr-decision-modal-${activeDecision.tone}`}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="pr-decision-title"
+            aria-describedby="pr-decision-subtitle"
+            aria-busy={actionLoading ? "true" : undefined}
+            onKeyDown={(event) => { if (event.key === "Escape") closeDecision(); }}
+          >
             <div className="pr-modal-header">
               <div>
-                <h2 className="pr-modal-title">{decision === "approve" ? "Accept Planting Report?" : "Reject Planting Report"}</h2>
-                <p className="pr-modal-subtitle">{decision === "approve" ? "Confirm that you have reviewed the submitted evidence and accept this planting report." : "Provide the reason the submitted planting evidence is unacceptable."}</p>
+                <h2 className="pr-modal-title" id="pr-decision-title">{activeDecision.title}</h2>
+                <p className="pr-modal-subtitle" id="pr-decision-subtitle">{activeDecision.subtitle}</p>
               </div>
-              <button type="button" className="pr-close-button" onClick={() => setDecision("")} disabled={actionLoading} aria-label="Close decision"><FiX size={17} /></button>
+              <button type="button" className="pr-close-button" onClick={closeDecision} disabled={actionLoading} aria-label="Close decision"><FiX size={17} /></button>
             </div>
-            {decision === "reject" && (
-              <div className="pr-modal-body">
-                <label className="pr-label" htmlFor="pr-rejection-reason">Reason for Rejection <span className="pr-required">*</span></label>
-                <textarea id="pr-rejection-reason" className="pr-textarea" value={verificationRemarks} aria-invalid={decisionFieldError ? "true" : undefined} aria-describedby={decisionFieldError ? "planting-decision-error" : undefined} onChange={(event) => { setVerificationRemarks(event.target.value); if (event.target.value.trim()) setDecisionFieldError(""); }} placeholder="Explain why this report is being rejected" />
-                {decisionFieldError && <small id="planting-decision-error" className="pr-field-error" role="alert">{decisionFieldError}</small>}
+            <div className="menro-toast-anchor" data-menro-toast-anchor />
+            <form
+              className="pr-modal-body pr-decision-body"
+              noValidate
+              onSubmit={(event) => { event.preventDefault(); submitDecision(); }}
+            >
+              <div className="pr-decision-summary">
+                <span>Submission</span>
+                <strong>{selectedSubmission.id}</strong>
+                {renderWorkflowBadge(submissionWorkflowStatus(selectedSubmission))}
               </div>
-            )}
-            <div className="pr-modal-footer">
-              <button type="button" className="pr-secondary-button" onClick={() => setDecision("")} disabled={actionLoading}>Cancel</button>
-              <button type="button" className={decision === "approve" ? "pr-primary-button" : "pr-danger-button"} onClick={decision === "approve" ? approveRecord : rejectRecord} disabled={actionLoading}>
-                {actionLoading ? "Saving..." : decision === "approve" ? "Confirm Review" : "Confirm Rejection"}
-              </button>
-            </div>
+              {decisionError && <div className="pr-decision-alert" role="alert">{decisionError}</div>}
+              <label className="pr-label" htmlFor="pr-decision-reason">
+                {activeDecision.reasonLabel} {activeDecision.reasonRequired ? <span className="pr-required">*</span> : <span className="pr-optional">(optional)</span>}
+              </label>
+              <textarea
+                id="pr-decision-reason"
+                ref={decisionReasonRef}
+                className="pr-textarea"
+                value={verificationRemarks}
+                maxLength={MAX_DECISION_REASON_LENGTH}
+                required={activeDecision.reasonRequired}
+                aria-required={activeDecision.reasonRequired ? "true" : undefined}
+                aria-invalid={decisionFieldError ? "true" : undefined}
+                aria-describedby={`pr-decision-count${decisionFieldError ? " planting-decision-error" : ""}`}
+                disabled={actionLoading}
+                placeholder={activeDecision.placeholder}
+                onChange={(event) => {
+                  setVerificationRemarks(event.target.value);
+                  if (decisionFieldError) setDecisionFieldError(decisionReasonError(decision, event.target.value));
+                }}
+              />
+              <div className="pr-decision-field-meta">
+                {decisionFieldError
+                  ? <small id="planting-decision-error" className="pr-field-error" role="alert">{decisionFieldError}</small>
+                  : <span />}
+                <small id="pr-decision-count" className="pr-decision-count">{decisionReasonLength}/{MAX_DECISION_REASON_LENGTH}</small>
+              </div>
+              <div className="pr-modal-footer pr-decision-footer">
+                <button type="button" className="pr-secondary-button" onClick={closeDecision} disabled={actionLoading}>Cancel</button>
+                <button
+                  type="submit"
+                  className={activeDecision.tone === "danger" ? "pr-danger-button" : activeDecision.tone === "warning" ? "pr-warning-button" : "pr-primary-button"}
+                  disabled={actionLoading}
+                  aria-disabled={actionLoading ? "true" : undefined}
+                >
+                  {actionLoading ? activeDecision.busy : activeDecision.confirm}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

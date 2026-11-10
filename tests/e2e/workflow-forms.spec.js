@@ -23,6 +23,7 @@ async function setup(page, overrides = {}) {
     else if (url.pathname === "/api/inventory/available") data = [{ id: "tree-1", species: "Narra", currentQuantity: 100 }];
     else if (url.pathname === "/api/notifications/unread-count") data = { unreadCount: 0 };
     else if (lists.includes(url.pathname)) data = [];
+    else if (key.startsWith("GET ") && /^\/api\/planting-reports\/[^/]+\/verification-logs$/.test(url.pathname)) data = [];
     else if (key === "POST /api/seedling-requests") data = { id: "new-request", requestNumber: "REQ-FIXTURE" };
     else { unexpected.push(key); return route.fulfill({ status: 500, json: { success: false, message: "Unregistered test request" } }); }
     return route.fulfill({ json: { success: true, data } });
@@ -922,4 +923,198 @@ test("Staff upload without EXIF is rejected and a camera photo keeps its capture
   await page.getByRole("button", { name: "Submit for Admin Verification" }).click();
   await expect(page.getByRole("dialog", { name: "Submit Official Planting Report" })).toHaveCount(0);
   expect(manifest).toHaveLength(1); expect(manifest[0].source).toBe("browser-camera"); expect(manifest[0].captureSessionId).toBe("mock-session"); fixture.check();
+});
+
+// ---------------------------------------------------------------------------
+// Planting report review workflow (Participant -> Staff -> Admin; Staff -> Admin)
+// ---------------------------------------------------------------------------
+const reviewPng = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aWQkAAAAASUVORK5CYII=", "base64");
+const reviewPhoto = { latitude: 12.6598, longitude: 123.918, locationAccuracyMeters: 6, photoCapturedAt: "2026-11-05T01:00:00.000Z",
+  locationCapturedAt: "2026-11-05T01:00:05.000Z", gpsValid: true, siteGpsValid: true, timestampValid: true,
+  siteLocationStatus: "Within Assigned Site", locationSource: "Secure Camera" };
+const reviewSubmission = (overrides = {}) => ({ id: "sub-participant", reportId: "report-review", eventId: "event-1", contributorId: "test-participant",
+  participantId: "test-participant", authenticatedSubmitterUid: "test-participant", submittedByName: "Field Volunteer", species: "Narra", inventoryId: "narra",
+  quantity: 10, verificationStatus: "Verified", staffReviewStatus: "Pending Review", workflowStatus: "Pending Review", staffApprovalRequired: true,
+  latitude: 12.6598, longitude: 123.918, gpsAccuracyMeters: 6, photos: [reviewPhoto], ...overrides });
+const reviewReport = (submissions) => ({ id: "report-review", reportType: "parent", reportNumber: "RPT-2026-0101", siteId: "site-1", siteName: "Fixture site",
+  barangay: "Bical", eventName: "Approved planting", eventId: "event-1", reportingProgress: "Fully Reported — Awaiting Review",
+  verificationStatus: "Fully Reported — Awaiting Review", quantityReleased: 10, quantityPlanted: 10, acceptedQuantity: 0, pendingReviewQuantity: 10,
+  rejectedQuantity: 0, remainingAvailableQuantity: 0, createdAt: "2026-11-05T02:00:00.000Z",
+  photos: submissions.flatMap((submission) => submission.photos || []), submissions });
+async function reviewFixture(page, current, overrides = {}) {
+  const list = route => route.fulfill({ json: { success: true, data: [current()] } });
+  const photos = {};
+  for (let index = 0; index < 4; index += 1) photos[`GET /api/evidence/planting-reports/report-review/photos/${index}`] = route => route.fulfill({ status: 200, contentType: "image/png", body: reviewPng });
+  return setup(page, { "GET /api/planting-reports": list, "GET /api/planting-reports/my-reports": list,
+    "GET /api/planting-reports/report-review/verification-logs": route => route.fulfill({ json: { success: true, data: [] } }), ...photos, ...overrides });
+}
+
+test("Staff reviews a participant report: Return requires a reason, closes only after success and blocks repeats", async ({ page }) => {
+  let report = reviewReport([reviewSubmission()]), release;
+  const returnCalls = [];
+  const fixture = await reviewFixture(page, () => report, {
+    "PATCH /api/planting-reports/sub-participant/return": async (route, request) => {
+      returnCalls.push(request.postDataJSON());
+      await new Promise(resolve => { release = resolve; });
+      report = reviewReport([reviewSubmission({ workflowStatus: "Returned for Correction", staffReviewStatus: "Rejected", returnReason: "Retake the photo inside the site", returnedByName: "Field Staff", correctionAllowed: true })]);
+      return route.fulfill({ json: { success: true, message: "Planting report returned for correction.", data: report } });
+    },
+  });
+  await page.goto("/staff/planting-reports?role=staff&report=report-review");
+  const card = page.getByRole("article", { name: "Submission sub-participant" });
+  await expect(card.locator('[data-workflow-status="Pending Review"]')).toBeVisible();
+  await expect(card.locator('[data-workflow-status="Pending Review"]')).toHaveClass(/pr-status-pending/);
+  await expect(card.getByRole("button", { name: "Approve", exact: true })).toHaveCount(0);
+  await expect(card.getByRole("button", { name: "Reject", exact: true })).toHaveCount(0);
+  await expect(card.getByRole("button", { name: "Forward to Admin", exact: true })).toBeVisible();
+  await card.getByRole("button", { name: "Return for Correction", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "Return for Correction", exact: true });
+  const reason = dialog.getByLabel(/Reason for Return/);
+  await expect(reason).toBeFocused();
+  await dialog.getByRole("button", { name: "Return for Correction", exact: true }).click();
+  await expect(reason).toHaveAttribute("aria-invalid", "true");
+  await expect(dialog.getByRole("alert")).toContainText("Enter the reason for returning this planting report.");
+  expect(returnCalls).toHaveLength(0);
+  await reason.fill("Retake the photo inside the site");
+  await expect(reason).not.toHaveAttribute("aria-invalid", "true");
+  await dialog.getByRole("button", { name: "Return for Correction", exact: true }).click();
+  const busy = dialog.getByRole("button", { name: "Returning...", exact: true });
+  await expect(busy).toBeDisabled();
+  await dialog.locator("form").evaluate(form => form.requestSubmit());
+  await expect(dialog).toBeVisible();
+  expect(returnCalls).toEqual([{ remarks: "Retake the photo inside the site" }]);
+  release();
+  await expect(dialog).toHaveCount(0);
+  await expect(card.locator('[data-workflow-status="Returned for Correction"]')).toBeVisible();
+  await expect(card.getByText("Retake the photo inside the site", { exact: true })).toBeVisible();
+  await expect(card.getByRole("button", { name: "Forward to Admin", exact: true })).toHaveCount(0);
+  await expect(page.locator(".pr-report-drawer .menro-toast").getByText("Planting report returned for correction.")).toBeVisible();
+  expect(returnCalls).toHaveLength(1); fixture.check();
+});
+
+test("Staff forwards a participant report to Admin with optional comments", async ({ page }) => {
+  let report = reviewReport([reviewSubmission()]);
+  const fixture = await reviewFixture(page, () => report, {
+    "PATCH /api/planting-reports/sub-participant/forward": (route, request) => {
+      expect(request.postDataJSON()).toEqual({ remarks: "" });
+      report = reviewReport([reviewSubmission({ workflowStatus: "Reviewed", staffReviewedBy: "test-staff", staffReviewedByName: "Field Staff", staffReviewedAt: "2026-11-06T01:00:00.000Z" })]);
+      return route.fulfill({ json: { success: true, message: "Planting report reviewed and forwarded to the MENRO Admin for approval.", data: report } });
+    },
+  });
+  await page.goto("/staff/planting-reports?role=staff&report=report-review");
+  const card = page.getByRole("article", { name: "Submission sub-participant" });
+  await card.getByRole("button", { name: "Forward to Admin", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "Forward to Admin for Approval?", exact: true });
+  await expect(dialog.getByText("(optional)")).toBeVisible();
+  await dialog.getByRole("button", { name: "Forward to Admin", exact: true }).click();
+  await expect(dialog).toHaveCount(0);
+  const badge = card.locator('[data-workflow-status="Reviewed"]');
+  await expect(badge).toBeVisible(); await expect(badge).toHaveClass(/pr-status-reviewed/);
+  await expect(card.getByText("Awaiting MENRO Admin approval.", { exact: true })).toBeVisible();
+  fixture.check();
+});
+
+test("Admin decides only Staff-reviewed participant reports and keeps the modal open when a decision fails", async ({ page }) => {
+  let attempts = 0;
+  const pending = reviewSubmission({ id: "sub-waiting" });
+  const reviewed = reviewSubmission({ id: "sub-reviewed", workflowStatus: "Reviewed", staffReviewedBy: "staff-1", staffReviewedByName: "Field Staff",
+    staffReviewedAt: "2026-11-06T01:00:00.000Z", staffReviewRemarks: "Photos match the site", photos: [] });
+  let report = reviewReport([pending, reviewed]);
+  const fixture = await reviewFixture(page, () => report, {
+    "GET /api/planting-reports/report-review/verification-logs": route => route.fulfill({ json: { success: true, data: [{ id: "log-1", action: "Staff Review — Forwarded to Admin",
+      previousStatus: "Pending Review", newStatus: "Reviewed", performedByName: "Field Staff", performedByRole: "staff", submissionId: "sub-reviewed",
+      remarks: "Photos match the site", createdAt: "2026-11-06T01:00:00.000Z" }] } }),
+    "PATCH /api/planting-reports/sub-reviewed/reject": (route, request) => {
+      attempts += 1;
+      if (attempts === 1) return route.fulfill({ status: 409, json: { success: false, message: "This planting report changed. Refresh before deciding." } });
+      report = reviewReport([pending, { ...reviewed, workflowStatus: "Rejected", staffReviewStatus: "Rejected", rejectionReason: request.postDataJSON().remarks, adminDecisionBy: "test-admin", adminDecisionByName: "MENRO Admin", adminDecisionAt: "2026-11-07T01:00:00.000Z" }]);
+      return route.fulfill({ json: { success: true, message: "Planting report rejected.", data: report } });
+    },
+  });
+  await page.goto("/admin/planting-reports?role=admin&report=report-review");
+  const waiting = page.getByRole("article", { name: "Submission sub-waiting" });
+  await expect(waiting.getByText("Awaiting MENRO Staff review before Admin approval.", { exact: true })).toBeVisible();
+  for (const action of ["Approve", "Reject", "Forward to Admin", "Return for Correction"]) await expect(waiting.getByRole("button", { name: action, exact: true })).toHaveCount(0);
+  const card = page.getByRole("article", { name: "Submission sub-reviewed" });
+  await expect(card.getByRole("button", { name: "Return for Correction", exact: true })).toHaveCount(0);
+  await expect(card.getByText("Photos match the site", { exact: true })).toBeVisible();
+  await expect(page.getByRole("list", { name: "Submission and decision history" }).getByText("Staff Review — Forwarded to Admin")).toBeVisible();
+  await card.getByRole("button", { name: "Reject", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "Reject Planting Report", exact: true });
+  await expect(dialog.getByText("Rejection is final.", { exact: false })).toBeVisible();
+  await dialog.getByLabel(/Reason for Rejection/).fill("Seedlings were planted outside the approved site");
+  await dialog.getByRole("button", { name: "Reject Report", exact: true }).click();
+  await expect(dialog.locator(".pr-decision-alert")).toHaveText("This planting report changed. Refresh before deciding.");
+  await expect(dialog.getByLabel(/Reason for Rejection/)).toHaveValue("Seedlings were planted outside the approved site");
+  await dialog.getByRole("button", { name: "Reject Report", exact: true }).click();
+  await expect(dialog).toHaveCount(0);
+  const rejected = card.locator('[data-workflow-status="Rejected"]');
+  await expect(rejected).toBeVisible(); await expect(rejected).toHaveClass(/pr-status-rejected/);
+  await expect(card.getByText("Seedlings were planted outside the approved site", { exact: true })).toBeVisible();
+  await expect(card.getByRole("button", { name: "Approve", exact: true })).toHaveCount(0);
+  expect(attempts).toBe(2); fixture.check();
+});
+
+test("Staff-submitted reports go directly to Admin with approve, reject and return", async ({ page }) => {
+  const report = reviewReport([reviewSubmission({ id: "sub-official", officialStaffReport: true, adminApprovalRequired: true, workflowStatus: "Pending Admin Approval",
+    contributorId: "test-staff", authenticatedSubmitterUid: "test-staff", submittedByName: "Field Staff", confirmationBasis: "release-based", photos: [] })]);
+  const fixture = await reviewFixture(page, () => report);
+  await page.goto("/admin/planting-reports?role=admin&report=report-review");
+  const card = page.getByRole("article", { name: "Submission sub-official" });
+  const badge = card.locator('[data-workflow-status="Pending Admin Approval"]');
+  await expect(badge).toBeVisible(); await expect(badge).toHaveClass(/pr-status-reviewed/);
+  for (const action of ["Approve", "Reject", "Return for Correction"]) await expect(card.getByRole("button", { name: action, exact: true })).toBeVisible();
+  await expect(card.getByRole("button", { name: "Forward to Admin", exact: true })).toHaveCount(0);
+  await card.getByRole("button", { name: "Approve", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "Approve Planting Report?", exact: true });
+  await expect(dialog.getByText("marks this submission Completed", { exact: false })).toBeVisible();
+  await dialog.getByRole("button", { name: "Cancel", exact: true }).click();
+  await expect(dialog).toHaveCount(0);
+  fixture.check();
+});
+
+test("View Report shows saved evidence on a read-only Bulan map without the upload prompt", async ({ page }) => {
+  const report = reviewReport([
+    reviewSubmission({ id: "sub-verified" }),
+    reviewSubmission({ id: "sub-returned", workflowStatus: "Returned for Correction", staffReviewStatus: "Rejected", returnReason: "Blurry photo",
+      photos: [{ ...reviewPhoto, latitude: 12.661, longitude: 123.921, gpsValid: true, siteGpsValid: false, timestampValid: true }] }),
+  ]);
+  const fixture = await reviewFixture(page, () => report);
+  await page.goto("/staff/planting-reports?role=staff&report=report-review");
+  const drawer = page.locator(".pr-report-drawer");
+  await expect(drawer.getByRole("heading", { name: "Bulan Evidence Map", exact: true })).toBeVisible();
+  await expect(drawer.getByText("2 saved evidence locations", { exact: true })).toBeVisible();
+  await expect(drawer.getByText("Verified (1)", { exact: true })).toBeVisible();
+  await expect(drawer.getByText("Rejected / Returned (1)", { exact: true })).toBeVisible();
+  await expect(drawer.locator(".pr-evidence-map")).toHaveAttribute("data-boundary-status", "ready");
+  await expect(drawer.locator(".pr-evidence-map .leaflet-interactive").first()).toBeVisible();
+  await expect(drawer.getByText("Upload or take a photo first", { exact: false })).toHaveCount(0);
+  const firstPhoto = drawer.locator(".pr-photo-evidence-details").first();
+  await expect(firstPhoto.getByText("Verified Evidence", { exact: true })).toBeVisible();
+  await expect(firstPhoto.getByText("± 6 m", { exact: true })).toBeVisible();
+  for (const check of ["GPS: Passed", "Site: Passed", "Timestamp: Passed"]) await expect(firstPhoto.getByText(check, { exact: true })).toBeVisible();
+  await expect(drawer.locator(".pr-photo-evidence-details").nth(1).getByText("Rejected / Returned Evidence", { exact: true })).toBeVisible();
+  await expect(drawer.locator(".pr-photo-evidence-details").nth(1).getByText("Site: Failed", { exact: true })).toBeVisible();
+  await page.setViewportSize({ width: 390, height: 844 });
+  const overflow = await drawer.evaluate(element => element.scrollWidth - element.clientWidth);
+  expect(overflow).toBeLessThanOrEqual(1);
+  fixture.check();
+});
+
+test("participant corrects only their own returned submission; rejected reports cannot be corrected", async ({ page }) => {
+  const report = reviewReport([
+    reviewSubmission({ id: "sub-own-returned", workflowStatus: "Returned for Correction", staffReviewStatus: "Rejected", returnReason: "Retake the photo inside the site", correctionAllowed: true, photos: [] }),
+    reviewSubmission({ id: "sub-own-rejected", workflowStatus: "Rejected", staffReviewStatus: "Rejected", rejectionReason: "Outside the site", correctionAllowed: false, photos: [] }),
+    reviewSubmission({ id: "sub-other-returned", contributorId: "other-participant", participantId: "other-participant", authenticatedSubmitterUid: "other-participant", workflowStatus: "Returned for Correction", staffReviewStatus: "Rejected", correctionAllowed: true, photos: [] }),
+  ]);
+  const fixture = await reviewFixture(page, () => report);
+  await page.goto("/participant/my-planting-reports?role=participant&report=report-review");
+  await expect(page.getByRole("article", { name: "Submission sub-own-rejected" }).getByRole("button", { name: "Correct and Resubmit" })).toHaveCount(0);
+  await expect(page.getByRole("article", { name: "Submission sub-other-returned" }).getByRole("button", { name: "Correct and Resubmit" })).toHaveCount(0);
+  for (const action of ["Forward to Admin", "Return for Correction", "Approve", "Reject"]) await expect(page.getByRole("button", { name: action, exact: true })).toHaveCount(0);
+  await page.getByRole("article", { name: "Submission sub-own-returned" }).getByRole("button", { name: "Correct and Resubmit", exact: true }).click();
+  const banner = page.getByRole("note", { name: "Correction details" });
+  await expect(banner).toContainText("Retake the photo inside the site");
+  await expect(banner).toContainText("Narra");
+  fixture.check();
 });
