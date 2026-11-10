@@ -45,7 +45,13 @@ export default function ModalDialog({ open = true, onClose, dismissible = true, 
   };
   return createPortal(<dialog ref={dialogRef} id={id} className={`menro-modal-dialog ${className || ""}`} aria-label={label} aria-modal="true" aria-busy={busy}
     onKeyDown={containTab}
-    onCancel={event => { event.preventDefault(); event.stopPropagation(); close(); }}
+    onCancel={event => {
+      // Dismissing a file picker fires a bubbling "cancel" on its <input type="file">.
+      // Only the dialog's own cancel (Escape) may close the dialog.
+      event.stopPropagation();
+      if (event.target !== event.currentTarget) return;
+      event.preventDefault(); close();
+    }}
     onClick={event => { if (event.target.closest("[data-modal-close]")) close(); }}
     onMouseDown={event => { if (event.target === event.currentTarget) close(); }}>
     {children}

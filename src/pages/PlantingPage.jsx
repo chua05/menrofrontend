@@ -3450,6 +3450,29 @@ export default function PlantingPage() {
                   </div>
                 </div>
 
+                {selectedRecord.allocationSummary?.length > 1 && (
+                  <div className="pr-species-breakdown">
+                    <div className="pr-info-label" id="pr-species-breakdown-title">Seedlings per Type</div>
+                    <div className="pr-species-breakdown-scroll">
+                      <table aria-labelledby="pr-species-breakdown-title">
+                        <thead><tr><th scope="col">Seedling Type</th><th scope="col">Released</th><th scope="col">Planted</th><th scope="col">Leftover</th><th scope="col">Remaining</th></tr></thead>
+                        <tbody>
+                          {selectedRecord.allocationSummary.map((item) => (
+                            <tr key={item.inventoryId || item.species}>
+                              <th scope="row">{item.species || "Seedling"}</th>
+                              <td>{item.allocated ?? "—"}</td>
+                              <td>{item.recorded ?? 0}</td>
+                              <td>{item.leftoverQuantity ?? 0}</td>
+                              <td>{item.remaining ?? 0}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                    <div className="pr-info-subvalue">Planted includes quantities awaiting approval. Returned and rejected submissions are not counted.</div>
+                  </div>
+                )}
+
                 {selectedRecord.remarks && (
                   <div className="pr-drawer-note">
                     <div className="pr-info-label">{displayReportStatus(selectedRecord.verificationStatus) === "Rejected" ? "Rejection Reason" : "Remarks"}</div>
@@ -3788,7 +3811,7 @@ export default function PlantingPage() {
                             <div className="pr-drawer-verification-actions"><button type="button" className="pr-primary-button" onClick={() => startCorrection(submission)}><FiRotateCcw size={14} />Correct and Resubmit</button></div>
                           )}
                           {submission.officialStaffReport && submission.confirmationBasis === "menro-field-report" && stage === WORKFLOW_STATUS.PENDING_ADMIN_APPROVAL && !submission.hasVerifiedPlantingEvidence && userRole === "staff" && submission.authenticatedSubmitterUid === currentUser?.uid && (
-                            <div className="pr-drawer-verification-actions"><button type="button" className="pr-secondary-button" onClick={() => { setOfficialForm({ resumeEvidence: submission }); setShowViewModal(false); }}>Add Verified Planting Evidence</button></div>
+                            <div className="pr-drawer-verification-actions"><button type="button" className="pr-secondary-button" onClick={() => { setOfficialForm({ resumeEvidence: { ...submission, operationRows: (selectedRecord.submissions || []).filter(row => row.officialStaffReport && row.officialOperationId && row.officialOperationId === submission.officialOperationId) } }); setShowViewModal(false); }}>Add Verified Planting Evidence</button></div>
                           )}
                         </article>
                         );

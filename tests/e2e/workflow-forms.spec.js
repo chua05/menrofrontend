@@ -1118,3 +1118,128 @@ test("participant corrects only their own returned submission; rejected reports 
   await expect(banner).toContainText("Narra");
   fixture.check();
 });
+
+const twoTypeOption = { ...releaseOption, items: [releaseOption.items[0], { inventoryId: "molave", species: "Molave", quantityReleased: 6, availableQuantity: 6 }] };
+const twoTypeOptions = route => route.fulfill({ json: { success: true, data: { options: [twoTypeOption], nextCursor: null } } });
+
+test("Staff report lists every released seedling type with per-type planted, leftover and totals", async ({ page }) => {
+  const fixture = await staffForm(page, { "GET /api/planting-reports/official/options": twoTypeOptions,
+    "POST /api/planting-reports/official": route => route.fulfill({ status: 201, json: { success: true, data: { id: "report-fixture", officialSubmissionIds: ["submission-fixture", "submission-two"] } } }) });
+  await expect(page.getByRole("heading", { name: "Seedlings Planted (2 seedling types)", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Narra", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Molave", exact: true })).toBeVisible();
+  const planted = page.getByLabel("Quantity Planted *", { exact: true }), leftover = page.getByLabel("Final Leftover Seedlings (Not Planted)", { exact: true });
+  await expect(planted).toHaveCount(2); await expect(leftover).toHaveCount(2);
+  await expect(page.getByLabel("Quantity Released", { exact: true }).nth(1)).toHaveValue("6");
+  await expect(planted.nth(0)).toHaveValue("8"); await expect(planted.nth(1)).toHaveValue("6");
+  for (const index of [0, 1]) await expect(planted.nth(index)).toHaveAttribute("readonly");
+  const totals = page.getByLabel("Report totals");
+  await expect(totals).toContainText("Seedling Types2"); await expect(totals).toContainText("Available for Reporting14"); await expect(totals).toContainText("Total Planted14");
+  await leftover.nth(1).fill("7");
+  await page.getByRole("button", { name: "Submit for Admin Verification" }).click();
+  await expect(page.getByText("Leftover cannot exceed the 6 seedlings available.", { exact: true })).toBeVisible();
+  await expect(leftover.nth(1)).toHaveAttribute("aria-invalid", "true"); await expect(leftover.nth(1)).toBeFocused();
+  await expect(leftover.nth(0)).not.toHaveAttribute("aria-invalid", "true");
+  await leftover.nth(0).fill("2"); await leftover.nth(1).fill("1");
+  await expect(planted.nth(0)).toHaveValue("6"); await expect(planted.nth(1)).toHaveValue("5");
+  await expect(totals).toContainText("Total Planted11"); await expect(totals).toContainText("Total Leftover3");
+  await page.getByRole("button", { name: "Take Photo", exact: true }).click();
+  await page.getByRole("button", { name: "Verify fixture camera photo" }).click();
+  await expect(page.getByText("Backend-verified camera capture", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Submit for Admin Verification" }).click();
+  await expect(page.getByRole("dialog", { name: "Submit Official Planting Report" })).toHaveCount(0);
+  const request = fixture.calls.find(call => call.key === "POST /api/planting-reports/official");
+  expect(request.body.items).toEqual([{ inventoryId: "narra", quantityPlanted: 6, leftoverQuantity: 2 }, { inventoryId: "molave", quantityPlanted: 5, leftoverQuantity: 1 }]);
+  expect(fixture.calls.filter(call => call.key === "PUT /api/planting-reports/official/submission-fixture/photos")).toHaveLength(1);
+  fixture.check();
+});
+
+test("partially reported multi-type release keeps fully reported types read-only and shows a combined server error once", async ({ page }) => {
+  const partial = { ...twoTypeOption, items: [{ ...twoTypeOption.items[0], availableQuantity: 0 }, twoTypeOption.items[1]] };
+  const fixture = await staffForm(page, { "GET /api/planting-reports/official/options": route => route.fulfill({ json: { success: true, data: { options: [partial], nextCursor: null } } }),
+    "POST /api/planting-reports/official": route => route.fulfill({ status: 409, json: { success: false, message: "Planted and leftover quantities exceed the available reportable balance.", fieldErrors: { items: "Refresh the release and enter quantities within its available balance." } } }) });
+  await page.getByLabel("Confirmation Basis").selectOption("release-based");
+  await expect(page.getByRole("status").filter({ hasText: "All released Narra are already reported." })).toBeVisible();
+  const leftover = page.getByLabel("Final Leftover Seedlings (Not Planted)", { exact: true });
+  await expect(leftover.nth(0)).toHaveAttribute("readonly"); await expect(leftover.nth(1)).not.toHaveAttribute("readonly");
+  await expect(page.getByLabel("Quantity Planted *", { exact: true }).nth(0)).toHaveValue("0");
+  await page.getByRole("button", { name: "Submit for Admin Verification" }).click();
+  await expect(page.getByText("Refresh the release and enter quantities within its available balance.", { exact: true })).toHaveCount(1);
+  await expect(page.getByRole("dialog", { name: "Submit Official Planting Report" })).toBeVisible();
+  const request = fixture.calls.find(call => call.key === "POST /api/planting-reports/official");
+  expect(request.body.items).toEqual([{ inventoryId: "narra", quantityPlanted: 0, leftoverQuantity: 0 }, { inventoryId: "molave", quantityPlanted: 6, leftoverQuantity: 0 }]);
+  fixture.check();
+});
+
+test("Staff form explains planted quantity and confirmation basis in plain language", async ({ page }) => {
+  const fixture = await staffForm(page);
+  await expect(page.getByText(/derived by the backend/)).toHaveCount(0);
+  await expect(page.getByText("Enter any leftover seedlings for each type. Quantity Planted is calculated automatically: released seedlings minus leftovers.", { exact: true })).toBeVisible();
+  const basis = page.getByLabel("Confirmation Basis");
+  await expect(basis.locator("option")).toHaveText(["MENRO Field Report", "Individual Release-Based Confirmation"]);
+  await expect(page.locator("#official-basis-help")).toHaveText(/Original planting photos taken at the site are required/);
+  await basis.selectOption("release-based");
+  await expect(page.getByText(/derived by the backend/)).toHaveCount(0);
+  await expect(page.locator("#official-basis-help")).toHaveText("Confirms planting from the release record of an individual requester. Site photos are not required.");
+  await expect(basis).toHaveAttribute("aria-describedby", "official-basis-help");
+  await expect(page.getByRole("button", { name: "Take Photo", exact: true })).toHaveCount(0);
+  fixture.check();
+});
+
+test("cancelling the attendance or photo file picker keeps the Staff form open with its data", async ({ page }) => {
+  const fixture = await staffForm(page, { "GET /api/planting-reports/official/options": twoTypeOptions });
+  const dialog = page.getByRole("dialog", { name: "Submit Official Planting Report", exact: true });
+  const leftover = page.getByLabel("Final Leftover Seedlings (Not Planted)", { exact: true });
+  await leftover.nth(1).fill("2"); await page.getByLabel("Remarks").fill("Kept remarks");
+  const attendance = page.getByLabel("Attendance Photo/File (Optional)");
+  // Chrome dispatches a bubbling "cancel" on the file input when its picker is closed with X or Cancel.
+  const dismissPicker = input => input.evaluate(node => node.dispatchEvent(new Event("cancel", { bubbles: true })));
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const chooser = page.waitForEvent("filechooser");
+    await page.getByRole("button", { name: "Choose Attendance File" }).click();
+    await chooser; await dismissPicker(attendance);
+    await expect(dialog).toBeVisible();
+  }
+  await dismissPicker(page.locator(".pr-official-dialog input[type=file]").first());
+  await expect(dialog).toBeVisible();
+  await expect(page.getByRole("combobox", { name: "Seedling Release Record *" })).toHaveValue("released-request");
+  await expect(leftover.nth(1)).toHaveValue("2"); await expect(page.getByLabel("Quantity Planted *", { exact: true }).nth(1)).toHaveValue("4");
+  await expect(page.getByLabel("Remarks")).toHaveValue("Kept remarks");
+  const chooser = page.waitForEvent("filechooser");
+  await page.getByRole("button", { name: "Choose Attendance File" }).click();
+  await (await chooser).setFiles({ name: "attendance.pdf", mimeType: "application/pdf", buffer: Buffer.from("fixture attendance") });
+  await expect(page.getByText("attendance.pdf", { exact: true })).toBeVisible();
+  const reopened = page.waitForEvent("filechooser");
+  await page.getByRole("button", { name: "Choose Attendance File" }).click();
+  await reopened; await dismissPicker(attendance);
+  await expect(dialog).toBeVisible(); await expect(page.getByText("attendance.pdf", { exact: true })).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(dialog).toHaveCount(0);
+  fixture.check();
+});
+
+test("View Report shows every seedling type of a multi-type report and resuming evidence lists all saved types", async ({ page }) => {
+  const row = (id, inventoryId, species, quantity, leftoverQuantity) => ({ id, requestId: "released-request", inventoryId, species, quantity, leftoverQuantity, revision: 0, officialOperationId: "operation-1",
+    officialStaffReport: true, authenticatedSubmitterUid: "test-staff", confirmationBasis: "menro-field-report", staffReviewStatus: "Pending Review", adminApprovalRequired: true, photos: [] });
+  const report = { id: "report-fixture", reportType: "parent", verificationStatus: "Fully Reported — Awaiting Review", species: "Narra, Molave", quantityReleased: 16, releasedItemQuantity: null, quantityPlanted: 14,
+    allocationSummary: [{ inventoryId: "narra", species: "Narra", allocated: 10, recorded: 8, leftoverQuantity: 2, remaining: 0 }, { inventoryId: "molave", species: "Molave", allocated: 6, recorded: 6, leftoverQuantity: 0, remaining: 0 }],
+    submissions: [row("submission-fixture", "narra", "Narra", 8, 2), row("submission-two", "molave", "Molave", 6, 0)], photos: [] };
+  const fixture = await staffForm(page, { "GET /api/planting-reports/official/options": route => route.fulfill({ json: { success: true, data: { options: [{ ...twoTypeOption, items: twoTypeOption.items.map(item => ({ ...item, availableQuantity: 0 })) }], nextCursor: null } } }),
+    "GET /api/planting-reports": route => route.fulfill({ json: { success: true, data: [report] } }),
+    "GET /api/planting-reports/report-fixture": route => route.fulfill({ json: { success: true, data: report } }),
+    "GET /api/planting-reports/report-fixture/verification-logs": route => route.fulfill({ json: { success: true, data: [] } }) });
+  await page.getByRole("button", { name: "Close", exact: true }).click();
+  await page.goto("/staff/planting-reports?role=staff&report=report-fixture");
+  await expect(page.locator(".pr-info-block").filter({ hasText: "Tree Species" }).locator(".pr-info-value")).toHaveText("Narra, Molave");
+  await expect(page.locator(".pr-info-block").filter({ hasText: "Released Quantity" }).locator(".pr-info-value")).toHaveText("16");
+  const breakdown = page.getByRole("table", { name: "Seedlings per Type" });
+  await expect(breakdown.getByRole("row")).toHaveCount(3);
+  await expect(breakdown.getByRole("row", { name: /Narra/ })).toHaveText(/Narra\s*10\s*8\s*2\s*0/);
+  await expect(breakdown.getByRole("row", { name: /Molave/ })).toHaveText(/Molave\s*6\s*6\s*0\s*0/);
+  await page.getByRole("button", { name: "Add Verified Planting Evidence", exact: true }).first().click();
+  await expect(page.getByRole("heading", { name: "Narra", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Molave", exact: true })).toBeVisible();
+  await expect(page.getByLabel("Quantity Planted *", { exact: true }).nth(0)).toHaveValue("8");
+  await expect(page.getByLabel("Quantity Planted *", { exact: true }).nth(1)).toHaveValue("6");
+  fixture.check();
+});
