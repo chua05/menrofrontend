@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 import { Buffer } from "node:buffer";
 
-const site = { id: "site-1", siteName: "Fixture site", barangay: "Bical", status: "active", latitude: 12.6598, longitude: 123.918,
+const site = { id: "site-1", siteName: "Fixture site", barangay: "Bical", status: "active", latitude: 12.6598, longitude: 123.918, areaHectares: 1.5,
   maximumCapacity: 1000, planted: 0, availableCapacity: 1000, utilizationPercentage: 0 };
 const polygon = { type: "FeatureCollection", features: [{ type: "Feature", properties: { barangay: "Bical", brgy_name: "Bical", NAME_3: "Bical" },
   geometry: { type: "Polygon", coordinates: [[[123.8, 12.5], [124, 12.5], [124, 12.8], [123.8, 12.8], [123.8, 12.5]]] } }] };
@@ -259,8 +259,8 @@ async function plantingDetails(page, { proposed = false, blankArea = false } = {
     await page.getByLabel("What type of land or area is the proposed planting location? *").selectOption("Grassland");
     await page.getByLabel(/Describe the current condition/).fill("Unused grassland");
   } else await page.getByRole("combobox", { name: "Planting Site *", exact: true }).selectOption("site-1");
-  if (!blankArea) {
-    await page.getByLabel(proposed ? "Planting Area (Hectares) (Optional)" : "Planting Area *", { exact: true }).selectOption("Other / Exact Area");
+  if (proposed && !blankArea) {
+    await page.getByLabel("Planting Area (Hectares) (Optional)", { exact: true }).selectOption("Other / Exact Area");
     await page.getByLabel("Specify Planting Area (Hectares)").fill("0.5");
   }
   await page.getByRole("radio", { name: "Pick-up", exact: true }).check();
@@ -276,19 +276,53 @@ async function plantingDetails(page, { proposed = false, blankArea = false } = {
   await page.getByRole("checkbox", { name: /confirm that the information/ }).check();
 }
 
-test("corrected exact area submits the authoritative coordinates and selected value", async ({ page }) => {
+test("existing site submits its registered area with the authoritative coordinates", async ({ page }) => {
   const fixture = await setup(page); await requester(page); await plantingDetails(page);
   await page.getByRole("button", { name: "Submit Request", exact: true }).click();
   await expect(page).toHaveURL(/participant\/my-requests/);
   const submission = fixture.calls.find(call => call.key === "POST /api/seedling-requests").body;
   for (const field of ["caretaker", "carePlan", "monitoringFrequency", "monitoringOther"]) expect(submission.workflow).not.toHaveProperty(field);
-  expect(submission.workflow.exactArea).toBe("0.5"); expect(submission.eventProposal.latitude).toBe(site.latitude); expect(submission.eventProposal.longitude).toBe(site.longitude);
+  expect(submission.workflow.areaChoice).toBe(""); expect(submission.workflow.exactArea).toBe(""); expect(submission.workflow.plantingAreaHectares).toBe(1.5);
+  expect(submission.eventProposal.latitude).toBe(site.latitude); expect(submission.eventProposal.longitude).toBe(site.longitude);
+  fixture.check();
+});
+
+test("proposed site submits an entered exact area", async ({ page }) => {
+  const fixture = await setup(page); await requester(page); await plantingDetails(page, { proposed: true });
+  await page.getByRole("button", { name: "Submit Request", exact: true }).click();
+  await expect(page).toHaveURL(/participant\/my-requests/);
+  const submission = fixture.calls.find(call => call.key === "POST /api/seedling-requests").body;
+  expect(submission.workflow.areaChoice).toBe("Other / Exact Area"); expect(submission.workflow.exactArea).toBe("0.5"); expect(submission.workflow.plantingAreaHectares).toBe(0.5);
+  fixture.check();
+});
+
+test("existing site hides the area input, shows the registered area and clears area on site-type switches", async ({ page }) => {
+  const noArea = { ...site, id: "site-2", siteName: "Unmeasured site", areaHectares: null };
+  const fixture = await setup(page, { "GET /api/sites": route => route.fulfill({ json: { success: true, data: [site, noArea] } }) });
+  await requester(page);
+  await page.getByLabel("Barangay *", { exact: true }).selectOption("Bical");
+  await expect(page.getByLabel("Planting Area *", { exact: true })).toHaveCount(0);
+  await expect(page.getByLabel("Planting Area (Hectares) (Optional)", { exact: true })).toHaveCount(0);
+  await expect(page.getByLabel("Planting Area (Registered Site Area)")).toHaveCount(0);
+  await page.getByRole("combobox", { name: "Planting Site *", exact: true }).selectOption("site-1");
+  const registered = page.getByLabel("Planting Area (Registered Site Area)", { exact: true });
+  await expect(registered).toHaveValue("1.5 ha"); await expect(registered).toHaveAttribute("readonly");
+  await page.getByRole("combobox", { name: "Planting Site *", exact: true }).selectOption("site-2");
+  await expect(registered).toHaveValue("Not recorded for this site");
+  await page.getByRole("button", { name: "Next", exact: true }).click();
+  await expect(page.locator("[data-validation-field=areaChoice], [data-validation-field=exactArea]")).toHaveCount(0);
+  await page.getByRole("radio", { name: "Propose New Planting Site", exact: true }).check();
+  const optional = page.getByLabel("Planting Area (Hectares) (Optional)", { exact: true });
+  await expect(optional).toHaveValue(""); await optional.selectOption("2 hectares");
+  await page.getByRole("radio", { name: "Select Existing Planting Site", exact: true }).check();
+  await page.getByRole("radio", { name: "Propose New Planting Site", exact: true }).check();
+  await expect(optional).toHaveValue("");
   fixture.check();
 });
 
 test("backend field validation returns to the right step and focuses its inline control", async ({ page }) => {
   const fixture = await setup(page, { "POST /api/seedling-requests": route => route.fulfill({ status: 400, json: { success: false, message: "Invalid area", fieldErrors: { exactArea: "Choose the exact area shown on the site record." } } }) });
-  await requester(page); await plantingDetails(page);
+  await requester(page); await plantingDetails(page, { proposed: true });
   await page.getByRole("button", { name: "Submit Request", exact: true }).click();
   const field = page.getByLabel("Specify Planting Area (Hectares)"); await expect(field).toBeFocused(); await expect(field).toHaveAttribute("aria-invalid", "true");
   await expect(page.getByRole("alert").filter({ hasText: "Choose the exact area" })).toBeVisible(); fixture.check();
@@ -305,7 +339,8 @@ test("proposed site accepts omitted area and preserves the map's selected coordi
 
 test("Other area appears directly beneath its dropdown, validates decimals, and clears on option switches", async ({ page }) => {
   const fixture = await setup(page); await requester(page);
-  const area = page.getByLabel("Planting Area *", { exact: true });
+  await page.getByRole("radio", { name: "Propose New Planting Site", exact: true }).check();
+  const area = page.getByLabel("Planting Area (Hectares) (Optional)", { exact: true });
   await area.selectOption("Other / Exact Area");
   const exact = page.getByLabel("Specify Planting Area (Hectares)"); await expect(exact).toBeVisible(); await expect(exact).toHaveAttribute("placeholder", "e.g., 0.5");
   const bounds = await area.boundingBox(), exactBounds = await exact.boundingBox(); expect(exactBounds.y).toBeGreaterThan(bounds.y + bounds.height);
@@ -1243,3 +1278,19 @@ test("View Report shows every seedling type of a multi-type report and resuming 
   await expect(page.getByLabel("Quantity Planted *", { exact: true }).nth(1)).toHaveValue("6");
   fixture.check();
 });
+for (const [label, workflow, expected] of [
+  ["registered site area", { siteMode: "existing", areaSource: "registered-site", areaHectares: 2.5, areaChoice: "" }, "2.5 ha (registered site area)"],
+  ["missing registered area", { siteMode: "existing", areaSource: "registered-site", areaHectares: null, areaChoice: "" }, "Not recorded for the registered site"],
+  ["proposed exact area", { siteMode: "proposed", areaChoice: "Other / Exact Area", exactArea: "0.75", areaHectares: 0.75 }, "0.75 ha"],
+  ["proposed without area", { siteMode: "proposed", areaChoice: "", areaHectares: null }, "Not provided"],
+  ["legacy existing-site choice", { siteMode: "existing", areaChoice: "1 hectare" }, "1 hectare"],
+]) {
+  test(`request details show the planting area for ${label}`, async ({ page }) => {
+    const base = ownRequest("Pending", "other-requester");
+    const request = { ...base, workflow: { ...base.workflow, areaChoice: undefined, areaHectares: undefined, ...workflow } };
+    const fixture = await setup(page, { "GET /api/seedling-requests": route => route.fulfill({ json: { success: true, data: [request] } }) });
+    await page.goto("/staff/requests?role=staff"); await page.getByRole("button", { name: "View details for REQ-2099-001", exact: true }).click();
+    await expect(page.locator(".sr-detail-tree-row").filter({ hasText: "Planting Area" }).locator("strong")).toHaveText(expected);
+    fixture.check();
+  });
+}

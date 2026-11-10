@@ -39,6 +39,8 @@ import {
   getEffectiveRequestType,
   getPlantingAreaError,
   getPlantingAreaHectares,
+  formatHectares,
+  registeredSiteAreaHectares,
   getPurposeOptions,
   REQUEST_SECTORS,
   REQUEST_TYPE_SELECTABLE_SECTORS,
@@ -451,6 +453,8 @@ export default function ParticipantSaplingRequestWizard({ currentUser, requester
         ...(key === "siteMode"
           ? {
               existingSiteId: "",
+              areaChoice: "",
+              exactArea: "",
               siteName: "",
               specificLocation: "",
               latitude: "",
@@ -657,11 +661,10 @@ export default function ParticipantSaplingRequestWizard({ currentUser, requester
     }
     if (s === 3) {
       need("siteBarangay", "Select a barangay.");
-      const areaError = getPlantingAreaError(
-        form.areaChoice,
-        form.exactArea,
-        { optional: form.siteMode === "proposed" },
-      );
+      // Existing sites use their registered area; a proposed site's area is optional.
+      const areaError = form.siteMode === "proposed"
+        ? getPlantingAreaError(form.areaChoice, form.exactArea, { optional: true })
+        : "";
       if (areaError) {
         if (!form.areaChoice) e.areaChoice = areaError;
         else e.exactArea = areaError;
@@ -793,7 +796,11 @@ export default function ParticipantSaplingRequestWizard({ currentUser, requester
             coverageType: COVERAGE_TYPE,
             siteVerificationStatus: SITE_VERIFICATION_STATUS,
           }
-        : {}),
+        : {
+            areaChoice: "",
+            exactArea: "",
+            plantingAreaHectares: registeredSiteAreaHectares(chosenSite),
+          }),
       requestLetter: group && !requestLetterCapability
         ? legacyRequestLetterMetadata(form.requestLetter)
         : null,
@@ -1323,50 +1330,14 @@ export default function ParticipantSaplingRequestWizard({ currentUser, requester
                     )}
                   </>
                 ) : (
-                  <>
-                    <Field fieldKey="areaChoice" label="Planting Area *" error={errors.areaChoice} wide>
-                      <select
-                        value={form.areaChoice}
-                        onChange={(e) => put("areaChoice", e.target.value)}
-                      >
-                        <option value="">Select area</option>
-                        {AREAS.map((x) => (
-                          <option key={x}>{x}</option>
-                        ))}
-                      </select>
+                  chosenSite && (
+                    <Field label="Planting Area (Registered Site Area)" wide>
+                      <input
+                        readOnly
+                        value={formatHectares(registeredSiteAreaHectares(chosenSite)) || "Not recorded for this site"}
+                      />
                     </Field>
-                    {EXACT_AREA_CHOICES.has(form.areaChoice) && (
-                      <Field fieldKey="exactArea"
-                        label="Specify Planting Area (Hectares)"
-                        error={errors.exactArea}
-                        wide
-                      >
-                        <input
-                          type="number"
-                          min={
-                            form.areaChoice.includes("6")
-                              ? "6"
-                              : form.areaChoice === "More than 10 hectares"
-                                ? "10"
-                                : "0"
-                          }
-                          max={
-                            form.areaChoice === "Less than 1 hectare"
-                              ? "1"
-                              : form.areaChoice.includes("6")
-                                ? "10"
-                                : undefined
-                          }
-                          step="any"
-                          required
-                          inputMode="decimal"
-                          value={form.exactArea}
-                          onChange={(e) => put("exactArea", e.target.value)}
-                          placeholder="e.g., 0.5"
-                        />
-                      </Field>
-                    )}
-                  </>
+                  )
                 )}
               </div>
               <Title

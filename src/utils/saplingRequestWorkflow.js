@@ -90,6 +90,25 @@ export function getPlantingAreaHectares(areaChoice, exactArea) {
   if (getPlantingAreaError(areaChoice, exactArea)) return null;
   return EXACT_AREA_CHOICES.has(areaChoice) ? Number(exactArea) : FIXED_AREAS[areaChoice];
 }
+export function registeredSiteAreaHectares(site) {
+  const value = Number(site?.areaHectares);
+  return site?.areaHectares !== null && site?.areaHectares !== "" && Number.isFinite(value) && value > 0 ? value : null;
+}
+export function formatHectares(value) {
+  const number = Number(value);
+  if (value === null || value === undefined || value === "" || !Number.isFinite(number) || number <= 0) return "";
+  return `${Number(number.toFixed(4))} ha`;
+}
+// Request details: a hectare value wins; older records fall back to the stored area choice.
+export function requestPlantingAreaLabel(workflow) {
+  if (!workflow) return "";
+  const hectares = formatHectares(workflow.areaHectares ?? workflow.plantingAreaHectares);
+  if (workflow.siteMode === "existing" && workflow.areaSource === "registered-site")
+    return hectares ? `${hectares} (registered site area)` : "Not recorded for the registered site";
+  if (hectares) return hectares;
+  if (workflow.areaChoice) return workflow.areaChoice;
+  return workflow.siteMode === "proposed" ? "Not provided" : "";
+}
 export function getPlantingAreaError(areaChoice, exactArea, { optional = false } = {}) {
   if (!areaChoice) return optional ? "" : "Select the planting area.";
   if (Object.hasOwn(FIXED_AREAS, areaChoice)) return "";
