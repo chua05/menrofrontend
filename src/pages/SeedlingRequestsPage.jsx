@@ -1272,7 +1272,7 @@ useEffect(() => {
     }
   };
 
-  const submitReview = async (siteVerification, policyProposal) => {
+  const submitReview = async (siteVerification) => {
     if (!reviewModal?.request?.id) return;
 
     const request = reviewModal.request;
@@ -1296,7 +1296,6 @@ useEffect(() => {
         preferredReleaseDate: request.preferredReleaseDate || "",
         expectedVersion: Number(request.requestVersion || 0),
         ...(siteVerification ? { siteVerification } : {}),
-        ...(policyProposal ? { policyProposal } : {}),
       };
 
       const updated = await apiRequest(
@@ -4292,19 +4291,17 @@ function ReviewRequestModal({
     maximumCapacity: String(request.proposedSiteVerification?.maximumCapacity ?? ""),
   });
   const [siteErrors, setSiteErrors] = useState({});
-  const [policyProposal, setPolicyProposal] = useState({});
-  const proposalValue = request.purposePolicyManaged && (policyProposal.reporting || policyProposal.reason || policyProposal.monitoring) ? policyProposal : undefined;
   const reviewForm = useRef(null);
   const needsSiteReview = request.workflow?.siteMode === "proposed" && !request.workflow?.officialSiteId;
   const completeReview = async () => {
-    if (!needsSiteReview) return onSubmit(undefined, proposalValue);
+    if (!needsSiteReview) return onSubmit(undefined);
     const next = {};
     const areaError = getPlantingAreaError("Other / Exact Area", siteVerification.areaHectares);
     if (areaError) next.areaHectares = areaError;
     if (!/^\d+$/.test(siteVerification.maximumCapacity) || !Number.isSafeInteger(Number(siteVerification.maximumCapacity)) || Number(siteVerification.maximumCapacity) <= 0) next.maximumCapacity = "Enter the verified capacity as a positive whole number.";
     setSiteErrors(next);
     if (Object.keys(next).length) return focusFirstInvalid(() => reviewForm.current);
-    const failure = await onSubmit(siteVerification, proposalValue);
+    const failure = await onSubmit(siteVerification);
     if (failure?.fieldErrors) {
       setSiteErrors({ areaHectares: failure.fieldErrors.verifiedAreaHectares, maximumCapacity: failure.fieldErrors.verifiedMaximumCapacity });
       focusFirstInvalid(() => reviewForm.current);
@@ -4377,7 +4374,6 @@ function ReviewRequestModal({
           {error && <small className="sr-field-error">{error}</small>}
         </div>
 
-        {request.purposePolicyManaged && <PurposePolicyFields candidate={request.purposePolicyCandidate} value={policyProposal} onChange={setPolicyProposal} label="Staff Policy Proposal (Admin approval required)" />}
           <div className="sr-modal-footer">
           <button
             type="button"

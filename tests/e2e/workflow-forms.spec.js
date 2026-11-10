@@ -554,20 +554,22 @@ test("original Staff encoder records a signed walk-in schedule without a citizen
   await expect(page.getByRole("button", { name: "Record Signed Schedule Acknowledgement", exact: true })).toHaveCount(0); expect(recorded).toBe(true); fixture.check();
 });
 
-test("Staff proposes Other policy with a reason and Admin makes the versioned final decision", async ({ page }) => {
+test("Staff reviews an Other-purpose request without a policy proposal and Admin makes the versioned final decision", async ({ page }) => {
   let request = { ...ownRequest("Pending", "citizen-requester"), purposePolicyManaged: true, purpose: "Habitat activity", purposePolicyCandidate: { purpose: "Other", policyVersion: 0 }, workflow: { ...ownRequest().workflow, purpose: "Other", purposeOther: "Habitat activity" } };
-  let proposed, approved;
+  let reviewed = false, approved;
   const fixture = await setup(page, { "GET /api/seedling-requests": route => route.fulfill({ json: { success: true, data: [request] } }),
     "GET /api/purpose-policies": route => route.fulfill({ json: { success: true, data: { version: 5, purposes: [{ purpose: "Other", reporting: "CONDITIONAL", monitoring: "NONE", quantityThreshold: null }] } } }),
-    "PATCH /api/seedling-requests/staff-own-request/review": (route, req) => { proposed = req.postDataJSON().policyProposal; expect(proposed).toEqual({ reporting: "REQUIRED", monitoring: "PERMANENT_SAMPLE", reason: "Staff documented the habitat activity" }); request = { ...request, status: "Reviewed", requestVersion: 4, staffPolicyProposal: proposed }; return route.fulfill({ json: { success: true, data: request } }); },
+    "PATCH /api/seedling-requests/staff-own-request/review": (route, req) => { expect(req.postDataJSON()).not.toHaveProperty("policyProposal"); reviewed = true; request = { ...request, status: "Reviewed", requestVersion: 4 }; return route.fulfill({ json: { success: true, data: request } }); },
     "PATCH /api/seedling-requests/staff-own-request/approve": (route, req) => { approved = req.postDataJSON(); expect(approved.expectedVersion).toBe(4); expect(approved.policyDecision.expectedPolicyVersion).toBe(5);
       if (!approved.policyDecision.reason) return route.fulfill({ status: 400, json: { success: false, message: "A policy decision reason is required.", fieldErrors: { policyReason: "Record the Admin reason." } } });
       request = { ...request, status: "Approved", requestVersion: 5 }; return route.fulfill({ json: { success: true, data: request } });
     } });
   await page.goto("/staff/requests?role=staff"); await page.getByRole("button", { name: "View details for REQ-2099-001", exact: true }).click(); await page.getByRole("button", { name: "Review", exact: true }).click();
-  const staffPolicy = page.getByRole("group", { name: "Staff Policy Proposal (Admin approval required)", exact: true });
-  await staffPolicy.getByLabel("Reporting Requirement").selectOption("REQUIRED"); await staffPolicy.getByLabel("Monitoring Requirement").selectOption("PERMANENT_SAMPLE"); await staffPolicy.getByLabel("Policy Decision Reason").fill("Staff documented the habitat activity");
-  await page.getByRole("button", { name: "Complete Review", exact: true }).click(); await expect(page.getByRole("button", { name: "Complete Review", exact: true })).toHaveCount(0); expect(proposed).toBeTruthy();
+  const reviewDialog = page.locator(".sr-decision-modal").filter({ has: page.getByRole("heading", { name: "Review Seedling Request", exact: true }) });
+  await expect(reviewDialog).toBeVisible();
+  await expect(reviewDialog.getByText("Staff Policy Proposal", { exact: false })).toHaveCount(0);
+  await expect(reviewDialog.getByLabel("Reporting Requirement")).toHaveCount(0); await expect(reviewDialog.getByLabel("Monitoring Requirement")).toHaveCount(0); await expect(reviewDialog.getByLabel("Policy Decision Reason")).toHaveCount(0);
+  await page.getByRole("button", { name: "Complete Review", exact: true }).click(); await expect(page.getByRole("button", { name: "Complete Review", exact: true })).toHaveCount(0); expect(reviewed).toBe(true);
   await page.goto("/admin/requests?role=admin"); await page.getByRole("button", { name: "View details for REQ-2099-001", exact: true }).click(); await page.getByRole("button", { name: "Approve", exact: true }).click();
   const adminPolicy = page.getByRole("group", { name: "Admin Final Purpose Policy", exact: true });
   await adminPolicy.getByLabel("Reporting Requirement").selectOption("REQUIRED"); await adminPolicy.getByLabel("Monitoring Requirement").selectOption("PERMANENT_SAMPLE");
