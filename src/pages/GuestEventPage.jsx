@@ -1,101 +1,45 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
-import L from "leaflet";
-import "leaflet/dist/leaflet.css";
-import * as exifr from "exifr";
 import logo from "../assets/menro-logo.png";
-import { formatDisplayId } from "../utils/displayId";
-import { createEvidenceAttempt, assertEvidenceComplete } from "../utils/evidenceAttempt";
+import { guestAttendanceErrors, normalizeGuestContact, attendanceOpensLabel } from "../utils/guestAttendance";
 import "../styles/guest-event.css";
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
-const MAX_PHOTOS = 10;
-const MAX_PHOTO_SIZE = 10 * 1024 * 1024;
+const EMPTY_FORM = { fullName: "", contactNumber: "", address: "" };
 
 function siteLabel(event) {
   const number = event?.plantingSiteNumber || "";
-  const name = event?.plantingSiteName || event?.location || "Not available";
+  const name = event?.plantingSiteName || "Not available";
   return number ? `${number} — ${name}` : name;
 }
 
-function newSubmissionKey() {
-  if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID();
-  return `${Date.now()}_${Math.random().toString(36).slice(2)}`;
-}
-
+// Event-specific attendance registration through the requester's guest link.
+// Guests record attendance only (Full Name, Contact Number, Address); planting
+// details belong to the event's final planting report, not to guests.
 export default function GuestEventPage() {
   const { token } = useParams();
-  const mapContainerRef = useRef(null);
-  const submissionKeyRef = useRef("");
-  const evidenceAttempt = useRef(createEvidenceAttempt());
   const [event, setEvent] = useState(null);
-  const [session, setSession] = useState(null);
-  const [contributions, setContributions] = useState([]);
-  const [contributionsLoading, setContributionsLoading] = useState(false);
-  const [contributionsError, setContributionsError] = useState("");
-  const [contributionsRetry, setContributionsRetry] = useState(0);
-  const [form, setForm] = useState({ fullName: "", contactNumber: "" });
-  const [plantingForm, setPlantingForm] = useState({ inventoryId: "", quantity: "" });
-  const [photos, setPhotos] = useState([]);
-  const [photoPreviews, setPhotoPreviews] = useState([]);
-  const [photoGps, setPhotoGps] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [submitting, setSubmitting] = useState(false);
-  const [plantingSubmitting, setPlantingSubmitting] = useState(false);
-  const [evidenceRecovery, setEvidenceRecovery] = useState(false);
-  const [error, setError] = useState("");
-  const [plantingMessage, setPlantingMessage] = useState({ type: "", text: "" });
+  const [loadError, setLoadError] = useState("");
   const [retryKey, setRetryKey] = useState(0);
-
-  const allocations = useMemo(() => Array.isArray(event?.allocation) ? event.allocation : [], [event]);
-  const selectedAllocation = allocations.find((item) => item.inventoryId === plantingForm.inventoryId) || null;
-  const allRecorded = allocations.length > 0 && allocations.every((item) => Number(item.remaining) === 0);
-
-  async function guestFetch(path, options = {}) {
-    const response = await fetch(`${API_BASE_URL}${path}`, {
-      ...options,
-      headers: {
-        ...(options.body instanceof FormData ? {} : { "Content-Type": "application/json" }),
-        ...(session?.sessionToken ? { Authorization: `Guest ${session.sessionToken}` } : {}),
-        ...options.headers,
-      },
-    });
-    const payload = await response.json().catch(() => null);
-    assertEvidenceComplete(response, payload, options.headers);
-    if (!response.ok) throw new Error(payload?.message || "Unable to complete the request.");
-    return payload?.data;
-  }
+  const [form, setForm] = useState(EMPTY_FORM);
+  const [errors, setErrors] = useState({});
+  const [submitError, setSubmitError] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [registered, setRegistered] = useState(null);
 
   useEffect(() => {
     let cancelled = false;
     async function loadEvent() {
       setLoading(true);
-      setError("");
+      setLoadError("");
       try {
         const response = await fetch(`${API_BASE_URL}/guest-events/${encodeURIComponent(token)}`);
         const payload = await response.json().catch(() => null);
-        if (!response.ok) throw new Error(payload?.message || "Guest event is unavailable.");
-        const data = payload?.data;
-        if (!data?.id) throw new Error("Guest event is unavailable.");
-        if (cancelled) return;
-        setEvent(data);
-        const savedToken = sessionStorage.getItem(`menro-guest-session:${data.id}`);
-        if (savedToken) {
-          const sessionResponse = await fetch(`${API_BASE_URL}/guest-events/session`, {
-            headers: { Authorization: `Guest ${savedToken}` },
-          });
-          const sessionPayload = await sessionResponse.json().catch(() => null);
-          if (sessionResponse.ok && sessionPayload?.data?.eventId === data.id) {
-            if (!cancelled) {
-              setSession({ ...sessionPayload.data, sessionToken: savedToken });
-              if (sessionPayload.data.event) setEvent(sessionPayload.data.event);
-            }
-          } else {
-            sessionStorage.removeItem(`menro-guest-session:${data.id}`);
-          }
-        }
-      } catch (loadError) {
-        if (!cancelled) setError(loadError.message || "Guest event is unavailable.");
+        if (!response.ok || !payload?.data?.id) throw new Error(payload?.message || "This event link is unavailable.");
+        if (!cancelled) setEvent(payload.data);
+      } catch (error) {
+        if (!cancelled) { setEvent(null); setLoadError(error.message || "This event link is unavailable."); }
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -104,168 +48,45 @@ export default function GuestEventPage() {
     return () => { cancelled = true; };
   }, [token, retryKey]);
 
-  useEffect(() => {
-    if (!session?.sessionToken) return;
-    let cancelled = false;
-    async function loadContributions() {
-      setContributionsLoading(true);
-      setContributionsError("");
-      try {
-        const data = await guestFetch("/guest-events/session/contributions");
-        if (!cancelled) setContributions(Array.isArray(data) ? data : []);
-      } catch (loadError) {
-        if (!cancelled) setContributionsError(loadError.message || "Unable to load contributions.");
-      } finally {
-        if (!cancelled) setContributionsLoading(false);
-      }
-    }
-    void loadContributions();
-    return () => { cancelled = true; };
-  }, [session?.sessionToken, contributionsRetry]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  useEffect(() => () => photoPreviews.forEach((url) => URL.revokeObjectURL(url)), [photoPreviews]);
-
-  useEffect(() => {
-    if (!session || !mapContainerRef.current) return undefined;
-    const siteLatitude = Number(event?.latitude);
-    const siteLongitude = Number(event?.longitude);
-    const hasSite = event?.latitude !== null && event?.latitude !== undefined &&
-      event?.longitude !== null && event?.longitude !== undefined &&
-      Number.isFinite(siteLatitude) && Number.isFinite(siteLongitude);
-    const hasPhoto = Number.isFinite(photoGps?.latitude) && Number.isFinite(photoGps?.longitude);
-    if (!hasSite && !hasPhoto) return undefined;
-    const center = hasPhoto ? [photoGps.latitude, photoGps.longitude] : [siteLatitude, siteLongitude];
-    const map = L.map(mapContainerRef.current, { center, zoom: 16, maxZoom: 19 });
-    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-      maxZoom: 19,
-      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
-    }).addTo(map);
-    const points = [];
-    if (hasSite) {
-      L.circleMarker([siteLatitude, siteLongitude], {
-        radius: 8, color: "#fff", weight: 2, fillColor: "#087443", fillOpacity: 1,
-      }).bindTooltip("Registered planting site").addTo(map);
-      points.push([siteLatitude, siteLongitude]);
-    }
-    if (hasPhoto) {
-      L.circleMarker([photoGps.latitude, photoGps.longitude], {
-        radius: 8, color: "#fff", weight: 2, fillColor: "#2563eb", fillOpacity: 1,
-      }).bindTooltip("Photo GPS location").addTo(map);
-      points.push([photoGps.latitude, photoGps.longitude]);
-    }
-    if (points.length > 1) map.fitBounds(points, { padding: [24, 24] });
-    window.setTimeout(() => map.invalidateSize(), 0);
-    return () => map.remove();
-  }, [session, event?.latitude, event?.longitude, photoGps]);
-
-  async function refreshGuestData() {
-    const data = await guestFetch("/guest-events/session");
-    setSession((previous) => ({ ...previous, ...data }));
-    if (data?.event) setEvent(data.event);
-    setContributionsRetry((count) => count + 1);
+  function update(field, value) {
+    setForm((current) => ({ ...current, [field]: value }));
+    setErrors((current) => ({ ...current, [field]: "" }));
+    setSubmitError("");
   }
 
-  async function join(eventSubmit) {
-    eventSubmit.preventDefault();
+  async function register(submitEvent) {
+    submitEvent.preventDefault();
+    if (submitting) return;
+    const validation = guestAttendanceErrors(form);
+    setErrors(validation);
+    if (Object.keys(validation).length) {
+      document.getElementById(`guest-${Object.keys(validation)[0]}`)?.focus();
+      return;
+    }
     setSubmitting(true);
-    setError("");
+    setSubmitError("");
     try {
-      const response = await fetch(`${API_BASE_URL}/guest-events/${encodeURIComponent(token)}/join`, {
+      const response = await fetch(`${API_BASE_URL}/guest-events/${encodeURIComponent(token)}/attendance`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ fullName: form.fullName.trim(), contactNumber: form.contactNumber.trim() }),
+        body: JSON.stringify({ fullName: form.fullName.trim(), contactNumber: normalizeGuestContact(form.contactNumber), address: form.address.trim() }),
       });
       const payload = await response.json().catch(() => null);
-      if (!response.ok) throw new Error(payload?.message || "Unable to join this event.");
-      const joined = payload?.data;
-      if (!joined?.sessionToken || joined.eventId !== event.id) throw new Error("Unable to start guest session.");
-      sessionStorage.setItem(`menro-guest-session:${event.id}`, joined.sessionToken);
-      setSession({ ...joined, fullName: form.fullName.trim() });
-    } catch (joinError) {
-      setError(joinError.message || "Unable to join this event.");
+      if (!response.ok) {
+        if (payload?.fieldErrors) setErrors(payload.fieldErrors);
+        throw new Error(payload?.message || "Attendance could not be recorded. Please try again.");
+      }
+      setRegistered({ fullName: payload?.data?.fullName || form.fullName.trim() });
+      setForm(EMPTY_FORM);
+    } catch (error) {
+      setSubmitError(error.message || "Attendance could not be recorded. Please try again.");
     } finally {
       setSubmitting(false);
     }
   }
 
-  async function selectPhotos(fileList) {
-    setPlantingMessage({ type: "", text: "" });
-    const selected = Array.from(fileList || []);
-    if (selected.length > MAX_PHOTOS || selected.some((file) => file.size > MAX_PHOTO_SIZE)) {
-      setPlantingMessage({ type: "error", text: "Select up to 10 photos, with a maximum size of 10 MB each." });
-      return;
-    }
-    photoPreviews.forEach((url) => URL.revokeObjectURL(url));
-    setPhotos(selected);
-    setPhotoPreviews(selected.map((file) => URL.createObjectURL(file)));
-    setPhotoGps(null);
-    for (const file of selected) {
-      const gps = await exifr.gps(file).catch(() => null);
-      if (Number.isFinite(gps?.latitude) && Number.isFinite(gps?.longitude)) {
-        setPhotoGps({ latitude: gps.latitude, longitude: gps.longitude });
-        break;
-      }
-    }
-  }
-
-  async function submitPlanting(eventSubmit) {
-    eventSubmit.preventDefault();
-    setPlantingMessage({ type: "", text: "" });
-    const quantity = Number(plantingForm.quantity);
-    if (!selectedAllocation) {
-      setPlantingMessage({ type: "error", text: "Select a tree or seedling from this event allocation." });
-      return;
-    }
-    const recovering = evidenceAttempt.current.enabled && Boolean(submissionKeyRef.current);
-    if (!Number.isInteger(quantity) || quantity <= 0 || (!recovering && quantity > Number(selectedAllocation.remaining))) {
-      setPlantingMessage({ type: "error", text: `Enter a positive whole number not greater than the current remaining quantity (${selectedAllocation.remaining}).` });
-      return;
-    }
-    if (photos.length === 0) {
-      setPlantingMessage({ type: "error", text: "Upload or take an original geotagged photo before submitting this planting report." });
-      return;
-    }
-    setPlantingSubmitting(true);
-    try {
-      const latestSession = await guestFetch("/guest-events/session");
-      if (latestSession?.event) setEvent(latestSession.event);
-      const latestAllocation = latestSession?.event?.allocation?.find(
-        (item) => item.inventoryId === selectedAllocation.inventoryId
-      );
-      if (!latestAllocation || (!recovering && quantity > Number(latestAllocation.remaining))) {
-        throw new Error("The available planting quantity has changed. Please review the updated remaining quantity and try again.");
-      }
-      if (!submissionKeyRef.current) submissionKeyRef.current = newSubmissionKey();
-      if (evidenceAttempt.current.enabled) setEvidenceRecovery(true);
-      const contribution = await guestFetch("/guest-events/session/contributions", {
-        method: "POST",
-        body: JSON.stringify({ inventoryId: selectedAllocation.inventoryId, quantity, submissionKey: submissionKeyRef.current }),
-      });
-      const photoData = new FormData();
-      photos.forEach((photo) => photoData.append("photos", photo));
-      await guestFetch(`/guest-events/session/contributions/${encodeURIComponent(contribution.id)}/evidence`, {
-        method: "POST", body: photoData, headers: evidenceAttempt.current.headers(submissionKeyRef.current),
-      });
-      await refreshGuestData();
-      setPlantingForm({ inventoryId: "", quantity: "" });
-      photoPreviews.forEach((url) => URL.revokeObjectURL(url));
-      setPhotos([]);
-      setPhotoPreviews([]);
-      setPhotoGps(null);
-      submissionKeyRef.current = "";
-      evidenceAttempt.current.reset();
-      setEvidenceRecovery(false);
-      setPlantingMessage({
-        type: "success",
-        text: "Your planting report was submitted successfully.",
-      });
-    } catch (submitError) {
-      setPlantingMessage({ type: "error", text: submitError.message || "Unable to submit planting record." });
-      await refreshGuestData().catch(() => {});
-    } finally {
-      setPlantingSubmitting(false);
-    }
-  }
+  const fieldError = (field) => errors[field] && <small id={`guest-${field}-error`} className="guest-event-field-error" role="alert">{errors[field]}</small>;
+  const describedBy = (field) => (errors[field] ? `guest-${field}-error` : undefined);
 
   return (
     <main className="guest-event-page">
@@ -274,11 +95,11 @@ export default function GuestEventPage() {
           <img src={logo} alt="MENRO seal" />
           <div><strong>MENRO</strong><span>Environment Office · Bulan</span></div>
         </header>
-        <article className="guest-event-card" aria-label="Guest event">
-          <div className="guest-event-heading"><h1>Tree Planting Event</h1><p>View your invitation and join as a guest participant.</p></div>
+        <article className="guest-event-card" aria-label="Guest event attendance">
+          <div className="guest-event-heading"><h1>Tree Planting Event Attendance</h1><p>Register your attendance at this planting event.</p></div>
           <div className="guest-event-divider" />
           {loading && <p className="guest-event-muted" role="status">Loading event...</p>}
-          {error && <div className="guest-event-alert" role="alert">{error}</div>}
+          {loadError && <div className="guest-event-alert" role="alert">{loadError}</div>}
           {!loading && !event && <button type="button" className="guest-event-button" onClick={() => setRetryKey((count) => count + 1)}>Retry</button>}
 
           {event && <section className="guest-event-summary" aria-label="Event details">
@@ -291,60 +112,42 @@ export default function GuestEventPage() {
             </dl>
           </section>}
 
-          {event && !session && <section className="guest-event-section" aria-label="Join event">
-            <h2>Join this event</h2><p className="guest-event-muted">Enter your details to register. No MENRO account is required.</p>
-            <form className="guest-event-form" onSubmit={join}>
-              <label className="guest-event-field">Full Name *<input required maxLength={120} autoComplete="name" value={form.fullName} onChange={(change) => setForm((previous) => ({ ...previous, fullName: change.target.value }))} /></label>
-              <label className="guest-event-field">Contact Number *<input required type="tel" inputMode="numeric" pattern="[0-9]*" maxLength={12} autoComplete="tel" value={form.contactNumber} onChange={(change) => setForm((previous) => ({ ...previous, contactNumber: change.target.value.replace(/\D/g, "").slice(0, 12) }))} /></label>
-              <label className="guest-event-field">Barangay<input readOnly value={event.barangay || "Not available"} /></label>
-              <label className="guest-event-field">Planting Site<input readOnly value={siteLabel(event)} /></label>
-              <button className="guest-event-button" type="submit" disabled={submitting}>{submitting ? "Joining..." : "Join Event"}</button>
-            </form>
+          {event && registered && <section className="guest-event-section guest-attendance-success" aria-label="Attendance recorded" role="status">
+            <h2>Attendance recorded</h2>
+            <p>Thank you, {registered.fullName}. Your attendance at this planting event has been recorded.</p>
+            <button type="button" className="guest-event-secondary-button" onClick={() => setRegistered(null)}>Register another attendee</button>
           </section>}
 
-          {event && session && <>
-            <section className="guest-event-section" aria-label="Planting allocation">
-              <h2>Trees Planted / Event Allocation</h2>
-              {!event.allocationReleased && <div className="guest-event-notice">The event planting allocation has not been released yet.</div>}
-              {allocations.length > 0 && <ul className="guest-event-allocation-list">{allocations.map((item) => <li key={item.inventoryId}><strong>{item.species}</strong><span>Allocated: {item.allocated}</span><span>Recorded: {item.recorded}</span><span>Remaining: {item.remaining}</span></li>)}</ul>}
-              {allRecorded && <div className="guest-event-notice">All allocated trees for this event have already been recorded as planted.</div>}
-            </section>
+          {event && !registered && !event.attendanceOpen && <section className="guest-event-section" aria-label="Attendance not open">
+            <div className="guest-event-notice" role="status">Attendance opens when the planting event starts{attendanceOpensLabel(event.attendanceOpensAt)}.</div>
+          </section>}
 
-            <section className="guest-event-section" aria-label="Submit planting record">
-              <h2>Planting Record</h2>
-              {plantingMessage.text && <div className={`guest-event-alert guest-event-alert-${plantingMessage.type}`} role="alert">{plantingMessage.text}</div>}
-              <form className="guest-event-form" onSubmit={submitPlanting}>
-                <label className="guest-event-field">Tree / Seedling *<select required value={plantingForm.inventoryId} disabled={evidenceRecovery || !allocations.length || allRecorded} onChange={(change) => setPlantingForm({ inventoryId: change.target.value, quantity: "" })}><option value="">Select from event allocation</option>{allocations.map((item) => <option key={item.inventoryId} value={item.inventoryId} disabled={item.remaining <= 0}>{item.species} ({item.remaining} remaining)</option>)}</select></label>
-                <div className="guest-event-quantity-grid">
-                  <label className="guest-event-field">Allocated Quantity<input readOnly value={selectedAllocation?.allocated ?? "—"} /></label>
-                  <label className="guest-event-field">Remaining Quantity<input readOnly value={selectedAllocation?.remaining ?? "—"} /></label>
-                </div>
-                <label className="guest-event-field">Quantity of Planted Trees *<input required type="number" min="1" step="1" max={evidenceRecovery ? undefined : selectedAllocation?.remaining || undefined} value={plantingForm.quantity} disabled={evidenceRecovery || !selectedAllocation || selectedAllocation.remaining <= 0} onChange={(change) => setPlantingForm((previous) => ({ ...previous, quantity: change.target.value }))} /></label>
-                <div className="guest-event-evidence">
-                  <div><strong>Photo Evidence — Required</strong><span>Submit the original photo with embedded GPS metadata.</span></div>
-                  <div className="guest-event-photo-actions">
-                    <label className="guest-event-secondary-button">Take Photo<input hidden type="file" accept="image/jpeg,image/png,image/webp" capture="environment" onChange={(change) => void selectPhotos(change.target.files)} /></label>
-                    <label className="guest-event-secondary-button">Upload Photo<input hidden type="file" accept="image/jpeg,image/png,image/webp" multiple onChange={(change) => void selectPhotos(change.target.files)} /></label>
-                  </div>
-                  {photoPreviews.length > 0 && <div className="guest-event-photo-previews">{photoPreviews.map((url, index) => <img key={url} src={url} alt={`Selected planting evidence ${index + 1}`} />)}</div>}
-                  <div className="guest-event-location-copy"><strong>Photo GPS</strong><span>{photoGps ? `${photoGps.latitude.toFixed(6)}, ${photoGps.longitude.toFixed(6)}` : "No GPS coordinates found. This image cannot be submitted as planting evidence."}</span></div>
-                  {((event.latitude !== null && event.latitude !== undefined &&
-                    event.longitude !== null && event.longitude !== undefined &&
-                    Number.isFinite(Number(event.latitude)) && Number.isFinite(Number(event.longitude))) || photoGps) &&
-                    <div ref={mapContainerRef} className="guest-event-map" aria-label="Planting site and optional photo location map" />}
-                </div>
-                <button className="guest-event-button" type="submit" disabled={plantingSubmitting || !selectedAllocation || (!evidenceRecovery && (selectedAllocation.remaining <= 0 || allRecorded))}>{plantingSubmitting ? "Submitting..." : "Submit Planting Record"}</button>
-              </form>
-            </section>
-
-            <section className="guest-event-section" aria-label="My guest contributions">
-              <h2>My Planting Contributions</h2>
-              {contributionsLoading && <p className="guest-event-muted" role="status">Loading your contributions...</p>}
-              {contributionsError && <div className="guest-event-alert" role="alert">{contributionsError}</div>}
-              {contributionsError && <button type="button" className="guest-event-button" onClick={() => setContributionsRetry((count) => count + 1)}>Retry</button>}
-              {!contributionsLoading && !contributionsError && (contributions.length ? <ul className="guest-event-contributions">{contributions.map((item, index) => <li key={item.id || index}><span>{item.species || formatDisplayId("INV", item.inventoryNumber, item.inventoryId)}</span><strong>{item.quantity}</strong></li>)}</ul> : <p className="guest-event-muted">No planting contributions recorded yet.</p>)}
-            </section>
-          </>}
+          {event && !registered && event.attendanceOpen && <section className="guest-event-section" aria-label="Register attendance">
+            <h2>Register attendance</h2>
+            <p className="guest-event-muted">No MENRO account is required. Your details are visible only to the event requester and MENRO Staff and Admin.</p>
+            {submitError && <div className="guest-event-alert" role="alert">{submitError}</div>}
+            <form className="guest-event-form" onSubmit={register} noValidate>
+              <label className="guest-event-field" htmlFor="guest-fullName">Full Name *
+                <input id="guest-fullName" required maxLength={120} autoComplete="name" value={form.fullName}
+                  aria-invalid={errors.fullName ? "true" : undefined} aria-describedby={describedBy("fullName")}
+                  onChange={(change) => update("fullName", change.target.value)} />
+              </label>
+              {fieldError("fullName")}
+              <label className="guest-event-field" htmlFor="guest-contactNumber">Contact Number *
+                <input id="guest-contactNumber" required type="tel" inputMode="numeric" maxLength={13} autoComplete="tel" placeholder="09XXXXXXXXX" value={form.contactNumber}
+                  aria-invalid={errors.contactNumber ? "true" : undefined} aria-describedby={describedBy("contactNumber")}
+                  onChange={(change) => update("contactNumber", change.target.value.replace(/[^\d+]/g, "").slice(0, 13))} />
+              </label>
+              {fieldError("contactNumber")}
+              <label className="guest-event-field" htmlFor="guest-address">Address *
+                <textarea id="guest-address" required rows={2} maxLength={200} autoComplete="street-address" placeholder="Purok / Street, Barangay, Municipality" value={form.address}
+                  aria-invalid={errors.address ? "true" : undefined} aria-describedby={describedBy("address")}
+                  onChange={(change) => update("address", change.target.value)} />
+              </label>
+              {fieldError("address")}
+              <button className="guest-event-button" type="submit" disabled={submitting}>{submitting ? "Registering..." : "Register Attendance"}</button>
+            </form>
+          </section>}
         </article>
       </div>
     </main>

@@ -27,6 +27,7 @@ import { buildEvidenceLocationView, photoGpsMetadataLabel } from "../utils/evide
 import { SITE_GPS_TOLERANCE_METERS, buildLocationPreviewStatus, calculateDistanceMeters, getFeatureBarangayName, isPointInBulanBoundary, isPointInPolygon } from "../utils/plantingLocationPreview";
 import PhotoRequirementsDialog from "../components/PhotoRequirementsDialog";
 import PlantingEvidenceMap from "../components/PlantingEvidenceMap";
+import EventAttendancePanel from "../components/EventAttendancePanel";
 import {
   REPORT_KPIS,
   REPORT_STATUS_FILTERS,
@@ -3922,6 +3923,11 @@ export default function PlantingPage() {
                   </div>
                 )}
               </section>
+
+              {selectedRecord.reportType === "parent" && selectedRecord.eventId && (canReview || selectedRecord.participantId === currentUser?.uid) && (
+                <EventAttendancePanel eventId={selectedRecord.eventId} canManageReservations={canReview}
+                  onReservationReleased={() => refreshSelectedRecord(selectedRecord.id)} />
+              )}
 
               <section className="pr-drawer-section pr-drawer-section-last">
                 <div className="pr-drawer-section-title">

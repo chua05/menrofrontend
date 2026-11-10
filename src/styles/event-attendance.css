@@ -1,0 +1,59 @@
+/* Event attendance (guest attendance-only registration) and legacy reservations. */
+.pr-event-attendance { min-width: 0; }
+
+.pr-attendance-table-wrap {
+  max-width: 100%;
+  margin-top: 8px;
+  overflow-x: auto;
+  border: 1px solid #e4e9e6;
+  border-radius: 10px;
+}
+
+.pr-attendance-table {
+  width: 100%;
+  min-width: 520px;
+  border-collapse: collapse;
+  font-size: 13.5px;
+}
+
+.pr-attendance-table th,
+.pr-attendance-table td {
+  padding: 8px 10px;
+  border-bottom: 1px solid #eef2ef;
+  text-align: left;
+  vertical-align: top;
+  overflow-wrap: anywhere;
+}
+
+.pr-attendance-table thead th {
+  color: #5f6b64;
+  background: #f7faf8;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.pr-legacy-reservations {
+  margin-top: 14px;
+  padding: 12px;
+  border: 1px dashed #d1d5db;
+  border-radius: 10px;
+}
+
+.pr-legacy-reservation-list {
+  display: grid;
+  gap: 10px;
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.pr-legacy-reservation-list li {
+  display: grid;
+  gap: 6px;
+}
+
+.pr-legacy-reservation-list small { color: #6b7280; }
+
+.pr-reservation-release-form { display: grid; gap: 6px; }
