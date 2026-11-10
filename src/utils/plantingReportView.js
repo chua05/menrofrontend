@@ -36,18 +36,51 @@ function submissionStage(entry) {
   return entry.officialStaffReport ? "Pending Admin Approval" : "Pending Review";
 }
 
+// Every submission approved so far, but released seedlings remain unreported.
+// Matches the backend AWAITING_REMAINING_REPORT label.
+export const AWAITING_REMAINING_REPORT = "Awaiting Remaining Report";
+
+function activeSubmissionStages(record) {
+  return reportSubmissions(record)
+    .filter((entry) => entry.verificationStatus !== "Invalid" && !entry.correctedBySubmission)
+    .map(submissionStage);
+}
+
 export function reportReviewStatus(record) {
   if (!record) return "Not Submitted";
   if (record.reportType !== "parent") return record.workflowStatus || "Pending Review";
   const submissions = reportSubmissions(record);
   if (submissions.length === 0) return "Not Submitted";
   if (record.reviewStatus) return record.reviewStatus;
-  const stages = submissions
-    .filter((entry) => entry.verificationStatus !== "Invalid" && !entry.correctedBySubmission)
-    .map(submissionStage);
+  const stages = activeSubmissionStages(record);
   for (const stage of REVIEW_STAGE_ORDER) if (stages.includes(stage)) return stage;
   if (stages.length > 0 && stages.every((stage) => stage === "Rejected")) return "Rejected";
-  return stages.includes("Completed") ? "Completed" : "Rejected";
+  if (!stages.includes("Completed")) return "Rejected";
+  // Only a report Admin-approved for its whole released balance is Completed.
+  return !record.reportingProgress || record.reportingProgress === "Completed" ? "Completed" : AWAITING_REMAINING_REPORT;
+}
+
+// All unfinished review stages on a report (workflow order). A report waiting
+// on both Staff and Admin belongs to both queues.
+export function reportReviewStages(record) {
+  if (!record) return [];
+  if (record.reportType !== "parent") {
+    const stage = record.workflowStatus || "Pending Review";
+    return REVIEW_STAGE_ORDER.includes(stage) ? [stage] : [];
+  }
+  if (Array.isArray(record.reviewStages)) return REVIEW_STAGE_ORDER.filter((stage) => record.reviewStages.includes(stage));
+  const stages = activeSubmissionStages(record);
+  return REVIEW_STAGE_ORDER.filter((stage) => stages.includes(stage));
+}
+
+// A legacy standalone report replaced by its own corrected resubmission. The
+// record is kept; only its correction appears in the table and counts.
+export function isSupersededReport(record) {
+  return Boolean(record && record.reportType !== "parent" && record.correctedByReportId);
+}
+
+export function currentReports(records) {
+  return (Array.isArray(records) ? records : []).filter((record) => !isSupersededReport(record));
 }
 
 export function latestSubmittedAt(record) {
@@ -152,16 +185,41 @@ export const REPORT_KPIS = Object.freeze([
   { key: "completed", title: "Completed", description: "Approved and finalized", tone: "completed" },
 ]);
 
+// Status keys shared by the KPI cards and the status filter. A report can be
+// in several queues at once (e.g. one submission with Staff, one with Admin).
+export function reportStatusKeys(record) {
+  if (reportSubmissionStatus(record) !== "Submitted") return ["awaiting"];
+  const stages = reportReviewStages(record);
+  const keys = [];
+  if (stages.includes("Pending Review")) keys.push("pendingReview");
+  if (stages.includes("Reviewed") || stages.includes("Pending Admin Approval")) keys.push("pendingApproval");
+  if (stages.includes("Returned for Correction")) keys.push("returned");
+  const review = reportReviewStatus(record);
+  if (review === "Completed") keys.push("completed");
+  if (review === AWAITING_REMAINING_REPORT) keys.push("awaitingRemaining");
+  if (review === "Rejected") keys.push("rejected");
+  return keys;
+}
+
+export const REPORT_STATUS_FILTERS = Object.freeze([
+  { key: "awaiting", label: "Awaiting Submission" },
+  { key: "pendingReview", label: "Pending Review" },
+  { key: "pendingApproval", label: "Pending Approval" },
+  { key: "returned", label: "Returned for Correction" },
+  { key: "awaitingRemaining", label: AWAITING_REMAINING_REPORT },
+  { key: "completed", label: "Completed" },
+  { key: "rejected", label: "Rejected" },
+]);
+
+export function reportMatchesStatusFilter(record, filterKey) {
+  return filterKey === "All" || reportStatusKeys(record).includes(filterKey);
+}
+
 export function reportKpiCounts(records) {
-  const list = Array.isArray(records) ? records : [];
+  const list = currentReports(records);
   const counts = { total: list.length, awaiting: 0, pendingReview: 0, pendingApproval: 0, returned: 0, completed: 0 };
   for (const record of list) {
-    if (reportSubmissionStatus(record) !== "Submitted") { counts.awaiting += 1; continue; }
-    const review = reportReviewStatus(record);
-    if (review === "Pending Review") counts.pendingReview += 1;
-    else if (review === "Reviewed" || review === "Pending Admin Approval") counts.pendingApproval += 1;
-    else if (review === "Returned for Correction") counts.returned += 1;
-    else if (review === "Completed") counts.completed += 1;
+    for (const key of reportStatusKeys(record)) if (key in counts && key !== "total") counts[key] += 1;
   }
   return counts;
 }

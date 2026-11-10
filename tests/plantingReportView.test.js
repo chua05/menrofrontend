@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   reportSubmissionStatus, reportReviewStatus, reportHistory,
   photoAvailabilityMessage, latestSubmittedAt, reportSeedlingItems, reportKpiCounts,
+  reportReviewStages, reportMatchesStatusFilter, currentReports, REPORT_STATUS_FILTERS,
 } from "../src/utils/plantingReportView.js";
 
 const emptyParent = { id: "event_EVT-1", reportType: "parent", createdAt: "2026-11-09T13:07:00Z",
@@ -29,7 +30,9 @@ test("a saved submission is Submitted while review stays Pending Review (never A
   assert.equal(reportSubmissionStatus(submitted), "Submitted");
   assert.equal(reportReviewStatus(submitted), "Pending Review");
   const accepted = { ...submitted, submissions: submitted.submissions.map((s) => ({ ...s, staffReviewStatus: "Accepted" })) };
-  assert.equal(reportReviewStatus(accepted), "Completed");
+  // All submissions approved, but released seedlings remain unreported: not Completed.
+  assert.equal(reportReviewStatus(accepted), "Awaiting Remaining Report");
+  assert.equal(reportReviewStatus({ ...accepted, reportingProgress: "Completed" }), "Completed");
   const forwarded = { ...submitted, submissions: submitted.submissions.map((s) => ({ ...s, workflowStatus: "Reviewed" })) };
   assert.equal(reportReviewStatus(forwarded), "Reviewed");
   const returned = { ...submitted, submissions: [{ ...submitted.submissions[0], staffReviewStatus: "Rejected", workflowStatus: "Returned for Correction" }] };
@@ -75,7 +78,9 @@ test("seedling column lists every released type and quantity from the linked all
 });
 
 test("KPI counts follow submission and review stages without double counting", () => {
-  const withStage = (stage) => ({ ...submitted, reviewStatus: stage });
+  // Backend sends reviewStatus (primary label) and reviewStages (all open queues).
+  const unfinished = ["Pending Review", "Reviewed", "Pending Admin Approval", "Returned for Correction"];
+  const withStage = (stage) => ({ ...submitted, reviewStatus: stage, reviewStages: unfinished.includes(stage) ? [stage] : [] });
   const records = [
     emptyParent, emptyParent,
     submitted, // derives Pending Review
@@ -89,4 +94,43 @@ test("KPI counts follow submission and review stages without double counting", (
   });
   assert.deepEqual(reportKpiCounts([]), {
     total: 0, awaiting: 0, pendingReview: 0, pendingApproval: 0, returned: 0, completed: 0 });
+});
+
+test("a report waiting on Staff and Admin counts in both queues and the filter agrees", () => {
+  const mixed = { ...submitted, reviewStatus: "Pending Review", reviewStages: ["Pending Review", "Reviewed"] };
+  assert.deepEqual(reportReviewStages(mixed), ["Pending Review", "Reviewed"]);
+  const counts = reportKpiCounts([mixed]);
+  assert.equal(counts.pendingReview, 1);
+  assert.equal(counts.pendingApproval, 1);
+  assert.equal(reportMatchesStatusFilter(mixed, "pendingReview"), true);
+  assert.equal(reportMatchesStatusFilter(mixed, "pendingApproval"), true);
+  assert.equal(reportMatchesStatusFilter(mixed, "completed"), false);
+  // Without backend stages (older API), stages derive from the submissions themselves.
+  const derived = { ...submitted, submissions: [submitted.submissions[0], { ...submitted.submissions[1], workflowStatus: "Reviewed" }] };
+  assert.deepEqual(reportReviewStages(derived), ["Pending Review", "Reviewed"]);
+});
+
+test("approved-so-far legacy partial reports are not Completed in cards, filter or label", () => {
+  const partial = { ...submitted, reportingProgress: "Partial", reviewStatus: "Awaiting Remaining Report", reviewStages: [] };
+  assert.equal(reportReviewStatus(partial), "Awaiting Remaining Report");
+  assert.equal(reportKpiCounts([partial]).completed, 0);
+  assert.equal(reportMatchesStatusFilter(partial, "awaitingRemaining"), true);
+  assert.equal(reportMatchesStatusFilter(partial, "completed"), false);
+  const done = { ...submitted, reportingProgress: "Completed", reviewStatus: "Completed", reviewStages: [] };
+  assert.equal(reportKpiCounts([done]).completed, 1);
+  assert.equal(reportMatchesStatusFilter(done, "completed"), true);
+});
+
+test("legacy standalone reports filter by their review stage; superseded corrections are hidden", () => {
+  const approved = { id: "r1", reportType: undefined, workflowStatus: "Completed", verificationStatus: "Approved" };
+  const returnedOld = { id: "r2", workflowStatus: "Returned for Correction", correctedByReportId: "r3" };
+  const correction = { id: "r3", workflowStatus: "Pending Review", correctionOf: "r2" };
+  // Standalone reports have no reportingProgress; they must not read as Awaiting Submission.
+  assert.equal(reportMatchesStatusFilter(approved, "awaiting"), false);
+  assert.equal(reportMatchesStatusFilter(approved, "completed"), true);
+  assert.deepEqual(currentReports([approved, returnedOld, correction]).map((r) => r.id), ["r1", "r3"]);
+  assert.deepEqual(reportKpiCounts([approved, returnedOld, correction]), {
+    total: 2, awaiting: 0, pendingReview: 1, pendingApproval: 0, returned: 0, completed: 1 });
+  assert.deepEqual(REPORT_STATUS_FILTERS.map((f) => f.label), ["Awaiting Submission", "Pending Review", "Pending Approval",
+    "Returned for Correction", "Awaiting Remaining Report", "Completed", "Rejected"]);
 });

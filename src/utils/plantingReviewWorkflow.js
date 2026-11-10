@@ -187,3 +187,18 @@ export function historyEntries(logs = []) {
     tone: /reject/i.test(log.action || "") ? "rejected" : /return/i.test(log.action || "") ? "returned" : "default",
   }));
 }
+
+// One final Planting Report (v4) is stored as one row per seedling type that
+// share `finalReportGroupId` and are decided together. Decisions and the
+// correction action are offered once, on the group's first row.
+export function finalReportGroupRows(submission, submissions = []) {
+  if (!submission?.finalReportGroupId) return [submission].filter(Boolean);
+  return submissions
+    .filter((row) => row.finalReportGroupId === submission.finalReportGroupId)
+    .sort((a, b) => Number(a.finalReportGroupIndex || 0) - Number(b.finalReportGroupIndex || 0) || String(a.id).localeCompare(String(b.id)));
+}
+
+export function isFinalReportGroupLead(submission, submissions = []) {
+  if (!submission?.finalReportGroupId) return true;
+  return finalReportGroupRows(submission, submissions)[0]?.id === submission.id;
+}

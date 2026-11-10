@@ -3,6 +3,7 @@ import AttendanceUpload from "./AttendanceUpload";
 import ModalDialog from "./ModalDialog";
 import { attendanceFileError } from "../utils/attendanceFile";
 import { leftoverQuantityError, plantedFromLeftover } from "../utils/plantingQuantity";
+import { MAX_LEFTOVER_REASON_LENGTH } from "../utils/plantingReportForm";
 import { useEffect, useRef, useState } from "react";
 import { FiFileText } from "react-icons/fi";
 import { authenticatedFetch } from "../services/authenticatedApi";
@@ -65,7 +66,7 @@ export default function StaffPlantingReportForm({ currentUser, onClose, onSaved,
     catch (failure) { setError(failure.message); } finally { setLoadingMore(false); }
   }
   function choose(id) {
-    setSelectedId(id); setItems((options.find(row => row.requestId === id)?.items || []).filter(row => !correction || row.inventoryId === correction.inventoryId).map(row => ({ ...row, leftoverQuantity: "0" })));
+    setSelectedId(id); setItems((options.find(row => row.requestId === id)?.items || []).filter(row => !correction || correction.finalReportGroupId || row.inventoryId === correction.inventoryId).map(row => ({ ...row, leftoverQuantity: "0" })));
     setErrors({}); setBasis("menro-field-report"); setPhotos([]); setPhotoSaved(false); photoKey.current = crypto.randomUUID(); submissionKey.current = crypto.randomUUID();
   }
   const aria = key => ({ "aria-invalid": errors[key] ? "true" : undefined, "aria-describedby": errors[key] ? `official-error-${key}` : undefined });
@@ -82,6 +83,10 @@ export default function StaffPlantingReportForm({ currentUser, onClose, onSaved,
     if (!saved) items.forEach((row, index) => {
       const message = leftoverQuantityError(row.leftoverQuantity, row.availableQuantity);
       if (message) validation[`leftoverQuantity-${index}`] = message;
+      // Final leftovers are documentation only, but each needs its reason.
+      const reason = String(row.leftoverReason || "").trim();
+      if (!message && Number(row.leftoverQuantity) > 0 && !reason) validation[`leftoverReason-${index}`] = "Enter the reason for the leftover seedlings.";
+      else if (reason.length > MAX_LEFTOVER_REASON_LENGTH) validation[`leftoverReason-${index}`] = `Use at most ${MAX_LEFTOVER_REASON_LENGTH} characters.`;
     });
     if (!saved && selected && items.every(row => Number(row.availableQuantity) === 0)) validation.items = "No seedlings remain available for reporting on this release.";
     if (basis === "menro-field-report" && !photoSaved && (!photos.length || photos.some(photo => !["ready", "verified"].includes(photo.status)))) validation.photos = "Add and verify original planting photos for the MENRO Field Report.";
@@ -92,7 +97,7 @@ export default function StaffPlantingReportForm({ currentUser, onClose, onSaved,
     let report = saved;
     try {
       if (!report) {
-        report = await api("/planting-reports/official", { method: "POST", body: JSON.stringify({ requestId: selected.requestId, items: items.map(row => ({ inventoryId: row.inventoryId, quantityPlanted: plantedFor(row), leftoverQuantity: Number(row.leftoverQuantity) })), confirmationBasis: basis, remarks, expectedVersion: selected.expectedVersion, clientSubmissionId: submissionKey.current, ...(correction ? { correctionOf: correction.id } : {}) }) });
+        report = await api("/planting-reports/official", { method: "POST", body: JSON.stringify({ requestId: selected.requestId, items: items.map(row => ({ inventoryId: row.inventoryId, quantityPlanted: plantedFor(row), leftoverQuantity: Number(row.leftoverQuantity), ...(Number(row.leftoverQuantity) > 0 ? { leftoverReason: String(row.leftoverReason || "").trim() } : {}) })), confirmationBasis: basis, remarks, expectedVersion: selected.expectedVersion, clientSubmissionId: submissionKey.current, ...(correction ? { correctionOf: correction.id } : {}) }) });
         setSaved(report);
       }
       if (basis === "menro-field-report" && !photoSaved) {
@@ -144,6 +149,7 @@ export default function StaffPlantingReportForm({ currentUser, onClose, onSaved,
             {!saved && Number(row.availableQuantity) === 0 && <p className="pr-helper-text pr-official-species-note" role="status">All released {row.species || "seedlings"} are already reported. Nothing more to record for this type.</p>}
             <div className="pr-field"><label htmlFor={`official-planted-${index}`}>Quantity Planted *</label><input id={`official-planted-${index}`} readOnly value={plantedFor(row)} {...aria(errors.items ? "items" : `quantityPlanted-${index}`)} />{index === 0 && items.length === 1 && feedback("items")}</div>
             <div className="pr-field"><label htmlFor={`official-leftover-${index}`}>Final Leftover Seedlings (Not Planted)</label><input id={`official-leftover-${index}`} type="number" min="0" max={row.availableQuantity} step="1" value={row.leftoverQuantity} readOnly={!saved && Number(row.availableQuantity) === 0} onChange={event => changeItem(index, "leftoverQuantity", event.target.value)} {...aria(`leftoverQuantity-${index}`)} aria-describedby={[errors[`leftoverQuantity-${index}`] && `official-error-leftoverQuantity-${index}`, "official-quantity-help"].filter(Boolean).join(" ")} />{feedback(`leftoverQuantity-${index}`)}</div>
+            {Number(row.leftoverQuantity) > 0 && !leftoverQuantityError(row.leftoverQuantity, row.availableQuantity) && <div className="pr-field pr-official-leftover-reason"><label htmlFor={`official-leftoverReason-${index}`}>Reason for Leftover Seedlings *</label><textarea id={`official-leftoverReason-${index}`} rows={2} maxLength={MAX_LEFTOVER_REASON_LENGTH} value={row.leftoverReason || ""} readOnly={Boolean(saved)} aria-required="true" placeholder="e.g. seedlings damaged in transport" onChange={event => changeItem(index, "leftoverReason", event.target.value)} {...aria(`leftoverReason-${index}`)} />{feedback(`leftoverReason-${index}`)}</div>}
           </div>
         </section>)}
         {items.length > 1 && <dl className="pr-official-totals" aria-label="Report totals">

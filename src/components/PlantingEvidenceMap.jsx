@@ -62,7 +62,7 @@ export default function PlantingEvidenceMap({ site, barangay, markers, formatDat
       setBoundaryLayer(boundary);
       setBoundaryStatus("ready");
       if (!siteGroup.getLayers().length && !evidenceGroup.getLayers().length && boundary.getBounds().isValid()) {
-        map.fitBounds(boundary.getBounds(), { padding: [24, 24] });
+        map.fitBounds(boundary.getBounds(), { padding: [24, 24], animate: false });
       }
     }).catch(() => {
       if (active) setBoundaryStatus("unavailable");
@@ -133,9 +133,12 @@ export default function PlantingEvidenceMap({ site, barangay, markers, formatDat
       fitPoints.push([marker.latitude, marker.longitude]);
     });
 
+    // Automatic fits are not animated: Leaflet 1.9 schedules an uncancelled
+    // 250 ms zoom-end timer that throws (_leaflet_pos) when the drawer closes
+    // and the map is removed mid-animation. The fitted view is identical.
     if (fitPoints.length) {
       const bounds = L.latLngBounds(fitPoints);
-      if (bounds.isValid()) map.fitBounds(bounds.pad(0.4), { padding: [34, 34], maxZoom: 17 });
+      if (bounds.isValid()) map.fitBounds(bounds.pad(0.4), { padding: [34, 34], maxZoom: 17, animate: false });
     }
     const resize = window.setTimeout(() => map.invalidateSize(), 0);
     return () => window.clearTimeout(resize);
