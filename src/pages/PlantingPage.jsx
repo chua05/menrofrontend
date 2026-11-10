@@ -3336,6 +3336,29 @@ export default function PlantingPage() {
                   </div>
                 </div>
 
+                {selectedRecord.allocationSummary?.length > 1 && (
+                  <div className="pr-species-breakdown">
+                    <div className="pr-info-label" id="pr-species-breakdown-title">Seedlings per Type</div>
+                    <div className="pr-species-breakdown-scroll">
+                      <table aria-labelledby="pr-species-breakdown-title">
+                        <thead><tr><th scope="col">Seedling Type</th><th scope="col">Released</th><th scope="col">Planted</th><th scope="col">Leftover</th><th scope="col">Remaining</th></tr></thead>
+                        <tbody>
+                          {selectedRecord.allocationSummary.map((item) => (
+                            <tr key={item.inventoryId || item.species}>
+                              <th scope="row">{item.species || "Seedling"}</th>
+                              <td>{item.allocated ?? "—"}</td>
+                              <td>{item.recorded ?? 0}</td>
+                              <td>{item.leftoverQuantity ?? 0}</td>
+                              <td>{item.remaining ?? 0}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                    <div className="pr-info-subvalue">Planted includes quantities awaiting approval. Returned and rejected submissions are not counted.</div>
+                  </div>
+                )}
+
                 {selectedRecord.remarks && (
                   <div className="pr-drawer-note">
                     <div className="pr-info-label">{displayReportStatus(selectedRecord.verificationStatus) === "Rejected" ? "Rejection Reason" : "Remarks"}</div>
@@ -3580,7 +3603,7 @@ export default function PlantingPage() {
                               <div className="pr-info-block"><div className="pr-info-label">Submitted By / Revision</div><div className="pr-info-value">MENRO Staff — {submission.submittedByName} / {submission.revision || 0}</div></div>
                               {submission.attendanceAvailable && (userRole === "admin" || userRole === "staff" || submission.authenticatedSubmitterUid === currentUser?.uid) && <ProtectedAttendanceButton submissionId={submission.id} official={submission.officialStaffReport === true} />}
                               {submission.staffReviewStatus === "Rejected" && !submission.correctedBySubmission && userRole === "staff" && submission.authenticatedSubmitterUid === currentUser?.uid && <button type="button" className="pr-secondary-button" onClick={() => { setOfficialForm({ correction: submission }); setShowViewModal(false); }}>Correct Official Submission</button>}
-                              {submission.officialStaffReport && submission.confirmationBasis === "menro-field-report" && submission.staffReviewStatus === "Pending Review" && !submission.hasVerifiedPlantingEvidence && userRole === "staff" && submission.authenticatedSubmitterUid === currentUser?.uid && <button type="button" className="pr-secondary-button" onClick={() => { setOfficialForm({ resumeEvidence: submission }); setShowViewModal(false); }}>Add Verified Planting Evidence</button>}
+                              {submission.officialStaffReport && submission.confirmationBasis === "menro-field-report" && submission.staffReviewStatus === "Pending Review" && !submission.hasVerifiedPlantingEvidence && userRole === "staff" && submission.authenticatedSubmitterUid === currentUser?.uid && <button type="button" className="pr-secondary-button" onClick={() => { setOfficialForm({ resumeEvidence: { ...submission, operationRows: (selectedRecord.submissions || []).filter(row => row.officialStaffReport && row.officialOperationId && row.officialOperationId === submission.officialOperationId) } }); setShowViewModal(false); }}>Add Verified Planting Evidence</button>}
                             </>}
                             <div className="pr-info-block"><div className="pr-info-label">Site / Event / Distribution</div><div className="pr-info-value">{selectedRecord.siteName || "—"} / {selectedRecord.eventName || submission.eventId || "—"} / {submission.requestId || selectedRecord.distributionId || "—"}</div></div>
                             <div className="pr-info-block"><div className="pr-info-label">Photo Coordinates</div><div className="pr-info-value">{submission.latitude ?? "—"}, {submission.longitude ?? "—"}</div></div>

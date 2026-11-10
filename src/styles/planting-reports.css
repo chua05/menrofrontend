@@ -1567,3 +1567,12 @@ button:disabled {
 .pr-official-dialog .pr-preview-card img { display: block; width: 100%; height: 200px; object-fit: contain; background: #f5f9f6; }
 .pr-official-dialog .pr-preview-footer { padding: 12px; }
 .pr-official-dialog .pr-preview-verification { display: flex; flex-direction: column; gap: 6px; margin: 10px 0; }
+
+/* View Report: per-seedling-type breakdown for multi-type releases */
+.pr-species-breakdown { margin-top: 14px; padding: 14px; border: 1px solid #e2e7e4; border-radius: 9px; background: #fafbfa; }
+.pr-species-breakdown-scroll { margin: 8px 0; overflow-x: auto; }
+.pr-species-breakdown table { width: 100%; border-collapse: collapse; font-size: 14px; }
+.pr-species-breakdown th, .pr-species-breakdown td { padding: 8px 10px; border-bottom: 1px solid #e2e7e4; text-align: right; white-space: nowrap; }
+.pr-species-breakdown thead th { color: #5f6d65; font-size: 12px; font-weight: 650; }
+.pr-species-breakdown th[scope="row"], .pr-species-breakdown thead th:first-child { text-align: left; color: #1f2d25; white-space: normal; overflow-wrap: anywhere; }
+.pr-species-breakdown tbody tr:last-child > * { border-bottom: 0; }

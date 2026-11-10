@@ -18,6 +18,10 @@ async function optionsPage(path) {
   if (!Array.isArray(page?.options) || page.options.some(row => !row.requestId || !Array.isArray(row.items)) || page.nextCursor !== null && typeof page.nextCursor !== "string") throw new Error("Authorized releases could not be loaded. Please retry.");
   return page;
 }
+const BASIS_HELP = {
+  "menro-field-report": "MENRO Staff confirmed the planting at the site. Original planting photos taken at the site are required.",
+  "release-based": "Confirms planting from the release record of an individual requester. Site photos are not required.",
+};
 export default function StaffPlantingReportForm({ currentUser, onClose, onSaved, correction, resumeEvidence }) {
   const reference = correction || resumeEvidence;
   const [options, setOptions] = useState([]), [loading, setLoading] = useState(true), [selectedId, setSelectedId] = useState(reference?.requestId || "");
@@ -47,11 +51,13 @@ export default function StaffPlantingReportForm({ currentUser, onClose, onSaved,
       const rows = page.options; setOptions(rows); setNextCursor(page.nextCursor);
       if (reference) {
         const source = rows.find(row => row.requestId === reference.requestId);
-        setItems((source?.items || []).filter(row => row.inventoryId === reference.inventoryId).map(row => ({ ...row, quantityPlanted: String(reference.quantity || 0), leftoverQuantity: String(reference.leftoverQuantity || 0) })));
+        // Evidence covers every seedling type saved together, so a resumed report lists all of them.
+        const savedRows = resumeEvidence?.operationRows?.length ? resumeEvidence.operationRows : [reference];
+        setItems(savedRows.map(entry => { const row = (source?.items || []).find(item => item.inventoryId === entry.inventoryId); return row && { ...row, quantityPlanted: String(entry.quantity || 0), leftoverQuantity: String(entry.leftoverQuantity || 0) }; }).filter(Boolean));
       }
     }).catch(failure => { if (active) setError(failure.message); }).finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
-  }, [reference]);
+  }, [reference, resumeEvidence]);
   async function more() {
     if (!nextCursor || loadingMore) return;
     setLoadingMore(true); setError("");
@@ -105,7 +111,7 @@ export default function StaffPlantingReportForm({ currentUser, onClose, onSaved,
     } catch (failure) {
       if ([400, 422].includes(failure.status) && !photoSaved) setPhotoRetryBound(false);
       const fields = backendFieldErrors(failure);
-      if (fields.items && items.length) { fields["leftoverQuantity-0"] = fields.items; delete fields.items; }
+      if (fields.items && items.length === 1) { fields["leftoverQuantity-0"] = fields.items; delete fields.items; }
       if (Object.keys(fields).length) { setErrors(fields); focusFirstInvalid(() => root.current); }
       else setError(report ? `The report is saved pending Admin verification. ${failure.message} Retry the same evidence with the same upload intent; do not submit the quantities again.` : failure.status === 409 ? `${failure.message} Refresh releases before correcting the report.` : failure.message);
     } finally { setSaving(false); }
@@ -124,16 +130,26 @@ export default function StaffPlantingReportForm({ currentUser, onClose, onSaved,
         {selected && missingRequired.length > 0 && <p role="alert">Required information not recorded: {missingRequired.join(", ")}. An authorized MENRO officer must correct the linked records before submission.</p>}
         {selected && !missingRequired.length && (!selected.participantSector || !selected.siteName || !selected.barangay) && <p role="status">Some requester or site information is not recorded. Ask an authorized MENRO officer to correct the linked records; the form does not infer missing values.</p>}
         {selected?.reportingPolicy?.reporting === "NOT_REQUIRED" && <p role="status">Released ? No Report Required. This official report is voluntary supporting documentation.</p>}
-        <label className="pr-field">Confirmation Basis<select value={basis} {...aria("confirmationBasis")} onChange={event => { setBasis(event.target.value); setErrors({}); submissionKey.current = crypto.randomUUID(); }}><option value="menro-field-report">MENRO Field Report</option>{selected?.requestType === "individual" && <option value="release-based">Individual Release-Based Confirmation</option>}</select>{feedback("confirmationBasis")}</label>
-        {basis === "release-based" && <p>Planted quantity is derived by the backend from the remaining released balance, excluding declared leftovers. This is release-based confirmation, not a field observation.</p>}
+        <label className="pr-field">Confirmation Basis<select value={basis} {...aria("confirmationBasis")} aria-describedby={["official-basis-help", errors.confirmationBasis && "official-error-confirmationBasis"].filter(Boolean).join(" ")} onChange={event => { setBasis(event.target.value); setErrors({}); submissionKey.current = crypto.randomUUID(); }}><option value="menro-field-report">MENRO Field Report</option>{selected?.requestType === "individual" && <option value="release-based">Individual Release-Based Confirmation</option>}</select><small id="official-basis-help" className="pr-helper-text">{BASIS_HELP[basis]}</small>{feedback("confirmationBasis")}</label>
+        {items.length > 0 && <div className="pr-official-quantities-intro">
+          <h3>Seedlings Planted{items.length > 1 ? ` (${items.length} seedling types)` : ""}</h3>
+          <p id="official-quantity-help" className="pr-helper-text">Enter any leftover seedlings for each type. Quantity Planted is calculated automatically: released seedlings minus leftovers.</p>
+        </div>}
         {items.map((row, index) => <section className="pr-official-species" key={row.inventoryId} aria-labelledby={`official-species-${index}`}><h3 id={`official-species-${index}`}>{row.species}</h3>
           <div className="pr-official-grid">
             <label>Quantity Released<input readOnly value={row.quantityReleased} /></label><label>Seedlings Available for Reporting<input readOnly value={row.availableQuantity} /></label>
-            <div className="pr-field"><label htmlFor={`official-planted-${index}`}>Quantity Planted *</label><input id={`official-planted-${index}`} readOnly value={plantedFor(row)} {...aria(errors.items ? "items" : `quantityPlanted-${index}`)} />{index === 0 && feedback("items")}</div>
-            <div className="pr-field"><label htmlFor={`official-leftover-${index}`}>Final Leftover Seedlings (Not Planted)</label><input id={`official-leftover-${index}`} type="number" min="0" max={row.availableQuantity} step="1" value={row.leftoverQuantity} onChange={event => changeItem(index, "leftoverQuantity", event.target.value)} {...aria(`leftoverQuantity-${index}`)} />{feedback(`leftoverQuantity-${index}`)}</div>
+            {!saved && Number(row.availableQuantity) === 0 && <p className="pr-helper-text pr-official-species-note" role="status">All released {row.species || "seedlings"} are already reported. Nothing more to record for this type.</p>}
+            <div className="pr-field"><label htmlFor={`official-planted-${index}`}>Quantity Planted *</label><input id={`official-planted-${index}`} readOnly value={plantedFor(row)} {...aria(errors.items ? "items" : `quantityPlanted-${index}`)} />{index === 0 && items.length === 1 && feedback("items")}</div>
+            <div className="pr-field"><label htmlFor={`official-leftover-${index}`}>Final Leftover Seedlings (Not Planted)</label><input id={`official-leftover-${index}`} type="number" min="0" max={row.availableQuantity} step="1" value={row.leftoverQuantity} readOnly={!saved && Number(row.availableQuantity) === 0} onChange={event => changeItem(index, "leftoverQuantity", event.target.value)} {...aria(`leftoverQuantity-${index}`)} aria-describedby={[errors[`leftoverQuantity-${index}`] && `official-error-leftoverQuantity-${index}`, "official-quantity-help"].filter(Boolean).join(" ")} />{feedback(`leftoverQuantity-${index}`)}</div>
           </div>
         </section>)}
-
+        {items.length > 1 && <dl className="pr-official-totals" aria-label="Report totals">
+          <div><dt>Seedling Types</dt><dd>{items.length}</dd></div>
+          <div><dt>Available for Reporting</dt><dd>{items.reduce((sum, row) => sum + Number(row.availableQuantity || 0), 0)}</dd></div>
+          <div><dt>Total Planted</dt><dd>{items.reduce((sum, row) => sum + plantedFor(row), 0)}</dd></div>
+          <div><dt>Total Leftover</dt><dd>{items.reduce((sum, row) => sum + (/^\d+$/.test(String(row.leftoverQuantity).trim()) ? Number(row.leftoverQuantity) : 0), 0)}</dd></div>
+        </dl>}
+        {items.length > 1 && feedback("items")}
       </fieldset>
       {basis === "menro-field-report" && <OfficialPlantingPhotos key={selected?.requestId || "no-release"} site={selected} photos={photos} onChange={next => { setPhotos(next); photoKey.current = crypto.randomUUID(); }} error={errors.photos} onError={message => setErrors(current => ({ ...current, photos: message }))} disabled={saving || photoSaved || photoRetryBound} />}
       <fieldset disabled={saving || Boolean(saved)} style={{ border: 0, margin: 0, padding: 0 }}>
