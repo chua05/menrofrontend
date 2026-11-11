@@ -24,6 +24,7 @@ async function setup(page, overrides = {}) {
     else if (url.pathname === "/api/notifications/unread-count") data = { unreadCount: 0 };
     else if (lists.includes(url.pathname)) data = [];
     else if (key.startsWith("GET ") && /^\/api\/planting-reports\/[^/]+\/verification-logs$/.test(url.pathname)) data = [];
+    else if (key === "GET /api/events/event-1/attendance" || key === "GET /api/events/event-1/reservations") data = [];
     else if (key === "POST /api/seedling-requests") data = { id: "new-request", requestNumber: "REQ-FIXTURE" };
     else { unexpected.push(key); return route.fulfill({ status: 500, json: { success: false, message: "Unregistered test request" } }); }
     return route.fulfill({ json: { success: true, data } });
@@ -106,13 +107,14 @@ test("Staff official reporting derives read-only identity/release data and submi
   await leftover.fill("-1"); await page.getByRole("button", { name: "Submit for Admin Verification" }).click();
   await expect(page.getByText("Enter a nonnegative whole number.", { exact: true })).toBeVisible();
   await leftover.fill("2"); await expect(planted).toHaveValue("6");
+  await page.getByLabel("Reason for Leftover Seedlings *", { exact: true }).fill("Seedlings damaged during transport");
   await page.getByRole("button", { name: "Take Photo", exact: true }).click();
   await page.getByRole("button", { name: "Verify fixture camera photo" }).click();
   await expect(page.getByText("Backend-verified camera capture", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Submit for Admin Verification" }).click();
   await expect(page.getByRole("dialog", { name: "Submit Official Planting Report" })).toHaveCount(0);
   const request = fixture.calls.find(call => call.key === "POST /api/planting-reports/official");
-  expect(request.body.expectedVersion).toBe(3); expect(request.body.items).toEqual([{ inventoryId: "narra", quantityPlanted: 6, leftoverQuantity: 2 }]);
+  expect(request.body.expectedVersion).toBe(3); expect(request.body.items).toEqual([{ inventoryId: "narra", quantityPlanted: 6, leftoverQuantity: 2, leftoverReason: "Seedlings damaged during transport" }]);
   expect(request.body).not.toHaveProperty("staffName"); expect(request.body).not.toHaveProperty("requesterName"); expect(request.body).not.toHaveProperty("quantityReleased"); fixture.check();
 });
 test("individual release-based preview excludes leftovers and optional attendance uses the protected multipart endpoint", async ({ page }) => {
@@ -122,6 +124,7 @@ test("individual release-based preview excludes leftovers and optional attendanc
   } });
   await page.getByLabel("Confirmation Basis").selectOption("release-based");
   await page.getByLabel("Final Leftover Seedlings (Not Planted)").fill("2");
+  await page.getByLabel("Reason for Leftover Seedlings *", { exact: true }).fill("Seedlings damaged during transport");
   await expect(page.getByLabel("Quantity Planted *")).toHaveValue("6"); await expect(page.getByLabel("Quantity Planted *")).toHaveAttribute("readonly");
   await page.getByLabel("Attendance Photo/File (Optional)").setInputFiles({ name: "attendance.pdf", mimeType: "application/pdf", buffer: Buffer.from("test-boundary-file; backend validates actual PDF in separate tests") });
   await page.getByRole("button", { name: "Submit for Admin Verification" }).click();
@@ -135,7 +138,7 @@ test("field report requires verified photos and keeps authoritative identity rea
   await expect(page.getByLabel("Barangay", { exact: true })).toHaveValue("Bical");
   await expect(page.getByLabel("Site Latitude", { exact: true })).toHaveAttribute("readonly");
   await page.getByRole("button", { name: "Submit for Admin Verification" }).click();
-  await expect(page.getByRole("alert").filter({ hasText: "Add and verify original" })).toBeVisible();
+  await expect(page.getByRole("alert").filter({ hasText: "Add at least one original planting photo" })).toBeVisible();
   expect(fixture.calls.filter(call => call.key === "POST /api/planting-reports/official")).toHaveLength(0);
   await page.getByRole("button", { name: "Take Photo", exact: true }).click();
   await page.keyboard.press("Escape");
@@ -183,12 +186,49 @@ test("interrupted Staff photo upload retries the same intent without submitting 
   await page.getByRole("button", { name: "Take Photo", exact: true }).click();
   await page.getByRole("button", { name: "Verify fixture camera photo" }).click();
   await page.getByRole("button", { name: "Submit for Admin Verification" }).click();
-  await expect(page.getByText(/The report is saved pending Admin verification/)).toBeVisible();
+  await expect(page.getByRole("alert").filter({ hasText: /^Report saved — retry evidence\./ })).toContainText("Storage unavailable");
+  await expect(page.getByRole("group", { name: "Location Verification", exact: true }).getByRole("alert")).toHaveText("Storage unavailable");
   await expect(page.getByRole("button", { name: "Take Photo", exact: true })).toBeDisabled();
   await page.getByRole("button", { name: "Upload Evidence for Saved Report", exact: true }).click();
   await expect(page.getByRole("dialog", { name: "Submit Official Planting Report", exact: true })).toHaveCount(0);
   expect(keys).toHaveLength(2); expect(keys[0]).toBe(keys[1]);
   expect(fixture.calls.filter(call => call.key === "POST /api/planting-reports/official")).toHaveLength(1); fixture.check();
+});
+
+for (const status of [400, 422]) test(`Staff photo correction after HTTP ${status} does not scroll an old form error back into view`, async ({ page }) => {
+  const message = "Replace the rejected original photo with valid planting evidence.";
+  const keys = []; let attempts = 0;
+  const fixture = await staffForm(page, { "PUT /api/planting-reports/official/submission-fixture/photos": (route, request) => {
+    keys.push(request.headers()["idempotency-key"]);
+    return ++attempts === 1 ? route.fulfill({ status, json: { success: false, message, fieldErrors: { photos: message } } })
+      : route.fulfill({ json: { success: true, data: { evidenceVerified: true } } });
+  } });
+  await takeFixturePhoto(page);
+  await page.getByRole("button", { name: "Submit for Admin Verification", exact: true }).click();
+  const card = page.getByRole("group", { name: "Location Verification", exact: true });
+  await expect(card.getByRole("alert")).toHaveText(message);
+  const remove = page.getByRole("button", { name: /^Remove planting photo / });
+  await expect(remove).toBeEnabled();
+  await page.evaluate(() => {
+    window.__footerScrolls = [];
+    const scroll = Element.prototype.scrollIntoView;
+    Element.prototype.scrollIntoView = function(options) {
+      if (this.matches(".pr-official-form-error")) window.__footerScrolls.push(this.textContent);
+      return scroll.call(this, options);
+    };
+  });
+  await remove.click();
+  await expect(card).toHaveAttribute("aria-invalid", "false");
+  // Wait for React's post-commit effect and paint, rather than using a sleep.
+  await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+  expect(await page.evaluate(() => window.__footerScrolls)).toEqual([]);
+  await expect(page.getByRole("button", { name: "Upload Evidence for Saved Report", exact: true })).toBeVisible();
+  await takeFixturePhoto(page);
+  await page.getByRole("button", { name: "Upload Evidence for Saved Report", exact: true }).click();
+  await expect(page.getByRole("dialog", { name: "Submit Official Planting Report", exact: true })).toHaveCount(0);
+  expect(keys).toHaveLength(2); expect(keys[0]).toBeTruthy(); expect(keys[1]).not.toBe(keys[0]);
+  expect(fixture.calls.filter(call => call.key === "POST /api/planting-reports/official")).toHaveLength(1);
+  fixture.check();
 });
 
 test("pending saved Staff report can resume verified evidence without reposting planting quantities", async ({ page }) => {
@@ -368,8 +408,9 @@ test("Participant form retains planting fields and traps keyboard focus with opt
   await page.goto("/participant/my-planting-reports?role=participant");
   const trigger = page.getByRole("button", { name: "Submit Planting Report", exact: true }); await trigger.click();
   const dialog = page.getByRole("dialog", { name: "Submit Planting Report", exact: true }); await expect(dialog).toBeVisible();
-  await expect(page.getByLabel("Final Leftover Seedlings (Not Planted)", { exact: true })).toHaveValue("0");
-  await expect(page.locator("#planting-quantity")).toHaveAttribute("readonly");
+  await expect(dialog.locator(".pr-final-report")).toBeVisible();
+  await expect(dialog.getByText("Select the released seedling distribution first.", { exact: true })).toBeVisible();
+  await expect(page.locator("#planting-quantity")).toHaveCount(0);
   await expect(page.locator("#planting-confirmation-mode")).toHaveCount(0);
   await expect(page.getByLabel("Attendance Photo/File (Optional)")).toHaveCount(1);
   const close = dialog.getByRole("button", { name: "Close", exact: true }); await close.focus();
@@ -898,7 +939,7 @@ for (const [sector, detail, key, requestingAs] of [
 });
 
 const noExifImage = { name: "no-exif.png", mimeType: "image/png", buffer: Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+ip1sAAAAASUVORK5CYII=", "base64") };
-async function participantEvidenceForm(page) {
+async function participantEvidenceForm(page, overrides = {}) {
   const event = { id: "event-1", name: "event-1", type: "Tree Planting", plantingSiteId: site.id, sourceRequestId: "request-1", date: "2026-01-01", startTime: "08:00", status: "Approved", recordStatus: "Authorized" };
   const release = { id: "release-1", requestId: "release-1", eventId: "event-1", plantingSiteId: site.id, participantId: "test-participant", status: "Released", items: [{ inventoryId: "narra", species: "Narra", releasedQuantity: 5, quantity: 5 }] };
   const fixture = await setup(page, {
@@ -906,6 +947,7 @@ async function participantEvidenceForm(page) {
     "GET /api/distributions/my-distributions": route => route.fulfill({ json: { success: true, data: [release] } }),
     "POST /api/evidence-capture-sessions": route => route.fulfill({ json: { success: true, data: { captureSessionId: "mixed-session", nonce: "fixture-only" } } }),
     "POST /api/evidence-capture-sessions/mixed-session/verify": route => route.fulfill({ json: { success: true, data: { verificationId: "verified", imageSha256: "digest", location: { latitude: site.latitude, longitude: site.longitude, accuracy: 12 } } } }),
+    ...overrides,
   });
   await page.goto("/participant/my-planting-reports?role=participant");
   await page.getByRole("button", { name: "Submit Planting Report", exact: true }).click();
@@ -916,6 +958,134 @@ async function participantEvidenceForm(page) {
 const takeFixturePhoto = async page => { await page.getByRole("button", { name: "Take Photo", exact: true }).click(); await page.getByRole("button", { name: "Verify fixture camera photo" }).click(); };
 const uploadFailure = page => page.locator(".pr-preview-verification strong").filter({ hasText: "Verification Failed — No GPS Metadata" });
 const cameraEvidence = page => page.locator(".pr-preview-verification strong").filter({ hasText: "Verified Browser Camera Evidence" });
+
+async function reportIdentity(page) {
+  await page.locator("#planting-submittedByName").fill("Fixture requester");
+  await page.locator("#planting-submittedBySector").selectOption("Volunteer");
+  await page.locator("#planting-submittedByContactNumber").fill("09123456789");
+}
+
+test("Staff GPS errors remain in Location Verification and receive focus on Submit", async ({ page }) => {
+  const fixture = await staffForm(page);
+  await page.setViewportSize({ width: 390, height: 700 });
+  await page.locator(".pr-official-dialog input[type=file].pr-file-input").setInputFiles(noExifImage);
+  await page.getByRole("button", { name: "Verify Photo Location", exact: true }).click();
+  const card = page.getByRole("group", { name: "Location Verification", exact: true });
+  await expect(card.getByRole("alert")).toContainText("no-exif.png has no GPS metadata");
+  const precise = await card.getByRole("alert").textContent();
+  await page.evaluate(() => {
+    window.__errorScroll = [];
+    const scroll = Element.prototype.scrollIntoView;
+    Element.prototype.scrollIntoView = function(options) { window.__errorScroll.push(options); return scroll.call(this, options); };
+  });
+  await page.getByRole("button", { name: "Submit for Admin Verification" }).click();
+  await expect(card.getByRole("alert")).toHaveText(precise);
+  await expect(card).toBeFocused();
+  await expect.poll(() => page.evaluate(() => window.__errorScroll.some(options => options?.behavior === "smooth"))).toBe(true);
+  expect(fixture.calls.some(call => call.key === "POST /api/planting-reports/official")).toBe(false);
+  fixture.check();
+});
+
+test("Participant Submit guard retains specific photo errors while GPS keeps the button blocked", async ({ page }) => {
+  const fixture = await participantEvidenceForm(page);
+  await reportIdentity(page); await takeFixturePhoto(page);
+  await expect(cameraEvidence(page)).toHaveCount(1);
+  await page.locator("#planting-photos").setInputFiles(noExifImage);
+  await expect(uploadFailure(page)).toHaveCount(1);
+  const submit = page.getByRole("button", { name: "Submit Report", exact: true });
+  await expect(submit).toBeDisabled();
+  // Exercise the form's defensive Submit validation too; the normal button
+  // remains disabled by the existing GPS rule throughout this invalid case.
+  const form = page.locator("form").filter({ has: page.locator("#planting-photos") });
+  await form.evaluate(node => node.requestSubmit());
+  const error = page.locator("#planting-photos-error");
+  await expect(error).toContainText(/GPS|geotagged/i);
+  const precise = await error.textContent();
+  await expect(page.getByRole("button", { name: "Take Photo", exact: true })).toBeFocused();
+  await form.evaluate(node => node.requestSubmit());
+  await expect(error).toHaveText(precise);
+  await expect(submit).toBeDisabled();
+  expect(fixture.calls.some(call => call.key === "POST /api/planting-reports")).toBe(false);
+  fixture.check();
+});
+
+test("Staff preserves a meaningful backend 503 before a report is saved", async ({ page }) => {
+  const message = "Evidence storage is temporarily paused. Please try again later.";
+  const fixture = await staffForm(page, { "POST /api/planting-reports/official": route => route.fulfill({ status: 503, json: { success: false, message } }) });
+  await page.getByLabel("Confirmation Basis").selectOption("release-based");
+  await page.evaluate(() => {
+    window.__newErrorScrolls = [];
+    const scroll = Element.prototype.scrollIntoView;
+    Element.prototype.scrollIntoView = function(options) {
+      if (this.matches(".pr-official-form-error")) window.__newErrorScrolls.push(this.textContent);
+      return scroll.call(this, options);
+    };
+  });
+  await page.getByRole("button", { name: "Submit for Admin Verification" }).click();
+  await expect(page.getByRole("alert").filter({ hasText: message })).toBeVisible();
+  await expect.poll(() => page.evaluate(() => window.__newErrorScrolls)).toEqual([message]);
+  await expect(page.getByText(/^Report saved — retry evidence\./)).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Submit for Admin Verification" })).toBeEnabled();
+  fixture.check();
+});
+
+test("Participant preserves a meaningful backend 503 without claiming a saved report", async ({ page }) => {
+  const message = "Private photo storage is temporarily unavailable. Retry later.";
+  let attempts = 0, release;
+  const fixture = await participantEvidenceForm(page, { "POST /api/planting-reports": async route => {
+    if (++attempts === 1) return route.fulfill({ status: 503, json: { success: false, message } });
+    await new Promise(resolve => { release = resolve; });
+    return route.fulfill({ status: 201, json: { success: true, message: "Awaiting MENRO Staff verification.", data: { id: "saved-participant-report" } } });
+  } });
+  await reportIdentity(page); await takeFixturePhoto(page);
+  await page.getByRole("button", { name: "Submit Report", exact: true }).click();
+  await expect(page.getByText(message, { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Submit Report", exact: true })).toBeEnabled();
+  await expect(page.getByText(/Your report is already saved pending/)).toHaveCount(0);
+  await page.getByRole("button", { name: "Submit Report", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Submitting...", exact: true })).toBeDisabled();
+  await expect.poll(() => attempts).toBe(2);
+  release();
+  await expect(page.getByRole("dialog", { name: "Submit Planting Report", exact: true })).toBeVisible();
+  await expect(page.locator("#planting-submittedByName")).toHaveValue("");
+  await expect(page.getByRole("status").filter({ hasText: "Planting Report Submitted Successfully" })).toContainText("Status: Pending Review.");
+  await expect(page.getByRole("button", { name: "Submitting...", exact: true })).toHaveCount(0);
+  expect(attempts).toBe(2);
+  fixture.check();
+});
+
+test("Participant preserves the backend's existing generic HTTP 500 message and releases Submit", async ({ page }) => {
+  // This is the unexpected-error message returned by plantingReport.controller.
+  const message = "Failed to submit planting report. Please try again.";
+  const fixture = await participantEvidenceForm(page, { "POST /api/planting-reports": route => route.fulfill({ status: 500,
+    json: { success: false, message } }) });
+  await reportIdentity(page); await takeFixturePhoto(page);
+  await page.getByRole("button", { name: "Submit Report", exact: true }).click();
+  await expect(page.getByText(message, { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Submit Report", exact: true })).toBeEnabled();
+  await expect(page.getByRole("dialog", { name: "Submit Planting Report", exact: true })).toBeVisible();
+  await expect(page.getByText(/Planting Report Submitted Successfully/)).toHaveCount(0);
+  expect(fixture.calls.filter(call => call.key === "POST /api/planting-reports")).toHaveLength(1);
+  fixture.check();
+});
+
+test("Staff saved report retries evidence after a lost upload response without checking or reposting quantities", async ({ page }) => {
+  let attempts = 0; const keys = [];
+  const fixture = await staffForm(page, { "PUT /api/planting-reports/official/submission-fixture/photos": (route, request) => {
+    keys.push(request.headers()["idempotency-key"]);
+    return ++attempts === 1 ? route.abort("connectionfailed") : route.fulfill({ json: { success: true, data: { evidenceVerified: true } } });
+  } });
+  await takeFixturePhoto(page);
+  await page.getByRole("button", { name: "Submit for Admin Verification" }).click();
+  await expect(page.getByRole("alert").filter({ hasText: /^Report saved — retry evidence\./ })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Check Submission", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Take Photo", exact: true })).toBeDisabled();
+  await page.getByRole("button", { name: "Upload Evidence for Saved Report", exact: true }).click();
+  await expect(page.getByRole("dialog", { name: "Submit Official Planting Report", exact: true })).toHaveCount(0);
+  expect(keys).toHaveLength(2); expect(keys[0]).toBe(keys[1]);
+  expect(fixture.calls.filter(call => call.key === "POST /api/planting-reports/official")).toHaveLength(1);
+  fixture.check();
+});
 
 test("Participant upload without EXIF is rejected without touching a verified camera photo", async ({ page }) => {
   const fixture = await participantEvidenceForm(page);
@@ -950,10 +1120,15 @@ test("Staff upload without EXIF is rejected and a camera photo keeps its capture
   await expect(page.getByText("Backend-verified camera capture", { exact: true })).toBeVisible();
   await page.locator(".pr-official-dialog input[type=file].pr-file-input").setInputFiles(noExifImage);
   await page.getByRole("button", { name: "Verify Photo Location", exact: true }).click();
-  await expect(page.getByText(/This original photo has no GPS metadata/)).toBeVisible();
+  await expect(page.getByRole("group", { name: "Location Verification", exact: true }).getByRole("alert")).toContainText("no-exif.png has no GPS metadata");
   await expect(page.getByText("Backend-verified camera capture", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Submit for Admin Verification" }).click();
-  await expect(page.getByText("Add and verify original planting photos for the MENRO Field Report.")).toBeVisible();
+  const location = page.getByRole("group", { name: "Location Verification", exact: true });
+  await expect(location.getByRole("alert")).toContainText("no-exif.png has no GPS metadata");
+  await expect(location).toHaveAttribute("aria-invalid", "true");
+  await expect(location).toHaveAttribute("aria-describedby", "official-location-error");
+  await expect(location).toBeFocused();
+  expect(fixture.calls.filter(call => call.key === "POST /api/planting-reports/official")).toHaveLength(0);
   await page.getByRole("button", { name: "Remove planting photo no-exif.png", exact: true }).click();
   await page.getByRole("button", { name: "Submit for Admin Verification" }).click();
   await expect(page.getByRole("dialog", { name: "Submit Official Planting Report" })).toHaveCount(0);
@@ -1023,7 +1198,7 @@ test("Staff reviews a participant report: Return requires a reason, closes only 
   await expect(card.locator('[data-workflow-status="Returned for Correction"]')).toBeVisible();
   await expect(card.getByText("Retake the photo inside the site", { exact: true })).toBeVisible();
   await expect(card.getByRole("button", { name: "Forward to Admin", exact: true })).toHaveCount(0);
-  await expect(page.locator(".pr-report-drawer .menro-toast").getByText("Planting report returned for correction.")).toBeVisible();
+  await expect(page.getByRole("status").filter({ hasText: "Planting report returned for correction." })).toBeVisible();
   expect(returnCalls).toHaveLength(1); fixture.check();
 });
 
@@ -1176,6 +1351,7 @@ test("Staff report lists every released seedling type with per-type planted, lef
   await expect(leftover.nth(1)).toHaveAttribute("aria-invalid", "true"); await expect(leftover.nth(1)).toBeFocused();
   await expect(leftover.nth(0)).not.toHaveAttribute("aria-invalid", "true");
   await leftover.nth(0).fill("2"); await leftover.nth(1).fill("1");
+  for (const reason of await page.getByLabel("Reason for Leftover Seedlings *", { exact: true }).all()) await reason.fill("Seedlings damaged during transport");
   await expect(planted.nth(0)).toHaveValue("6"); await expect(planted.nth(1)).toHaveValue("5");
   await expect(totals).toContainText("Total Planted11"); await expect(totals).toContainText("Total Leftover3");
   await page.getByRole("button", { name: "Take Photo", exact: true }).click();
@@ -1184,7 +1360,7 @@ test("Staff report lists every released seedling type with per-type planted, lef
   await page.getByRole("button", { name: "Submit for Admin Verification" }).click();
   await expect(page.getByRole("dialog", { name: "Submit Official Planting Report" })).toHaveCount(0);
   const request = fixture.calls.find(call => call.key === "POST /api/planting-reports/official");
-  expect(request.body.items).toEqual([{ inventoryId: "narra", quantityPlanted: 6, leftoverQuantity: 2 }, { inventoryId: "molave", quantityPlanted: 5, leftoverQuantity: 1 }]);
+  expect(request.body.items).toEqual([{ inventoryId: "narra", quantityPlanted: 6, leftoverQuantity: 2, leftoverReason: "Seedlings damaged during transport" }, { inventoryId: "molave", quantityPlanted: 5, leftoverQuantity: 1, leftoverReason: "Seedlings damaged during transport" }]);
   expect(fixture.calls.filter(call => call.key === "PUT /api/planting-reports/official/submission-fixture/photos")).toHaveLength(1);
   fixture.check();
 });

@@ -27,3 +27,7 @@
 .pr-official-totals dt { color: #4d5f55; font-size: 13px; line-height: 1.4; }
 .pr-official-totals dd { margin: 2px 0 0; font-size: 20px; font-weight: 750; color: #173d27; }
 @media (max-width: 600px) { .pr-official-totals { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+/* Photo GPS problems shown beside Verify Photo Location, and form-level errors beside the action buttons. */
+.pr-gps-verification-error { margin: 0 0 12px; padding: 10px 12px; border: 1px solid #f1b5b5; border-radius: 8px; background: #fdf2f2; }
+.pr-gps-verification-error ul { margin: 4px 0; padding-left: 18px; }
+.pr-official-form-error { margin: 12px 0 0; padding: 10px 12px; border: 1px solid #f1b5b5; border-radius: 8px; background: #fdf2f2; color: #b91c1c; font-size: 0.875rem; line-height: 1.45; }

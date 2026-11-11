@@ -9,14 +9,14 @@ import { useSearchParams } from "react-router-dom";
 import L from "leaflet";
 import { boundaryLayerOptions } from "../utils/barangayMap";
 import { createEvidenceAttempt, assertEvidenceComplete } from "../utils/evidenceAttempt";
-import { AMBIGUOUS_WRITE_MESSAGE, AUTH_TIMEOUT_MESSAGE, AUTH_TIMEOUT_MS, READ_TIMEOUT_MESSAGE, READ_TIMEOUT_MS, RequestTimeoutError, UPLOAD_TIMEOUT_MS, WRITE_TIMEOUT_MS, isAmbiguousWriteFailure, isWriteMethod, withDeadline } from "../utils/requestTimeout";
+import { AMBIGUOUS_WRITE_MESSAGE, AUTH_TIMEOUT_MESSAGE, AUTH_TIMEOUT_MS, READ_TIMEOUT_MESSAGE, READ_TIMEOUT_MS, RequestTimeoutError, UPLOAD_TIMEOUT_MS, WRITE_TIMEOUT_MS, isAmbiguousWriteFailure, isGatewayWriteFailure, isWriteMethod, serverFailureMessage, withDeadline } from "../utils/requestTimeout";
 import { findOwnPendingSubmission, findReconciledSubmission, ownSubmissionIdsForEvent } from "../utils/plantingSubmissionReconcile";
 import { clearPendingSubmission, loadPendingSubmission, savePendingSubmission } from "../utils/pendingPlantingSubmission";
 import "leaflet/dist/leaflet.css";
 import * as exifr from "exifr";
 import { extractGpsCoordinates } from "../utils/exifGps";
 import PageLoadingState from "../components/PageLoadingState";
-import { focusFirstInvalid, backendFieldErrors } from "../utils/formValidation";
+import { focusFirstInvalid, backendFieldErrors, retainInvalidFieldMessages } from "../utils/formValidation";
 import {
   MAX_LEFTOVER_REASON_LENGTH,
   finalReportFieldErrors,
@@ -331,11 +331,14 @@ function getPhotoSignature(file) {
   return `${file?.name || "photo"}|${file?.size || 0}|${file?.lastModified || 0}`;
 }
 
+// Bounded so a photo that never finishes decoding cannot leave "Verifying..." stuck.
+const PHOTO_CHECK_TIMEOUT_MS = 20_000;
 function canRenderImage(previewUrl) {
   return new Promise((resolve) => {
     const image = new Image();
-    image.onload = () => resolve(image.naturalWidth > 0 && image.naturalHeight > 0);
-    image.onerror = () => resolve(false);
+    const timer = window.setTimeout(() => resolve(false), PHOTO_CHECK_TIMEOUT_MS);
+    image.onload = () => { window.clearTimeout(timer); resolve(image.naturalWidth > 0 && image.naturalHeight > 0); };
+    image.onerror = () => { window.clearTimeout(timer); resolve(false); };
     image.src = previewUrl;
   });
 }
@@ -413,6 +416,7 @@ export default function PlantingPage() {
   const [historyVersion, setHistoryVersion] = useState(0);
   const toast = useToast();
   const submitModalOpenRef = useRef(false);
+  const submitAlertRef = useRef(null), revealSubmitAlertRef = useRef(false);
   const [reportError, setReportError] = useState("");
   const [noEventsAlertSiteId, setNoEventsAlertSiteId] = useState("");
 
@@ -462,10 +466,13 @@ export default function PlantingPage() {
 
   // The submit form keeps its inline alert slot; every other page message uses
   // the shared MENRO toast, which anchors inside an open drawer or modal.
-  function showPopup(message, type = "success") {
+  // In the submit form, errors and warnings are scrolled into view so a
+  // refusal is never shown only above the visible part of a long form.
+  function showPopup(message, type = "success", { reveal = type === "error" || type === "warning" } = {}) {
     const text = String(message || "").trim();
     if (!text) return;
     if (submitModalOpenRef.current) {
+      revealSubmitAlertRef.current = reveal;
       setPopup({ message: text, type });
       return;
     }
@@ -552,13 +559,15 @@ export default function PlantingPage() {
       payload = {};
     }
 
+    // A hosting gateway (not MENRO) gave up on a write: the outcome is unknown.
+    if (isGatewayWriteFailure(requestOptions.method, response.status, payload)) throw new RequestTimeoutError(AMBIGUOUS_WRITE_MESSAGE, { ambiguous: true });
     assertEvidenceComplete(response, payload, options.headers);
     if (!response.ok) {
       if (response.status === 401) {
         throw new Error("Your session has expired. Please sign in again.");
       }
 
-      const requestError = new Error(payload.message || "The request could not be completed.");
+      const requestError = new Error(serverFailureMessage(response.status, payload, response.status >= 500 && !payload.message ? "MENRO is temporarily unavailable. Please try again in a moment." : payload.message || "The request could not be completed."));
       requestError.code = payload.code || "";
       requestError.status = response.status;
       requestError.fieldErrors = payload.fieldErrors;
@@ -798,6 +807,13 @@ export default function PlantingPage() {
   useEffect(() => {
     submitModalOpenRef.current = showSubmitModal;
   }, [showSubmitModal]);
+
+  // Bring a new submit-form error or warning into view (see showPopup).
+  useEffect(() => {
+    if (!popup.message || !revealSubmitAlertRef.current || !submitModalOpenRef.current) return;
+    revealSubmitAlertRef.current = false;
+    submitAlertRef.current?.scrollIntoView?.({ block: "nearest" });
+  }, [popup]);
 
   useEffect(() => {
     if (!decision) return undefined;
@@ -1942,13 +1958,13 @@ export default function PlantingPage() {
         submissionBlocked: true,
       });
       if (clearsFormLocation) clearPhotoLocation();
-      if (announce) showPopup(UNREADABLE_PHOTO_MESSAGE, "error");
+      if (announce) showPopup(UNREADABLE_PHOTO_MESSAGE, "error", { reveal: false });
       return { verified: false, message: UNREADABLE_PHOTO_MESSAGE, tone: "error" };
     }
 
     let metadata;
     try {
-      metadata = await exifr.parse(file, { gps: true, tiff: true, exif: true });
+      metadata = await withDeadline(exifr.parse(file, { gps: true, tiff: true, exif: true }), PHOTO_CHECK_TIMEOUT_MS, () => new Error("Photo metadata could not be read in time."));
     } catch {
       if (!activePhotoPreviewIdsRef.current.has(preview.id)) return { cancelled: true };
       updatePhotoPreview(preview.id, {
@@ -1959,7 +1975,7 @@ export default function PlantingPage() {
         submissionBlocked: true,
       });
       if (clearsFormLocation) clearPhotoLocation();
-      if (announce) showPopup(UNREADABLE_METADATA_MESSAGE, "error");
+      if (announce) showPopup(UNREADABLE_METADATA_MESSAGE, "error", { reveal: false });
       return { verified: false, message: UNREADABLE_METADATA_MESSAGE, tone: "error" };
     }
 
@@ -1988,7 +2004,7 @@ export default function PlantingPage() {
         locationSource: PHOTO_EXIF_LOCATION_SOURCE,
       });
       if (clearsFormLocation) clearPhotoLocation();
-      if (announce) showPopup(message, "error");
+      if (announce) showPopup(message, "error", { reveal: false });
       return { verified: false, message, tone: "error" };
     }
 
@@ -2041,7 +2057,8 @@ export default function PlantingPage() {
           ? "error"
           : locationResult.verificationTone === "warning"
             ? "warning"
-            : "success"
+            : "success",
+        { reveal: false }
       );
     }
     return {
@@ -2173,6 +2190,9 @@ export default function PlantingPage() {
       ...selectedFiles.map(() => ({ source: "uploaded-original" }))]);
     setPhotoPreviews((previous) => [...previous, ...newPreviews]);
     setSelectedLocationPreviewId(newPreviews[0]?.id || "");
+    // A message about the previous photo set no longer applies; each photo's
+    // own verification result is shown inline from here on.
+    setFormErrors(current => (current.photos ? { ...current, photos: "" } : current));
 
     event.target.value = "";
 
@@ -2200,7 +2220,9 @@ export default function PlantingPage() {
           ? "error"
           : resultToAnnounce.tone === "warning"
             ? "warning"
-            : "success"
+            : "success",
+        // The reason is also shown inline in the photo section the user is in.
+        { reveal: false }
       );
     }
   }
@@ -2224,6 +2246,7 @@ export default function PlantingPage() {
     setPhotoFiles(remainingFiles);
     setEvidenceDescriptors((previous) => previous.filter((_, itemIndex) => itemIndex !== index));
     setPhotoPreviews(remainingPreviews);
+    setFormErrors(current => (current.photos ? { ...current, photos: "" } : current));
     if (selectedLocationPreviewId === preview?.id) {
       setSelectedLocationPreviewId(remainingPreviews[0]?.id || "");
     }
@@ -2300,7 +2323,7 @@ export default function PlantingPage() {
     const errors = validatePlantingReportForm(form, { distributions, photos: photoFiles, previews: photoPreviews, hasGps, municipalityScopeStatus, finalRows });
     const attendanceError = attendanceFileError(attendanceFile) || formErrors.attendance;
     if (attendanceError) errors.attendance = attendanceError;
-    setFormErrors(errors);
+    setFormErrors(retainInvalidFieldMessages(errors, formErrors));
     if (Object.keys(errors).length) { focusFirstInvalid(() => reportFormRef.current); return; }
 
     if (!form.submittedByName.trim() || !form.submittedBySector || !form.submittedByContactNumber.trim()) {
@@ -2941,6 +2964,7 @@ export default function PlantingPage() {
               <div className="pr-modal-body pr-submit-modal-body">
                 <fieldset disabled={submitting || Boolean(unconfirmedSubmission) || Boolean(savedParticipantReport)} style={{ border: 0, margin: 0, padding: 0, minWidth: 0 }}>
                 <div
+                  ref={submitAlertRef}
                   className="pr-submit-alert-slot"
                   aria-live={popup.type === "error" ? "assertive" : "polite"}
                 >
@@ -3280,7 +3304,7 @@ export default function PlantingPage() {
                           <div className="pr-photo-content">
 
 
-                    <PlantingPhotoControls inputId="planting-photos" count={photoFiles.length} max={MAX_EVIDENCE_PHOTOS} disabled={submitting || Boolean(unconfirmedSubmission)} error={formErrors.photos} onCamera={startCamera} onFiles={files => handlePhotoChange({ target: { files, value: "" } })} />
+                    <PlantingPhotoControls inputId="planting-photos" count={photoFiles.length} max={MAX_EVIDENCE_PHOTOS} disabled={submitting || Boolean(unconfirmedSubmission)} error={formErrors.photos || photoPreviews.find(preview => preview.verificationStatus === "failed" || preview.submissionBlocked)?.verificationMessage || ""} onCamera={startCamera} onFiles={files => handlePhotoChange({ target: { files, value: "" } })} />
 
 
                     {photoPreviews.length > 0 && (

@@ -111,3 +111,32 @@ test("an unconfirmed submission is kept per user and role until it is resolved",
     assert.equal(loadPendingSubmission("staff", ""), null, "nothing is kept without a signed-in user");
   } finally { delete globalThis.window; }
 });
+
+test("a gateway 502/504 on a write is ambiguous; MENRO's own answers are not", async () => {
+  const { isGatewayWriteFailure } = await import("../src/utils/requestTimeout.js");
+  const server = createServer((request, response) => {
+    request.resume();
+    if (request.url.endsWith("/gateway")) { response.writeHead(504, { "Content-Type": "text/html" }); response.end("<html>Gateway Timeout</html>"); return; }
+    response.writeHead(503, { "Content-Type": "application/json" });
+    response.end(JSON.stringify({ success: false, message: "Private planting evidence storage is unavailable." }));
+  });
+  await new Promise(resolve => server.listen(0, "127.0.0.1", resolve));
+  const base = `http://127.0.0.1:${server.address().port}`;
+  try {
+    await assert.rejects(fetchJsonWithDeadline(`${base}/gateway`, { method: "PUT", body: "{}" }, { timeoutMs: 2000 }), error => isAmbiguousWriteFailure(error) && error.message === AMBIGUOUS_WRITE_MESSAGE);
+    const read = await fetchJsonWithDeadline(`${base}/gateway`, {}, { timeoutMs: 2000 });
+    assert.equal(read.response.status, 504, "a read is never ambiguous");
+    const refused = await fetchJsonWithDeadline(`${base}/storage`, { method: "PUT", body: "{}" }, { timeoutMs: 2000 });
+    assert.equal(refused.response.status, 503, "MENRO's own 503 is a definitive answer");
+  } finally { await new Promise(resolve => server.close(resolve)); }
+  assert.equal(isGatewayWriteFailure("POST", 502, { success: false, message: "Unable to send" }), false);
+  assert.equal(isGatewayWriteFailure("POST", 500, null), false);
+});
+
+test("MENRO 503 reasons are shown; other server failures stay generic", async () => {
+  const { serverFailureMessage } = await import("../src/utils/requestTimeout.js");
+  assert.equal(serverFailureMessage(503, { message: "Evidence uploads are temporarily unavailable. Please try again later." }, "generic"), "Evidence uploads are temporarily unavailable. Please try again later.");
+  assert.equal(serverFailureMessage(503, null, "generic"), "generic");
+  assert.equal(serverFailureMessage(500, { message: "stack details" }, "generic"), "generic");
+  assert.equal(serverFailureMessage(409, { message: "The reportable balance changed." }, "generic"), "The reportable balance changed.");
+});
