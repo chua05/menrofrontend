@@ -1,5 +1,4 @@
 import WalkInScheduleAcknowledgement from "../components/WalkInScheduleAcknowledgement";
-import PurposePolicyFields from "../components/PurposePolicyFields";
 import ModalDialog from "../components/ModalDialog";
 import {  useCallback, useEffect, useMemo, useRef, useState, } from "react";
 import { createPortal } from "react-dom";
@@ -569,7 +568,6 @@ export default function SeedlingRequestsPage() {
   const [requestError, setRequestError] = useState("");
   const [actionLoading, setActionLoading] = useState(false);
   const [decisionModal, setDecisionModal] = useState(null);
-  const [policyDecision, setPolicyDecision] = useState({});
   const [rejectionChoice, setRejectionChoice] = useState("");
   const [decisionError, setDecisionError] = useState("");
   const [reviewModal, setReviewModal] = useState(null);
@@ -1503,16 +1501,7 @@ useEffect(() => {
     await releaseRequest(releaseModal, items);
   };
 
-  const openDecisionModal = async (request, action) => {
-    setPolicyDecision({});
-    if (action === "approve" && request.purposePolicyManaged) {
-      try {
-        let current = await apiRequest("/purpose-policies");
-        const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Manila", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
-        if (current.effectiveDate && current.effectiveDate > today) current = current.previousEffective || current;
-        request = { ...request, purposePolicyCandidate: { ...request.purposePolicyCandidate, policyVersion: current.version, definition: current.purposes.find(row => row.purpose === request.purposePolicyCandidate?.purpose) } };
-      } catch (failure) { setRequestError(failure.message || "The current policy could not be loaded. Retry before approval."); return; }
-    }
+  const openDecisionModal = (request, action) => {
     setDecisionModal({ request, action });
     setRejectionChoice("");
     setDecisionError("");
@@ -1526,7 +1515,7 @@ useEffect(() => {
   };
 
   const submitDecision = async () => {
-    if (actionLoading || !decisionModal?.request?.id) return;
+    if (actionLoading || !decisionModal?.request?.id || (decisionModal.action === "approve" && decisionModal.policyBlocked)) return;
 
     const { request, action } = decisionModal;
     let payload;
@@ -1546,7 +1535,8 @@ useEffect(() => {
 
       payload = { reason, expectedVersion: Number(request.requestVersion || 0) };
     } else {
-      payload = { expectedVersion: Number(request.requestVersion || 0), ...(request.purposePolicyManaged && (policyDecision.reporting || policyDecision.monitoring || policyDecision.reason) ? { policyDecision: { ...policyDecision, expectedPolicyVersion: request.purposePolicyCandidate?.policyVersion } } : {}) };
+      // The backend approval transaction resolves the effective purpose policy.
+      payload = { expectedVersion: Number(request.requestVersion || 0) };
     }
 
     setActionLoading(true);
@@ -1586,7 +1576,10 @@ useEffect(() => {
       if (action === "approve") {
         // If backend indicates a guest-invitation/server-secret configuration
         // issue, surface a safe administrative message instead of raw text.
-        if (/GUEST_INVITATION_SECRET|invitation secret|guest invitation|secret/i.test(rawMessage)) {
+        if ((error.status === 400 || error.status === 409) && error.fieldErrors?.policyReason) {
+          setDecisionModal(current => current ? { ...current, policyBlocked: true } : current);
+          setDecisionError("This request cannot be approved yet. MENRO must first confirm its reporting and monitoring requirements. No approval was saved.");
+        } else if (/GUEST_INVITATION_SECRET|invitation secret|guest invitation|secret/i.test(rawMessage)) {
           setDecisionError(
             "Unable to approve the request due to a server configuration error. Please contact the system administrator."
           );
@@ -2638,8 +2631,6 @@ useEffect(() => {
 
       <AdminDecisionModal
         modal={decisionModal}
-        policyDecision={policyDecision}
-        onPolicyDecision={setPolicyDecision}
         rejectionChoice={rejectionChoice}
         setRejectionChoice={setRejectionChoice}
         error={decisionError}
@@ -4414,7 +4405,6 @@ function AdminDecisionModal({
   loading,
   onClose,
   onSubmit,
-  policyDecision, onPolicyDecision,
 }) {
   if (!modal) return null;
 
@@ -4434,7 +4424,7 @@ function AdminDecisionModal({
             </h2>
             <p>
               {isApprove
-                ? modal.request.purposePolicyManaged ? "Confirm approval using the effective purpose policy. Overrides and unresolved policies require an explicit decision and reason." : "Confirm approval of this seedling request. No approval reason is required."
+                ? "Review the request details and confirm approval."
                 : "Provide the reason that will be shown to the participant."}
             </p>
           </div>
@@ -4457,9 +4447,9 @@ function AdminDecisionModal({
 
           {isApprove ? (
             <>
-              {modal.request.purposePolicyManaged && <PurposePolicyFields candidate={modal.request.purposePolicyCandidate} value={policyDecision} onChange={onPolicyDecision} label="Admin Final Purpose Policy" />}
               <p className="sr-decision-confirm-text">Are you sure you want to approve this seedling request?</p>
               <div className="sr-details-grid">
+                {modal.request.purpose && <DetailItem label="Purpose" value={modal.request.purpose} />}
                 <DetailItem label="Original Planting Date" value={formatDate(modal.request.originalSchedule?.plantingDate || modal.request.proposedDate)} />
                 <DetailItem label="Confirmed Planting Date" value={formatDate(modal.request.preApprovalSchedule?.plantingDate || modal.request.proposedDate)} />
                 <DetailItem label="Requester Confirmation" value={modal.request.preApprovalSchedule?.status === "Confirmed" ? "Confirmed" : "Original schedule unchanged"} />
@@ -4487,7 +4477,7 @@ function AdminDecisionModal({
             <input type="text" value={formatLocalDateLabel()} readOnly />
           </div>
 
-          {error && <small className="sr-field-error">{error}</small>}
+          {error && <small className="sr-field-error" role="alert">{error}</small>}
         </div>
 
         <div className="sr-modal-footer">
@@ -4508,7 +4498,7 @@ function AdminDecisionModal({
             }
             onClick={onSubmit}
             disabled={
-              loading ||
+              loading || (isApprove && modal.policyBlocked === true) ||
               (!isApprove && !rejectionChoice.trim())
             }
           >

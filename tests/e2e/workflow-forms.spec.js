@@ -631,30 +631,107 @@ test("original Staff encoder records a signed walk-in schedule without a citizen
   await expect(page.getByRole("button", { name: "Record Signed Schedule Acknowledgement", exact: true })).toHaveCount(0); expect(recorded).toBe(true); fixture.check();
 });
 
-test("Staff reviews an Other-purpose request without a policy proposal and Admin makes the versioned final decision", async ({ page }) => {
+async function expectAutomaticApproval(modal) {
+  for (const label of ["Reporting Requirement", "Monitoring Requirement", "Policy Decision Reason"]) await expect(modal.getByLabel(label, { exact: true })).toHaveCount(0);
+  await expect(modal).not.toContainText(/Admin Final Purpose Policy|Policy version:|Pending thresholds|organization precedence/i);
+  await expect(modal.getByRole("button", { name: /Change Requirements/i })).toHaveCount(0);
+}
+const automaticApprovalBlocked = "This request cannot be approved yet. MENRO must first confirm its reporting and monitoring requirements. No approval was saved.";
+
+test("Staff review stays independent and automatic Admin approval blocks an unresolved Other-purpose request", async ({ page }) => {
   let request = { ...ownRequest("Pending", "citizen-requester"), purposePolicyManaged: true, purpose: "Habitat activity", purposePolicyCandidate: { purpose: "Other", policyVersion: 0 }, workflow: { ...ownRequest().workflow, purpose: "Other", purposeOther: "Habitat activity" } };
-  let reviewed = false, approved;
+  let reviewed = false, approvalAttempts = 0;
   const fixture = await setup(page, { "GET /api/seedling-requests": route => route.fulfill({ json: { success: true, data: [request] } }),
-    "GET /api/purpose-policies": route => route.fulfill({ json: { success: true, data: { version: 5, purposes: [{ purpose: "Other", reporting: "CONDITIONAL", monitoring: "NONE", quantityThreshold: null }] } } }),
     "PATCH /api/seedling-requests/staff-own-request/review": (route, req) => { expect(req.postDataJSON()).not.toHaveProperty("policyProposal"); reviewed = true; request = { ...request, status: "Reviewed", requestVersion: 4 }; return route.fulfill({ json: { success: true, data: request } }); },
-    "PATCH /api/seedling-requests/staff-own-request/approve": (route, req) => { approved = req.postDataJSON(); expect(approved.expectedVersion).toBe(4); expect(approved.policyDecision.expectedPolicyVersion).toBe(5);
-      if (!approved.policyDecision.reason) return route.fulfill({ status: 400, json: { success: false, message: "A policy decision reason is required.", fieldErrors: { policyReason: "Record the Admin reason." } } });
-      request = { ...request, status: "Approved", requestVersion: 5 }; return route.fulfill({ json: { success: true, data: request } });
+    "PATCH /api/seedling-requests/staff-own-request/approve": (route, req) => {
+      approvalAttempts++; expect(req.postDataJSON()).toEqual({ expectedVersion: 4 });
+      return route.fulfill({ status: 409, json: { success: false, message: "An explicit Admin reporting/monitoring policy decision is required before approval.", fieldErrors: { policyReason: "Resolve the pending purpose/organization policy." } } });
     } });
   await page.goto("/staff/requests?role=staff"); await page.getByRole("button", { name: "View details for REQ-2099-001", exact: true }).click(); await page.getByRole("button", { name: "Review", exact: true }).click();
   const reviewDialog = page.locator(".sr-decision-modal").filter({ has: page.getByRole("heading", { name: "Review Seedling Request", exact: true }) });
-  await expect(reviewDialog).toBeVisible();
-  await expect(reviewDialog.getByText("Staff Policy Proposal", { exact: false })).toHaveCount(0);
-  await expect(reviewDialog.getByLabel("Reporting Requirement")).toHaveCount(0); await expect(reviewDialog.getByLabel("Monitoring Requirement")).toHaveCount(0); await expect(reviewDialog.getByLabel("Policy Decision Reason")).toHaveCount(0);
+  await expect(reviewDialog).toBeVisible(); await expectAutomaticApproval(reviewDialog);
   await page.getByRole("button", { name: "Complete Review", exact: true }).click(); await expect(page.getByRole("button", { name: "Complete Review", exact: true })).toHaveCount(0); expect(reviewed).toBe(true);
   await page.goto("/admin/requests?role=admin"); await page.getByRole("button", { name: "View details for REQ-2099-001", exact: true }).click(); await page.getByRole("button", { name: "Approve", exact: true }).click();
-  const adminPolicy = page.getByRole("group", { name: "Admin Final Purpose Policy", exact: true });
-  await adminPolicy.getByLabel("Reporting Requirement").selectOption("REQUIRED"); await adminPolicy.getByLabel("Monitoring Requirement").selectOption("PERMANENT_SAMPLE");
-  await page.getByRole("button", { name: "Confirm Approval", exact: true }).click(); await expect(page.getByText("A policy decision reason is required.", { exact: true })).toBeVisible();
-  await adminPolicy.getByLabel("Policy Decision Reason").fill("Admin confirms the documented reporting and monitoring requirement"); await page.getByRole("button", { name: "Confirm Approval", exact: true }).click();
-  await expect(page.getByRole("button", { name: "Confirm Approval", exact: true })).toHaveCount(0); expect(request.status).toBe("Approved"); fixture.check();
+  const modal = page.locator(".sr-decision-modal"), confirm = modal.getByRole("button", { name: "Confirm Approval", exact: true });
+  await expectAutomaticApproval(modal); await confirm.click();
+  await expect(modal.getByRole("alert")).toHaveText(automaticApprovalBlocked); await expect(confirm).toBeDisabled();
+  await confirm.evaluate(node => node.click()); expect(approvalAttempts).toBe(1); expect(request.status).toBe("Reviewed");
+  await expect(modal.getByRole("button", { name: "Cancel", exact: true })).toBeEnabled(); fixture.check();
 });
 
+const automaticApprovalScenarios = [
+  { label: "unmanaged", managed: false, purpose: "Household / Backyard" },
+  { label: "managed", managed: true, purpose: "Household / Backyard", definition: { reporting: "NOT_REQUIRED", monitoring: "STAFF_SPOT_CHECK", quantityThreshold: null } },
+  { label: "conditional threshold configured", managed: true, purpose: "Agroforestry / Fruit Tree", definition: { reporting: "CONDITIONAL", monitoring: "NONE", quantityThreshold: 50 } },
+  { label: "organization configured", managed: true, purpose: "Household / Backyard", sector: "Government Agency", definition: { reporting: "REQUIRED", monitoring: "PERMANENT_SAMPLE", quantityThreshold: null } },
+];
+for (const scenario of automaticApprovalScenarios) test(`Admin automatic approval preserves request details and schedules (${scenario.label})`, async ({ page }) => {
+  let request = { ...ownRequest("Reviewed", "citizen-requester"), purposePolicyManaged: scenario.managed, purpose: scenario.purpose,
+    purposePolicyCandidate: { purpose: scenario.purpose, policyVersion: 0 }, workflow: { ...ownRequest().workflow, purpose: scenario.purpose, ...(scenario.sector ? { sector: scenario.sector } : {}) } };
+  let approved;
+  const fixture = await setup(page, {
+    "GET /api/seedling-requests": route => route.fulfill({ json: { success: true, data: [request] } }),
+    "PATCH /api/seedling-requests/staff-own-request/approve": (route, req) => {
+      approved = req.postDataJSON(); request = { ...request, status: "Approved", requestVersion: 4,
+        ...(scenario.managed ? { approvedPurposePolicy: { policyVersion: 5, definition: scenario.definition, override: null, approvedBy: "test-admin", source: "ADMIN_APPROVED_PURPOSE_POLICY" } } : {}) };
+      return route.fulfill({ json: { success: true, data: request } });
+    },
+  });
+  await page.goto("/admin/requests?role=admin"); await page.getByRole("button", { name: "View details for REQ-2099-001", exact: true }).click(); await page.getByRole("button", { name: "Approve", exact: true }).click();
+  const modal = page.locator(".sr-decision-modal");
+  await expect(modal.getByRole("heading", { name: "Approve Seedling Request", exact: true })).toBeVisible(); await expectAutomaticApproval(modal);
+  await expect(modal.locator(".sr-decision-request-summary")).toContainText("REQ-2099-001");
+  for (const label of ["Purpose", "Original Planting Date", "Confirmed Planting Date", "Requester Confirmation", "Schedule Status"]) await expect(modal.getByText(label, { exact: true })).toBeVisible();
+  await expect(modal.getByRole("button", { name: "Cancel", exact: true })).toBeEnabled();
+  await modal.screenshot({ path: test.info().outputPath(`automatic-approval-${scenario.label.replaceAll(" ", "-")}.png`) });
+  await modal.getByRole("button", { name: "Confirm Approval", exact: true }).click(); await expect(modal).toHaveCount(0);
+  expect(approved).toEqual({ expectedVersion: 3 }); expect(request.status).toBe("Approved");
+  if (scenario.managed) expect(request.approvedPurposePolicy).toMatchObject({ definition: scenario.definition, override: null }); fixture.check();
+});
+
+for (const scenario of [
+  { label: "missing quantity threshold", purpose: "Agroforestry / Fruit Tree", sector: "Resident / Individual" },
+  { label: "unresolved organization rule", purpose: "Household / Backyard", sector: "Government Agency" },
+]) test(`Admin automatic approval stays blocked for ${scenario.label}`, async ({ page }) => {
+  const request = { ...ownRequest("Reviewed", "citizen-requester"), purposePolicyManaged: true, purpose: scenario.purpose,
+    workflow: { ...ownRequest().workflow, purpose: scenario.purpose, sector: scenario.sector } };
+  let attempts = 0;
+  const fixture = await setup(page, {
+    "GET /api/seedling-requests": route => route.fulfill({ json: { success: true, data: [request] } }),
+    "PATCH /api/seedling-requests/staff-own-request/approve": (route, req) => { attempts++; expect(req.postDataJSON()).toEqual({ expectedVersion: 3 });
+      return route.fulfill({ status: 409, json: { success: false, message: "An explicit Admin reporting/monitoring policy decision is required before approval.", fieldErrors: { policyReason: "Resolve the pending purpose/organization policy." } } }); },
+  });
+  await page.goto("/admin/requests?role=admin"); await page.getByRole("button", { name: "View details for REQ-2099-001", exact: true }).click(); await page.getByRole("button", { name: "Approve", exact: true }).click();
+  const modal = page.locator(".sr-decision-modal"); await expectAutomaticApproval(modal); await modal.getByRole("button", { name: "Confirm Approval", exact: true }).click();
+  await expect(modal.getByRole("alert")).toHaveText(automaticApprovalBlocked); await expect(modal.getByRole("button", { name: "Confirm Approval", exact: true })).toBeDisabled();
+  await modal.getByRole("button", { name: "Cancel", exact: true }).click(); await expect(modal).toHaveCount(0); expect(attempts).toBe(1); expect(request.status).toBe("Reviewed"); fixture.check();
+});
+
+for (const failure of [
+  { label: "stale request", status: 409, message: "The request has changed. Refresh and try again." },
+  { label: "service unavailable", status: 503, message: "Approval is temporarily unavailable. Please try again." },
+  { label: "authorization denied", status: 403, message: "Admin access is required." },
+]) test(`Admin automatic approval does not retry or save after ${failure.label}`, async ({ page }) => {
+  const request = { ...ownRequest("Reviewed", "citizen-requester"), purposePolicyManaged: true };
+  let attempts = 0;
+  const fixture = await setup(page, {
+    "GET /api/seedling-requests": route => route.fulfill({ json: { success: true, data: [request] } }),
+    "PATCH /api/seedling-requests/staff-own-request/approve": (route, req) => { attempts++; expect(req.postDataJSON()).toEqual({ expectedVersion: 3 }); return route.fulfill({ status: failure.status, json: { success: false, message: failure.message } }); },
+  });
+  await page.goto("/admin/requests?role=admin"); await page.getByRole("button", { name: "View details for REQ-2099-001", exact: true }).click(); await page.getByRole("button", { name: "Approve", exact: true }).click();
+  const modal = page.locator(".sr-decision-modal"); await expectAutomaticApproval(modal); await modal.getByRole("button", { name: "Confirm Approval", exact: true }).click();
+  await expect(modal.getByRole("alert")).toHaveText(failure.message); await expect(modal.getByRole("button", { name: "Confirm Approval", exact: true })).toBeEnabled();
+  expect(attempts).toBe(1); expect(request.status).toBe("Reviewed"); fixture.check();
+});
+
+test("automatic approval remains inaccessible to Staff, Participant and unauthenticated users", async ({ page }) => {
+  const fixture = await setup(page);
+  for (const role of ["staff", "participant", "unauthenticated"]) {
+    await page.goto(`/admin/requests?role=${role}`); await expect(page).not.toHaveURL(/\/admin\/requests/);
+    await expect(page.getByRole("button", { name: "Confirm Approval", exact: true })).toHaveCount(0);
+  }
+  expect(fixture.calls.filter(call => call.key.endsWith("/approve"))).toHaveLength(0); fixture.check();
+});
 
 test("Staff assisted identity is the only new request mode and starts blank", async ({ page }) => {
   const fixture = await setup(page);
@@ -785,14 +862,17 @@ test("disabled cohort gate hides integrated actions and preserves safe bookmarke
   await expect(page.getByLabel("Verified cohort", { exact: true })).toHaveCount(0); fixture.check();
 });
 
-for (const role of ["admin", "staff", "participant"]) for (const width of [320, 360, 390, 430, 768, 1440]) test(role + " populated coverage stays within " + width + "px", async ({ page }) => {
+for (const role of ["admin", "staff", "participant"]) for (const width of [320, 360, 390, 430, 768, 1440]) test(role + " dashboard omits reporting coverage at " + width + "px", async ({ page }) => {
   const request = { ...ownRequest("Released", role === "participant" ? "test-participant" : "test-staff"), reportingPolicy: { reporting: "REQUIRED" }, releasedItems: [{ releasedQuantity: 10 }] };
-  await setup(page, Object.fromEntries(["/api/seedling-requests", "/api/seedling-requests/my", "/api/seedling-requests/my-requests"].map(path => ["GET " + path, route => route.fulfill({ json: { success: true, data: [request] } })])));
+  const fixture = await setup(page, Object.fromEntries(["/api/seedling-requests", "/api/seedling-requests/my", "/api/seedling-requests/my-requests"].map(path => ["GET " + path, route => route.fulfill({ json: { success: true, data: [request] } })])));
   await page.setViewportSize({ width, height: 900 }); await page.goto("/" + role + "/dashboard?role=" + role);
   await expect(page.locator(".dashboard-kpi-grid")).toBeVisible();
-  if (role !== "participant") await expect(page.locator(".reporting-coverage")).toHaveCount(0);
-  else { await expect(page.getByRole("region", { name: "Planting reporting coverage" })).toBeVisible(); await expect(page.locator(".reporting-coverage table")).toContainText(request.requestNumber); }
+  await expect(page.locator(".reporting-coverage")).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: "Planting Confirmation and Reporting Coverage", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("region", { name: "Planting reporting coverage", exact: true })).toHaveCount(0);
+  await expect(page.locator(".dashboard-filter-row")).toBeAttached();
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+  await page.screenshot({ path: test.info().outputPath(`dashboard-cleanup-${role}-${width}.png`), fullPage: true }); fixture.check();
 });
 test("sampling action wraps at 320px without clipping", async ({ page }) => {
   await setup(page); await page.setViewportSize({ width: 320, height: 900 }); await page.goto("/staff/survival-monitoring?role=staff");
