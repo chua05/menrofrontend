@@ -26,3 +26,11 @@ export function backendFieldErrors(error, aliases = {}) {
   }
   return result;
 }
+
+// Revalidating on Submit must not replace a precise error with a generic one.
+// Only retain messages for fields that are still invalid; corrected fields clear.
+export function retainInvalidFieldMessages(validation, previous = {}) {
+  return Object.fromEntries(Object.entries(validation).map(([key, message]) => [key,
+    typeof previous[key] === "string" && previous[key].trim() ? previous[key] : message,
+  ]));
+}

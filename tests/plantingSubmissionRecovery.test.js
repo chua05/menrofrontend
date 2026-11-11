@@ -43,3 +43,22 @@ test("planting location metadata uses the 50 metre fallback consistently", () =>
   assert.match(plantingPage, /"50m-fallback"/);
   assert.doesNotMatch(plantingPage, /"20m-fallback"/);
 });
+
+test("photo verification problems are specific, shown in place, and never silent", () => {
+  const staffForm = readFileSync(new URL("../src/components/StaffPlantingReportForm.jsx", import.meta.url), "utf8");
+  const photos = readFileSync(new URL("../src/components/OfficialPlantingPhotos.jsx", import.meta.url), "utf8");
+  // Staff: every photo is checked and a failure stays on that photo, beside Verify Photo Location.
+  assert.match(photos, /next\.push\(\{ \.\.\.row, status: "failed", failure: failure\.message/);
+  assert.match(photos, /className="pr-field-error pr-gps-verification-error" role="alert"/);
+  // Submit keeps the photo's own reason instead of a generic message.
+  assert.match(staffForm, /: failedPhoto \? failedPhoto\.failure/);
+  // A confirmed report is never reported as unconfirmed when only an upload is unknown.
+  assert.match(staffForm, /if \(report\) setError\(stage === "attendance"/);
+  assert.match(staffForm, /else \{ setUnconfirmed\(true\); setError\(failure\.message\); \}/);
+  // Form-level messages sit beside the buttons and are scrolled into view.
+  assert.match(staffForm, /errorRef\.current\?\.scrollIntoView/);
+  // Participant: the failed photo's reason is inline, and submit-form errors are revealed.
+  assert.match(plantingPage, /error=\{formErrors\.photos \|\| photoPreviews\.find\(preview => preview\.verificationStatus === "failed"/);
+  assert.match(plantingPage, /submitAlertRef\.current\?\.scrollIntoView/);
+  assert.match(plantingPage, /isGatewayWriteFailure\(requestOptions\.method, response\.status, payload\)/);
+});

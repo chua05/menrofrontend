@@ -8,13 +8,13 @@ import { editableCorrectionPaths, evidenceCarriedForward } from "../utils/planti
 import { useEffect, useRef, useState } from "react";
 import { FiFileText } from "react-icons/fi";
 import { authenticatedFetch, authenticatedJson } from "../services/authenticatedApi";
-import { READ_TIMEOUT_MS, UPLOAD_TIMEOUT_MS, WRITE_TIMEOUT_MS, isAmbiguousWriteFailure } from "../utils/requestTimeout";
-import { backendFieldErrors, focusFirstInvalid } from "../utils/formValidation";
+import { READ_TIMEOUT_MS, UPLOAD_TIMEOUT_MS, WRITE_TIMEOUT_MS, isAmbiguousWriteFailure, serverFailureMessage } from "../utils/requestTimeout";
+import { backendFieldErrors, focusFirstInvalid, retainInvalidFieldMessages } from "../utils/formValidation";
 import "../styles/official-planting.css";
 // Every call is bounded so "Saving…" and "Loading…" always recover.
 async function api(path, options = {}, timeoutMs = READ_TIMEOUT_MS) {
   const { response, body } = await authenticatedJson(path, options, { timeoutMs });
-  if (!response.ok || body?.success !== true) throw Object.assign(new Error(response.status >= 500 ? "Official planting reporting is temporarily unavailable." : body?.message || "Unable to save the official report."), { status: response.status, fieldErrors: body?.fieldErrors });
+  if (!response.ok || body?.success !== true) throw Object.assign(new Error(serverFailureMessage(response.status, body, response.status >= 500 ? "Official planting reporting is temporarily unavailable." : "Unable to save the official report.")), { status: response.status, fieldErrors: body?.fieldErrors });
   return body?.data;
 }
 async function optionsPage(path) {
@@ -54,7 +54,14 @@ export default function StaffPlantingReportForm({ currentUser, onClose, onSaved,
   // that times out while this form is open keeps using the form itself.
   const [openedWithPending] = useState(() => Boolean(pending?.body));
   const photoKey = useRef(crypto.randomUUID());
-  const root = useRef(null), submissionKey = useRef(crypto.randomUUID());
+  const root = useRef(null), submissionKey = useRef(crypto.randomUUID()), errorRef = useRef(null), previousError = useRef("");
+  // Reveal a new form-level message, without replaying an old one when an
+  // inline photo error is cleared during correction.
+  useEffect(() => {
+    const isNewMessage = error !== previousError.current;
+    previousError.current = error;
+    if (isNewMessage && error && !errors.photos) errorRef.current?.scrollIntoView?.({ block: "nearest" });
+  }, [error, errors.photos]);
   const selected = options.find(row => row.requestId === selectedId);
   const missingRequired = selected ? ["requesterName", "requestId", "eventId", "siteId", "plantingDate"].filter(key => !String(selected[key] || "").trim()) : [];
   if (selected && basis === "menro-field-report" && (!Number.isFinite(selected.latitude) || !Number.isFinite(selected.longitude))) missingRequired.push("site coordinates");
@@ -112,12 +119,18 @@ export default function StaffPlantingReportForm({ currentUser, onClose, onSaved,
       else if (reason.length > MAX_LEFTOVER_REASON_LENGTH) validation[`leftoverReason-${index}`] = `Use at most ${MAX_LEFTOVER_REASON_LENGTH} characters.`;
     });
     if (!saved && selected && items.every(row => Number(row.availableQuantity) === 0)) validation.items = "No seedlings remain available for reporting on this release.";
-    if (basis === "menro-field-report" && !photoSaved && !evidenceCarried && (!photos.length || photos.some(photo => !["ready", "verified"].includes(photo.status)))) validation.photos = "Add and verify original planting photos for the MENRO Field Report.";
+    // The specific reason is kept: a failed photo names what is wrong with it.
+    if (basis === "menro-field-report" && !photoSaved && !evidenceCarried && (!photos.length || photos.some(photo => !["ready", "verified"].includes(photo.status)))) {
+      const failedPhoto = photos.find(photo => photo.status === "failed");
+      validation.photos = !photos.length ? "Add at least one original planting photo for the MENRO Field Report."
+        : failedPhoto ? failedPhoto.failure
+          : "Select Verify Photo Location to check each uploaded photo's GPS before submitting.";
+    }
     if (attendanceFileError(file) || errors.attendance) validation.attendance = attendanceFileError(file) || errors.attendance;
-    setErrors(validation);
+    setErrors(retainInvalidFieldMessages(validation, errors));
     if (Object.keys(validation).length) return focusFirstInvalid(() => root.current);
     setSaving(true); setError("");
-    let report = saved, completed = false;
+    let report = saved, completed = false, stage = "report";
     try {
       if (!report) {
         const body = { requestId: selected.requestId, items: items.map(row => ({ inventoryId: row.inventoryId, quantityPlanted: plantedFor(row), leftoverQuantity: Number(row.leftoverQuantity), ...(Number(row.leftoverQuantity) > 0 ? { leftoverReason: String(row.leftoverReason || "").trim() } : {}) })), confirmationBasis: basis, remarks, expectedVersion: selected.expectedVersion, clientSubmissionId: submissionKey.current, ...(correction ? { correctionOf: correction.id } : {}) };
@@ -130,6 +143,7 @@ export default function StaffPlantingReportForm({ currentUser, onClose, onSaved,
         setSaved(report);
       }
       if (basis === "menro-field-report" && !photoSaved && !evidenceCarried) {
+        stage = "photos";
         setPhotoRetryBound(true);
         const photoData = new FormData(); photos.forEach(photo => photoData.append("photos", photo.file));
         photoData.append("evidenceManifest", JSON.stringify(photos.map(photo => photo.descriptor)));
@@ -138,13 +152,31 @@ export default function StaffPlantingReportForm({ currentUser, onClose, onSaved,
         setPhotoSaved(true);
       }
       if (file && !attendanceCarried) {
+        stage = "attendance";
         const data = new FormData(); data.append("attendance", file);
         await api(`/planting-reports/official/${encodeURIComponent(report.officialSubmissionIds[0])}/attendance`, { method: "PUT", body: data }, UPLOAD_TIMEOUT_MS);
       }
       completed = true; setUnconfirmed(false);
     } catch (failure) {
-      if (isAmbiguousWriteFailure(failure)) { setUnconfirmed(true); setError(failure.message); return; }
       if ([400, 422].includes(failure.status) && !photoSaved) setPhotoRetryBound(false);
+      if (report && stage === "photos") {
+        setUnconfirmed(false);
+        const detail = backendFieldErrors(failure, { evidence: "photos", files: "photos" }).photos || failure.message;
+        setErrors(current => ({ ...current, photos: detail }));
+        setError(`Report saved — retry evidence. ${failure.message} Retry the same evidence with the same upload intent; do not submit the quantities again.`);
+        focusFirstInvalid(() => root.current);
+        return;
+      }
+      if (isAmbiguousWriteFailure(failure)) {
+        // The report itself is confirmed: only the evidence or attendance upload
+        // is unknown. Both uploads are safe to repeat with the same file (the
+        // photo upload keeps its Idempotency-Key, attendance is matched by hash).
+        if (report) setError(stage === "attendance"
+          ? "The report is saved pending Admin verification. MENRO did not confirm the attendance upload in time. Select Retry Attendance Upload to send the same file again; it is not saved twice."
+          : "The report is saved pending Admin verification. MENRO did not confirm the planting photo upload in time. Select Upload Evidence for Saved Report to send the same photos again; they are not saved twice. Do not submit the quantities again.");
+        else { setUnconfirmed(true); setError(failure.message); }
+        return;
+      }
       const fields = backendFieldErrors(failure);
       // "field-<path>" errors name a field that was not returned for correction.
       for (const key of Object.keys(fields)) {
@@ -188,7 +220,7 @@ export default function StaffPlantingReportForm({ currentUser, onClose, onSaved,
       <div><strong>An earlier submission was not confirmed by MENRO</strong>
         <p>Release {pending.body.requestId}{pending.correction ? " (correction)" : ""} may already be saved. Select Check Submission to confirm it. The same report is sent again only if MENRO has not saved it, so it cannot be created twice.</p></div>
     </div>
-    {error && <p role="alert">{error}</p>}
+    {error && <p role="alert" className="pr-official-form-error">{error}</p>}
     <div className="pr-official-actions"><button type="button" className="pr-secondary-button" onClick={onClose} disabled={saving}>Close</button><button type="button" className="pr-primary-button" onClick={checkPending} disabled={saving}>{saving ? "Checking…" : "Check Submission"}</button></div>
   </section></ModalDialog>;
   return <ModalDialog className="pr-official-backdrop" label={title} onClose={onClose} dismissible={!saving} busy={saving}><section className="pr-official-dialog">
@@ -199,8 +231,7 @@ export default function StaffPlantingReportForm({ currentUser, onClose, onSaved,
         {evidenceCarried && <p>Your verified planting evidence is kept and does not need to be uploaded again.</p>}
         <p>Your corrected report goes directly to the MENRO Admin for approval.</p></div>
     </div>}
-    {loading ? <p role="status">Loading authorized releases…</p> : <form ref={root} onSubmit={save} noValidate>
-      {error && <p role="alert">{error}</p>}
+    {loading ? <>{error && <p role="alert" className="pr-official-form-error">{error}</p>}<p role="status">Loading authorized releases…</p></> : <form ref={root} onSubmit={save} noValidate>
       {!options.length && <p>No eligible released requests are available. An existing authorized release is required.</p>}
       <fieldset disabled={saving || unconfirmed || Boolean(saved)}>
         <div className="pr-field"><label htmlFor="official-request">Seedling Release Record *</label><select id="official-request" value={selectedId} onChange={event => choose(event.target.value)} {...aria("requestId")}><option value="">Select a released request</option>{options.map(row => <option key={row.requestId} value={row.requestId}>{row.requesterName} — {row.eventName || row.requestId}</option>)}</select>{feedback("requestId")}</div>
@@ -243,6 +274,8 @@ export default function StaffPlantingReportForm({ currentUser, onClose, onSaved,
       </fieldset>
       {attendanceCarried && <p className="pr-helper-text" role="status">Attendance documentation from the returned report is kept.</p>}
       {!attendanceCarried && <AttendanceUpload file={file} onChange={setFile} error={errors.attendance} onError={message => setErrors(current => ({ ...current, attendance: message }))} disabled={saving || unconfirmed} />}
+      {/* Shown beside the buttons the user just selected, never only at the top of a long form. */}
+      {error && <p ref={errorRef} role="alert" className="pr-official-form-error">{error}</p>}
       <div className="pr-official-actions"><button type="button" className="pr-secondary-button" onClick={onClose} disabled={saving}>Close</button>{!saved && !unconfirmed && <button type="button" className="pr-secondary-button" onClick={refresh} disabled={saving}>Refresh Releases</button>}<button type="submit" className="pr-primary-button" disabled={saving || !options.length}>{saving ? "Saving…" : unconfirmed ? "Check Submission" : saved ? basis === "menro-field-report" && !photoSaved ? "Upload Evidence for Saved Report" : file ? "Retry Attendance Upload" : "Finish Saved Report" : "Submit for Admin Verification"}</button></div>
     </form>}
   </section></ModalDialog>;

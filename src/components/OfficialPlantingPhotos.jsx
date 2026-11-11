@@ -7,6 +7,7 @@ import * as exifr from "exifr";
 import SecureCameraCapture from "./SecureCameraCapture";
 import ModalDialog from "./ModalDialog";
 import { authenticatedFetch } from "../services/authenticatedApi";
+import { withDeadline } from "../utils/requestTimeout";
 import { extractGpsCoordinates } from "../utils/exifGps";
 import { buildEvidenceLocationView } from "../utils/evidenceLocationView";
 import { buildLocationPreviewStatus, compareEvidenceToSite, coordinateValue, isOutsideSite, isPointInBulanBoundary } from "../utils/plantingLocationPreview";
@@ -24,7 +25,7 @@ function photoEvidence(row) {
     boundaryRule: row.location?.boundaryRule, boundaryLimitMeters: row.location?.boundaryLimitMeters,
     source: row.descriptor.source, sourceLabel: sourceLabel(row.descriptor.source),
     verification: row.status === "verified" ? "Backend-verified capture" : "EXIF preview ready - server verification required",
-    waitingLabel: row.location ? "" : "Select Verify Photo Location to read this photo's GPS." };
+    waitingLabel: row.location ? "" : row.status === "failed" ? row.failure : "Select Verify Photo Location to read this photo's GPS." };
 }
 function diagnosticEvidence(diagnostic) {
   if (!diagnostic) return null;
@@ -36,6 +37,23 @@ function boundaryRuleLabel(evidence, comparison) {
   if (evidence?.boundaryRule === "configured-radius" || comparison.radiusMeters !== null) return `Configured radius (${evidence?.boundaryLimitMeters ?? comparison.radiusMeters} m)`;
   if (evidence?.boundaryRule === "site-polygon" || comparison.insidePolygon !== null) return "Authoritative site polygon";
   return "50 m site-distance fallback where applicable";
+}
+const METADATA_TIMEOUT_MS = 20_000;
+// Reads one original photo's EXIF. The same rules as before: original GPS
+// metadata and a valid, non-future capture timestamp are required.
+async function metadataFailure(file) {
+  let metadata;
+  try {
+    metadata = await withDeadline(exifr.parse(file, { gps: true, tiff: true, exif: true }), METADATA_TIMEOUT_MS, () => new Error("timeout"));
+  } catch {
+    return { message: `${file.name}: the photo metadata could not be read. Upload the original geotagged file or use Take Photo with a secure capture session.` };
+  }
+  const gps = extractGpsCoordinates(metadata || {});
+  const taken = new Date(metadata?.DateTimeOriginal || metadata?.CreateDate || metadata?.DateTime || "");
+  if (gps.status === "missing") return { message: `${file.name} has no GPS metadata. Upload the original geotagged file or use Take Photo with a secure capture session.` };
+  if (gps.status !== "valid") return { message: `${file.name}: the GPS metadata is incomplete or unreadable. Browser location permission does not add EXIF to an existing file.` };
+  if (!Number.isFinite(taken.getTime()) || taken > new Date()) return { message: `${file.name}: a valid original capture timestamp is required. Device coordinates cannot replace EXIF.` };
+  return { location: { latitude: gps.latitude, longitude: gps.longitude } };
 }
 async function cameraRequest(path, options) {
   const response = await authenticatedFetch(path, options), body = await response.json();
@@ -76,33 +94,33 @@ export default function OfficialPlantingPhotos({ site, photos, onChange, error, 
     if (!ready || disabled || verifying || photos.length >= 10) return;
     setDiagnostic(null); setActiveCameraScope(scope.current); setCamera(true);
   }
+  // Every uploaded photo is checked; a photo that fails keeps its own reason,
+  // shown on the photo and in the Location Verification card beside the button.
   async function verify() {
     if (disabled || verifying) return; const binding = scope.current; setVerifying(true); onError("");
     try {
       const next = [];
       for (const row of photos) {
         if (row.descriptor.source === "browser-camera") { next.push(row); continue; }
-        const metadata = await exifr.parse(row.file, { gps: true, tiff: true, exif: true }), gps = extractGpsCoordinates(metadata || {});
-        const taken = new Date(metadata?.DateTimeOriginal || metadata?.CreateDate || metadata?.DateTime || "");
-        if (gps.status === "missing") throw new Error("This original photo has no GPS metadata. Upload the original geotagged file or use Take Photo with a secure capture session.");
-        if (gps.status !== "valid") throw new Error("The original photo GPS metadata is incomplete or unreadable. Browser location permission does not add EXIF to an existing file.");
-        if (!Number.isFinite(taken.getTime()) || taken > new Date()) throw new Error("A valid original capture timestamp is required. Device coordinates cannot replace EXIF.");
-        next.push({ ...row, status: "ready", location: { latitude: gps.latitude, longitude: gps.longitude } });
+        const failure = await metadataFailure(row.file);
+        if (failure.message) { next.push({ ...row, status: "failed", failure: failure.message, location: undefined }); continue; }
+        next.push({ ...row, status: "ready", failure: undefined, location: failure.location });
       }
-      if (scope.current === binding && binding) onChange(next);
+      if (scope.current === binding && binding) { onChange(next); setFocusId(next.find(row => row.status === "failed")?.id || next.find(row => row.location)?.id || null); }
     } catch (failure) { if (scope.current === binding && binding) onError(failure.message || "Photo metadata could not be verified."); } finally { if (scope.current === binding && binding) setVerifying(false); }
   }
+  const failedPhotos = photos.filter(row => row.status === "failed");
   return <>
     <section className="pr-section pr-photo-evidence-section" aria-labelledby="official-evidence-heading">
       <div className="pr-section-header pr-photo-section-header"><h3 id="official-evidence-heading"><FiCamera size={15} /> Planting Photo Evidence</h3>
         <button type="button" className="pr-reminder-button" onClick={() => setRequirements(true)}><FiInfo size={14} /> Reminder</button></div>
       <div className="pr-photo-content">
-        <PlantingPhotoControls count={photos.length} disabled={disabled || (site && !ready) || verifying} error={error}
+        <PlantingPhotoControls count={photos.length} disabled={disabled || (site && !ready) || verifying}
           onCamera={startCamera} onFiles={add} />
         {site && !ready && <p>Authoritative registered-site coordinates are required. Ask an authorized MENRO officer to correct the linked site before capture.</p>}
         <div className="pr-evidence-grid">{photos.map(row => <div className="pr-preview-card" key={row.id}>
           <Preview file={row.file} /><div className="pr-preview-footer"><div className="pr-preview-file"><strong className="pr-preview-name">{row.file.name}</strong></div>
-          <div className={`pr-preview-verification pr-preview-verification-${row.status === "unverified" ? "info" : "success"}`} role="status"><strong>{row.status === "verified" ? "Backend-verified camera capture" : row.status === "ready" ? "EXIF preview ready - server verification required on upload" : "Verify original GPS metadata"}</strong><span>Location Source: {sourceLabel(row.descriptor.source)}</span></div>
+          <div className={`pr-preview-verification pr-preview-verification-${row.status === "unverified" ? "info" : row.status === "failed" ? "error" : "success"}`} role="status"><strong>{row.status === "verified" ? "Backend-verified camera capture" : row.status === "ready" ? "EXIF preview ready - server verification required on upload" : row.status === "failed" ? "Verification Failed - not accepted as evidence" : "Verify original GPS metadata"}</strong>{row.status === "failed" && <span>{row.failure}</span>}<span>Location Source: {sourceLabel(row.descriptor.source)}</span></div>
           {row.location && <button type="button" className="pr-secondary-button" aria-label={`Show planting photo ${row.file.name} on map`} onClick={() => setFocusId(row.id)}>Show on Map</button>}
           <button type="button" disabled={disabled || verifying} className="pr-secondary-button" aria-label={`Remove planting photo ${row.file.name}`} onClick={() => { onChange(photos.filter(photo => photo.id !== row.id)); onError(""); }}>Remove</button></div>
         </div>)}</div>
@@ -110,9 +128,16 @@ export default function OfficialPlantingPhotos({ site, photos, onChange, error, 
     </section>
     <section className="pr-section pr-photo-location-section" aria-labelledby="official-location-heading">
       <div className="pr-section-header"><h3 id="official-location-heading"><FiNavigation size={15} /> Photo Location Verification</h3></div>
-      <div className="pr-gps-card">
+      <div className={`pr-gps-card${error || failedPhotos.length ? " pr-invalid-field" : ""}`} role="group" aria-label="Location Verification" tabIndex={-1}
+        aria-invalid={Boolean(error || failedPhotos.length)} aria-describedby={error || failedPhotos.length ? "official-location-error" : undefined}>
         <div className="pr-gps-top"><div className="pr-gps-title">Location Verification</div><button type="button" className="pr-secondary-button" disabled={disabled || verifying || !photos.length} onClick={verify}>{verifying ? "Reading Photo..." : "Verify Photo Location"}</button></div>
         {diagnostic && <p role="alert">{diagnostic.message}</p>}
+        {(error || failedPhotos.length > 0) && <div className="pr-field-error pr-gps-verification-error" role="alert" id="official-location-error">
+          {error && !failedPhotos.some(row => row.failure === error) && <p>{error}</p>}
+          {failedPhotos.length > 0 && <><strong>{failedPhotos.length === 1 ? "This photo cannot be used as planting evidence:" : `${failedPhotos.length} photos cannot be used as planting evidence:`}</strong>
+          <ul>{failedPhotos.map(row => <li key={row.id}>{row.failure}</li>)}</ul>
+          <span>Remove {failedPhotos.length === 1 ? "it" : "them"} and add an original geotagged photo, or use Take Photo.</span></>}
+        </div>}
         {hasGps && <div className="pr-gps-captured">
           {[["Latitude", latitude.toFixed(6)], ["Longitude", longitude.toFixed(6)], ["Source", evidence.sourceLabel],
             ["GPS Accuracy", Number.isFinite(accuracy) && accuracy >= 0 ? `${accuracy.toFixed(1)} m` : "Not provided by EXIF"],

@@ -39,6 +39,23 @@ export function isAmbiguousWriteFailure(error) {
   return error?.ambiguous === true;
 }
 
+// A 502/504 that did not come from MENRO itself (no MENRO JSON body) is a
+// hosting gateway giving up on the request: MENRO may still have processed a
+// write, so its outcome is unknown, exactly like a timeout.
+export function isGatewayWriteFailure(method, status, body) {
+  return isWriteMethod(method) && (status === 502 || status === 504) && typeof body?.success !== "boolean";
+}
+
+// Server messages worth showing as they are: MENRO's own 503 answers name the
+// unavailable service (for example evidence storage or upload maintenance).
+// Other 5xx answers stay generic so internal failures are never exposed.
+export function serverFailureMessage(status, body, fallback) {
+  const message = typeof body?.message === "string" ? body.message.trim() : "";
+  if (status === 503 && message) return message;
+  if (status >= 500) return fallback;
+  return message || fallback;
+}
+
 // Runs fetch + body parsing under one deadline. The timer covers reading the
 // body too, so a response that stalls mid-stream also recovers.
 export async function fetchJsonWithDeadline(url, options = {}, { timeoutMs, parse = response => response.json().catch(() => null) } = {}) {
@@ -47,6 +64,7 @@ export async function fetchJsonWithDeadline(url, options = {}, { timeoutMs, pars
   const run = (async () => {
     const response = await fetch(url, { ...options, signal: controller.signal });
     const body = await parse(response);
+    if (isGatewayWriteFailure(options.method, response.status, body)) throw new RequestTimeoutError(AMBIGUOUS_WRITE_MESSAGE, { ambiguous: true });
     return { response, body };
   })();
   try {
