@@ -238,7 +238,7 @@ export default function SecureCameraCapture({ open, request, binding, onVerified
           void begin(devices[(index + 1) % devices.length].deviceId);
         }}>Switch Camera</button>}
         {status === "error" && <button type="button" onClick={() => begin(deviceId)}>Retry</button>}
-        {location && ["error", "captured"].includes(status) &&
+        {location && typeof onViewLocation === "function" && ["error", "captured"].includes(status) &&
           <button type="button" onClick={() => { stopLocationSearch(); stopTracks(); onViewLocation?.(); }}>View Detected Location</button>}
         <button type="button" onClick={() => { stopLocationSearch(); stopTracks(); clearPreview(); onCancel(); }}>Cancel</button>
       </div>

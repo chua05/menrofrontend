@@ -65,7 +65,7 @@ export default function MonitoringInformationPage() {
     {cursor && <button disabled={loadingMore} onClick={more}>{loadingMore ? "Loading older requests…" : "Load older requests"}</button>}
     {selected && <div role="dialog" aria-modal="true" aria-label="Monitoring information reply" className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
       <div className="w-full max-w-xl rounded bg-white p-5">
-        <h2 className="text-xl font-semibold">Monitoring information</h2><p>{selected.question}</p>
+        <h2 className="text-xl font-semibold">Monitoring information</h2>{selected.sampleId && <p>Tree: {selected.sampleId}</p>}<p>{selected.question}</p>
         <ol>{selected.history.map((entry, i) => <li key={i}>{entry.action} · {entry.role}</li>)}</ol>
         {selected.writesPaused && <p role="status">Replies are paused. Information history remains available.</p>}
         {selected.answer ? <p>Reply: {selected.answer}</p> : userRole === "participant" && !selected.writesPaused && <form onSubmit={reply}>

@@ -6,7 +6,10 @@ export default function SecureCameraCapture({ open, request, binding, onVerified
       method: "POST",
       body: JSON.stringify(binding),
     });
-    const file = new File(["phase3c-fixture-photo"], "fixture.jpg", {
+    const canvas = document.createElement("canvas"); canvas.width = 8; canvas.height = 8;
+    const context = canvas.getContext("2d"); context.fillStyle = "#145b3a"; context.fillRect(0, 0, 8, 8);
+    const jpeg = await new Promise(resolve => canvas.toBlob(resolve, "image/jpeg"));
+    const file = new File([jpeg], "fixture.jpg", {
       type: "image/jpeg",
       lastModified: 1,
     });
@@ -29,7 +32,7 @@ export default function SecureCameraCapture({ open, request, binding, onVerified
   }
 
   return (
-    <div role="dialog" aria-label="Secure camera capture">
+    <div role="dialog" aria-modal="true" aria-label="Secure camera capture">
       <button type="button" onClick={verifyFixturePhoto}>Verify fixture camera photo</button>
       <button type="button" onClick={onCancel}>Cancel</button>
     </div>

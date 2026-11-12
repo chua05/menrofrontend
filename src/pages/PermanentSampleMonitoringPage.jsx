@@ -1,6 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { authenticatedFetch } from "../services/authenticatedApi";
 import SecureCameraCapture from "../components/SecureCameraCapture";
+import ModalDialog from "../components/ModalDialog";
+import PermanentSampleVisitForm from "../components/PermanentSampleVisitForm";
+import { assessmentErrors } from "../utils/sampleMonitoringForm";
+import { withDeadline, RequestTimeoutError, READ_TIMEOUT_MS, WRITE_TIMEOUT_MS, UPLOAD_TIMEOUT_MS } from "../utils/requestTimeout";
+import "../styles/permanent-sample-monitoring-form.css";
 import MonitoringInformationPanel from "../components/MonitoringInformationPanel";
 import { informationEnabled } from "../utils/permanentSampleFeatures";
 import {
@@ -9,19 +14,15 @@ import {
 } from "../utils/verifiedPlantingCohort";
 import { useAuth } from "../context/AuthContext";
 
-const CONDITIONS = ["Healthy", "Damaged", "Dead", "Needs Rechecking"];
-const INVESTIGATION_OUTCOME = "Not Located After Rechecking";
 
-async function api(path, options) {
-  const response = await authenticatedFetch(path, options);
-  const body = await response.json().catch(() => ({}));
-  if (!response.ok || !body.success) {
-    throw Object.assign(
-      new Error(body.message || "Monitoring visits could not be loaded."),
-      { status: response.status }
-    );
-  }
-  return body.data;
+async function api(path, options = {}) {
+  const write = options.method && options.method !== "GET";
+  return withDeadline((async () => {
+    const response = await authenticatedFetch(path, options);
+    const body = await response.json().catch(() => ({}));
+    if (!response.ok || !body.success) throw Object.assign(new Error(body.message || "Monitoring visits could not be loaded."), { status: response.status, code: body.code });
+    return body.data;
+  })(), write ? WRITE_TIMEOUT_MS : READ_TIMEOUT_MS, () => new RequestTimeoutError(write ? "MENRO has not confirmed this save. Check the saved outcome before trying again." : "Monitoring data could not be loaded in time. Please retry.", { ambiguous: Boolean(write) }));
 }
 
 function formAssessment(value) {
@@ -38,23 +39,10 @@ function formAssessment(value) {
   };
 }
 
-function validationError(assessments) {
-  for (const assessment of assessments) {
-    if (!CONDITIONS.includes(assessment.condition)) {
-      return `Select a condition for ${assessment.sampleId}.`;
-    }
-    if (assessment.condition === "Needs Rechecking" && !assessment.remarks.trim()) {
-      return `Remarks are required for ${assessment.sampleId} when it needs rechecking.`;
-    }
-    if (
-      assessment.investigationOutcome === INVESTIGATION_OUTCOME &&
-      !assessment.searchFindings.trim()
-    ) {
-      return `Document search findings for ${assessment.sampleId}.`;
-    }
-  }
-  return "";
-}
+
+const draftSnapshot = (rows, remarks, date) => JSON.stringify([rows.map(row =>
+  ["sampleId", "condition", "heightCentimeters", "diameterCentimeters", "remarks", "investigationOutcome", "searchFindings"]
+    .map(field => String(row[field] ?? ""))), remarks, date]);
 
 export default function PermanentSampleMonitoringPage() {
   const enabled = resolveVerifiedPlantingCohortEnabled();
@@ -66,12 +54,25 @@ export default function PermanentSampleMonitoringPage() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [activeTreeId, setActiveTreeId] = useState("");
+  const [fieldErrors, setFieldErrors] = useState({});
+  const [visitRemarks, setVisitRemarks] = useState("");
+  const [dateMonitored, setDateMonitored] = useState("");
+  const [unconfirmed, setUnconfirmed] = useState(null);
+  const operationBusy = useRef(false);
+  const [savedDraft, setSavedDraft] = useState("");
+  const [questions, setQuestions] = useState({});
+  const [originalReviews, setOriginalReviews] = useState({});
   const [reviewReasons, setReviewReasons] = useState("");
   const [reviewing, setReviewing] = useState(false);
   const [cameraOpen, setCameraOpen] = useState(false);
   const [cameraSampleId, setCameraSampleId] = useState("");
   const [pendingEvidence, setPendingEvidence] = useState({});
   const [evidenceUrls, setEvidenceUrls] = useState({});
+  const unsaved = userRole === "staff" && ["DRAFT", "RETURNED"].includes(detail?.status) &&
+    (Object.keys(pendingEvidence).length > 0 || Object.values(questions).some(value => value.trim()) ||
+      savedDraft !== draftSnapshot(assessments, visitRemarks, dateMonitored));
   const uploadKeys = useRef({});
   const evidenceEpoch = useRef(0);
   const objectUrls = useRef(new Set());
@@ -82,7 +83,7 @@ export default function PermanentSampleMonitoringPage() {
     objectUrls.current.forEach(url => URL.revokeObjectURL(url));
     objectUrls.current.clear();
     uploadKeys.current = {};
-    setPendingEvidence({}); setEvidenceUrls({});
+    setPendingEvidence({}); setEvidenceUrls({}); setOriginalReviews({});
     setCameraOpen(false); setCameraSampleId("");
     return evidenceEpoch.current;
   }, []);
@@ -91,8 +92,7 @@ export default function PermanentSampleMonitoringPage() {
     objectUrls.current.forEach(url => URL.revokeObjectURL(url));
     objectUrls.current.clear();
   }, []);
-  const evidenceKey = (sampleId, index) => JSON.stringify([detail?.id, sampleId,
-    detail?.sampleAssessments?.find(row => row.sampleId === sampleId)?.evidenceHistory?.[index]?.revision, index]);
+  const evidenceKey = (sampleId, index, sourceVisitId = detail?.id) => JSON.stringify([sourceVisitId, sampleId, index]);
   const pendingKey = sampleId => JSON.stringify([detail?.id, sampleId, detail?.version,
     detail?.sampleAssessments?.find(row => row.sampleId === sampleId)?.assessmentRevision || 0]);
 
@@ -130,7 +130,18 @@ export default function PermanentSampleMonitoringPage() {
     return () => window.clearTimeout(timer);
   }, [enabled, load, userRole]);
 
-  const open = async (visitId) => {
+  const allowDiscard = () => {
+    if (!unsaved || window.confirm("This visit has unsaved assessments, photos or questions. Discard those changes?")) return true;
+    setError("Save your draft, upload pending photos or send your question before changing visits. Your entries have been kept.");
+    setDialogOpen(true);
+    return false;
+  };
+
+  const open = async (visitId, refresh = false) => {
+    if (operationBusy.current) return;
+    if (unconfirmed) { if (detail?.id === visitId) { setDialogOpen(true); return; } setError("Check the saved outcome before switching visits."); return; }
+    if (!refresh && detail?.id === visitId) { setDialogOpen(true); return; }
+    if (!allowDiscard()) return;
     const epoch = resetEvidence();
     setDetail(null);
     setLoading(true);
@@ -142,6 +153,10 @@ export default function PermanentSampleMonitoringPage() {
       if (epoch !== evidenceEpoch.current) return;
       setDetail(data);
       setAssessments((data.sampleAssessments || []).map(formAssessment));
+      setActiveTreeId(data.sampleAssessments?.[0]?.sampleId || "");
+      const date = data.dateMonitored || new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Manila", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
+      setSavedDraft(draftSnapshot((data.sampleAssessments || []).map(formAssessment), data.visitRemarks || "", date));
+      setQuestions({}); setVisitRemarks(data.visitRemarks || ""); setDateMonitored(date); setFieldErrors({}); setDialogOpen(true);
     } catch (requestError) {
       if (epoch !== evidenceEpoch.current) return;
       setError(
@@ -155,6 +170,12 @@ export default function PermanentSampleMonitoringPage() {
   };
 
   const updateAssessment = (sampleId, field, value) => {
+    const resolved = field === "condition" && value !== "Needs Rechecking";
+    const row = assessments.find(item => item.sampleId === sampleId);
+    const remarksError = resolved && row ? assessmentErrors([{ ...row, condition: value, investigationOutcome: "", searchFindings: "" }])[`${sampleId}.remarks`] : "";
+    setFieldErrors(current => ({ ...current, [`${sampleId}.${field}`]: "", ...(resolved ? {
+      [`${sampleId}.remarks`]: remarksError || "", [`${sampleId}.searchFindings`]: "",
+    } : {}) }));
     setAssessments((current) =>
       current.map((assessment) => {
         if (assessment.sampleId !== sampleId) return assessment;
@@ -169,35 +190,53 @@ export default function PermanentSampleMonitoringPage() {
   };
 
   const save = async (submit = false) => {
-    if (!detail) return;
-    const invalid = validationError(assessments);
-    if (invalid) {
-      setError(invalid);
+    if (!detail || operationBusy.current || unconfirmed) return;
+    const invalid = assessmentErrors(assessments, submit);
+    if (Object.keys(invalid).length) {
+      setFieldErrors(invalid); const first = Object.keys(invalid)[0]; setActiveTreeId(first.split(".")[0]); setError("Please correct the highlighted assessment fields.");
+      window.setTimeout(() => { const field = document.querySelector(`[data-validation-field="${CSS.escape(first)}"]`); field?.scrollIntoView({ behavior: "smooth", block: "center" }); field?.querySelector("input,select,textarea")?.focus({ preventScroll: true }); }, 0); return;
+    }
+    if (Object.keys(pendingEvidence).length) { setError("Upload or remove pending photos before saving. A save changes the version used for capture verification."); return; }
+    const unsentQuestion = submit && Object.keys(questions).find(sampleId => questions[sampleId].trim());
+    if (unsentQuestion) {
+      setActiveTreeId(unsentQuestion);
+      setError(`There is an unsent requester question for ${unsentQuestion}. Send or discard it before submitting the visit.`);
+      window.setTimeout(() => {
+        const field = document.querySelector("#sample-active-assessment .psm-rechecking form textarea, #sample-active-assessment [data-discard-question]");
+        field?.scrollIntoView({ behavior: "smooth", block: "center" }); field?.focus({ preventScroll: true });
+      }, 0);
       return;
     }
-    setSaving(true);
-    setError("");
+    if (!dateMonitored || dateMonitored > new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Manila", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date())) { setError("Date Monitored is required and cannot be in the future."); setFieldErrors(current => ({ ...current, dateMonitored: "Enter the actual assessment date, up to today." })); window.setTimeout(() => { const field = document.getElementById("sample-date-monitored"); field?.scrollIntoView({ behavior: "smooth", block: "center" }); field?.focus({ preventScroll: true }); }, 0); return; }
+    const payload = { expectedVersion: detail.version, assessments, submit, visitRemarks, dateMonitored };
+    operationBusy.current = true; setSaving(true); setError("");
     try {
-      const data = await api(`/verified-sample-monitoring/visits/${detail.id}`, {
-        method: "PUT",
-        body: JSON.stringify({
-          expectedVersion: detail.version,
-          assessments,
-          submit,
-        }),
-      });
-      resetEvidence();
-      setDetail(data);
-      setAssessments((data.sampleAssessments || []).map(formAssessment));
+      const data = await api(`/verified-sample-monitoring/visits/${detail.id}`, { method: "PUT", body: JSON.stringify(payload) });
+      setSavedDraft(draftSnapshot(data.sampleAssessments.map(formAssessment), data.visitRemarks || "", data.dateMonitored || dateMonitored));
+      resetEvidence(); setDetail(data); setAssessments((data.sampleAssessments || []).map(formAssessment)); setVisitRemarks(data.visitRemarks || "");
+      setPage(current => current ? { ...current, visits: current.visits.map(row => row.id === data.id ? { ...row, status: data.status, version: data.version } : row) } : current);
     } catch (requestError) {
-      setError(
-        requestError.status === 409
-          ? "This monitoring visit changed. Reload the current authorized visit before trying again."
-          : requestError.message
-      );
-    } finally {
-      setSaving(false);
-    }
+      if (requestError.ambiguous) setUnconfirmed({ visitId: detail.id, ...payload });
+      setError(requestError.status === 409 && !requestError.code?.startsWith("ORIGINAL_") ? "This monitoring visit changed. Reload the current authorized visit before trying again." : requestError.message);
+    } finally { operationBusy.current = false; setSaving(false); }
+  };
+  const reconcile = async () => {
+    if (!unconfirmed || operationBusy.current) return;
+    operationBusy.current = true; setSaving(true);
+    try {
+      const data = await api(`/verified-sample-monitoring/visits/${encodeURIComponent(unconfirmed.visitId)}`);
+      if (unconfirmed.review !== undefined) {
+        if (data.status !== (unconfirmed.review ? "APPROVED" : "RETURNED") || !unconfirmed.review && data.reviewReasons !== unconfirmed.reasons) { setError("The review outcome is not confirmed. Check again before another decision."); return; }
+        setSavedDraft(draftSnapshot(data.sampleAssessments.map(formAssessment), data.visitRemarks || "", data.dateMonitored || dateMonitored));
+      resetEvidence(); setDetail(data); setAssessments(data.sampleAssessments.map(formAssessment)); setVisitRemarks(data.visitRemarks || ""); setDateMonitored(data.dateMonitored || dateMonitored); setUnconfirmed(null); setError(""); return;
+      }
+      const equivalent = (left, right) => ["sampleId", "condition", "remarks", "investigationOutcome", "searchFindings"].every(key => String(left[key] || "").trim() === String(right[key] || "").trim()) && ["heightCentimeters", "diameterCentimeters"].every(key => (left[key] === "" || left[key] == null ? null : Number(left[key])) === (right[key] === "" || right[key] == null ? null : Number(right[key])));
+      const matches = data.version > unconfirmed.expectedVersion && data.status === (unconfirmed.submit ? "PENDING_ADMIN_APPROVAL" : "DRAFT") && data.sampleAssessments.length === unconfirmed.assessments.length && unconfirmed.assessments.every(row => data.sampleAssessments.some(saved => equivalent(row, saved))) && String(data.visitRemarks || "") === unconfirmed.visitRemarks.trim() && data.dateMonitored === unconfirmed.dateMonitored;
+      if (!matches) { setError("The saved outcome is not confirmed. Keep these entries and check again before retrying."); return; }
+      setSavedDraft(draftSnapshot(data.sampleAssessments.map(formAssessment), data.visitRemarks || "", data.dateMonitored || dateMonitored));
+      resetEvidence(); setDetail(data); setAssessments(data.sampleAssessments.map(formAssessment)); setVisitRemarks(data.visitRemarks || ""); setDateMonitored(data.dateMonitored || dateMonitored); setUnconfirmed(null); setError("");
+    } catch (failure) { setError(failure.message); }
+    finally { operationBusy.current = false; setSaving(false); }
   };
 
   const cameraBinding = useMemo(() => {
@@ -219,7 +258,7 @@ export default function PermanentSampleMonitoringPage() {
 
   const cameraRequest = async (path, options) => ({ data: await api(path, options) });
 
-  const attachEvidence = ({ file, descriptor }) => {
+  const attachEvidence = ({ file, descriptor, location }) => {
     if (!cameraSampleId || captureEpoch.current !== evidenceEpoch.current) return;
     const previousUrl = pendingEvidence[pendingKey(cameraSampleId)]?.previewUrl;
     if (previousUrl) { URL.revokeObjectURL(previousUrl); objectUrls.current.delete(previousUrl); }
@@ -227,66 +266,91 @@ export default function PermanentSampleMonitoringPage() {
     objectUrls.current.add(previewUrl);
     setPendingEvidence((current) => ({
       ...current,
-      [pendingKey(cameraSampleId)]: { file, descriptor, previewUrl },
+      [pendingKey(cameraSampleId)]: { file, descriptor, previewUrl, location },
     }));
+    setFieldErrors(current => ({ ...current, [cameraSampleId + ".evidence"]: "" }));
     setCameraOpen(false);
     setCameraSampleId("");
+  };
+
+  const originalsEnabled = import.meta.env.VITE_SAMPLE_MONITORING_FORM_ACCEPTANCE === "true" &&
+    import.meta.env.VITE_MONITORING_ORIGINAL_PHOTO_PROPOSAL === "true" && detail?.originalPhotoProposal?.linkingEnabled === true;
+  const chooseOriginal = (sampleId, file) => {
+    if (!file || !originalsEnabled || operationBusy.current) return;
+    if (savedDraft !== draftSnapshot(assessments, visitRemarks, dateMonitored) || !detail.dateMonitored) {
+      setFieldErrors(current => ({...current,[sampleId+".evidence"]:"Save the actual monitoring date and assessment draft before selecting an original photo."})); return;
+    }
+    const contextKey = pendingKey(sampleId), previous = pendingEvidence[contextKey];
+    if (previous?.previewUrl) { URL.revokeObjectURL(previous.previewUrl); objectUrls.current.delete(previous.previewUrl); }
+    const previewUrl=URL.createObjectURL(file); objectUrls.current.add(previewUrl);
+    setPendingEvidence(current=>({...current,[contextKey]:{file,previewUrl,selectionId:crypto.randomUUID(),descriptor:{source:"uploaded-original"}}}));
+    setFieldErrors(current=>({...current,[sampleId+".evidence"]:""}));
   };
 
   const uploadEvidence = async (sampleId) => {
     const contextKey = pendingKey(sampleId);
     const pending = pendingEvidence[contextKey];
     const assessment = detail?.sampleAssessments?.find((item) => item.sampleId === sampleId);
-    if (!pending || !detail || !assessment) return;
+    if (!pending || !detail || !assessment || operationBusy.current || unconfirmed) return;
+    operationBusy.current = true;
     const epoch = evidenceEpoch.current;
-    const attemptKey = `${contextKey}:${pending.descriptor.captureSessionId}`;
+    const attemptKey = `${contextKey}:${pending.selectionId || pending.descriptor.captureSessionId}`;
     const key = uploadKeys.current[attemptKey] || crypto.randomUUID();
     uploadKeys.current[attemptKey] = key;
     setSaving(true);
     setError("");
     try {
+      let descriptor = pending.descriptor;
+      if (descriptor.source === "uploaded-original" && !descriptor.originalVerificationId) {
+        const verifyForm = new FormData(); verifyForm.set("photos",pending.file); verifyForm.set("source","uploaded-original");
+        verifyForm.set("expectedVisitVersion",String(detail.version)); verifyForm.set("assessmentRevision",String(assessment.assessmentRevision || 0));
+        const proof=await api(`/verified-sample-monitoring/visits/${encodeURIComponent(detail.id)}/samples/${encodeURIComponent(sampleId)}/original-photo/verify`,{method:"POST",body:verifyForm,headers:{"Idempotency-Key":key}});
+        descriptor={source:"uploaded-original",originalVerificationId:proof.originalVerificationId};
+        setPendingEvidence(current=>({...current,[contextKey]:{...current[contextKey],descriptor,location:proof.location,verification:proof}}));
+      }
       const form = new FormData();
       form.append("photos", pending.file);
       form.append("assessmentRevision", String(assessment.assessmentRevision || 0));
       form.append("expectedVisitVersion", String(detail.version));
-      form.append("evidenceManifest", JSON.stringify([pending.descriptor]));
-      const response = await authenticatedFetch(
-        `/verified-sample-monitoring/visits/${encodeURIComponent(detail.id)}/samples/${encodeURIComponent(sampleId)}/evidence`,
-        { method: "PUT", body: form, headers: { "Idempotency-Key": key } }
-      );
-      const payload = await response.json().catch(() => ({}));
+      form.append("evidenceManifest", JSON.stringify([descriptor]));
+      const { response, payload } = await withDeadline((async () => {
+        const response = await authenticatedFetch(`/verified-sample-monitoring/visits/${encodeURIComponent(detail.id)}/samples/${encodeURIComponent(sampleId)}/evidence`, { method: "PUT", body: form, headers: { "Idempotency-Key": key } });
+        return { response, payload: await response.json().catch(() => ({})) };
+      })(), UPLOAD_TIMEOUT_MS, () => new RequestTimeoutError("Photo upload was not confirmed. Retry this same photo to check its saved outcome.", { ambiguous: true }));
       if (epoch !== evidenceEpoch.current) return;
       if (!response.ok || !payload.success) {
         throw Object.assign(new Error(payload.message || "Evidence upload could not be completed."), {
-          status: response.status,
+          status: response.status, code:payload.code,
         });
       }
       uploadKeys.current[attemptKey] = "";
+      setFieldErrors(current => ({ ...current, [sampleId + ".evidence"]: "" }));
       setPendingEvidence((current) => {
         const next = { ...current };
         delete next[contextKey];
         return next;
       });
-      await open(detail.id);
+      if (pending.previewUrl) { URL.revokeObjectURL(pending.previewUrl); objectUrls.current.delete(pending.previewUrl); }
+      try { const fresh = await api(`/verified-sample-monitoring/visits/${encodeURIComponent(detail.id)}`); if (epoch === evidenceEpoch.current) setDetail(fresh); }
+      catch { setError("Photo saved. Visit refresh failed; reload the visit to view its current evidence."); }
     } catch (requestError) {
       setError(
-        requestError.status === 409
+        requestError.status === 409 && !requestError.code?.startsWith("ORIGINAL_")
           ? "Evidence changed while uploading. Refresh the visit and retake the photo if required."
           : requestError.message
       );
-    } finally {
-      setSaving(false);
-    }
+      setFieldErrors(current => ({ ...current, [sampleId + ".evidence"]: requestError.message }));
+    } finally { operationBusy.current = false; setSaving(false); }
   };
 
-  const viewEvidence = async (sampleId, evidenceIndex) => {
+  const viewEvidence = async (sampleId, evidenceIndex, sourceVisitId = detail?.id) => {
     if (!detail) return;
     const epoch = evidenceEpoch.current;
-    const key = evidenceKey(sampleId, evidenceIndex);
+    const key = evidenceKey(sampleId, evidenceIndex, sourceVisitId);
     if (evidenceUrls[key]) return;
     try {
       const response = await authenticatedFetch(
-        `/evidence/sample-monitoring/visits/${encodeURIComponent(detail.id)}/samples/${encodeURIComponent(sampleId)}/evidence/${evidenceIndex}`
+        sourceVisitId === "baseline" ? `/evidence/verified-planting-cohorts/${encodeURIComponent(detail.cohortId)}/baseline/${encodeURIComponent(sampleId)}/photos/${evidenceIndex}` : `/evidence/sample-monitoring/visits/${encodeURIComponent(sourceVisitId)}/samples/${encodeURIComponent(sampleId)}/evidence/${evidenceIndex}`
       );
       if (!response.ok) throw new Error("The private evidence photo is unavailable.");
       const blob = await response.blob();
@@ -300,12 +364,12 @@ export default function PermanentSampleMonitoringPage() {
   };
 
   const review = async (approve) => {
-    if (!detail || userRole !== "admin") return;
+    if (!detail || userRole !== "admin" || operationBusy.current || unconfirmed) return;
     if (!approve && !reviewReasons.trim()) {
       setError("A return reason is required before sending the visit for correction.");
       return;
     }
-    setReviewing(true);
+    operationBusy.current = true; setReviewing(true);
     setError("");
     try {
       const data = await api(
@@ -316,6 +380,7 @@ export default function PermanentSampleMonitoringPage() {
             expectedVersion: detail.version,
             approve,
             reasons: reviewReasons.trim(),
+            ...(approve && detail.originalEvidenceReviewRequirements?.length ? {originalEvidenceReviews:detail.originalEvidenceReviewRequirements.filter(item=>originalReviews[item.evidenceId])} : {}),
           }),
         }
       );
@@ -323,13 +388,14 @@ export default function PermanentSampleMonitoringPage() {
       setAssessments((data.sampleAssessments || []).map(formAssessment));
       setReviewReasons("");
     } catch (requestError) {
+      if (requestError.ambiguous) setUnconfirmed({ visitId: detail.id, review: approve, reasons: reviewReasons.trim() });
       setError(
-        requestError.status === 409
+        requestError.status === 409 && !requestError.code?.startsWith("ORIGINAL_")
           ? "This monitoring visit changed. Reload the current authorized visit before reviewing it."
           : requestError.message
       );
     } finally {
-      setReviewing(false);
+      operationBusy.current = false; setReviewing(false);
     }
   };
 
@@ -361,7 +427,7 @@ export default function PermanentSampleMonitoringPage() {
       <p>Existing authorized visits only. Scheduling and visit creation are unavailable.</p>
       <label>
         Status
-        <select value={status} onChange={(event) => setStatus(event.target.value)}>
+        <select value={status} onChange={(event) => { if (allowDiscard()) setStatus(event.target.value); }}>
           <option value="">All statuses</option>
           {["DRAFT", "RETURNED", "PENDING_ADMIN_APPROVAL", "APPROVED"].map(
             (value) => (
@@ -389,175 +455,42 @@ export default function PermanentSampleMonitoringPage() {
             <p role="status">No authorized monitoring visits are available.</p>
           )}
           {page.nextCursor && (
-            <button type="button" onClick={() => load(page.nextCursor)}>
+            <button type="button" onClick={() => { if (allowDiscard()) load(page.nextCursor); }}>
               Next page
             </button>
           )}
         </>
       )}
-      {detail && (
-        <section className="cohort-card">
+      {detail && <ModalDialog open={dialogOpen} label="Monitor Planted Trees" className="psm-dialog" dismissible={!saving && !reviewing} busy={saving || reviewing} onClose={() => setDialogOpen(false)}>
+        <header className="psm-header"><div><h2>Monitor Planted Trees</h2><p>Monitor registered sample trees and document their current survival conditions.</p><strong>{({ DRAFT: "Draft", RETURNED: "Returned for Correction", PENDING_ADMIN_APPROVAL: "Pending Admin Review", APPROVED: "Approved" })[detail.status] || detail.status}</strong></div><button type="button" data-modal-close="" disabled={saving || reviewing} aria-label="Close monitoring visit">Close</button></header>
+        <div className="psm-body">
+        <label className="psm-field">Verified Planting Report<select value={detail.id} disabled={saving || Boolean(unconfirmed)} onChange={event => open(event.target.value)}>{(page?.visits || [detail]).map(row => <option key={row.id} value={row.id}>{row.visitDate || row.id} - {row.id}</option>)}</select></label>
+        {error && <p role="alert" className="psm-error">{error}</p>}
+        {unconfirmed ? <button type="button" disabled={saving} onClick={reconcile}>Check saved outcome</button> : <button type="button" disabled={saving || reviewing} onClick={() => open(detail.id, true)}>Reload visit</button>}
+        <section className="psm-content">
           <h2>{detail.id}</h2>
           <p>{`${detail.status} · version ${detail.version}`}</p>
-          <p role="status">{`${completed}/${assessments.length} assessments recorded.`}</p>
+          {!editable && <p role="status">{`${completed}/${assessments.length} assessments recorded.`}</p>}
           {editable ? (
-            <>
-              <p>Each draft save sends all authoritative sample assessments with the current visit version.</p>
-              {assessments.map((assessment) => (
-                <fieldset key={assessment.sampleId}>
-                  <legend>{assessment.sampleId}</legend>
-                  {assessment.previousAssessmentReference && (
-                    <p>
-                      Previous assessment: {assessment.previousAssessmentReference.condition || "recorded"}
-                      {assessment.previousAssessmentReference.remarks
-                        ? ` — ${assessment.previousAssessmentReference.remarks}`
-                        : ""}
-                    </p>
-                  )}
-                  <label>
-                    Height (cm)
-                    <input
-                      type="number"
-                      value={assessment.heightCentimeters}
-                      onChange={(event) =>
-                        updateAssessment(assessment.sampleId, "heightCentimeters", event.target.value)
-                      }
-                    />
-                  </label>
-                  <label>
-                    Diameter (cm)
-                    <input
-                      type="number"
-                      value={assessment.diameterCentimeters}
-                      onChange={(event) =>
-                        updateAssessment(assessment.sampleId, "diameterCentimeters", event.target.value)
-                      }
-                    />
-                  </label>
-                  <label>
-                    Condition
-                    <select
-                      value={assessment.condition}
-                      onChange={(event) =>
-                        updateAssessment(assessment.sampleId, "condition", event.target.value)
-                      }
-                    >
-                      <option value="">Select condition</option>
-                      {CONDITIONS.map((condition) => (
-                        <option key={condition}>{condition}</option>
-                      ))}
-                    </select>
-                  </label>
-                  <label>
-                    Remarks
-                    <textarea
-                      value={assessment.remarks}
-                      onChange={(event) =>
-                        updateAssessment(assessment.sampleId, "remarks", event.target.value)
-                      }
-                    />
-                  </label>
-                  {assessment.condition === "Needs Rechecking" && (
-                    <>
-                      <label>
-                        Investigation outcome
-                        <select
-                          value={assessment.investigationOutcome}
-                          onChange={(event) =>
-                            updateAssessment(
-                              assessment.sampleId,
-                              "investigationOutcome",
-                              event.target.value
-                            )
-                          }
-                        >
-                          <option value="">No outcome recorded</option>
-                          <option value={INVESTIGATION_OUTCOME}>{INVESTIGATION_OUTCOME}</option>
-                        </select>
-                      </label>
-                      {assessment.investigationOutcome === INVESTIGATION_OUTCOME && (
-                        <label>
-                          Search findings
-                          <textarea
-                            value={assessment.searchFindings}
-                            onChange={(event) =>
-                              updateAssessment(
-                                assessment.sampleId,
-                                "searchFindings",
-                                event.target.value
-                              )
-                            }
-                          />
-                        </label>
-                      )}
-                    </>
-                  )}
-                  <button type="button" disabled={saving} onClick={() => save(false)}>
-                    Save {assessment.sampleId} Draft
-                  </button>
-                  <button
-                    type="button"
-                    disabled={saving}
-                    onClick={() => {
-                      setCameraSampleId(assessment.sampleId);
-                      setCameraOpen(true);
-                      captureEpoch.current = evidenceEpoch.current;
-                    }}
-                  >
-                    Capture verified photo for {assessment.sampleId}
-                  </button>
-                  {pendingEvidence[pendingKey(assessment.sampleId)] && (
-                    <div>
-                      <p role="status">Verified photo ready for private upload.</p>
-                      {saving && <p role="status">Uploading private evidence…</p>}
-                      <img
-                        className="cohort-photo-preview"
-                        src={pendingEvidence[pendingKey(assessment.sampleId)].previewUrl}
-                        alt={`Verified evidence preview for ${assessment.sampleId}`}
-                      />
-                      <button
-                        type="button"
-                        disabled={saving}
-                        onClick={() => uploadEvidence(assessment.sampleId)}
-                      >
-                        Upload verified photo for {assessment.sampleId}
-                      </button>
-                    </div>
-                  )}
-                  {(detail.sampleAssessments || [])
-                    .find((item) => item.sampleId === assessment.sampleId)
-                    ?.evidenceHistory?.map((evidence, evidenceIndex) => {
-                      const key = evidenceKey(assessment.sampleId, evidenceIndex);
-                      return (
-                        <div key={key}>
-                          <p>{`Historical evidence revision ${evidence.revision}`}</p>
-                          {evidenceUrls[key] ? (
-                            <img
-                              className="cohort-photo-preview"
-                              src={evidenceUrls[key]}
-                              alt={`Private evidence for ${assessment.sampleId}, revision ${evidence.revision}`}
-                            />
-                          ) : (
-                            <button type="button" onClick={() => viewEvidence(assessment.sampleId, evidenceIndex)}>
-                              View private evidence revision {evidence.revision}
-                            </button>
-                          )}
-                        </div>
-                      );
-                    })}
-                </fieldset>
-              ))}
-              <button type="button" disabled={saving} onClick={() => save(true)}>
-                Submit Visit
-              </button>
-            </>
+            <PermanentSampleVisitForm detail={detail} assessments={assessments} activeTreeId={activeTreeId} onTree={setActiveTreeId}
+              errors={fieldErrors} onChange={updateAssessment} saving={saving || Boolean(unconfirmed)} onSave={save} questions={questions} onQuestion={(sampleId,value) => setQuestions(current => ({ ...current, [sampleId]: value }))}
+              originalEnabled={originalsEnabled} onOriginal={chooseOriginal}
+              pendingFor={sampleId => pendingEvidence[pendingKey(sampleId)]} onUpload={uploadEvidence}
+              onDiscard={sampleId => { const key = pendingKey(sampleId), photo = pendingEvidence[key]; if (photo?.previewUrl) { URL.revokeObjectURL(photo.previewUrl); objectUrls.current.delete(photo.previewUrl); } setPendingEvidence(current => { const next = { ...current }; delete next[key]; return next; }); }}
+              onCapture={sampleId => { setCameraSampleId(sampleId); setCameraOpen(true); captureEpoch.current = evidenceEpoch.current; }}
+              evidenceUrls={evidenceUrls} evidenceKey={evidenceKey} onView={viewEvidence} visitRemarks={visitRemarks} onVisitRemarks={setVisitRemarks} dateMonitored={dateMonitored} onDateMonitored={value => { setDateMonitored(value); setFieldErrors(current => ({ ...current, dateMonitored: "" })); }}/>
           ) : (
             <>
+              <div className="psm-info"><p>Planting site: {detail.visitContext?.siteName || "Not supplied"}</p><p>Planting report: {detail.visitContext?.reportNumber || detail.visitContext?.plantingReportId || "Not supplied"}</p><p>Date Monitored: {detail.dateMonitored || "Not recorded"}</p>{detail.visitRemarks && <p>Visit remarks: {detail.visitRemarks}</p>}</div>
               <p>{`Cohort ${detail.cohortId} · Site ${detail.siteId} · ${completed}/${assessments.length} assessments complete`}</p>
               {detail.reviewReasons && <p>{`Review reason: ${detail.reviewReasons}`}</p>}
               {userRole === "admin" && !detail.writesPaused && detail.status === "PENDING_ADMIN_APPROVAL" && (
                 <section aria-label="Admin visit review">
                   <h3>Admin Visit Review</h3>
+                  {(detail.originalEvidenceReviewRequirements || []).map(item=><label key={item.evidenceId} className="psm-field">
+                    <input type="checkbox" checked={Boolean(originalReviews[item.evidenceId])} onChange={event=>setOriginalReviews(current=>({...current,[item.evidenceId]:event.target.checked}))}/>
+                    I reviewed the uploaded original for {item.sampleId}, revision {item.assessmentRevision}. GPS accuracy is Unknown; EXIF does not prove authenticity. Local proposed policy only.
+                  </label>)}
                   <label>
                     Return reason
                     <textarea
@@ -566,10 +499,10 @@ export default function PermanentSampleMonitoringPage() {
                     />
                   </label>
                   {reviewing && <p role="status">Submitting Admin decision…</p>}
-                  <button type="button" disabled={reviewing} onClick={() => review(true)}>
+                  <button type="button" disabled={reviewing || Boolean(unconfirmed)} onClick={() => review(true)}>
                     Approve Visit
                   </button>
-                  <button type="button" disabled={reviewing} onClick={() => review(false)}>
+                  <button type="button" disabled={reviewing || Boolean(unconfirmed)} onClick={() => review(false)}>
                     Return for Correction
                   </button>
                 </section>
@@ -586,6 +519,8 @@ export default function PermanentSampleMonitoringPage() {
                       ? ` · diameter ${assessment.diameterCentimeters} cm`
                       : ""}
                     {assessment.remarks ? ` · ${assessment.remarks}` : ""}
+                    {assessment.evidenceHistory?.some(e=>e.source === "uploaded-original") && <p>Uploaded original: GPS accuracy Unknown. EXIF does not prove authenticity.</p>}
+                    {assessment.evidenceHistory?.at(-1)?.location && <p>Recorded evidence GPS: {assessment.evidenceHistory.at(-1).location.latitude}, {assessment.evidenceHistory.at(-1).location.longitude}</p>}
                     {assessment.investigationOutcome
                       ? ` · ${assessment.investigationOutcome}`
                       : ""}
@@ -629,8 +564,11 @@ export default function PermanentSampleMonitoringPage() {
             </>
           )}
         </section>
-      )}
-      {detail && informationEnabled() && <MonitoringInformationPanel key={detail.id} visitId={detail.id} readOnly={detail.writesPaused} />}
+        {informationEnabled() && <MonitoringInformationPanel key={detail.id} visitId={detail.id} readOnly={detail.writesPaused} />}
+        </div>
+        <footer className="psm-footer">{editable && <><button type="button" disabled={saving || Boolean(unconfirmed)} onClick={() => save(false)}>{saving ? "Saving..." : "Save Draft"}</button><button type="button" className="psm-primary" aria-label="Submit Visit" disabled={saving || Boolean(unconfirmed)} onClick={() => save(true)}>{saving ? "Submitting..." : "Submit Monitoring Visit"}</button></>}</footer>
+      </ModalDialog>}
+      {cameraOpen && <ModalDialog label="Monitoring camera" className="psm-camera-host" onClose={() => { setCameraOpen(false); setCameraSampleId(""); }}>
       <SecureCameraCapture
         open={cameraOpen}
         request={cameraRequest}
@@ -640,8 +578,9 @@ export default function PermanentSampleMonitoringPage() {
           setCameraOpen(false);
           setCameraSampleId("");
         }}
-        onDiagnostic={({ message }) => setError(message)}
+        onDiagnostic={({ message }) => { setError(message); setFieldErrors(current => ({ ...current, [cameraSampleId + ".evidence"]: message })); }}
       />
+      </ModalDialog>}
     </main>
   );
 }

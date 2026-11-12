@@ -19,12 +19,12 @@ function barangayStyle(feature, barangay) {
   };
 }
 
-export default function PlantingLocationMap({ site, evidence, status, onBoundaries, onBoundaryError }) {
+export default function PlantingLocationMap({ site, evidence, registeredTree, status, onBoundaries, onBoundaryError }) {
   const root = useRef(null), mapRef = useRef(null), layers = useRef(null), callbacks = useRef({});
   const [barangayLayer, setBarangayLayer] = useState(null);
   const barangay = site?.barangay || "";
   const latitude = coordinateValue(evidence?.latitude), longitude = coordinateValue(evidence?.longitude);
-  const accuracy = coordinateValue(evidence?.accuracy);
+  const accuracy = coordinateValue(evidence?.accuracy ?? evidence?.accuracyMeters);
 
   useEffect(() => { callbacks.current = { onBoundaries, onBoundaryError }; }, [onBoundaries, onBoundaryError]);
 
@@ -37,7 +37,7 @@ export default function PlantingLocationMap({ site, evidence, status, onBoundari
     }).addTo(map);
     const site = L.layerGroup().addTo(map), captured = L.layerGroup().addTo(map);
     mapRef.current = map;
-    layers.current = { site, captured };
+    layers.current = { site, captured, tree: L.layerGroup().addTo(map) };
 
     authenticatedFetch("/sites/barangay-boundaries").then(response => {
       if (!response.ok) throw new Error("Boundary unavailable");
@@ -69,6 +69,12 @@ export default function PlantingLocationMap({ site, evidence, status, onBoundari
     return () => {
       active = false;
       window.clearTimeout(resize);
+      // Leaflet 1.9 finishes a zoom animation from a 250 ms timer that is not
+      // cancelled by remove(); closing the form mid-zoom (for example right
+      // after a confirmed save) then throws "_leaflet_pos". The timer returns
+      // early when no zoom is animating.
+      map.stop();
+      map._animatingZoom = false;
       map.remove();
       mapRef.current = null;
       layers.current = null;
@@ -84,6 +90,7 @@ export default function PlantingLocationMap({ site, evidence, status, onBoundari
     if (!map || !group) return undefined;
     group.site.clearLayers();
     group.captured.clearLayers();
+    group.tree.clearLayers();
     const fitPoints = [];
     const siteName = site?.siteName || "Registered Planting Site";
     const siteLatitude = coordinateValue(site?.latitude), siteLongitude = coordinateValue(site?.longitude);
@@ -112,6 +119,12 @@ export default function PlantingLocationMap({ site, evidence, status, onBoundari
       fitPoints.push([siteLatitude, siteLongitude]);
     }
 
+    const treeLatitude = coordinateValue(registeredTree?.latitude), treeLongitude = coordinateValue(registeredTree?.longitude);
+    if (Number.isFinite(treeLatitude) && Number.isFinite(treeLongitude)) {
+      L.circleMarker([treeLatitude, treeLongitude], { radius: 7, color: "#684b11", weight: 2, fillColor: "#e6b64c", fillOpacity: 1 })
+        .bindTooltip(`${registeredTree.sampleId || "Permanent sample"} - Registered Tree`).addTo(group.tree);
+      fitPoints.push([treeLatitude, treeLongitude]);
+    }
     if (Number.isFinite(latitude) && Number.isFinite(longitude)) {
       L.circleMarker([latitude, longitude], { radius: 8, color: "#ffffff", weight: 2, fillColor: "#2563eb", fillOpacity: 1 })
         .bindTooltip("Detected Evidence Location", { permanent: false, direction: "top", offset: [0, -8] }).addTo(group.captured);
@@ -127,7 +140,7 @@ export default function PlantingLocationMap({ site, evidence, status, onBoundari
     }
     const resize = window.setTimeout(() => map.invalidateSize(), 0);
     return () => window.clearTimeout(resize);
-  }, [site, latitude, longitude, accuracy]);
+  }, [site, registeredTree, latitude, longitude, accuracy]);
 
   return <div className="pr-location-map-section">
     <div className="pr-location-map-heading">
@@ -140,6 +153,7 @@ export default function PlantingLocationMap({ site, evidence, status, onBoundari
     <div className="pr-location-map-legend">
       <span><i className="pr-map-legend-line" /> Barangay Boundary</span>
       <span><i className="pr-map-legend-site" /> Registered Site</span>
+      {registeredTree && <span><i style={{ display: "inline-block", width: 9, height: 9, borderRadius: "50%", background: "#e6b64c" }} /> Registered Tree</span>}
       <span><i className="pr-map-legend-captured" /> Evidence GPS</span>
     </div>
   </div>;
