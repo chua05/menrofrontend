@@ -292,10 +292,10 @@ test("existing visit selection loads authoritative sample details", async ({ pag
   await isolate(page);
   await page.goto("/staff/permanent-sample-monitoring?role=staff");
   await page.getByRole("button", { name: "VPMV-STAFF-001" }).click();
-  await expect(page.getByRole("heading", { name: "VPMV-STAFF-001" })).toBeVisible();
-  await expect(page.getByRole("group", { name: "TREE-001" }).getByLabel("Condition")).toHaveValue("Healthy");
+  await expect(page.getByRole("combobox", { name: "Verified Planting Report", exact: true })).toHaveValue("VPMV-STAFF-001");
+  await expect(page.getByRole("group", { name: "TREE-001" }).getByRole("radio",{name:"Healthy",exact:true})).toBeChecked();
   await page.locator(".psm-tree-list button").filter({hasText:"TREE-002"}).click();
-  await expect(page.getByRole("group", { name: "TREE-002" }).getByLabel("Condition",{exact:true})).toHaveValue("Needs Rechecking");
+  await expect(page.getByRole("group", { name: "TREE-002" }).getByRole("radio",{name:"Needs Rechecking",exact:true})).toBeChecked();
   await page.getByRole("button",{name:"Previous Tree"}).click();
   await expect(page.getByText(/Previous assessment: Healthy/)).toBeVisible();
   await expect.poll(() => page.evaluate(() => window.__PHASE3C_REQUESTS__.at(-1))).toBe("/verified-sample-monitoring/visits/VPMV-STAFF-001");
@@ -365,7 +365,7 @@ test("staff validates required rechecking data and saves the full versioned asse
   await page.getByRole("button",{name:"Previous Tree"}).click();
   await page.getByRole("group", { name: "TREE-001" }).getByLabel("Height (cm)").fill("123");
   await page.getByRole("button", { name: "Save TREE-001 Draft" }).click();
-  await expect(page.getByText("DRAFT · version 5")).toBeVisible();
+  await expect(page.getByText("Draft · Revision 5")).toBeVisible();
   const mutation = await page.evaluate(() => window.__PHASE3C_MUTATIONS__.at(-1));
   await expect(mutation.path).toBe("VPMV-STAFF-001");
   await expect(mutation.payload.expectedVersion).toBe(4);
@@ -379,7 +379,7 @@ test("staff submits one complete visit and handles stale version conflicts safel
   await page.goto("/staff/permanent-sample-monitoring?role=staff");
   await page.getByRole("button", { name: "VPMV-STAFF-001" }).click();
   await page.getByRole("button", { name: "Submit Visit" }).click();
-  await expect(page.getByText("PENDING_ADMIN_APPROVAL · version 5")).toBeVisible();
+  await expect(page.getByText("Pending Admin Review · Revision 5")).toBeVisible();
   const submit = await page.evaluate(() => window.__PHASE3C_MUTATIONS__.at(-1));
   await expect(submit.payload.submit).toBe(true);
 
@@ -395,7 +395,7 @@ test("returned visits support staff correction while approved visits and admin v
   await page.getByRole("button", { name: "VPMV-RETURNED-001" }).click();
   await page.getByRole("group", { name: "TREE-001" }).getByLabel("Remarks").fill("Corrected after return.");
   await page.getByRole("button", { name: "Save TREE-001 Draft" }).click();
-  await expect(page.getByText("DRAFT · version 8")).toBeVisible();
+  await expect(page.getByText("Draft · Revision 8")).toBeVisible();
   const correction = await page.evaluate(() => window.__PHASE3C_MUTATIONS__.at(-1));
   await expect(correction.payload.expectedVersion).toBe(7);
 
@@ -491,7 +491,7 @@ test("admin reviews one consolidated pending visit with assessments, history, an
   await isolate(page);
   await page.goto("/admin/permanent-sample-monitoring?role=admin&fixture=review-pending");
   await page.getByRole("button", { name: "VPMV-PENDING-REVIEW-001" }).click();
-  await expect(page.getByRole("heading", { name: "VPMV-PENDING-REVIEW-001" })).toBeVisible();
+  await expect(page.getByRole("combobox", { name: "Verified Planting Report", exact: true })).toHaveValue("VPMV-PENDING-REVIEW-001");
   await expect(page.getByText(/Cohort cohort-fixture.*Site site-fixture.*2\/2 assessments complete/)).toBeVisible();
   await expect(page.getByText(/TREE-001: Healthy.*height 120 cm.*diameter 6 cm.*Stable growth/)).toBeVisible();
   await expect(page.getByText(/TREE-002: Needs Rechecking.*Not Located After Rechecking/)).toBeVisible();
@@ -510,7 +510,7 @@ test("admin validates return reason and posts one versioned approval decision", 
   expect(await page.evaluate(() => window.__PHASE3C_REVIEWS__ || [])).toHaveLength(0);
 
   await page.getByRole("button", { name: "Approve Visit" }).click();
-  await expect(page.getByText("APPROVED · version 11")).toBeVisible();
+  await expect(page.getByText("Approved · Revision 11")).toBeVisible();
   const review = await page.evaluate(() => window.__PHASE3C_REVIEWS__.at(-1));
   await expect(review).toEqual({
     visitId: "VPMV-PENDING-REVIEW-001",
@@ -526,7 +526,7 @@ test("admin returns a visit with reason while staff cannot access review actions
   await page.getByRole("button", { name: "VPMV-PENDING-REVIEW-001" }).click();
   await page.getByLabel("Return reason").fill("Please verify TREE-002 location.");
   await page.getByRole("button", { name: "Return for Correction" }).click();
-  await expect(page.getByText("RETURNED · version 11")).toBeVisible();
+  await expect(page.getByText("Returned for Correction · Revision 11")).toBeVisible();
   await expect(page.getByText("Review reason: Please verify TREE-002 location.")).toBeVisible();
   const returned = await page.evaluate(() => window.__PHASE3C_REVIEWS__.at(-1));
   await expect(returned.payload).toEqual({
@@ -546,7 +546,7 @@ test("stale and failed admin reviews retain the authoritative pending state", as
   await page.getByRole("button", { name: "VPMV-PENDING-REVIEW-001" }).click();
   await page.getByRole("button", { name: "Approve Visit" }).click();
   await expect(page.getByRole("dialog",{name:"Monitor Planted Trees"}).getByRole("alert")).toContainText("This monitoring visit changed.");
-  await expect(page.getByText("PENDING_ADMIN_APPROVAL · version 11")).toBeVisible();
+  await expect(page.getByText("Pending Admin Review · Revision 11")).toBeVisible();
 
   await page.goto("/admin/permanent-sample-monitoring?role=admin&fixture=review-failure");
   await page.getByRole("button", { name: "VPMV-PENDING-REVIEW-001" }).click();
