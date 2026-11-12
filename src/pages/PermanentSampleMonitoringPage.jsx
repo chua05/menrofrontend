@@ -14,7 +14,7 @@ import {
 } from "../utils/verifiedPlantingCohort";
 import { useAuth } from "../context/AuthContext";
 import { Trees, X } from "lucide-react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 
 const STATUS_LABELS = { DRAFT: "Draft", RETURNED: "Returned for Correction", PENDING_ADMIN_APPROVAL: "Pending Admin Review", APPROVED: "Approved" };
 const statusLabel = value => STATUS_LABELS[value] || value;
@@ -75,6 +75,10 @@ export default function PermanentSampleMonitoringPage() {
   const [cameraSampleId, setCameraSampleId] = useState("");
   const [pendingEvidence, setPendingEvidence] = useState({});
   const [evidenceUrls, setEvidenceUrls] = useState({});
+  const [searchParams] = useSearchParams();
+  // One-time arrival request from the Staff "Submit Monitoring Record" action (?start=1).
+  const startRequested = useRef(searchParams.get("start") === "1");
+  const [selectPrompt, setSelectPrompt] = useState(false);
   const unsaved = userRole === "staff" && ["DRAFT", "RETURNED"].includes(detail?.status) &&
     (Object.keys(pendingEvidence).length > 0 || Object.values(questions).some(value => value.trim()) ||
       savedDraft !== draftSnapshot(assessments, visitRemarks, dateMonitored));
@@ -101,52 +105,7 @@ export default function PermanentSampleMonitoringPage() {
   const pendingKey = sampleId => JSON.stringify([detail?.id, sampleId, detail?.version,
     detail?.sampleAssessments?.find(row => row.sampleId === sampleId)?.assessmentRevision || 0]);
 
-  const load = useCallback(
-    async (next = "") => {
-      setLoading(true);
-      setError("");
-      try {
-        const query = new URLSearchParams();
-        if (status) query.set("status", status);
-        if (next) query.set("cursor", next);
-        const data = await api(`/verified-sample-monitoring/visits?${query}`);
-        setPage(data);
-        resetEvidence();
-        setDetail(null);
-        setAssessments([]);
-      } catch (requestError) {
-        setError(
-          requestError.status === 401
-            ? "Sign in is required."
-            : requestError.status === 403
-              ? "You are not authorized to view monitoring visits."
-              : requestError.message
-        );
-      } finally {
-        setLoading(false);
-      }
-    },
-    [status, resetEvidence]
-  );
-
-  useEffect(() => {
-    if (!enabled || !["staff", "admin"].includes(userRole)) return undefined;
-    const timer = window.setTimeout(() => load(), 0);
-    return () => window.clearTimeout(timer);
-  }, [enabled, load, userRole]);
-
-  const allowDiscard = () => {
-    if (!unsaved || window.confirm("This visit has unsaved assessments, photos or questions. Discard those changes?")) return true;
-    setError("Save your draft, upload pending photos or send your question before changing visits. Your entries have been kept.");
-    setDialogOpen(true);
-    return false;
-  };
-
-  const open = async (visitId, refresh = false) => {
-    if (operationBusy.current) return;
-    if (unconfirmed) { if (detail?.id === visitId) { setDialogOpen(true); return; } setError("Check the saved outcome before switching visits."); return; }
-    if (!refresh && detail?.id === visitId) { setDialogOpen(true); return; }
-    if (!allowDiscard()) return;
+  const showVisit = useCallback(async (visitId) => {
     const epoch = resetEvidence();
     setDetail(null);
     setLoading(true);
@@ -172,6 +131,63 @@ export default function PermanentSampleMonitoringPage() {
     } finally {
       setLoading(false);
     }
+  }, [resetEvidence]);
+
+  const load = useCallback(
+    async (next = "") => {
+      setLoading(true);
+      setError("");
+      try {
+        const query = new URLSearchParams();
+        if (status) query.set("status", status);
+        if (next) query.set("cursor", next);
+        const data = await api(`/verified-sample-monitoring/visits?${query}`);
+        setPage(data);
+        resetEvidence();
+        setDetail(null);
+        setAssessments([]);
+        // Arrival from the Staff "Submit Monitoring Record" action: open the visit directly only when the
+        // complete authorized list has exactly one editable visit; otherwise Staff chooses from the list.
+        if (startRequested.current && !next) {
+          startRequested.current = false;
+          const editable = (data.visits || []).filter(visit => ["DRAFT", "RETURNED"].includes(visit.status));
+          if (userRole === "staff" && editable.length === 1 && !data.nextCursor) await showVisit(editable[0].id);
+          else setSelectPrompt(true);
+        }
+      } catch (requestError) {
+        setError(
+          requestError.status === 401
+            ? "Sign in is required."
+            : requestError.status === 403
+              ? "You are not authorized to view monitoring visits."
+              : requestError.message
+        );
+      } finally {
+        setLoading(false);
+      }
+    },
+    [status, resetEvidence, showVisit, userRole]
+  );
+
+  useEffect(() => {
+    if (!enabled || !["staff", "admin"].includes(userRole)) return undefined;
+    const timer = window.setTimeout(() => load(), 0);
+    return () => window.clearTimeout(timer);
+  }, [enabled, load, userRole]);
+
+  const allowDiscard = () => {
+    if (!unsaved || window.confirm("This visit has unsaved assessments, photos or questions. Discard those changes?")) return true;
+    setError("Save your draft, upload pending photos or send your question before changing visits. Your entries have been kept.");
+    setDialogOpen(true);
+    return false;
+  };
+
+  const open = async (visitId, refresh = false) => {
+    if (operationBusy.current) return;
+    if (unconfirmed) { if (detail?.id === visitId) { setDialogOpen(true); return; } setError("Check the saved outcome before switching visits."); return; }
+    if (!refresh && detail?.id === visitId) { setDialogOpen(true); return; }
+    if (!allowDiscard()) return;
+    await showVisit(visitId);
   };
 
   const updateAssessment = (sampleId, field, value) => {
@@ -445,6 +461,7 @@ export default function PermanentSampleMonitoringPage() {
       {loading && <p role="status">Loading monitoring visits…</p>}
       {page && !loading && (
         <>
+          {selectPrompt && page.visits?.length > 0 && <p role="status">Select the monitoring visit to continue.</p>}
           {page.visits?.length ? (
             <ul>
               {page.visits.map((visit) => (
