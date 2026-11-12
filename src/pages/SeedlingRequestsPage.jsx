@@ -4282,8 +4282,15 @@ function ReviewRequestModal({
     maximumCapacity: String(request.proposedSiteVerification?.maximumCapacity ?? ""),
   });
   const [siteErrors, setSiteErrors] = useState({});
+  // Previously recorded values open the section so Staff re-confirm them; otherwise it starts collapsed.
+  const [siteVerificationOpen, setSiteVerificationOpen] = useState(() => Boolean(request.proposedSiteVerification));
   const reviewForm = useRef(null);
   const needsSiteReview = request.workflow?.siteMode === "proposed" && !request.workflow?.officialSiteId;
+  const siteVerificationSummary = siteErrors.areaHectares || siteErrors.maximumCapacity
+    ? "Required · check the highlighted fields"
+    : siteVerification.areaHectares && siteVerification.maximumCapacity
+      ? `${siteVerification.areaHectares} ha · ${siteVerification.maximumCapacity} seedlings`
+      : "Required for this proposed site";
   const completeReview = async () => {
     if (!needsSiteReview) return onSubmit(undefined);
     const next = {};
@@ -4291,10 +4298,14 @@ function ReviewRequestModal({
     if (areaError) next.areaHectares = areaError;
     if (!/^\d+$/.test(siteVerification.maximumCapacity) || !Number.isSafeInteger(Number(siteVerification.maximumCapacity)) || Number(siteVerification.maximumCapacity) <= 0) next.maximumCapacity = "Enter the verified capacity as a positive whole number.";
     setSiteErrors(next);
-    if (Object.keys(next).length) return focusFirstInvalid(() => reviewForm.current);
+    if (Object.keys(next).length) {
+      setSiteVerificationOpen(true);
+      return focusFirstInvalid(() => reviewForm.current);
+    }
     const failure = await onSubmit(siteVerification);
     if (failure?.fieldErrors) {
       setSiteErrors({ areaHectares: failure.fieldErrors.verifiedAreaHectares, maximumCapacity: failure.fieldErrors.verifiedMaximumCapacity });
+      setSiteVerificationOpen(true);
       focusFirstInvalid(() => reviewForm.current);
     }
   };
@@ -4311,11 +4322,11 @@ function ReviewRequestModal({
         onMouseDown={(event) => event.stopPropagation()}
         role="dialog"
         aria-modal="true"
-        aria-labelledby="sr-admin-decision-title"
+        aria-labelledby="sr-review-request-title"
       >
         <div className="sr-modal-header">
           <div>
-            <h2>Review Seedling Request</h2>
+            <h2 id="sr-review-request-title">Review Seedling Request</h2>
             <p>
               Mark this request as reviewed and forward it to the MENRO Administrator for final decision?
             </p>
@@ -4344,15 +4355,6 @@ function ReviewRequestModal({
             <DetailItem label="Requester Confirmation" value={confirmationRequired ? "Awaiting requester" : request.preApprovalSchedule?.status === "Confirmed" ? "Confirmed" : "Not required"} />
           </div>
           {request.processingEstimate && <p className="sr-decision-confirm-text">Estimated processing window: {formatDate(request.processingEstimate.earliestDate)} to {formatDate(request.processingEstimate.latestDate)} (advisory).</p>}
-          {needsSiteReview && <section className="sr-form-grid">
-            <p className="full-width">Verify the proposed site's area and capacity before forwarding this request for Admin approval. The requester's location stays unchanged.</p>
-            {[ ["areaHectares", "Verified Planting Area (Hectares)"], ["maximumCapacity", "Verified Site Capacity (Seedlings)"] ].map(([key, label]) => <div className="sr-form-field" key={key}>
-              <label htmlFor={`site-review-${key}`}>{label} *</label>
-              <input id={`site-review-${key}`} type="number" step={key === "areaHectares" ? "any" : "1"} min="0" value={siteVerification[key]} aria-invalid={siteErrors[key] ? "true" : undefined} aria-describedby={siteErrors[key] ? `site-review-error-${key}` : undefined}
-                onChange={event => { setSiteVerification(value => ({ ...value, [key]: event.target.value })); setSiteErrors(value => ({ ...value, [key]: "" })); }} />
-              {siteErrors[key] && <small className="sr-field-error" id={`site-review-error-${key}`} role="alert">{siteErrors[key]}</small>}
-            </div>)}
-          </section>}
           {scheduleWarning && <p className="sr-field-error" role="alert">{scheduleWarning}</p>}
           <div className="sr-form-grid">
             <label className="sr-form-field"><span>Proposed Release Date *</span><input type="date" value={schedule.preferredReleaseDate} onChange={update("preferredReleaseDate")} /></label>
@@ -4361,6 +4363,23 @@ function ReviewRequestModal({
             <label className="sr-form-field"><span>End Time</span><input type="time" value={schedule.endTime} onChange={update("endTime")} /></label>
             <label className="sr-form-field sr-form-field-full"><span>Adjustment Reason</span><textarea value={schedule.adjustmentReason} onChange={update("adjustmentReason")} placeholder="Required when changing the schedule" /></label>
           </div>
+
+          {/* Only new proposed sites without an official site record need Staff-verified area and capacity. */}
+          {needsSiteReview && <section className="sr-site-verification">
+            <button type="button" className="sr-site-verification-toggle" aria-expanded={siteVerificationOpen} aria-controls="sr-site-verification-fields" onClick={() => setSiteVerificationOpen(value => !value)}>
+              <span className="sr-site-verification-title">Site Verification</span>
+              <span className="sr-site-verification-status">{siteVerificationSummary}</span>
+              <ChevronDown size={16} aria-hidden="true" className="sr-site-verification-chevron" />
+            </button>
+            {siteVerificationOpen && <div id="sr-site-verification-fields" className="sr-form-grid">
+              {[ ["areaHectares", "Verified Planting Area (Hectares)"], ["maximumCapacity", "Verified Site Capacity (Seedlings)"] ].map(([key, label]) => <div className="sr-form-field" key={key}>
+                <label htmlFor={`site-review-${key}`}>{label} *</label>
+                <input id={`site-review-${key}`} type="number" step={key === "areaHectares" ? "any" : "1"} min="0" value={siteVerification[key]} aria-invalid={siteErrors[key] ? "true" : undefined} aria-describedby={siteErrors[key] ? `site-review-error-${key}` : undefined}
+                  onChange={event => { setSiteVerification(value => ({ ...value, [key]: event.target.value })); setSiteErrors(value => ({ ...value, [key]: "" })); }} />
+                {siteErrors[key] && <small className="sr-field-error" id={`site-review-error-${key}`} role="alert">{siteErrors[key]}</small>}
+              </div>)}
+            </div>}
+          </section>}
 
           {error && <small className="sr-field-error">{error}</small>}
         </div>

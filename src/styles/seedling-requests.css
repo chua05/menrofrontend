@@ -3673,3 +3673,13 @@
   .sr-header-actions > button { flex: 1 1 200px; }
 }
 
+
+/* Staff review: Site Verification section (new proposed sites only) */
+.sr-site-verification { margin-top: 16px; border: 1px solid #d8e4dc; border-radius: 10px; background: #f8fbf9; }
+.sr-site-verification-toggle { width: 100%; min-height: 48px; padding: 10px 14px; border: 0; background: transparent; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font: inherit; text-align: left; cursor: pointer; color: #1d3529; }
+.sr-site-verification-toggle:focus-visible { outline: 2px solid #087443; outline-offset: 2px; border-radius: 10px; }
+.sr-site-verification-title { font-weight: 700; }
+.sr-site-verification-status { min-width: 0; flex: 1 1 auto; color: #5b6b62; font-size: 13px; overflow-wrap: anywhere; }
+.sr-site-verification-chevron { flex: 0 0 auto; transition: transform .15s ease; }
+.sr-site-verification-toggle[aria-expanded="true"] .sr-site-verification-chevron { transform: rotate(180deg); }
+.sr-site-verification > .sr-form-grid { padding: 0 14px 14px; }
