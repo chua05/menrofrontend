@@ -132,14 +132,44 @@ test("participant legacy monitoring links redirect to planting reports without s
 });
 
 const aggregateLabel = "Submit Aggregate Monitoring Record";
+const primaryLabel = "Submit Monitoring Record";
 const sampleTreeLabel = "Monitor Permanent Sample Trees";
+const blueprintSections = ["1. Verified Planting Site Information", "2. Monitoring Summary & Automatic Schedule", "3. Assessment Progress",
+  "4. Permanent Sample Tree Records", "5. Individual Tree Assessment", "7. Automatic Monitoring Visit Summary"];
+
+test("Staff primary Submit Monitoring Record opens the full permanent-sample visit form, never the aggregate modal", async ({ page }) => {
+  await isolate(page);
+  await mockLegacyMonitoringApi(page);
+  await page.goto("/staff/survival-monitoring?role=staff");
+  const primary = page.locator(".sm-header-actions").getByRole("link", { name: primaryLabel, exact: true });
+  await expect(primary).toBeVisible();
+  await expect(primary).toHaveClass(/sm-primary-button/);
+  await expect(primary).toHaveAttribute("href", "/staff/permanent-sample-monitoring");
+  await expect(page.locator(".sm-header-actions").getByRole("button", { name: aggregateLabel, exact: true })).toHaveClass(/sm-secondary-button/);
+  await primary.click();
+  await expect(page).toHaveURL(/\/staff\/permanent-sample-monitoring$/);
+  await expect(page.locator(".sm-modal")).toHaveCount(0);
+  await expectMonitoringPage(page);
+  await page.getByRole("button", { name: "VPMV-STAFF-001", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "Monitor Planted Trees" });
+  await expect(dialog).toBeVisible();
+  await expect(dialog.getByText("Monitor registered sample trees and document their current survival conditions.", { exact: true })).toBeVisible();
+  for (const heading of blueprintSections) await expect(dialog.getByRole("heading", { name: heading })).toBeVisible();
+  await expect(dialog.locator(".psm-progress-card")).toHaveCount(3);
+  await expect(dialog.getByRole("radiogroup", { name: "Tree Condition *" })).toBeVisible();
+  await expect(dialog.locator(".psm-location .leaflet-container")).toBeVisible();
+  await dialog.getByRole("radio", { name: "Needs Rechecking", exact: true }).check();
+  await expect(dialog.getByRole("heading", { name: "6. Rechecking & Requester Clarification" })).toBeVisible();
+  await expect(dialog.getByRole("button", { name: "Save Draft", exact: true })).toBeVisible();
+  await expect(dialog.getByRole("button", { name: "Submit Visit", exact: true })).toHaveText("Submit Monitoring Visit");
+});
 
 test("Staff can open the legacy aggregate monitoring form while Admin remains read-only", async ({ page }) => {
   await isolate(page);
   await mockLegacyMonitoringApi(page);
   await page.goto("/staff/survival-monitoring?role=staff");
   await expect(page.getByRole("heading", { name: "Survival Monitoring" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Submit Monitoring Record", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: primaryLabel, exact: true })).toHaveCount(0);
   const submitButton = page.getByRole("button", { name: aggregateLabel, exact: true });
   await expect(submitButton).toBeVisible();
   await submitButton.click();
@@ -156,33 +186,46 @@ test("Staff can open the legacy aggregate monitoring form while Admin remains re
   await expect(page.getByRole("button", { name: aggregateLabel, exact: true })).toHaveCount(0);
 });
 
-test("Monitor Permanent Sample Trees entry is a visible header action for Staff and Admin when the gate is enabled", async ({ page }) => {
+test("Admin keeps a Monitor Permanent Sample Trees review link and has no Staff submission actions", async ({ page }) => {
   await isolate(page);
   await mockLegacyMonitoringApi(page);
-  for (const role of ["staff", "admin"]) {
-    await page.goto(`/${role}/survival-monitoring?role=${role}`);
-    const entry = page.locator(".sm-header-actions").getByRole("link", { name: sampleTreeLabel, exact: true });
-    await expect(entry).toBeVisible();
-    await expect(entry).toHaveAttribute("href", `/${role}/permanent-sample-monitoring`);
-    await expect(page.getByRole("link", { name: sampleTreeLabel, exact: true })).toHaveCount(1);
-  }
-
-  await page.goto("/staff/survival-monitoring?role=staff");
-  await page.locator(".sm-header-actions").getByRole("link", { name: sampleTreeLabel, exact: true }).click();
-  await expect(page).toHaveURL(/\/staff\/permanent-sample-monitoring$/);
+  await page.goto("/admin/survival-monitoring?role=admin");
+  const entry = page.locator(".sm-header-actions").getByRole("link", { name: sampleTreeLabel, exact: true });
+  await expect(entry).toBeVisible();
+  await expect(entry).toHaveAttribute("href", "/admin/permanent-sample-monitoring");
+  await expect(page.getByRole("link", { name: primaryLabel, exact: true })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: aggregateLabel, exact: true })).toHaveCount(0);
+  await entry.click();
+  await expect(page).toHaveURL(/\/admin\/permanent-sample-monitoring$/);
   await expectMonitoringPage(page);
 });
 
-test("disabled gate hides the Monitor Permanent Sample Trees entry but keeps aggregate monitoring", async ({ page }) => {
+test("disabled gate keeps only the aggregate action and states why permanent-sample monitoring is unavailable", async ({ page }) => {
   await isolate(page, false);
   await mockLegacyMonitoringApi(page);
   for (const role of ["staff", "admin"]) {
     await page.goto(`/${role}/survival-monitoring?role=${role}`);
     await expect(page.getByRole("heading", { name: "Survival Monitoring" })).toBeVisible();
     await expect(page.getByRole("link", { name: sampleTreeLabel, includeHidden: true })).toHaveCount(0);
+    await expect(page.getByRole("link", { name: primaryLabel, includeHidden: true })).toHaveCount(0);
   }
   await page.goto("/staff/survival-monitoring?role=staff");
-  await expect(page.getByRole("button", { name: aggregateLabel, exact: true })).toBeVisible();
+  const aggregate = page.getByRole("button", { name: aggregateLabel, exact: true });
+  await expect(aggregate).toBeVisible();
+  await expect(aggregate).toHaveClass(/sm-primary-button/);
+  await expect(page.getByRole("status").filter({ hasText: "Permanent sample tree monitoring is not enabled in this environment." })).toBeVisible();
+  await aggregate.click();
+  await expect(page).toHaveURL(/\/staff\/survival-monitoring/);
+  await expect(page.locator(".sm-modal").getByRole("heading", { name: "Monitor Planted Trees" })).toBeVisible();
+});
+
+test("primary destination reports when no authorized permanent-sample visit exists instead of opening another form", async ({ page }) => {
+  await isolate(page);
+  await page.goto("/staff/permanent-sample-monitoring?role=staff&fixture=empty");
+  await expect(page.getByRole("status").filter({ hasText: "No authorized monitoring visits are available." })).toBeVisible();
+  await expect(page.getByText("A visit appears here after MENRO creates it from an approved sampling plan and baseline.", { exact: true })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Back to Survival Monitoring", exact: true })).toHaveAttribute("href", "/staff/survival-monitoring");
+  await expect(page.locator(".sm-modal")).toHaveCount(0);
 });
 
 for (const viewport of [{ width: 1366, height: 800 }, { width: 768, height: 1024 }, { width: 390, height: 844 }, { width: 320, height: 640 }]) {
@@ -194,8 +237,8 @@ for (const viewport of [{ width: 1366, height: 800 }, { width: 768, height: 1024
     const actions = page.locator(".sm-header-actions");
     const controls = [
       actions.getByTitle("Refresh data"),
+      actions.getByRole("link", { name: primaryLabel, exact: true }),
       actions.getByRole("button", { name: aggregateLabel, exact: true }),
-      actions.getByRole("link", { name: sampleTreeLabel, exact: true }),
     ];
     const boxes = [];
     for (const control of controls) {
