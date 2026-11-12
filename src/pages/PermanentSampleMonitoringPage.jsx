@@ -14,6 +14,7 @@ import {
 } from "../utils/verifiedPlantingCohort";
 import { useAuth } from "../context/AuthContext";
 import { Trees, X } from "lucide-react";
+import { Link } from "react-router-dom";
 
 const STATUS_LABELS = { DRAFT: "Draft", RETURNED: "Returned for Correction", PENDING_ADMIN_APPROVAL: "Pending Admin Review", APPROVED: "Approved" };
 const statusLabel = value => STATUS_LABELS[value] || value;
@@ -456,7 +457,11 @@ export default function PermanentSampleMonitoringPage() {
               ))}
             </ul>
           ) : (
-            <p role="status">No authorized monitoring visits are available.</p>
+            <>
+              <p role="status">No authorized monitoring visits are available.</p>
+              <p>A visit appears here after MENRO creates it from an approved sampling plan and baseline.</p>
+              <Link to={`/${userRole}/survival-monitoring`}>Back to Survival Monitoring</Link>
+            </>
           )}
           {page.nextCursor && (
             <button type="button" onClick={() => { if (allowDiscard()) load(page.nextCursor); }}>
@@ -469,7 +474,9 @@ export default function PermanentSampleMonitoringPage() {
         <header className="psm-header"><div className="psm-header-main"><span className="psm-header-icon"><Trees size={22} aria-hidden="true" /></span><div><h2>Monitor Planted Trees</h2><p>Monitor registered sample trees and document their current survival conditions.</p></div></div>
           <div className="psm-header-actions"><span className="psm-status-badge">{statusLabel(detail.status)}</span><button type="button" className="psm-close" data-modal-close="" disabled={saving || reviewing} aria-label="Close monitoring visit"><X size={18} aria-hidden="true" /></button></div></header>
         <div className="psm-body">
-        <label className="psm-field">Verified Planting Report<select value={detail.id} disabled={saving || Boolean(unconfirmed)} onChange={event => open(event.target.value)}>{(page?.visits || [detail]).map(row => <option key={row.id} value={row.id}>{row.visitDate || row.id} - {row.id}</option>)}</select></label>
+        <label className="psm-field">Verified Planting Report<select value={detail.id} disabled={saving || Boolean(unconfirmed)} onChange={event => open(event.target.value)}>{(page?.visits || [detail]).map(row => <option key={row.id} value={row.id}>{row.id === detail.id && detail.visitContext?.reportNumber
+          ? `${detail.visitContext.reportNumber} · ${detail.visitContext.siteName || "Planting site"} · Visit ${row.visitDate || ""}`
+          : `Visit ${row.visitDate || row.id} · ${statusLabel(row.status)}`}</option>)}</select></label>
         {error && <p role="alert" className="psm-error">{error}</p>}
         {unconfirmed ? <button type="button" disabled={saving} onClick={reconcile}>Check saved outcome</button> : <button type="button" disabled={saving || reviewing} onClick={() => open(detail.id, true)}>Reload visit</button>}
         <section className="psm-content">

@@ -53,7 +53,7 @@ const active=page=>page.locator(".psm-tree");
 const modal=page=>page.getByRole("dialog",{name:"Monitor Planted Trees"});
 test("authoritative context, baseline units, tree navigation and unfinished edits persist",async({page})=>{
  const s=await setup(page);
- await expect(page.getByText("PR-2026-FIXTURE")).toBeVisible();await page.getByLabel("Date Monitored *").fill("2026-11-01");
+ await expect(page.locator(".psm-info").getByText("PR-2026-FIXTURE",{exact:true})).toBeVisible();await expect(page.getByRole("combobox",{name:"Verified Planting Report",exact:true}).locator("option:checked")).toHaveText(/^PR-2026-FIXTURE · Bulan fixture site · Visit 2026-11-01$/);await page.getByLabel("Date Monitored *").fill("2026-11-01");
  await expect(page.getByText("2026-12-01",{exact:true})).toBeVisible();await expect(page.locator(".psm-tree-list button")).toHaveCount(2);
  await active(page).getByLabel("Height (cm)").fill("125.5");await page.getByRole("button",{name:"Next Tree"}).click(); await active(page).getByRole("radio",{name:"Damaged",exact:true}).check();
  await page.getByRole("button",{name:"Previous Tree"}).click();await expect(active(page).getByLabel("Height (cm)")).toHaveValue("125.5");

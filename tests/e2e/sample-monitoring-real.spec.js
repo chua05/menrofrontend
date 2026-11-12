@@ -54,6 +54,22 @@ async function upload(page,photo,f){
 async function multipart(page,f,photo,sampleId=photo.tree,key=photo.key){
  return page.evaluate(async({f,photo,sampleId,key})=>{const{authenticatedFetch}=await import("/src/services/authenticatedApi.js");const form=new FormData();form.set("photos",new File([new Uint8Array(photo.bytes)],photo.filename||"capture.jpg",{type:"image/jpeg"}));form.set("assessmentRevision",String(photo.binding.assessmentRevision));form.set("expectedVisitVersion",String(photo.binding.visitVersion));form.set("evidenceManifest",JSON.stringify([{source:"browser-camera",captureSessionId:photo.session.captureSessionId,nonce:photo.session.nonce,verificationId:photo.verified.verificationId,imageSha256:photo.verified.imageSha256}]));const r=await authenticatedFetch(`/verified-sample-monitoring/visits/${f.visitId}/samples/${sampleId}/evidence`,{method:"PUT",headers:{"Idempotency-Key":key},body:form});return{status:r.status,body:await r.json()};},{f,photo,sampleId,key});
 }
+test("real Staff Survival Monitoring primary action opens the full permanent-sample visit form and keeps aggregate monitoring separate",async({page})=>{
+ await isolate(page);const f=await login(page,"staff");
+ await page.getByRole("button",{name:"Open sidebar",exact:true}).click();await page.getByRole("link",{name:"Survival Monitoring",exact:true}).click();
+ await expect(page).toHaveURL(/\/staff\/survival-monitoring$/);await expect(page.getByRole("heading",{name:"Survival Monitoring",exact:true})).toBeVisible({timeout:30000});
+ const primary=page.locator(".sm-header-actions").getByRole("link",{name:"Submit Monitoring Record",exact:true});await expect(primary).toBeVisible();
+ const aggregate=page.locator(".sm-header-actions").getByRole("button",{name:"Submit Aggregate Monitoring Record",exact:true});await expect(aggregate).toBeVisible();
+ await aggregate.click();const legacy=page.locator(".sm-modal");await expect(legacy.getByRole("heading",{name:"Monitor Planted Trees"})).toBeVisible();await expect(page).toHaveURL(/\/staff\/survival-monitoring$/);
+ await legacy.getByRole("button",{name:"Cancel",exact:true}).click();await expect(legacy).toHaveCount(0);
+ const [response]=await Promise.all([collection(page),primary.click()]);expect(response.status()).toBe(200);await expect(page).toHaveURL(/\/staff\/permanent-sample-monitoring$/);
+ await page.getByRole("button",{name:f.visitId,exact:true}).click();const dialog=page.getByRole("dialog",{name:"Monitor Planted Trees"});await expect(dialog).toBeVisible();
+ for(const heading of ["1. Verified Planting Site Information","2. Monitoring Summary & Automatic Schedule","3. Assessment Progress","4. Permanent Sample Tree Records","5. Individual Tree Assessment","7. Automatic Monitoring Visit Summary"])await expect(dialog.getByRole("heading",{name:heading})).toBeVisible();
+ await expect(dialog.locator(".psm-tree-list button")).toHaveCount(f.sampleIds.length);await expect(dialog.locator(".psm-progress-card")).toHaveCount(3);
+ await expect(dialog.locator(".psm-location .leaflet-container")).toBeVisible();await expect(dialog.getByRole("radiogroup",{name:"Tree Condition *"})).toBeVisible();
+ await expect(dialog.getByRole("button",{name:"Save Draft",exact:true})).toBeEnabled();await expect(dialog.getByRole("button",{name:"Submit Visit",exact:true})).toBeEnabled();
+ expect(traffic.filter(t=>["PUT","PATCH","DELETE"].includes(t.method)||t.method==="POST"&&t.path.startsWith("/api/")&&!t.path.startsWith("/api/auth/"))).toEqual([]);
+});
 test("real Staff and Admin authentication discovers the two-tree fixture using actual modules",async({browser})=>{
  for(const role of ["staff","admin"]){const context=await browser.newContext();const page=await context.newPage();await isolate(page);const f=await open(page,role);for(const id of f.sampleIds)await expect(role==="admin"?page.locator(".psm-content > ul > li").filter({hasText:id}):page.getByText(id,{exact:true}).first()).toBeVisible();
  const authCode=await(await page.request.get(frontend+"/src/context/AuthContext.jsx")).text();const apiCode=await(await page.request.get(frontend+"/src/services/authenticatedApi.js")).text();expect(authCode).toContain("verifyMenroSession");expect(apiCode).toContain("assertFrontendIntegrationTokenAudience");expect(authCode+apiCode).not.toContain("tests/phase3c/mocks");await context.close();}

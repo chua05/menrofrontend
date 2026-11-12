@@ -434,6 +434,7 @@ export default function MonitoringPage() {
   const isParticipant = userRole === "participant";
   const isStaff = userRole === "staff";
   const isAdmin = userRole === "admin";
+  const permanentSampleEnabled = resolveVerifiedPlantingCohortEnabled();
 
   const uploadInputRef = useRef(null);
   const previewUrlRef = useRef(null);
@@ -1502,23 +1503,31 @@ export default function MonitoringPage() {
             <FiRefreshCw size={16} />
           </button>
 
+          {/* Primary Staff action: the permanent-sample visit workflow, behind the same gate as its route. */}
+          {isStaff && permanentSampleEnabled && (
+            <Link className="sm-primary-button sm-primary-link" to="/staff/permanent-sample-monitoring">
+              <FiPlus size={15} aria-hidden="true" />
+              Submit Monitoring Record
+            </Link>
+          )}
+
           {/* Legacy aggregate workflow: opens the existing modal in place, never the per-tree form. */}
           {isStaff && (
             <button
               type="button"
-              className="sm-primary-button"
+              className={permanentSampleEnabled ? "sm-secondary-button sm-aggregate-action" : "sm-primary-button"}
               onClick={openForm}
             >
-              <FiPlus size={15} />
+              <FiPlus size={15} aria-hidden="true" />
               Submit Aggregate Monitoring Record
             </button>
           )}
 
-          {/* Per-tree workflow: same gate and role rule as the route and sidebar entry. */}
-          {resolveVerifiedPlantingCohortEnabled() && !isParticipant && (
+          {/* Admin reviews permanent-sample visits; Admin never submits monitoring records. */}
+          {isAdmin && permanentSampleEnabled && (
             <Link
               className="sm-secondary-button sm-sample-tree-link"
-              to={`/${userRole}/permanent-sample-monitoring`}
+              to="/admin/permanent-sample-monitoring"
             >
               <FiActivity size={15} aria-hidden="true" />
               Monitor Permanent Sample Trees
@@ -1526,6 +1535,12 @@ export default function MonitoringPage() {
           )}
         </div>
       </div>
+
+      {isStaff && !permanentSampleEnabled && (
+        <p className="sm-header-note" role="status">
+          Permanent sample tree monitoring is not enabled in this environment. Aggregate monitoring remains available.
+        </p>
+      )}
 
       {isParticipant && loadError && (
         <p role="status">Monitoring data is unavailable right now. Refresh to try again.</p>

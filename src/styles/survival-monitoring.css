@@ -1816,3 +1816,14 @@
   .sm-header-actions .sm-primary-button,
   .sm-secondary-button.sm-sample-tree-link { white-space: normal; text-align: center; min-width: 0; }
 }
+
+/* Staff primary permanent-sample action (link styled as the primary button) and secondary aggregate action */
+.sm-primary-button.sm-primary-link { text-decoration: none; }
+.sm-primary-button.sm-primary-link:focus-visible, .sm-secondary-button.sm-aggregate-action:focus-visible { outline: 2px solid #17643a; outline-offset: 2px; }
+.sm-secondary-button.sm-aggregate-action { min-height: 44px; }
+.sm-header-note { margin: -10px 0 18px; color: #5b6b62; font-size: 13px; line-height: 1.5; }
+@media (max-width: 760px) { .sm-secondary-button.sm-aggregate-action { min-height: 46px; } }
+@media (max-width: 480px) {
+  .sm-header-actions .sm-primary-button + .sm-aggregate-action { grid-column: 1 / -1; }
+  .sm-secondary-button.sm-aggregate-action, .sm-header-actions .sm-primary-link { white-space: normal; text-align: center; min-width: 0; }
+}
