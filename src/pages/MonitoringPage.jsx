@@ -1505,7 +1505,7 @@ export default function MonitoringPage() {
 
           {/* Primary Staff action: the permanent-sample visit workflow, behind the same gate as its route. */}
           {isStaff && permanentSampleEnabled && (
-            <Link className="sm-primary-button sm-primary-link" to="/staff/permanent-sample-monitoring">
+            <Link className="sm-primary-button sm-primary-link" to="/staff/permanent-sample-monitoring?start=1">
               <FiPlus size={15} aria-hidden="true" />
               Submit Monitoring Record
             </Link>

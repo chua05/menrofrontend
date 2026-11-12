@@ -62,8 +62,10 @@ test("real Staff Survival Monitoring primary action opens the full permanent-sam
  const aggregate=page.locator(".sm-header-actions").getByRole("button",{name:"Submit Aggregate Monitoring Record",exact:true});await expect(aggregate).toBeVisible();
  await aggregate.click();const legacy=page.locator(".sm-modal");await expect(legacy.getByRole("heading",{name:"Monitor Planted Trees"})).toBeVisible();await expect(page).toHaveURL(/\/staff\/survival-monitoring$/);
  await legacy.getByRole("button",{name:"Cancel",exact:true}).click();await expect(legacy).toHaveCount(0);
- const [response]=await Promise.all([collection(page),primary.click()]);expect(response.status()).toBe(200);await expect(page).toHaveURL(/\/staff\/permanent-sample-monitoring$/);
- await page.getByRole("button",{name:f.visitId,exact:true}).click();const dialog=page.getByRole("dialog",{name:"Monitor Planted Trees"});await expect(dialog).toBeVisible();
+ const [response]=await Promise.all([collection(page),primary.click()]);expect(response.status()).toBe(200);await expect(page).toHaveURL(/\/staff\/permanent-sample-monitoring\?start=1$/);
+ const listed=(await response.json()).data;expect(listed.visits.filter(v=>["DRAFT","RETURNED"].includes(v.status)).map(v=>v.id)).toEqual([f.visitId]);expect(listed.nextCursor).toBeNull();
+ // One editable authorized visit: the Staff action opens it directly, with no second selection step.
+ const dialog=page.getByRole("dialog",{name:"Monitor Planted Trees"});await expect(dialog).toBeVisible();await expect(dialog.getByRole("combobox",{name:"Verified Planting Report",exact:true})).toHaveValue(f.visitId);
  for(const heading of ["1. Verified Planting Site Information","2. Monitoring Summary & Automatic Schedule","3. Assessment Progress","4. Permanent Sample Tree Records","5. Individual Tree Assessment","7. Automatic Monitoring Visit Summary"])await expect(dialog.getByRole("heading",{name:heading})).toBeVisible();
  await expect(dialog.locator(".psm-tree-list button")).toHaveCount(f.sampleIds.length);await expect(dialog.locator(".psm-progress-card")).toHaveCount(3);
  await expect(dialog.locator(".psm-location .leaflet-container")).toBeVisible();await expect(dialog.getByRole("radiogroup",{name:"Tree Condition *"})).toBeVisible();

@@ -144,12 +144,15 @@ test("Staff primary Submit Monitoring Record opens the full permanent-sample vis
   const primary = page.locator(".sm-header-actions").getByRole("link", { name: primaryLabel, exact: true });
   await expect(primary).toBeVisible();
   await expect(primary).toHaveClass(/sm-primary-button/);
-  await expect(primary).toHaveAttribute("href", "/staff/permanent-sample-monitoring");
+  await expect(primary).toHaveAttribute("href", "/staff/permanent-sample-monitoring?start=1");
   await expect(page.locator(".sm-header-actions").getByRole("button", { name: aggregateLabel, exact: true })).toHaveClass(/sm-secondary-button/);
   await primary.click();
-  await expect(page).toHaveURL(/\/staff\/permanent-sample-monitoring$/);
+  await expect(page).toHaveURL(/\/staff\/permanent-sample-monitoring\?start=1$/);
   await expect(page.locator(".sm-modal")).toHaveCount(0);
   await expectMonitoringPage(page);
+  // The default fixture's visit list has more pages, so Staff chooses instead of a guessed auto-open.
+  await expect(page.getByRole("status").filter({ hasText: "Select the monitoring visit to continue." })).toBeVisible();
+  await expect(page.getByRole("dialog", { name: "Monitor Planted Trees" })).toHaveCount(0);
   await page.getByRole("button", { name: "VPMV-STAFF-001", exact: true }).click();
   const dialog = page.getByRole("dialog", { name: "Monitor Planted Trees" });
   await expect(dialog).toBeVisible();
@@ -162,6 +165,35 @@ test("Staff primary Submit Monitoring Record opens the full permanent-sample vis
   await expect(dialog.getByRole("heading", { name: "6. Rechecking & Requester Clarification" })).toBeVisible();
   await expect(dialog.getByRole("button", { name: "Save Draft", exact: true })).toBeVisible();
   await expect(dialog.getByRole("button", { name: "Submit Visit", exact: true })).toHaveText("Submit Monitoring Visit");
+});
+
+test("Staff arrival opens the only editable authorized visit directly and keeps other query state", async ({ page }) => {
+  await isolate(page);
+  await page.goto("/staff/permanent-sample-monitoring?role=staff&fixture=returned&start=1");
+  const dialog = page.getByRole("dialog", { name: "Monitor Planted Trees" });
+  await expect(dialog).toBeVisible();
+  await expect(dialog.getByRole("combobox", { name: "Verified Planting Report", exact: true })).toHaveValue("VPMV-RETURNED-001");
+  await expect(dialog.locator(".psm-status-badge")).toHaveText("Returned for Correction");
+  // The dialog must stay open (no second list load closing it) and the first tree stays editable.
+  await page.waitForTimeout(500);
+  await expect(dialog).toBeVisible();
+  await expect(dialog.getByRole("radiogroup", { name: "Tree Condition *" })).toBeVisible();
+  await expect(page).toHaveURL(/fixture=returned/);
+});
+
+test("without the Staff start request the visit list is shown and nothing opens automatically", async ({ page }) => {
+  await isolate(page);
+  await page.goto("/staff/permanent-sample-monitoring?role=staff&fixture=returned");
+  await expect(page.getByRole("button", { name: "VPMV-RETURNED-001", exact: true })).toBeVisible();
+  await expect(page.getByRole("dialog", { name: "Monitor Planted Trees" })).toHaveCount(0);
+  await expect(page.getByText("Select the monitoring visit to continue.", { exact: true })).toHaveCount(0);
+});
+
+test("Admin arriving with a start request never auto-opens a Staff visit", async ({ page }) => {
+  await isolate(page);
+  await page.goto("/admin/permanent-sample-monitoring?role=admin&fixture=returned&start=1");
+  await expect(page.getByRole("button", { name: "VPMV-RETURNED-001", exact: true })).toBeVisible();
+  await expect(page.getByRole("dialog", { name: "Monitor Planted Trees" })).toHaveCount(0);
 });
 
 test("Staff can open the legacy aggregate monitoring form while Admin remains read-only", async ({ page }) => {
