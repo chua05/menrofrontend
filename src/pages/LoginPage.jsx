@@ -21,7 +21,7 @@ import {
 } from "../utils/authErrors";
 import { GOOGLE_IN_APP_BROWSER_MESSAGE } from "../utils/inAppBrowser";
 
-import menroLogo from "../assets/menro-logo.png";
+import menroLogo from "../assets/menrologo-transparent.png";
 import "../styles/login.css";
 
 const isFirebaseNetworkError = (error) =>
