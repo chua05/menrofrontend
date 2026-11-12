@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
-import logo from "../assets/menro-logo.png";
+import logo from "../assets/menrologo-transparent.png";
 import { guestAttendanceErrors, normalizeGuestContact, attendanceOpensLabel } from "../utils/guestAttendance";
 import "../styles/guest-event.css";
 

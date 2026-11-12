@@ -4,7 +4,7 @@ import { auth } from "../firebase/config";
 import { useAuth } from "../context/AuthContext";
 import { BULAN_BARANGAYS, USER_TYPES, userTypeField } from "../utils/userTypes";
 import { API_BASE_URL } from "../services/authenticatedApi";
-import menroLogo from "../assets/menro-logo.png";
+import menroLogo from "../assets/menrologo-transparent.png";
 import "../styles/register.css";
 
 export default function CompleteProfilePage() {

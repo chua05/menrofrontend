@@ -9,7 +9,7 @@ import { publicApiFetch, verifyMenroSession } from "../services/authenticatedApi
 import { startGooglePopup } from "../services/googleRedirectAuth";
 import { getAuthErrorMessage, isGoogleCancellation } from "../utils/authErrors";
 
-import menroLogo from "../assets/menro-logo.png";
+import menroLogo from "../assets/menrologo-transparent.png";
 import "../styles/register.css";
 
 const Field = ({ label, htmlFor, error, children }) => (

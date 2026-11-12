@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { ChevronDown, Menu, X } from "lucide-react";
 
-import menroLogo from "../assets/menro-logo.png";
+import menroLogo from "../assets/menrologo-transparent.png";
 import heroImage from "../assets/headerimg.jpg";
 import aboutImage from "../assets/aboutsys.jpg";
 import "../styles/landing-page.css";

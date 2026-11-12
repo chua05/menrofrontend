@@ -24,7 +24,7 @@ import {
   getUnreadCountsByPath,
   NOTIFICATIONS_UPDATED_EVENT,
 } from "../utils/notificationRoutes";
-import menroLogo from "../assets/menro-logo.png";
+import menroLogo from "../assets/menrologo-transparent.png";
 import { resolveVerifiedPlantingCohortEnabled } from "../utils/verifiedPlantingCohort";
 import { informationEnabled, sampleAnalyticsEnabled } from "../utils/permanentSampleFeatures";
 

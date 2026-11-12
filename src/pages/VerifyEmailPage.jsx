@@ -3,7 +3,7 @@ import { Link, useSearchParams } from "react-router-dom";
 import { applyActionCode, checkActionCode, signOut } from "firebase/auth";
 import { auth } from "../firebase/config";
 import { getVerificationErrorMessage } from "../utils/authErrors";
-import menroLogo from "../assets/menro-logo.png";
+import menroLogo from "../assets/menrologo-transparent.png";
 import "../styles/register.css";
 import "../styles/verify-email.css";
 
