@@ -1798,3 +1798,21 @@
 }
 
 .sm-secondary-button.sm-cohort-toggle { max-width: 100%; min-width: 0; white-space: normal; overflow-wrap: anywhere; height: auto; text-align: center; }
+
+/* Header actions: aggregate record button + Permanent Sample Trees entry */
+.sm-header-actions { flex-wrap: wrap; justify-content: flex-end; }
+.sm-secondary-button.sm-sample-tree-link { min-height: 44px; color: #17643a; border-color: #b9d3c3; text-decoration: none; }
+.sm-secondary-button.sm-sample-tree-link:hover { background: #f1f7f3; }
+.sm-secondary-button.sm-sample-tree-link:focus-visible { outline: 2px solid #17643a; outline-offset: 2px; }
+@media (max-width: 1024px) {
+  .sm-header { flex-direction: column; gap: 16px; }
+  .sm-header-actions { width: 100%; justify-content: flex-start; }
+}
+@media (max-width: 760px) {
+  .sm-secondary-button.sm-sample-tree-link { min-height: 46px; }
+}
+@media (max-width: 480px) {
+  .sm-header-actions .sm-primary-button + .sm-sample-tree-link { grid-column: 1 / -1; }
+  .sm-header-actions .sm-primary-button,
+  .sm-secondary-button.sm-sample-tree-link { white-space: normal; text-align: center; min-width: 0; }
+}
