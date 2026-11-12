@@ -47,7 +47,7 @@ async function openMonitoring(page, role) {
 }
 
 async function submitObservation(page, reportId, evidenceName, counts = { total: 10, healthy: 8, damaged: 1, dead: 1 }) {
-  await page.getByRole("button", { name: "Submit Monitoring Record", exact: true }).click();
+  await page.getByRole("button", { name: "Submit Aggregate Monitoring Record", exact: true }).click();
   const modal = page.locator(".sm-modal");
   await expect(modal).toBeVisible();
   await modal.locator("select").first().selectOption(reportId);
@@ -58,7 +58,7 @@ async function submitObservation(page, reportId, evidenceName, counts = { total:
   await modal.locator('[data-monitoring-field="dead"]').fill(String(counts.dead));
   await modal.locator('input[type="file"]').last().setInputFiles(path.join(EVIDENCE_ROOT, evidenceName));
   await expect(modal.getByText("Photo GPS found")).toBeVisible();
-  await modal.getByRole("button", { name: "Submit Monitoring Record" }).click();
+  await modal.getByRole("button", { name: "Submit Aggregate Monitoring Record" }).click();
   await expect(page.getByText("Monitoring record submitted successfully.")).toBeVisible({ timeout: 20_000 });
   await modal.locator(".sm-modal-close").click();
 }
@@ -99,7 +99,7 @@ async function resubmitReturnedObservation(page, reportNumber, evidenceName) {
   await modal.locator('[data-monitoring-field="dead"]').fill("1");
   await modal.locator('input[type="file"]').last().setInputFiles(path.join(EVIDENCE_ROOT, evidenceName));
   await expect(modal.getByText("Photo GPS found")).toBeVisible();
-  await modal.getByRole("button", { name: "Submit Monitoring Record" }).click();
+  await modal.getByRole("button", { name: "Submit Aggregate Monitoring Record" }).click();
   await expect(page.getByText("Monitoring observation resubmitted for review.")).toBeVisible({ timeout: 20_000 });
   await modal.locator(".sm-modal-close").click();
 }

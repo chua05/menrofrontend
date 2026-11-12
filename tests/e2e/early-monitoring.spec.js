@@ -25,7 +25,7 @@ function row(page, reportNumber) {
 }
 
 async function submit(page, reportId, evidenceName, monitoredDate, type = "early") {
-  await page.getByRole("button", { name: "Submit Monitoring Record", exact: true }).click();
+  await page.getByRole("button", { name: "Submit Aggregate Monitoring Record", exact: true }).click();
   const modal = page.locator(".sm-modal");
   await modal.locator("select").first().selectOption(reportId);
   if (type === "early") {
@@ -39,7 +39,7 @@ async function submit(page, reportId, evidenceName, monitoredDate, type = "early
   await modal.locator('[data-monitoring-field="dead"]').fill("1");
   await modal.locator('input[type="file"]').last().setInputFiles(path.join(EVIDENCE_ROOT, evidenceName));
   await expect(modal.getByText("Photo GPS found")).toBeVisible();
-  await modal.getByRole("button", { name: "Submit Monitoring Record" }).click();
+  await modal.getByRole("button", { name: "Submit Aggregate Monitoring Record" }).click();
   await expect(page.getByText("Monitoring record submitted successfully.")).toBeVisible({ timeout: 20_000 });
   await modal.locator(".sm-modal-close").click();
 }
@@ -91,7 +91,7 @@ test.describe.serial("Early Survival Monitoring authenticated acceptance", () =>
     await expect(modal.getByRole("heading", { name: "Edit Returned Monitoring Observation" })).toBeVisible();
     await modal.locator('input[type="date"]').fill("2026-10-02");
     await modal.locator('input[type="file"]').last().setInputFiles(path.join(EVIDENCE_ROOT, "early-b-replacement.jpg"));
-    await modal.getByRole("button", { name: "Submit Monitoring Record" }).click();
+    await modal.getByRole("button", { name: "Submit Aggregate Monitoring Record" }).click();
     await expect(correction.getByText("Monitoring observation resubmitted for review.")).toBeVisible({ timeout: 20_000 });
     await modal.locator(".sm-modal-close").click();
     await row(correction, "TEST-EARLY-B").getByTitle("View monitoring record").click();

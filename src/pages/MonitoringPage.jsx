@@ -1474,7 +1474,6 @@ export default function MonitoringPage() {
     <div className="sm-page">
       {resolveVerifiedPlantingCohortEnabled() && !isParticipant && <section className="cohort-card">
         <button type="button" className="sm-secondary-button sm-cohort-toggle" aria-expanded={showCohorts} onClick={() => setShowCohorts(value => !value)}>Permanent Sample Selection and Baselines</button>
-        <Link className="sm-secondary-button sm-cohort-toggle" to={`/${userRole}/permanent-sample-monitoring`}>Monitor Permanent Sample Trees</Link>
         {showCohorts && <VerifiedPlantingCohortsPage embedded view="sampling" />}
       </section>}
       {/* PAGE HEADER */}
@@ -1503,6 +1502,7 @@ export default function MonitoringPage() {
             <FiRefreshCw size={16} />
           </button>
 
+          {/* Legacy aggregate workflow: opens the existing modal in place, never the per-tree form. */}
           {isStaff && (
             <button
               type="button"
@@ -1510,8 +1510,19 @@ export default function MonitoringPage() {
               onClick={openForm}
             >
               <FiPlus size={15} />
-              Submit Monitoring Record
+              Submit Aggregate Monitoring Record
             </button>
+          )}
+
+          {/* Per-tree workflow: same gate and role rule as the route and sidebar entry. */}
+          {resolveVerifiedPlantingCohortEnabled() && !isParticipant && (
+            <Link
+              className="sm-secondary-button sm-sample-tree-link"
+              to={`/${userRole}/permanent-sample-monitoring`}
+            >
+              <FiActivity size={15} aria-hidden="true" />
+              Monitor Permanent Sample Trees
+            </Link>
           )}
         </div>
       </div>
@@ -2405,7 +2416,7 @@ export default function MonitoringPage() {
                 >
                   {actionLoading
                     ? "Submitting..."
-                    : "Submit Monitoring Record"}
+                    : "Submit Aggregate Monitoring Record"}
                 </button>
               </div>
             </form>
