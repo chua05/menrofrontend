@@ -493,6 +493,116 @@ test("independent Staff retains normal review controls for another request", asy
   await expect(page.getByRole("button", { name: "Return Request", exact: true })).toBeVisible(); fixture.check();
 });
 
+const siteInstruction = "Verify the proposed site's area and capacity before forwarding this request for Admin approval.";
+const proposedSiteRequest = (extra = {}) => {
+  const request = ownRequest("Pending", "other-requester");
+  return { ...request, ...extra, workflow: { ...request.workflow, siteMode: "proposed", existingSiteId: "", areaChoice: "", siteReviewRequired: true, siteName: "Proposed fixture site", latitude: 12.6598, longitude: 123.918 },
+    eventProposal: { ...request.eventProposal, plantingSiteId: "PROPOSED" } };
+};
+async function openStaffReview(page, request, overrides = {}) {
+  const reviews = [];
+  const fixture = await setup(page, {
+    "GET /api/seedling-requests": route => route.fulfill({ json: { success: true, data: [request] } }),
+    "PATCH /api/seedling-requests/staff-own-request/review": route => { reviews.push(route.request().postDataJSON()); return overrides.review ? overrides.review(route) : route.fulfill({ json: { success: true, data: { ...request, status: "Reviewed", requestVersion: 4 } } }); },
+  });
+  await page.goto("/staff/requests?role=staff");
+  await page.getByRole("button", { name: "View details for REQ-2099-001", exact: true }).click();
+  await page.getByRole("button", { name: "Review", exact: true }).click();
+  const modal = page.getByRole("dialog", { name: "Review Seedling Request" });
+  await expect(modal).toBeVisible();
+  return { fixture, reviews, modal };
+}
+
+test("Staff review of an existing registered site hides manual site verification and submits without it", async ({ page }) => {
+  const { fixture, reviews, modal } = await openStaffReview(page, ownRequest("Pending", "other-requester"));
+  await expect(modal.getByText(siteInstruction)).toHaveCount(0);
+  await expect(modal.getByRole("button", { name: /Site Verification/ })).toHaveCount(0);
+  await expect(modal.getByLabel(/Verified Planting Area/)).toHaveCount(0);
+  await expect(modal.getByLabel(/Verified Site Capacity/)).toHaveCount(0);
+  await expect(modal.getByLabel("Proposed Planting Date *")).toBeVisible();
+  await modal.getByRole("button", { name: "Complete Review", exact: true }).click();
+  await expect.poll(() => reviews.length).toBe(1);
+  expect(reviews[0]).not.toHaveProperty("siteVerification");
+  expect(reviews[0].expectedVersion).toBe(3);
+  fixture.check();
+});
+
+test("Staff review of a proposed site keeps verification in a collapsed Site Verification section and never submits blank values", async ({ page }) => {
+  const { fixture, reviews, modal } = await openStaffReview(page, proposedSiteRequest());
+  await expect(modal.getByText(siteInstruction)).toHaveCount(0);
+  const toggle = modal.getByRole("button", { name: /Site Verification/ });
+  await expect(toggle).toBeVisible();
+  await expect(toggle).toHaveAttribute("aria-expanded", "false");
+  await expect(toggle).toContainText("Required");
+  await expect(modal.getByLabel("Verified Planting Area (Hectares) *")).toHaveCount(0);
+  await expect(modal.getByLabel("Proposed Planting Date *")).toBeVisible();
+
+  await modal.getByRole("button", { name: "Complete Review", exact: true }).click();
+  await expect(toggle).toHaveAttribute("aria-expanded", "true");
+  const area = modal.getByLabel("Verified Planting Area (Hectares) *");
+  const capacity = modal.getByLabel("Verified Site Capacity (Seedlings) *");
+  await expect(area).toBeFocused();
+  await expect(area).toHaveAttribute("aria-invalid", "true");
+  await expect(capacity).toHaveAttribute("aria-invalid", "true");
+  expect(reviews).toHaveLength(0);
+
+  await area.fill("0.5"); await capacity.fill("30");
+  await toggle.click();
+  await expect(toggle).toHaveAttribute("aria-expanded", "false");
+  await expect(toggle).toContainText("0.5 ha");
+  await expect(toggle).toContainText("30 seedlings");
+  await modal.getByRole("button", { name: "Complete Review", exact: true }).click();
+  await expect.poll(() => reviews.length).toBe(1);
+  expect(reviews[0].siteVerification).toEqual({ areaHectares: "0.5", maximumCapacity: "30" });
+  fixture.check();
+});
+
+test("backend site-verification errors reopen the Site Verification section on the failing field", async ({ page }) => {
+  const { fixture, reviews, modal } = await openStaffReview(page, proposedSiteRequest(), {
+    review: route => route.fulfill({ status: 400, json: { success: false, message: "Enter the Staff-verified proposed site area and capacity.", fieldErrors: { verifiedMaximumCapacity: "Enter the verified capacity as a positive whole number." } } }),
+  });
+  const toggle = modal.getByRole("button", { name: /Site Verification/ });
+  await toggle.click();
+  await modal.getByLabel("Verified Planting Area (Hectares) *").fill("0.5");
+  await modal.getByLabel("Verified Site Capacity (Seedlings) *").fill("30");
+  await toggle.click();
+  await modal.getByRole("button", { name: "Complete Review", exact: true }).click();
+  await expect.poll(() => reviews.length).toBe(1);
+  await expect(toggle).toHaveAttribute("aria-expanded", "true");
+  const capacity = modal.getByLabel("Verified Site Capacity (Seedlings) *");
+  await expect(capacity).toHaveAttribute("aria-invalid", "true");
+  await expect(capacity).toBeFocused();
+  await expect(modal.getByText("Enter the verified capacity as a positive whole number.")).toBeVisible();
+  await expect(modal).toBeVisible();
+  fixture.check();
+});
+
+test("previously recorded site verification opens expanded for Staff to re-confirm before submitting", async ({ page }) => {
+  const { fixture, reviews, modal } = await openStaffReview(page, proposedSiteRequest({ proposedSiteVerification: { areaHectares: 1.2, maximumCapacity: 400 } }));
+  const toggle = modal.getByRole("button", { name: /Site Verification/ });
+  await expect(toggle).toHaveAttribute("aria-expanded", "true");
+  await expect(modal.getByLabel("Verified Planting Area (Hectares) *")).toHaveValue("1.2");
+  await expect(modal.getByLabel("Verified Site Capacity (Seedlings) *")).toHaveValue("400");
+  expect(reviews).toHaveLength(0);
+  fixture.check();
+});
+
+for (const viewport of [{ width: 1366, height: 820 }, { width: 390, height: 844 }]) {
+  test(`proposed-site review modal fits without horizontal overflow at ${viewport.width}px`, async ({ page }) => {
+    await page.setViewportSize(viewport);
+    const { fixture, modal } = await openStaffReview(page, proposedSiteRequest());
+    await modal.getByRole("button", { name: /Site Verification/ }).click();
+    const fits = await modal.evaluate(node => node.scrollWidth <= node.clientWidth + 1);
+    expect(fits).toBe(true);
+    for (const name of ["Verified Planting Area (Hectares) *", "Verified Site Capacity (Seedlings) *"]) {
+      const box = await modal.getByLabel(name).boundingBox();
+      expect(box.x).toBeGreaterThanOrEqual(0);
+      expect(box.x + box.width).toBeLessThanOrEqual(viewport.width + 0.5);
+    }
+    fixture.check();
+  });
+}
+
 for (const role of ["staff", "participant"]) {
 test(`${role} returned request reopens the same wizard and resubmits with its authoritative version`, async ({ page }) => {
   const request = { ...ownRequest("Returned", `test-${role}`), returnReason: "Clarify care plan" }; let edited = false;
