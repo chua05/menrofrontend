@@ -1,4 +1,5 @@
 export const DEMO_PROJECT_ID = "demo-menro-phase2";
+const SAMPLE_FORM_PROJECT_ID = "demo-menro-legacy-monitoring-20261106";
 const PHASE3C_ISOLATED_PROJECT_ID = "demo-menro-phase3c-isolated";
 export const AUTH_EMULATOR_URL = "http://127.0.0.1:9099";
 export const LOCAL_API_URL = "http://localhost:5000/api";
@@ -14,6 +15,18 @@ const PHASE3C_ISOLATED_STORAGE_EMULATOR_HOST = "127.0.0.1:9298";
 export function validateFrontendIntegrationEnvironment(env) {
   const integration = String(env.VITE_USE_FIREBASE_EMULATORS || "").toLowerCase() === "true";
   const phase3cIsolated = env.VITE_PHASE3C_ISOLATED_EMULATORS === "true";
+  if (env.VITE_SAMPLE_MONITORING_FORM_ACCEPTANCE !== undefined) {
+    const exact = env.VITE_SAMPLE_MONITORING_FORM_ACCEPTANCE === "true" && integration && env.DEV === true && env.MODE === "test" && env.PROD !== true &&
+      env.VITE_PHASE3C_BROWSER_ACCEPTANCE === "true" && env.VITE_PHASE3C_ISOLATED_EMULATORS === undefined &&
+      env.VITE_FIREBASE_PROJECT_ID === SAMPLE_FORM_PROJECT_ID && env.VITE_FIREBASE_STORAGE_BUCKET === `${SAMPLE_FORM_PROJECT_ID}.firebasestorage.app` &&
+      env.VITE_API_URL === PHASE3C_BROWSER_ACCEPTANCE_API_URL && env.VITE_PHASE3C_AUTH_EMULATOR_URL === "http://127.0.0.1:9399" &&
+      env.VITE_PHASE3C_FIRESTORE_EMULATOR_HOST === "127.0.0.1:8381" && env.VITE_PHASE3C_STORAGE_EMULATOR_HOST === "127.0.0.1:9398" &&
+      !["VITE_MENRO_MPDO_BOUNDARY_ACCEPTANCE", "VITE_MENRO_REQUEST_LETTER_ACCEPTANCE", "VITE_GCS_DEVELOPMENT",
+        "GOOGLE_APPLICATION_CREDENTIALS", "FIREBASE_PRIVATE_KEY", "FIREBASE_CLIENT_EMAIL", "FIREBASE_CONFIG"].some(key => env[key] !== undefined);
+    if (!exact) throw new Error("Monitoring form acceptance requires the complete credential-free test-only demo topology.");
+    return { integration: true, apiUrl: PHASE3C_BROWSER_ACCEPTANCE_API_URL, authEmulatorUrl: "http://127.0.0.1:9399",
+      phase3cBrowserAcceptance: true, sampleMonitoringFormAcceptance: true, phase3cIsolated: false };
+  }
   if (phase3cIsolated && (!integration || env.PROD === true)) {
     throw new Error("Isolated Phase 3C emulators require the local test server and emulator mode.");
   }
@@ -61,7 +74,7 @@ export function assertFrontendIntegrationTokenAudience(token, state) {
     const normalized = parts[1].replace(/-/g, "+").replace(/_/g, "/");
     const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, "=");
     const claims = JSON.parse(globalThis.atob(padded));
-    const expectedProject = state?.phase3cIsolated
+    const expectedProject = state?.sampleMonitoringFormAcceptance ? SAMPLE_FORM_PROJECT_ID : state?.phase3cIsolated
       ? PHASE3C_ISOLATED_PROJECT_ID
       : DEMO_PROJECT_ID;
     if (claims?.aud !== expectedProject) throw new Error();

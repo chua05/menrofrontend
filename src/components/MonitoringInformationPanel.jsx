@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import { sampleRequest } from "../services/permanentSampleApi";
 
-export default function MonitoringInformationPanel({ visitId, readOnly = false }) {
+export default function MonitoringInformationPanel({ visitId, sampleId, assessmentRevision, readOnly = false, draftQuestion, onDraftQuestion }) {
   const [rows, setRows] = useState([]);
-  const [question, setQuestion] = useState("");
+  const [localQuestion, setLocalQuestion] = useState("");
+  const question = draftQuestion ?? localQuestion, setQuestion = onDraftQuestion || setLocalQuestion;
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -17,7 +18,7 @@ export default function MonitoringInformationPanel({ visitId, readOnly = false }
       .catch(error => { if (active) setError(error.message); })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
-  }, [visitId]);
+  }, [visitId, sampleId]);
   async function more() {
     if (!cursor || loadingMore) return;
     setLoadingMore(true);
@@ -37,7 +38,7 @@ export default function MonitoringInformationPanel({ visitId, readOnly = false }
     try {
       const row = await sampleRequest("/sample-monitoring-information", { method: "POST", headers: {
         "Content-Type": "application/json", "Idempotency-Key": attempt.current.key,
-      }, body: JSON.stringify({ visitId, question: value }) });
+      }, body: JSON.stringify({ visitId, question: value, ...(sampleId ? { sampleId, assessmentRevision } : {}) }) });
       setRows(previous => [row, ...previous.filter(item => item.id !== row.id)]);
       setQuestion(""); attempt.current = null;
     } catch (error) { setError(error.message); }
@@ -55,8 +56,8 @@ export default function MonitoringInformationPanel({ visitId, readOnly = false }
       <button disabled={busy || !question.trim()} className="rounded bg-emerald-700 px-4 py-2 text-white">{busy ? "Sending…" : "Request Information"}</button>
     </form>}
     {!loading && !rows.length && <p>No information requests.</p>}
-    <ul className="space-y-3">{rows.map(row => <li key={row.id} className="rounded border p-3">
-      <p>{row.question}</p><p>Status: {row.status}</p>
+    <ul className="space-y-3">{rows.filter(row => !sampleId || row.sampleId === sampleId).map(row => <li key={row.id} className="rounded border p-3">
+      {row.sampleId && <p>Tree: {row.sampleId}</p>}<p>{row.question}</p><p>Status: {row.status}</p>
       {row.answer && <p>Reply: {row.answer}</p>}
       <ol>{row.history.map((entry, i) => <li key={i}>{entry.action} · {entry.role}</li>)}</ol>
     </li>)}</ul>

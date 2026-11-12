@@ -123,7 +123,7 @@ function saveResponse(visitId, options, activeFixture) {
   if (activeFixture === "stale-save") return failure(409, "This monitoring visit is no longer editable.");
   const payload = JSON.parse(options.body || "{}");
   window.__PHASE3C_MUTATIONS__ = [...(window.__PHASE3C_MUTATIONS__ || []), { path: String(visitId), payload }];
-  if (!Array.isArray(payload.assessments) || payload.assessments.some((assessment) => !assessment.condition)) {
+  if (!Array.isArray(payload.assessments) || (payload.submit && payload.assessments.some((assessment) => !assessment.condition))) {
     return failure(409, "Every approved sample requires an assessment before submission.");
   }
   const source = visitId === returnedDetail.id ? returnedDetail : detail;
@@ -141,6 +141,8 @@ function saveResponse(visitId, options, activeFixture) {
     status: payload.submit ? "PENDING_ADMIN_APPROVAL" : "DRAFT",
     version: Number(source.version) + 1,
     sampleAssessments,
+    visitRemarks: payload.visitRemarks || "",
+    dateMonitored: payload.dateMonitored,
   } });
 }
 
@@ -194,7 +196,7 @@ export async function authenticatedFetch(path, options = {}) {
   window.__PHASE3C_REQUESTS__ = [...(window.__PHASE3C_REQUESTS__ || []), String(path)];
   const activeFixture = fixture();
   if (activeFixture === "network-error") throw new TypeError("Monitoring network unavailable.");
-  if (activeFixture === "loading") await new Promise((resolve) => window.setTimeout(resolve, 150));
+  if (activeFixture === "loading") await (window.__PHASE3C_DISCOVERY_GATE__ || new Promise((resolve) => window.setTimeout(resolve, 150)));
   const url = new URL(path, API_BASE_URL);
   if (url.pathname === "/evidence-capture-sessions" && options.method === "POST") {
     return captureResponse(JSON.parse(options.body || "{}"));

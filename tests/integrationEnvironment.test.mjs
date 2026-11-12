@@ -132,3 +132,24 @@ test("isolated emulator HTTP tokens require the isolated demo project", () => {
   assert.doesNotThrow(() => assertFrontendIntegrationTokenAudience(jwt({ aud: "demo-menro-phase3c-isolated" }), state));
   assert.throws(() => assertFrontendIntegrationTokenAudience(jwt({ aud: "demo-menro-phase2" }), state), /project mismatch/);
 });
+
+const sampleForm = () => ({ VITE_USE_FIREBASE_EMULATORS: "true", DEV: true, MODE: "test", PROD: false,
+  VITE_SAMPLE_MONITORING_FORM_ACCEPTANCE: "true", VITE_PHASE3C_BROWSER_ACCEPTANCE: "true",
+  VITE_FIREBASE_PROJECT_ID: "demo-menro-legacy-monitoring-20261106", VITE_FIREBASE_STORAGE_BUCKET: "demo-menro-legacy-monitoring-20261106.firebasestorage.app",
+  VITE_API_URL: "http://127.0.0.1:5185/api", VITE_PHASE3C_AUTH_EMULATOR_URL: "http://127.0.0.1:9399",
+  VITE_PHASE3C_FIRESTORE_EMULATOR_HOST: "127.0.0.1:8381", VITE_PHASE3C_STORAGE_EMULATOR_HOST: "127.0.0.1:9398" });
+test("monitoring form browser mode accepts only its exact explicit test topology", () => {
+  const state=validateFrontendIntegrationEnvironment(sampleForm());assert.equal(state.sampleMonitoringFormAcceptance,true);assert.equal(state.authEmulatorUrl,"http://127.0.0.1:9399");
+  assert.doesNotThrow(()=>assertFrontendIntegrationTokenAudience(jwt({aud:"demo-menro-legacy-monitoring-20261106"}),state));
+  for(const aud of ["demo-menro-phase2","demo-menro-phase3c-isolated","production"])assert.throws(()=>assertFrontendIntegrationTokenAudience(jwt({aud}),state));
+});
+test("monitoring form topology rejects absent flags, production, mixed/remote endpoints, wrong bucket and credentials", () => {
+  for(const changed of [{VITE_SAMPLE_MONITORING_FORM_ACCEPTANCE:undefined},{VITE_SAMPLE_MONITORING_FORM_ACCEPTANCE:"false"},{VITE_USE_FIREBASE_EMULATORS:"false"},{VITE_PHASE3C_BROWSER_ACCEPTANCE:undefined},
+    {MODE:"development"},{MODE:"production"},{DEV:false},{PROD:true},{VITE_PHASE3C_ISOLATED_EMULATORS:"true"},
+    {VITE_FIREBASE_PROJECT_ID:"demo-menro-phase3c-isolated"},{VITE_FIREBASE_PROJECT_ID:"production"},{VITE_FIREBASE_STORAGE_BUCKET:"demo-menro-phase2.firebasestorage.app"},
+    {VITE_API_URL:"https://example.invalid/api"},{VITE_API_URL:"http://127.0.0.1:5187/api"},{VITE_PHASE3C_AUTH_EMULATOR_URL:"http://127.0.0.1:9299"},
+    {VITE_PHASE3C_FIRESTORE_EMULATOR_HOST:"127.0.0.1:8281"},{VITE_PHASE3C_STORAGE_EMULATOR_HOST:"example.invalid:9398"},
+    {GOOGLE_APPLICATION_CREDENTIALS:"forbidden"},{FIREBASE_CONFIG:"{}"},{FIREBASE_PRIVATE_KEY:"forbidden"},{FIREBASE_CLIENT_EMAIL:"forbidden"},{VITE_GCS_DEVELOPMENT:"true"}]){
+    assert.throws(()=>validateFrontendIntegrationEnvironment({...sampleForm(),...changed}),JSON.stringify(Object.keys(changed)));
+  }
+});

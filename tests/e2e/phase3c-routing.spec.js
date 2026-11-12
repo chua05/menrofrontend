@@ -49,7 +49,7 @@ test("same permanent tree in different visits never reuses cached private photos
   await page.getByRole("button", { name: "View private evidence revision 0", exact: true }).click();
   const image = page.getByAltText("Private evidence for TREE-001, revision 0");
   await expect(image).toBeVisible(); const first = await image.getAttribute("src");
-  await page.getByRole("button", { name: "VPMV-APPROVED-001", exact: true }).click();
+  await page.getByLabel("Verified Planting Report").selectOption("VPMV-APPROVED-001");
   await expect(image).toHaveCount(0);
   expect(await page.evaluate(value => window.__REVOKED_PHOTOS__.includes(value), first)).toBe(true);
   await page.getByRole("button", { name: "View private evidence revision 0", exact: true }).click();
@@ -86,7 +86,8 @@ test("replaced and cross-visit pending photo previews are revoked", async ({ pag
   }
   expect(await page.evaluate(value => window.__REVOKED_PENDING__.includes(value), first)).toBe(true);
   const second = await preview.getAttribute("src");
-  await page.getByRole("button", { name: "VPMV-APPROVED-001", exact: true }).click();
+  page.once("dialog", dialog => dialog.accept()); // Explicitly discard this test-owned pending photo.
+  await page.getByLabel("Verified Planting Report").selectOption("VPMV-APPROVED-001");
   await expect(preview).toHaveCount(0);
   expect(await page.evaluate(value => window.__REVOKED_PENDING__.includes(value), second)).toBe(true);
   await expect(page.getByRole("button", { name: "Upload verified photo for TREE-001" })).toHaveCount(0);
@@ -194,8 +195,10 @@ test("discovery supports empty, loading, and network-failure states", async ({ p
   await page.goto("/staff/permanent-sample-monitoring?role=staff&fixture=empty");
   await expect(page.getByRole("status", { name: "" })).toContainText("No authorized monitoring visits are available.");
 
+  await page.addInitScript(() => { window.__PHASE3C_DISCOVERY_GATE__ = new Promise(resolve => { window.__PHASE3C_RELEASE_DISCOVERY__ = resolve; }); });
   await page.goto("/staff/permanent-sample-monitoring?role=staff&fixture=loading");
   await expect(page.getByRole("status").filter({ hasText: "Loading monitoring visits" })).toBeVisible();
+  await page.evaluate(() => window.__PHASE3C_RELEASE_DISCOVERY__());
   await expect(page.getByRole("button", { name: "VPMV-STAFF-001" })).toBeVisible();
 
   await page.goto("/staff/permanent-sample-monitoring?role=staff&fixture=network-error");
@@ -222,7 +225,9 @@ test("existing visit selection loads authoritative sample details", async ({ pag
   await page.getByRole("button", { name: "VPMV-STAFF-001" }).click();
   await expect(page.getByRole("heading", { name: "VPMV-STAFF-001" })).toBeVisible();
   await expect(page.getByRole("group", { name: "TREE-001" }).getByLabel("Condition")).toHaveValue("Healthy");
-  await expect(page.getByRole("group", { name: "TREE-002" }).getByLabel("Condition")).toHaveValue("Needs Rechecking");
+  await page.locator(".psm-tree-list button").filter({hasText:"TREE-002"}).click();
+  await expect(page.getByRole("group", { name: "TREE-002" }).getByLabel("Condition",{exact:true})).toHaveValue("Needs Rechecking");
+  await page.getByRole("button",{name:"Previous Tree"}).click();
   await expect(page.getByText(/Previous assessment: Healthy/)).toBeVisible();
   await expect.poll(() => page.evaluate(() => window.__PHASE3C_REQUESTS__.at(-1))).toBe("/verified-sample-monitoring/visits/VPMV-STAFF-001");
   await expect(page.getByText(/private:\/\//)).toHaveCount(0);
@@ -268,9 +273,11 @@ test("staff renders every authoritative sample in one editable visit form", asyn
   await isolate(page);
   await page.goto("/staff/permanent-sample-monitoring?role=staff");
   await page.getByRole("button", { name: "VPMV-STAFF-001" }).click();
-  await expect(page.getByRole("group")).toHaveCount(2);
+  await expect(page.locator(".psm-tree-list button")).toHaveCount(2);
   await expect(page.getByRole("group", { name: "TREE-001" })).toBeVisible();
+  await page.getByRole("button",{name:"Next Tree"}).click();
   await expect(page.getByRole("group", { name: "TREE-002" })).toBeVisible();
+  await page.getByRole("button",{name:"Previous Tree"}).click();
   await expect(page.getByText(/Previous assessment: Healthy/)).toBeVisible();
   await expect(page.getByRole("status").filter({ hasText: "2/2 assessments recorded" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Submit Visit" })).toBeVisible();
@@ -280,11 +287,13 @@ test("staff validates required rechecking data and saves the full versioned asse
   await isolate(page);
   await page.goto("/staff/permanent-sample-monitoring?role=staff");
   await page.getByRole("button", { name: "VPMV-STAFF-001" }).click();
-  await page.getByRole("group", { name: "TREE-002" }).getByLabel("Remarks").fill("");
+  await page.locator(".psm-tree-list button").filter({hasText:"TREE-002"}).click();
+  await page.getByRole("group", { name: "TREE-002" }).getByLabel(/Remarks/).fill("");
   await page.getByRole("button", { name: "Save TREE-002 Draft" }).click();
-  await expect(page.getByRole("alert")).toContainText("Remarks are required for TREE-002");
+  await expect(page.locator("[data-validation-field=\"TREE-002.remarks\"] [role=alert]")).toContainText("Explain why this tree needs rechecking.");
 
-  await page.getByRole("group", { name: "TREE-002" }).getByLabel("Remarks").fill("Tag needs verification.");
+  await page.getByRole("group", { name: "TREE-002" }).getByLabel(/Remarks/).fill("Tag needs verification.");
+  await page.getByRole("button",{name:"Previous Tree"}).click();
   await page.getByRole("group", { name: "TREE-001" }).getByLabel("Height (cm)").fill("123");
   await page.getByRole("button", { name: "Save TREE-001 Draft" }).click();
   await expect(page.getByText("DRAFT · version 5")).toBeVisible();
@@ -308,7 +317,7 @@ test("staff submits one complete visit and handles stale version conflicts safel
   await page.goto("/staff/permanent-sample-monitoring?role=staff&fixture=stale-save");
   await page.getByRole("button", { name: "VPMV-STAFF-001" }).click();
   await page.getByRole("button", { name: "Save TREE-001 Draft" }).click();
-  await expect(page.getByRole("alert")).toContainText("This monitoring visit changed.");
+  await expect(page.getByRole("dialog",{name:"Monitor Planted Trees"}).getByRole("alert")).toContainText("This monitoring visit changed.");
 });
 
 test("returned visits support staff correction while approved visits and admin views stay read-only", async ({ page }) => {
@@ -379,7 +388,7 @@ test("stale and unauthorized evidence requests fail closed without exposing priv
   await page.getByRole("button", { name: "Capture verified photo for TREE-001" }).click();
   await page.getByRole("button", { name: "Verify fixture camera photo" }).click();
   await page.getByRole("button", { name: "Upload verified photo for TREE-001" }).click();
-  await expect(page.getByRole("alert")).toContainText("Evidence changed while uploading.");
+  await expect(page.getByRole("dialog",{name:"Monitor Planted Trees"}).locator(".psm-error")).toContainText("Evidence changed while uploading.");
   await expect(page.getByText(/server-only-reference|storage\.googleapis/i)).toHaveCount(0);
 
   await page.goto("/staff/permanent-sample-monitoring?role=staff&fixture=evidence-403");
@@ -388,7 +397,7 @@ test("stale and unauthorized evidence requests fail closed without exposing priv
   await page.getByRole("button", { name: "Verify fixture camera photo" }).click();
   await page.getByRole("button", { name: "Upload verified photo for TREE-001" }).click();
   await page.getByRole("button", { name: "View private evidence revision 0" }).click();
-  await expect(page.getByRole("alert")).toContainText("private evidence photo is unavailable");
+  await expect(page.getByRole("dialog",{name:"Monitor Planted Trees"}).getByRole("alert")).toContainText("private evidence photo is unavailable");
 });
 
 test("returned correction keeps historical evidence while approved visits disable capture", async ({ page }) => {
@@ -428,7 +437,7 @@ test("admin validates return reason and posts one versioned approval decision", 
   await page.goto("/admin/permanent-sample-monitoring?role=admin&fixture=review-pending");
   await page.getByRole("button", { name: "VPMV-PENDING-REVIEW-001" }).click();
   await page.getByRole("button", { name: "Return for Correction" }).click();
-  await expect(page.getByRole("alert")).toContainText("A return reason is required");
+  await expect(page.getByRole("dialog",{name:"Monitor Planted Trees"}).getByRole("alert")).toContainText("A return reason is required");
   expect(await page.evaluate(() => window.__PHASE3C_REVIEWS__ || [])).toHaveLength(0);
 
   await page.getByRole("button", { name: "Approve Visit" }).click();
@@ -467,11 +476,11 @@ test("stale and failed admin reviews retain the authoritative pending state", as
   await page.goto("/admin/permanent-sample-monitoring?role=admin&fixture=review-stale");
   await page.getByRole("button", { name: "VPMV-PENDING-REVIEW-001" }).click();
   await page.getByRole("button", { name: "Approve Visit" }).click();
-  await expect(page.getByRole("alert")).toContainText("This monitoring visit changed.");
+  await expect(page.getByRole("dialog",{name:"Monitor Planted Trees"}).getByRole("alert")).toContainText("This monitoring visit changed.");
   await expect(page.getByText("PENDING_ADMIN_APPROVAL · version 11")).toBeVisible();
 
   await page.goto("/admin/permanent-sample-monitoring?role=admin&fixture=review-failure");
   await page.getByRole("button", { name: "VPMV-PENDING-REVIEW-001" }).click();
   await page.getByRole("button", { name: "Approve Visit" }).click();
-  await expect(page.getByRole("alert")).toContainText("Review service is unavailable.");
+  await expect(page.getByRole("dialog",{name:"Monitor Planted Trees"}).getByRole("alert")).toContainText("Review service is unavailable.");
 });

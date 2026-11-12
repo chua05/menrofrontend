@@ -2,7 +2,7 @@ import VerifiedPlantingCohortsPage from "./VerifiedPlantingCohortsPage";
 import { resolveVerifiedPlantingCohortEnabled } from "../utils/verifiedPlantingCohort";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createEvidenceAttempt, assertEvidenceComplete } from "../utils/evidenceAttempt";
-import { useSearchParams } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import L from "leaflet";
 import {
   CONDITION_SUM_ERROR, EMPTY_MONITORING_EVIDENCE, clearSharedCountError, monitoringPreview,
@@ -1474,6 +1474,7 @@ export default function MonitoringPage() {
     <div className="sm-page">
       {resolveVerifiedPlantingCohortEnabled() && !isParticipant && <section className="cohort-card">
         <button type="button" className="sm-secondary-button sm-cohort-toggle" aria-expanded={showCohorts} onClick={() => setShowCohorts(value => !value)}>Permanent Sample Selection and Baselines</button>
+        <Link className="sm-secondary-button sm-cohort-toggle" to={`/${userRole}/permanent-sample-monitoring`}>Monitor Permanent Sample Trees</Link>
         {showCohorts && <VerifiedPlantingCohortsPage embedded view="sampling" />}
       </section>}
       {/* PAGE HEADER */}
