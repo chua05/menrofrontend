@@ -106,10 +106,10 @@ test("unanswered information never blocks approval; approved-only analytics pres
   expect((await api(page, "/permanent-sample-analytics")).body.data.cohorts).toEqual([]);
   await page.getByLabel("Height (cm)").fill("120"); await page.getByLabel("Diameter (cm)").fill("4");
   const tree = page.getByRole("group", { name: "TREE-001" });
-  await tree.getByLabel("Condition").selectOption("Needs Rechecking");
+  await tree.getByRole("radio",{name:"Needs Rechecking",exact:true}).check();
   await tree.getByLabel("Remarks").fill("Location requires investigation.");
   await page.getByRole("button", { name: "Save TREE-001 Draft" }).click();
-  await expect(page.getByText(/DRAFT · version 1/)).toBeVisible();
+  await expect(page.getByText(/Draft · Revision 1/)).toBeVisible();
   const stale = await api(page, `/verified-sample-monitoring/visits/${data.visitId}`, "PUT", { expectedVersion: 0, assessments: [], submit: false });
   expect(stale.status).toBe(409);
   await page.getByRole("button", { name: "Submit Visit", exact: true }).click();

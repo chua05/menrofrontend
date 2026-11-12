@@ -1,16 +1,24 @@
 import { useState } from "react";
 import MonitoringInformationPanel from "./MonitoringInformationPanel";
 import { informationEnabled } from "../utils/permanentSampleFeatures";
-import { Camera, Image, MapPin, Trees, ChevronLeft, ChevronRight } from "lucide-react";
+import { Camera, Image, MapPin, Trees, ChevronLeft, ChevronRight, CircleCheck } from "lucide-react";
 import PlantingLocationMap from "./PlantingLocationMap";
 import { SAMPLE_CONDITIONS, sampleProgress } from "../utils/sampleMonitoringForm";
 const shown = value => value === null || value === undefined || value === "" ? "Not available" : String(value);
 const definitions = { Healthy: "Living tree in good condition.", Damaged: "Living tree with observed damage.", Dead: "Confirmed dead by field assessment.", "Needs Rechecking": "Condition is not yet confirmed." };
+const PENDING_SCHEDULE = "Pending Official Schedule";
+const CONFIRMED = new Set(["Healthy", "Damaged", "Dead"]);
 function Reference({ label, value }) { return <div><dt>{label}</dt><dd>{shown(value)}</dd></div>; }
+// Species and planted quantities come only from the authoritative cohort; unknown counts stay unknown.
+function SpeciesQuantities({ rows, fallback }) {
+  if (!rows?.length) return <Reference label="Species and Quantities" value={fallback} />;
+  return <div><dt>Species and Quantities</dt><dd><ul className="psm-species">{rows.map((row, index) => <li key={`${index}-${row.species}`}>
+    {row.verifiedPlantedQuantity == null ? `${row.species}: quantity not recorded` : `${row.species}: ${row.verifiedPlantedQuantity} planted`}</li>)}</ul></dd></div>;
+}
 export default function PermanentSampleVisitForm({ detail, assessments, activeTreeId, onTree, errors, onChange, onSave,
   saving, onCapture, onUpload, originalEnabled = false, onOriginal, pendingFor, onDiscard, onView, evidenceUrls, evidenceKey, visitRemarks, onVisitRemarks, dateMonitored, onDateMonitored, questions, onQuestion, readOnly = false }) {
   const [clarifications, setClarifications] = useState({});
-  const context=detail.visitContext, progress=sampleProgress(assessments);
+  const context=detail.visitContext, progress=sampleProgress(assessments), confirmed=progress.healthy+progress.damaged+progress.dead;
   const active=assessments.find(row=>row.sampleId===activeTreeId);
   const index=assessments.findIndex(row=>row.sampleId===active?.sampleId);
   const sample=context?.samples?.find(row=>row.sampleId===active?.sampleId);
@@ -31,24 +39,30 @@ export default function PermanentSampleVisitForm({ detail, assessments, activeTr
         <Reference label="Planting Date" value={context?.plantingDate}/><Reference label="Verified Planted Quantity" value={context?.verifiedPlantedQuantity}/>
         <Reference label="Approved Sample Target" value={context?.approvedSampleTarget}/><Reference label="Sampling Plan Status" value={context?.planStatus}/>
         <Reference label="Registered Sample Trees" value={context?.registeredSampleTrees??assessments.length}/>
-        <Reference label="Species" value={context?.samples?.map(row=>row.species).filter(Boolean).filter((value,index,all)=>all.indexOf(value)===index).join(", ")}/></dl>
+        <SpeciesQuantities rows={context?.speciesQuantities} fallback={context?.samples?.map(row=>row.species).filter(Boolean).filter((value,index,all)=>all.indexOf(value)===index).join(", ")}/>
+        <Reference label="Monitoring Visit Number" value={context?.schedule?.visitNumber||"Not assigned"}/></dl>
       {context && (context.planStatus!=="APPROVED"||context.baselineStatus!=="APPROVED")&&<p role="alert">An approved sampling plan and baseline are required before official submission.</p>}
     </section>
     <section className="psm-section"><h3>2. Monitoring Summary &amp; Automatic Schedule</h3><dl className="psm-info">
-      <Reference label="Start Monitoring Date" value={context?.schedule?.startMonitoringDate||"Awaiting an approved schedule"}/>
-      <Reference label="Next Monitoring Date" value={context?.schedule?.nextMonitoringDate||"Awaiting an approved schedule"}/>
-      <Reference label="Monitoring Visit Number" value={context?.schedule?.visitNumber||"Not assigned"}/><Reference label="Schedule Status" value={context?.schedule?.status||"No official schedule supplied"}/></dl>
+      <Reference label="Start Monitoring Date" value={context?.schedule?.startMonitoringDate||PENDING_SCHEDULE}/>
+      <Reference label="Next Monitoring Date" value={context?.schedule?.nextMonitoringDate||PENDING_SCHEDULE}/>
+      <Reference label="Monitoring Visit" value={context?.schedule?.visitNumber?`Visit #${context.schedule.visitNumber}`:"Not assigned"}/><Reference label="Schedule Status" value={context?.schedule?.status||PENDING_SCHEDULE}/></dl>
       <div className="psm-field"><label htmlFor="sample-date-monitored">Date Monitored *</label><input id="sample-date-monitored" type="date" required value={dateMonitored} disabled={saving||readOnly} aria-invalid={Boolean(errors.dateMonitored)} aria-describedby={errors.dateMonitored?"sample-date-monitored-error":undefined} onChange={event=>onDateMonitored(event.target.value)}/>{errors.dateMonitored&&<small role="alert" id="sample-date-monitored-error">{errors.dateMonitored}</small>}</div>
       <p className="psm-note">Scheduled dates come from the authorized visit. Recording the actual assessment date does not change the approved schedule.</p>
     </section>
+    {/* Non-overlapping counts: confirmed condition + unresolved rechecking + not assessed = registered trees. */}
     <section className="psm-section"><h3>3. Assessment Progress</h3><div className="psm-progress">
-      <span>Assessed: {progress.assessed}</span><span>Needs Rechecking: {progress.rechecking}</span><span>Not Assessed: {progress.notAssessed}</span><span>Total Registered Sample Trees: {progress.total}</span></div>
-      <progress aria-label="Sample assessment progress" value={progress.assessed} max={progress.total||1}/><p role="status">{progress.assessed}/{progress.total} assessments recorded.</p>
+      {[["Assessed", confirmed, "Healthy, Damaged or Dead"], ["Needs Rechecking", progress.rechecking, "Unresolved"], ["Not Assessed", progress.notAssessed, "No condition recorded"]].map(([label, value, hint]) =>
+        <div className="psm-progress-card" key={label}><span>{label}</span><strong>{value}</strong><small>{hint}</small></div>)}</div>
+      <div className="psm-progress-bar"><progress aria-label="Confirmed sample assessments" value={confirmed} max={progress.total||1}/><span>{`${confirmed} / ${progress.total} confirmed`}</span></div>
+      <p role="status">{`${progress.assessed}/${progress.total} assessments recorded; ${progress.rechecking === 1 ? "1 needs" : `${progress.rechecking} need`} rechecking.`}</p>
     </section>
     <section className="psm-section"><h3>4. Permanent Sample Tree Records</h3><div className="psm-tree-list">{assessments.map(row=>{
       const reference=context?.samples?.find(item=>item.sampleId===row.sampleId);
+      const prior=row.previousAssessmentReference?.condition||reference?.previous?.condition||reference?.baseline?.condition;
       return <button type="button" key={row.sampleId} aria-expanded={row.sampleId===active?.sampleId} aria-controls="sample-active-assessment" onClick={()=>onTree(row.sampleId===active?.sampleId?"":row.sampleId)}>
-        <span><strong>{row.sampleId}</strong>{reference?.species&&` - ${reference.species}`}</span><span>{row.condition||"Not Assessed"}{row.previousAssessmentReference||row.recheckRequired?" - Rechecking reference":""}</span></button>;
+        <span><strong>{row.sampleId}</strong>{reference?.species&&` · ${reference.species}`}</span>
+        <span className="psm-tree-state">{CONFIRMED.has(row.condition)&&<CircleCheck size={16} aria-hidden="true" className="psm-tree-done"/>}{row.condition||"Not Assessed"}{prior?` · Previous: ${prior}`:""}{row.recheckRequired||row.previousAssessmentReference?" · Rechecking carried forward":""}</span></button>;
     })}</div></section>
     {!active&&<section id="sample-active-assessment" hidden /> }
     {active&&<section className="psm-section" id="sample-active-assessment"><h3>5. Individual Tree Assessment</h3><fieldset className="psm-tree" key={active.sampleId}><legend>{active.sampleId}</legend>
@@ -77,17 +91,23 @@ export default function PermanentSampleVisitForm({ detail, assessments, activeTr
         {errors[active.sampleId + ".evidence"]&&<p role="alert">{errors[active.sampleId + ".evidence"]}</p>}
         <p className="psm-note">Geotagging verifies evidence location. Staff determines the tree's biological condition.</p></div>
       <div className="psm-history">{(server?.evidenceHistory||[]).map((evidence,n)=>{const key=evidenceKey(active.sampleId,n);return <div key={key}><p>Historical evidence revision {evidence.revision}{evidence.source === "uploaded-original" ? " - Uploaded original - GPS accuracy Unknown - Requires Admin review" : ""}</p>{evidenceUrls[key]?<img src={evidenceUrls[key]} alt={`Private evidence for ${active.sampleId}, revision ${evidence.revision}`}/>:<button type="button" onClick={()=>onView(active.sampleId,n)}>View private evidence revision {evidence.revision}</button>}</div>;})}</div>
-      <h4>Tree Measurements &amp; Condition</h4><div className="psm-measurements">{input("heightCentimeters","Height (cm)")}{input("diameterCentimeters","Diameter (cm)")}</div>
-      <div className="psm-field" data-validation-field={`${active.sampleId}.condition`}><label htmlFor={`sample-${active.sampleId}-condition`}>Condition</label>
-        <select id={`sample-${active.sampleId}-condition`} value={active.condition} disabled={saving||readOnly} aria-invalid={Boolean(errors[`${active.sampleId}.condition`])} aria-describedby={errors[`${active.sampleId}.condition`]?`sample-${active.sampleId}-condition-error`:undefined} onChange={event=>onChange(active.sampleId,"condition",event.target.value)}>
-          <option value="">Select condition</option>{SAMPLE_CONDITIONS.map(value=><option key={value}>{value}</option>)}</select>
-        {active.condition&&<p>{definitions[active.condition]}</p>}{errors[`${active.sampleId}.condition`]&&<small role="alert" id={`sample-${active.sampleId}-condition-error`}>{errors[`${active.sampleId}.condition`]}</small>}</div>
+      <h4>Tree Measurements</h4><div className="psm-measurements">{input("heightCentimeters","Height (cm)")}{input("diameterCentimeters","Diameter (cm)")}</div>
+      <div className="psm-field" data-validation-field={`${active.sampleId}.condition`}><span className="psm-label" id={`sample-${active.sampleId}-condition-label`}>Tree Condition *</span>
+        <div className="psm-conditions" role="radiogroup" aria-labelledby={`sample-${active.sampleId}-condition-label`} aria-invalid={Boolean(errors[`${active.sampleId}.condition`])} aria-describedby={errors[`${active.sampleId}.condition`]?`sample-${active.sampleId}-condition-error`:undefined}>
+          {SAMPLE_CONDITIONS.map(value=>{const id=`sample-${active.sampleId}-condition-${value.replace(/\s+/g,"-").toLowerCase()}`;return <div className="psm-condition" key={value}>
+            <label><input type="radio" name={`sample-${active.sampleId}-condition`} value={value} checked={active.condition===value} disabled={saving||readOnly} aria-describedby={`${id}-help`} onChange={()=>onChange(active.sampleId,"condition",value)}/>{value}</label>
+            <small id={`${id}-help`}>{definitions[value]}</small></div>;})}</div>
+        {errors[`${active.sampleId}.condition`]&&<small role="alert" id={`sample-${active.sampleId}-condition-error`}>{errors[`${active.sampleId}.condition`]}</small>}</div>
       {input("remarks",active.condition==="Needs Rechecking"?"Assessment Remarks *":"Remarks","textarea")}
       {questions[active.sampleId]?.trim() && (active.condition !== "Needs Rechecking" || !clarifications[active.sampleId]) && <div className="psm-note">
         <p>Unsent requester question: {questions[active.sampleId]}</p>
         <button type="button" data-discard-question="" disabled={saving||readOnly} aria-label={`Discard unsent question for ${active.sampleId}`} onClick={()=>onQuestion(active.sampleId,"")}>Discard unsent question</button>
       </div>}
-      {active.condition==="Needs Rechecking"&&<section className="psm-rechecking"><h3>6. Rechecking &amp; Requester Clarification</h3><p>Rechecking required. Follow-up: {context?.schedule?.nextMonitoringDate||"Awaiting the next approved scheduled visit"}.</p>
+      {active.condition==="Needs Rechecking"&&<section className="psm-rechecking"><h3>6. Rechecking &amp; Requester Clarification</h3>
+        <dl className="psm-info"><Reference label="Rechecking Required" value="Yes — Needs Rechecking"/>
+          <div><dt>Reason for Rechecking</dt><dd>{active.remarks.trim()||"Enter the reason in Assessment Remarks."}</dd></div>
+          <Reference label="Scheduled Rechecking Visit" value={context?.schedule?.nextMonitoringDate||PENDING_SCHEDULE}/></dl>
+        <p className="psm-note">This tree is carried into the next approved monitoring visit. It is never counted as dead while unresolved.</p>
         <label className="psm-field">Investigation outcome<select value={active.investigationOutcome} disabled={saving||readOnly} onChange={event=>onChange(active.sampleId,"investigationOutcome",event.target.value)}><option value="">No outcome recorded</option><option>Not Located After Rechecking</option></select></label>
         {active.investigationOutcome&&input("searchFindings","Search findings","textarea")}
         <label><input type="checkbox" checked={Boolean(clarifications[active.sampleId])} disabled={!informationEnabled() || server?.condition !== "Needs Rechecking" || saving || readOnly} onChange={event=>setClarifications(current=>({...current,[active.sampleId]:event.target.checked}))}/> Request additional information from Requester</label>
@@ -95,7 +115,7 @@ export default function PermanentSampleVisitForm({ detail, assessments, activeTr
       {!readOnly&&<button type="button" disabled={saving} onClick={()=>onSave(false)}>Save {active.sampleId} Draft</button>}
       <div className="psm-tree-nav"><button type="button" disabled={index<=0} onClick={()=>onTree(assessments[index-1].sampleId)}><ChevronLeft size={17}/> Previous Tree</button><button type="button" disabled={index>=assessments.length-1} onClick={()=>onTree(assessments[index+1].sampleId)}>Next Tree <ChevronRight size={17}/></button></div>
     </fieldset></section>}
-    <section className="psm-section"><h3 className="psm-heading"><Trees size={18}/> 7. Monitoring Visit Summary</h3><dl className="psm-info">{[["Healthy",progress.healthy],["Damaged (Living)",progress.damaged],["Confirmed Dead",progress.dead],["Needs Rechecking",progress.rechecking],["Not Assessed",progress.notAssessed],["Total Registered Sample Trees",progress.total]].map(([label,value])=><Reference key={label} label={label} value={value}/>)}</dl>
+    <section className="psm-section psm-summary"><h3 className="psm-heading"><Trees size={18}/> 7. Automatic Monitoring Visit Summary</h3><dl className="psm-info">{[["Healthy",progress.healthy],["Damaged (Living)",progress.damaged],["Confirmed Dead",progress.dead],["Needs Rechecking",progress.rechecking],["Not Assessed",progress.notAssessed],["Total Registered Sample Trees",progress.total],["Assessment Completion Count",`${confirmed} / ${progress.total}`]].map(([label,value])=><Reference key={label} label={label} value={value}/>)}</dl>
       <p>Official Sample Survival Status: Pending applicable policy / Admin review. Unresolved trees are not classified as dead.</p>
       <label className="psm-field">Overall Visit Remarks (Optional)<textarea value={visitRemarks} maxLength={1000} disabled={saving||readOnly} onChange={event=>onVisitRemarks(event.target.value)} rows={3}/></label></section>
   </>;

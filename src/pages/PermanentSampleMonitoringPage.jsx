@@ -13,6 +13,10 @@ import {
   visibleCohortMessage,
 } from "../utils/verifiedPlantingCohort";
 import { useAuth } from "../context/AuthContext";
+import { Trees, X } from "lucide-react";
+
+const STATUS_LABELS = { DRAFT: "Draft", RETURNED: "Returned for Correction", PENDING_ADMIN_APPROVAL: "Pending Admin Review", APPROVED: "Approved" };
+const statusLabel = value => STATUS_LABELS[value] || value;
 
 
 async function api(path, options = {}) {
@@ -462,14 +466,14 @@ export default function PermanentSampleMonitoringPage() {
         </>
       )}
       {detail && <ModalDialog open={dialogOpen} label="Monitor Planted Trees" className="psm-dialog" dismissible={!saving && !reviewing} busy={saving || reviewing} onClose={() => setDialogOpen(false)}>
-        <header className="psm-header"><div><h2>Monitor Planted Trees</h2><p>Monitor registered sample trees and document their current survival conditions.</p><strong>{({ DRAFT: "Draft", RETURNED: "Returned for Correction", PENDING_ADMIN_APPROVAL: "Pending Admin Review", APPROVED: "Approved" })[detail.status] || detail.status}</strong></div><button type="button" data-modal-close="" disabled={saving || reviewing} aria-label="Close monitoring visit">Close</button></header>
+        <header className="psm-header"><div className="psm-header-main"><span className="psm-header-icon"><Trees size={22} aria-hidden="true" /></span><div><h2>Monitor Planted Trees</h2><p>Monitor registered sample trees and document their current survival conditions.</p></div></div>
+          <div className="psm-header-actions"><span className="psm-status-badge">{statusLabel(detail.status)}</span><button type="button" className="psm-close" data-modal-close="" disabled={saving || reviewing} aria-label="Close monitoring visit"><X size={18} aria-hidden="true" /></button></div></header>
         <div className="psm-body">
         <label className="psm-field">Verified Planting Report<select value={detail.id} disabled={saving || Boolean(unconfirmed)} onChange={event => open(event.target.value)}>{(page?.visits || [detail]).map(row => <option key={row.id} value={row.id}>{row.visitDate || row.id} - {row.id}</option>)}</select></label>
         {error && <p role="alert" className="psm-error">{error}</p>}
         {unconfirmed ? <button type="button" disabled={saving} onClick={reconcile}>Check saved outcome</button> : <button type="button" disabled={saving || reviewing} onClick={() => open(detail.id, true)}>Reload visit</button>}
         <section className="psm-content">
-          <h2>{detail.id}</h2>
-          <p>{`${detail.status} · version ${detail.version}`}</p>
+          <p className="psm-note">{`${statusLabel(detail.status)} · Revision ${detail.version}`}</p>
           {!editable && <p role="status">{`${completed}/${assessments.length} assessments recorded.`}</p>}
           {editable ? (
             <PermanentSampleVisitForm detail={detail} assessments={assessments} activeTreeId={activeTreeId} onTree={setActiveTreeId}

@@ -20,3 +20,19 @@
 /* Keep the existing real camera inside the native modal focus/top-layer scope. */
 .psm-camera-host[open] { display:block;position:fixed;inset:0;width:100vw;height:100dvh;max-width:none;max-height:none;margin:0;padding:0;border:0;background:transparent;overflow:visible;transform:none; }
 .psm-camera-host::backdrop { background:transparent; }
+
+/* Blueprint completion: header, progress cards, tree rows, condition radios */
+.psm-header-main { display:flex;gap:12px;align-items:flex-start;min-width:0; }.psm-header-icon { flex:none;width:42px;height:42px;border-radius:10px;background:#edf6ef;color:#145b3a;display:grid;place-items:center; }
+.psm-header-actions { flex:none;display:flex;gap:10px;align-items:center; }.psm-status-badge { padding:5px 10px;border-radius:999px;background:#edf6ef;color:#145b3a;font-size:12px;font-weight:700;white-space:nowrap; }
+.psm-dialog button.psm-close { width:40px;height:40px;padding:0; }
+.psm-progress { display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px; }.psm-progress-card { padding:12px;border:1px solid #d6e3da;border-radius:10px;background:#f6faf7;display:flex;flex-direction:column;gap:4px;min-width:0; }
+.psm-progress-card span { font-size:13px;color:#4f6357;font-weight:600; }.psm-progress-card strong { font-size:24px;line-height:1.1; }.psm-progress-card small { color:#667a6e;font-size:12px; }
+.psm-progress-bar { display:flex;align-items:center;gap:12px;margin-top:14px; }.psm-section .psm-progress-bar progress { flex:1;margin:0;min-width:0; }.psm-progress-bar span { flex:none;font-weight:600;font-size:13px; }
+.psm-tree-state { display:inline-flex;align-items:center;gap:6px;flex-wrap:wrap;color:#4f6357; }.psm-tree-done { color:#145b3a;flex:none; }
+.psm-label { font-weight:600; }.psm-conditions { display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px; }
+.psm-condition { border:1px solid #cbd8cf;border-radius:10px;padding:10px 12px;min-width:0; }.psm-condition:has(input:checked) { border-color:#145b3a;background:#f0f8f2; }
+.psm-condition label { display:flex;gap:8px;align-items:center;font-weight:600;cursor:pointer; }.psm-condition input { width:18px;height:18px;accent-color:#145b3a;flex:none; }.psm-condition small { display:block;margin:4px 0 0 26px;color:#617268;font-size:12px; }
+.psm-conditions[aria-invalid=true] .psm-condition { border-color:#b42318; }.psm-species { margin:0;padding-left:18px; }
+@media(max-width:600px) { .psm-progress { grid-template-columns:1fr; }.psm-conditions { grid-template-columns:1fr; }.psm-header-main { gap:10px; }.psm-header-icon { width:36px;height:36px; } }
+.psm-dialog .psm-condition input[type=radio] { width:18px;min-width:18px;height:18px;margin:0;padding:0;border:0;box-sizing:border-box; }
+.psm-progress .psm-progress-card span { padding:0;background:none;border-radius:0; }

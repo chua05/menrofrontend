@@ -141,7 +141,7 @@ async function completeAssessment(page, remarks, height = "120") {
   const tree = page.getByRole("group", { name: "TREE-001" });
   await tree.getByLabel("Height (cm)").fill(height);
   await tree.getByLabel("Diameter (cm)").fill("6");
-  await tree.getByLabel("Condition").selectOption("Healthy");
+  await tree.getByRole("radio",{name:"Healthy",exact:true}).check();
   await tree.getByLabel("Remarks").fill(remarks);
   await tree.getByRole("button", { name: "Save TREE-001 Draft" }).click();
   await expect(page.getByText(/DRAFT · version \d+/)).toBeVisible();
