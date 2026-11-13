@@ -214,3 +214,11 @@ test("condition radios submit the exact backend vocabulary", async ({ page }) =>
   expect(s.puts[0].assessments.map(row => row.condition)).toEqual(["Healthy", "Damaged"]);
   expect(s.puts[0].submit).toBe(true);
 });
+
+test("sampling plan status in Section 1 is shown as a readable label, never a raw backend code", async ({ page }) => {
+  await setup(page);
+  const section = modal(page).locator(".psm-section").first();
+  const status = section.locator("div").filter({ has: page.getByText("Sampling Plan Status", { exact: true }) }).locator("dd");
+  await expect(status).toHaveText("Approved");
+  await expect(section.getByText("APPROVED", { exact: true })).toHaveCount(0);
+});
