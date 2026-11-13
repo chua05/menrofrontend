@@ -7,6 +7,7 @@ import { SAMPLE_CONDITIONS, sampleProgress } from "../utils/sampleMonitoringForm
 const shown = value => value === null || value === undefined || value === "" ? "Not available" : String(value);
 const definitions = { Healthy: "Living tree in good condition.", Damaged: "Living tree with observed damage.", Dead: "Confirmed dead by field assessment.", "Needs Rechecking": "Condition is not yet confirmed." };
 const PENDING_SCHEDULE = "Pending Official Schedule";
+const PLAN_STATUS = { DRAFT: "Draft", PENDING_ADMIN_APPROVAL: "Pending Admin Review", RETURNED: "Returned for Correction", APPROVED: "Approved", REJECTED: "Rejected" };
 const CONFIRMED = new Set(["Healthy", "Damaged", "Dead"]);
 function Reference({ label, value }) { return <div><dt>{label}</dt><dd>{shown(value)}</dd></div>; }
 // Species and planted quantities come only from the authoritative cohort; unknown counts stay unknown.
@@ -37,7 +38,7 @@ export default function PermanentSampleVisitForm({ detail, assessments, activeTr
       <dl className="psm-info"><Reference label="Planting Report ID" value={context?.reportNumber||context?.plantingReportId}/><Reference label="Planting Site" value={context?.siteName}/>
         <Reference label="Address / Barangay" value={context?.barangay}/><Reference label="Planting Report Status" value={context?.reportStatus}/>
         <Reference label="Planting Date" value={context?.plantingDate}/><Reference label="Verified Planted Quantity" value={context?.verifiedPlantedQuantity}/>
-        <Reference label="Approved Sample Target" value={context?.approvedSampleTarget}/><Reference label="Sampling Plan Status" value={context?.planStatus}/>
+        <Reference label="Approved Sample Target" value={context?.approvedSampleTarget}/><Reference label="Sampling Plan Status" value={PLAN_STATUS[context?.planStatus] || context?.planStatus}/>
         <Reference label="Registered Sample Trees" value={context?.registeredSampleTrees??assessments.length}/>
         <SpeciesQuantities rows={context?.speciesQuantities} fallback={context?.samples?.map(row=>row.species).filter(Boolean).filter((value,index,all)=>all.indexOf(value)===index).join(", ")}/>
         <Reference label="Monitoring Visit Number" value={context?.schedule?.visitNumber||"Not assigned"}/></dl>
