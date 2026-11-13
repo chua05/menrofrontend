@@ -1,4 +1,5 @@
 import VerifiedPlantingCohortsPage from "./VerifiedPlantingCohortsPage";
+import PermanentSampleMonitoringPage from "./PermanentSampleMonitoringPage";
 import { resolveVerifiedPlantingCohortEnabled } from "../utils/verifiedPlantingCohort";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createEvidenceAttempt, assertEvidenceComplete } from "../utils/evidenceAttempt";
@@ -468,6 +469,8 @@ export default function MonitoringPage() {
   const [showDetails, setShowDetails] = useState(false);
   const [selectedRecord, setSelectedRecord] = useState(null);
   const [editingObservation, setEditingObservation] = useState(null);
+  const [sampleFormMounted, setSampleFormMounted] = useState(false);
+  const [sampleFormOpen, setSampleFormOpen] = useState(false);
   const [retainEvidenceRevision, setRetainEvidenceRevision] = useState("");
   const [openActionMenuId, setOpenActionMenuId] = useState(null);
 
@@ -1001,16 +1004,19 @@ export default function MonitoringPage() {
     clearPreview();
   }
 
-  async function openForm() {
-    await refreshPlantingReports();
-    resetForm();
-    setShowForm(true);
-  }
-
   function closeForm() {
     setCameraOpen(false);
     setShowForm(false);
     resetForm();
+  }
+
+  // Historical aggregate monitoring: a follow-up official or early observation for an existing lifecycle.
+  // It reuses the legacy aggregate form and APIs and never writes permanent-sample visits.
+  function openAggregateObservation(record) {
+    setOpenActionMenuId(null);
+    resetForm();
+    handlePlantingReportChange({ target: { value: record.plantingReportId } });
+    setShowForm(true);
   }
 
   function updateFormField(field, value) {
@@ -1473,7 +1479,7 @@ export default function MonitoringPage() {
 
   return (
     <div className="sm-page">
-      {resolveVerifiedPlantingCohortEnabled() && !isParticipant && <section className="cohort-card">
+      {permanentSampleEnabled && isAdmin && <section className="cohort-card">
         <button type="button" className="sm-secondary-button sm-cohort-toggle" aria-expanded={showCohorts} onClick={() => setShowCohorts(value => !value)}>Permanent Sample Selection and Baselines</button>
         {showCohorts && <VerifiedPlantingCohortsPage embedded view="sampling" />}
       </section>}
@@ -1503,20 +1509,13 @@ export default function MonitoringPage() {
             <FiRefreshCw size={16} />
           </button>
 
-          {/* Primary Staff action: the permanent-sample visit workflow, behind the same gate as its route. */}
-          {isStaff && permanentSampleEnabled && (
-            <Link className="sm-primary-button sm-primary-link" to="/staff/permanent-sample-monitoring?start=1">
-              <FiPlus size={15} aria-hidden="true" />
-              Submit Monitoring Record
-            </Link>
-          )}
-
-          {/* Legacy aggregate workflow: opens the existing modal in place, never the per-tree form. */}
+          {/* The single Staff submission action (label requested by MENRO). It opens the permanent-sample
+              visit form in the Monitor Planted Trees modal; per-tree data never goes to aggregate records. */}
           {isStaff && (
             <button
               type="button"
-              className={permanentSampleEnabled ? "sm-secondary-button sm-aggregate-action" : "sm-primary-button"}
-              onClick={openForm}
+              className="sm-primary-button"
+              onClick={() => { setSampleFormMounted(true); setSampleFormOpen(true); }}
             >
               <FiPlus size={15} aria-hidden="true" />
               Submit Aggregate Monitoring Record
@@ -1536,10 +1535,9 @@ export default function MonitoringPage() {
         </div>
       </div>
 
-      {isStaff && !permanentSampleEnabled && (
-        <p className="sm-header-note" role="status">
-          Permanent sample tree monitoring is not enabled in this environment. Aggregate monitoring remains available.
-        </p>
+      {/* Mounted on first use and kept mounted, so unsaved per-tree edits survive closing and reopening. */}
+      {isStaff && sampleFormMounted && (
+        <PermanentSampleMonitoringPage embedded open={sampleFormOpen} onClose={() => setSampleFormOpen(false)} />
       )}
 
       {isParticipant && loadError && (
@@ -1964,6 +1962,15 @@ export default function MonitoringPage() {
 
                               {openActionMenuId === record.id && (
                                 <div className="sm-action-menu">
+                                  {isStaff && !record.archived && record.status !== "Monitoring Completed" && (
+                                    <button
+                                      type="button"
+                                      onClick={() => openAggregateObservation(record)}
+                                    >
+                                      <FiPlus size={14} />
+                                      Record Aggregate Observation
+                                    </button>
+                                  )}
                                   <button
                                     type="button"
                                     onClick={() => archiveRecord(record)}
@@ -2038,7 +2045,7 @@ export default function MonitoringPage() {
           <div className="sm-modal">
             <div className="sm-modal-header">
               <div>
-                <h2>{editingObservation ? "Edit Returned Monitoring Observation" : "Monitor Planted Trees"}</h2>
+                <h2>{editingObservation ? "Edit Returned Monitoring Observation" : "Record Aggregate Monitoring Observation"}</h2>
                 <p>
                   Monitor a verified planting report and document the current
                   survival condition.

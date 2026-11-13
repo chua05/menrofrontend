@@ -70,6 +70,8 @@ function listResponse(url, activeFixture) {
     { ...approvedDetail, progress: { completed: 2, total: 2, rechecking: 0 } },
   ], nextCursor: null } });
   if (activeFixture === "empty") return response(200, { success: true, data: { visits: [], nextCursor: null } });
+  // Same shape as the backend gate: 409 with a code and no message.
+  if (activeFixture === "server-disabled") return response(409, { success: false, code: "COHORT_WORKFLOW_DISABLED" });
   if (activeFixture === "discovery-401") return failure(401, "Credentials required.");
   if (activeFixture === "discovery-403") return failure(403, "Forbidden.");
   if (activeFixture === "discovery-500") return failure(500, "Discovery unavailable.");

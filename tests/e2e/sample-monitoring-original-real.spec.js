@@ -25,8 +25,13 @@ async function login(page,role){
  await expect(page).toHaveURL(new RegExp(`/${role==="otherStaff"?"staff":role}/dashboard$`),{timeout:30000});return f;
 }
 const collection=page=>page.waitForResponse(r=>{const u=new URL(r.url());return r.request().method()==="GET"&&u.origin===backend&&u.pathname==="/api/verified-sample-monitoring/visits";},{timeout:30000});
-async function discover(page){await page.getByRole("button",{name:"Open sidebar",exact:true}).click();const [response]=await Promise.all([collection(page),page.getByRole("link",{name:"Permanent Sample Monitoring",exact:true}).click()]);return response;}
-async function open(page,role){const f=await login(page,role);const r=await discover(page);const b=await r.json();expect(r.status()).toBe(200);expect(b.data.visits.some(v=>v.id===f.visitId)).toBe(true);await page.getByRole("button",{name:f.visitId,exact:true}).click();await expect(page.getByRole("dialog",{name:"Monitor Planted Trees"})).toBeVisible();return f;}
+async function discover(page,role="staff"){await page.getByRole("button",{name:"Open sidebar",exact:true}).click();
+ if(role==="admin"){const [response]=await Promise.all([collection(page),page.getByRole("link",{name:"Permanent Sample Monitoring",exact:true}).click()]);return response;}
+ // Staff reach permanent-sample monitoring only through Survival Monitoring's single submission button.
+ await page.getByRole("link",{name:"Survival Monitoring",exact:true}).click();await expect(page.getByRole("heading",{name:"Survival Monitoring",exact:true})).toBeVisible({timeout:30000});
+ const [response]=await Promise.all([collection(page),page.locator(".sm-header-actions").getByRole("button",{name:"Submit Aggregate Monitoring Record",exact:true}).click()]);
+ await expect(page.getByRole("dialog",{name:"Monitor Planted Trees"})).toBeVisible();return response;}
+async function open(page,role){const f=await login(page,role);const r=await discover(page,role);const b=await r.json();expect(r.status()).toBe(200);expect(b.data.visits.some(v=>v.id===f.visitId)).toBe(true);if(role==="admin")await page.getByRole("button",{name:f.visitId,exact:true}).click();const dialog=page.getByRole("dialog",{name:"Monitor Planted Trees"});await expect(dialog).toBeVisible();await expect(dialog.getByRole("combobox",{name:"Verified Planting Report",exact:true})).toHaveValue(f.visitId);return f;}
 async function api(page,endpoint,method="GET",body){return page.evaluate(async({endpoint,method,body})=>{const {authenticatedFetch}=await import("/src/services/authenticatedApi.js");const r=await authenticatedFetch(endpoint,{method,...(body?{body:JSON.stringify(body),headers:{"Content-Type":"application/json"}}:{})});return{status:r.status,body:await r.json()};},{endpoint,method,body});}
 const detail=(page,id)=>api(page,`/verified-sample-monitoring/visits/${id}`);
 const selectTree=async(page,id)=>{const button=page.locator(".psm-tree-list button").filter({hasText:id});if(await button.getAttribute("aria-expanded")!=="true")await button.click();};

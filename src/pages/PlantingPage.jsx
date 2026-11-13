@@ -2769,7 +2769,8 @@ export default function PlantingPage() {
 
       {!isParticipant && resolveVerifiedPlantingCohortEnabled() && <section className="pr-panel pr-cohort-integration">
         <button type="button" className="pr-secondary-button" aria-expanded={showCohorts} onClick={() => setShowCohorts(value => !value)}>Verified Planting Cohorts</button>
-        {showCohorts && <VerifiedPlantingCohortsPage embedded view="records" />}
+        {/* Staff register sampling plans and baselines here; Admin reviews them from Survival Monitoring. */}
+        {showCohorts && <VerifiedPlantingCohortsPage embedded view={userRole === "staff" ? "all" : "records"} />}
       </section>}
       <div className="pr-cards" role="list" aria-label="Planting report summary">
         {REPORT_KPIS.map((kpi) => (

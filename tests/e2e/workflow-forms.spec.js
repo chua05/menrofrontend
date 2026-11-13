@@ -898,23 +898,45 @@ for (const width of [390, 1440]) test(`Staff dashboard preserves cards without r
   await page.screenshot({ path: test.info().outputPath(`staff-dashboard-${width}.png`) }); fixture.check();
 });
 
-for (const role of ["staff", "admin"]) test(`${role} accesses verified records inside reports and sampling inside monitoring`, async ({ page }) => {
-  const cohort = { id: "VPC-fixture", verifiedPlantedQuantity: 10, source: { plantingReportId: "report-1", siteId: "site-1" }, samplingPolicySnapshot: { percentage: 10 }, samplingReadiness: { target: null, pending: ["approved minimum"] }, samplingPlan: { status: "DRAFT", version: 0 } };
-  const fixture = await setup(page, { "GET /api/verified-planting-cohorts": route => route.fulfill({ json: { success: true, data: [cohort] } }) });
+const cohortAccessFixture = { id: "VPC-fixture", verifiedPlantedQuantity: 10, source: { plantingReportId: "report-1", siteId: "site-1" }, samplingPolicySnapshot: { percentage: 10 }, samplingReadiness: { target: null, pending: ["approved minimum"] }, samplingPlan: { status: "DRAFT", version: 0 } };
+async function openReportsCohort(page, role) {
   await page.goto(`/${role}/planting-reports?role=${role}`);
   await page.getByRole("button", { name: "Verified Planting Cohorts", exact: true }).click();
-  await page.getByLabel("Verified cohort", { exact: true }).selectOption(cohort.id);
+  await page.getByLabel("Verified cohort", { exact: true }).selectOption(cohortAccessFixture.id);
   await expect(page.getByRole("heading", { name: "Verified planting record", exact: true })).toBeVisible();
   await expect(page.getByRole("link", { name: "View source planting report", exact: true })).toHaveAttribute("href", "/" + role + "/planting-reports?report=report-1");
   await expect(page.getByRole("link", { name: "View registered planting site", exact: true })).toHaveAttribute("href", "/" + role + "/planting-sites?site=site-1");
-  await expect(page.getByRole("heading", { name: "Sampling Plan", exact: true })).toHaveCount(0);
+}
+
+test("staff manages verified records, sampling plans and baselines from Planting Reports, not Survival Monitoring", async ({ page }) => {
+  const fixture = await setup(page, { "GET /api/verified-planting-cohorts": route => route.fulfill({ json: { success: true, data: [cohortAccessFixture] } }) });
+  await openReportsCohort(page, "staff");
+  await expect(page.getByRole("heading", { name: "Sampling Plan", exact: true })).toBeVisible();
+  await expect(page.getByText(/MENRO decisions pending: approved minimum/)).toBeVisible();
+  await expect(page.getByRole("button", { name: "Submit plan for approval", exact: true })).toBeDisabled();
+  await expect(page.getByRole("button", { name: /Create Visit/ })).toHaveCount(0);
+  await expect(page.getByText(/to manage eligible permanent samples and baseline records/)).toHaveCount(0);
   await page.getByRole("button", { name: "Open sidebar", exact: true }).click();
   await expect(page.getByRole("link", { name: "Verified Planting Records", exact: true })).toHaveCount(0);
-  await page.goto(`/${role}/survival-monitoring?role=${role}`);
+  await expect(page.getByRole("link", { name: "Permanent Sample Monitoring", exact: true, includeHidden: true })).toHaveCount(0);
+  await page.goto("/staff/survival-monitoring?role=staff");
+  await expect(page.getByRole("heading", { name: "Survival Monitoring", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Permanent Sample Selection and Baselines", exact: true })).toHaveCount(0);
+  fixture.check();
+});
+
+test("admin keeps verified records in Planting Reports and plan/baseline review in Survival Monitoring", async ({ page }) => {
+  const fixture = await setup(page, { "GET /api/verified-planting-cohorts": route => route.fulfill({ json: { success: true, data: [cohortAccessFixture] } }) });
+  await openReportsCohort(page, "admin");
+  await expect(page.getByRole("heading", { name: "Sampling Plan", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("link", { name: "Tree Survival Monitoring", exact: true })).toHaveAttribute("href", "/admin/survival-monitoring");
+  await page.getByRole("button", { name: "Open sidebar", exact: true }).click();
+  await expect(page.getByRole("link", { name: "Verified Planting Records", exact: true })).toHaveCount(0);
+  await page.goto("/admin/survival-monitoring?role=admin");
   await page.getByRole("button", { name: "Permanent Sample Selection and Baselines", exact: true }).click();
-  await page.getByLabel("Verified cohort", { exact: true }).selectOption(cohort.id);
+  await page.getByLabel("Verified cohort", { exact: true }).selectOption(cohortAccessFixture.id);
   await expect(page.getByText(/MENRO decisions pending: approved minimum/)).toBeVisible();
-  if (role === "staff") await expect(page.getByRole("button", { name: "Submit plan for approval", exact: true })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "Submit plan for approval", exact: true })).toHaveCount(0);
   await expect(page.getByRole("button", { name: /Create Visit/ })).toHaveCount(0);
   fixture.check();
 });
@@ -984,11 +1006,13 @@ for (const role of ["admin", "staff", "participant"]) for (const width of [320, 
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
   await page.screenshot({ path: test.info().outputPath(`dashboard-cleanup-${role}-${width}.png`), fullPage: true }); fixture.check();
 });
-test("sampling action wraps at 320px without clipping", async ({ page }) => {
-  await setup(page); await page.setViewportSize({ width: 320, height: 900 }); await page.goto("/staff/survival-monitoring?role=staff");
-  const button = page.getByRole("button", { name: "Permanent Sample Selection and Baselines", exact: true });
-  expect(await button.evaluate(node => getComputedStyle(node).whiteSpace)).toBe("normal");
+for (const [role, path, name] of [["staff", "/staff/planting-reports?role=staff", "Verified Planting Cohorts"], ["admin", "/admin/survival-monitoring?role=admin", "Permanent Sample Selection and Baselines"]])
+test(`${role} sampling action wraps at 320px without clipping`, async ({ page }) => {
+  await setup(page); await page.setViewportSize({ width: 320, height: 900 }); await page.goto(path);
+  const button = page.getByRole("button", { name, exact: true });
+  await expect(button).toBeVisible();
   expect(await button.evaluate(node => node.getBoundingClientRect().right)).toBeLessThanOrEqual(320);
+  expect(await button.evaluate(node => node.scrollWidth <= node.clientWidth + 1)).toBe(true);
 });
 
 test("Staff photo verification shows the participant map and explains Take Photo before a release is selected", async ({ page }) => {
