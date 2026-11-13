@@ -159,7 +159,9 @@ export default function VerifiedPlantingCohortsPage({ embedded = false, view = "
       <dt>Cohort</dt><dd>{selected.id}</dd><dt>Verified planted quantity</dt><dd>{selected.verifiedPlantedQuantity}</dd>
       <dt>Planting report</dt><dd>{selected.source?.plantingReportId ? <Link to={`/${userRole}/planting-reports?report=${encodeURIComponent(selected.source.plantingReportId)}`}>View source planting report</Link> : "Not recorded"}</dd><dt>Site</dt><dd>{selected.source?.siteId ? <Link to={`/${userRole}/planting-sites?site=${encodeURIComponent(selected.source.siteId)}`}>View registered planting site</Link> : "Not recorded"}</dd>
       <dt>Sampling plan</dt><dd>{selected.samplingPlan?.status || "Not started"}</dd><dt>Baseline</dt><dd>{selected.baseline?.approvalStatus || selected.baselineStatus || "Not started"}</dd>
-    </dl>{sampleAnalyticsEnabled() && <p><Link to={`/${userRole}/permanent-sample-analytics`}>View approved sample coverage and survival estimates</Link></p>}{view === "records" && <p>Open <Link to={`/${userRole}/survival-monitoring`}>Tree Survival Monitoring</Link> to manage eligible permanent samples and baseline records.</p>}</section>}
+    </dl>{sampleAnalyticsEnabled() && <p><Link to={`/${userRole}/permanent-sample-analytics`}>View approved sample coverage and survival estimates</Link></p>}{view === "records" && (userRole === "admin"
+      ? <p>Open <Link to={`/${userRole}/survival-monitoring`}>Tree Survival Monitoring</Link> to review permanent sample plans and baseline records.</p>
+      : <p>Sampling plans and baselines are managed in the Verified Planting Cohorts panel on <Link to={`/${userRole}/planting-reports`}>Planting Reports</Link>.</p>)}</section>}
     {selected && view !== "records" && <>
       <SamplingPolicyReadiness key={selected.id} cohort={selected} role={userRole} onSaved={reload} />
       <section className="cohort-card"><h2>Sampling Plan</h2><p>Provisional target: <strong>{samplingBlocked ? "Pending MENRO approval" : target}</strong> samples ({selected.samplingPlan?.provisionalPolicy || "test-only ceil(verified quantity × 10%)"}).</p>

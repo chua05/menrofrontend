@@ -168,7 +168,7 @@ const NAVIGATION = {
           icon: Activity,
           to: "/staff/survival-monitoring",
         },
-        { label: "Permanent Sample Monitoring", icon: Activity, to: "/staff/permanent-sample-monitoring", cohortFeature: true },
+        // Staff reach permanent-sample monitoring only through Survival Monitoring's single submission action.
         { label: "Permanent Sample Monitoring Analytics", icon: ChartNoAxesCombined, to: "/staff/permanent-sample-analytics", sampleAnalyticsFeature: true },
       ],
     },

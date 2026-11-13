@@ -1,9 +1,11 @@
 import { test, expect } from "@playwright/test";
 import path from "node:path";
+import process from "node:process";
 import { formatDisplayId } from "../../src/utils/displayId.js";
 
 const PASSWORD = "Phase2-Test-Only!2026";
-const EVIDENCE_ROOT = "C:/Users/chuak/Desktop/menrobackend/tests/integration/fixtures";
+const EVIDENCE_ROOT = process.env.MENRO_EVIDENCE_FIXTURE_ROOT || "C:/Users/chuak/Desktop/menrobackend/tests/integration/fixtures";
+const AGGREGATE_REPORT_NUMBERS = {"early-e2e-report-a":"TEST-EARLY-A","early-e2e-report-b":"TEST-EARLY-B","early-e2e-report-c":"TEST-EARLY-C"};
 const EMAILS = {
   participant: "phase2.participant@example.test",
   staff: "phase2.staff@example.test",
@@ -24,8 +26,25 @@ function row(page, reportNumber) {
   return page.locator("tbody tr").filter({ hasText: formatDisplayId("RPT", reportNumber) });
 }
 
+// The single Staff header button now opens permanent-sample monitoring. Aggregate (full-cohort) observations
+// start from the lifecycle row's existing "More actions" menu. A FIRST observation for a report without a
+// lifecycle has no Staff UI entry until MENRO decides whether new aggregate lifecycles continue, so it fails
+// explicitly here instead of silently using the permanent-sample form.
+async function openAggregateObservation(page, reportId) {
+  const reportNumber = AGGREGATE_REPORT_NUMBERS[reportId];
+  const lifecycle = row(page, reportNumber);
+  if (!reportNumber || !(await lifecycle.count())) {
+    throw new Error(`No Staff UI entry exists for a first aggregate observation on ${reportId} (no lifecycle row); pending MENRO decision on new aggregate lifecycles.`);
+  }
+  await lifecycle.getByTitle("More actions").click();
+  await lifecycle.getByRole("button", { name: "Record Aggregate Observation", exact: true }).click();
+  const modal = page.locator(".sm-modal");
+  await expect(modal.getByRole("heading", { name: "Record Aggregate Monitoring Observation" })).toBeVisible();
+  await expect(modal.locator('select[data-monitoring-field="plantingReportId"]')).toHaveValue(reportId);
+}
+
 async function submit(page, reportId, evidenceName, monitoredDate, type = "early") {
-  await page.getByRole("button", { name: "Submit Aggregate Monitoring Record", exact: true }).click();
+  await openAggregateObservation(page, reportId);
   const modal = page.locator(".sm-modal");
   await modal.locator("select").first().selectOption(reportId);
   if (type === "early") {

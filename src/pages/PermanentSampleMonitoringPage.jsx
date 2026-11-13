@@ -26,7 +26,10 @@ async function api(path, options = {}) {
   return withDeadline((async () => {
     const response = await authenticatedFetch(path, options);
     const body = await response.json().catch(() => ({}));
-    if (!response.ok || !body.success) throw Object.assign(new Error(body.message || "Monitoring visits could not be loaded."), { status: response.status, code: body.code });
+    // The backend gate answers 409 COHORT_WORKFLOW_DISABLED without a message; say what it means.
+    if (!response.ok || !body.success) throw Object.assign(new Error(body.message || (body.code === "COHORT_WORKFLOW_DISABLED"
+      ? "Permanent sample tree monitoring is not enabled on the MENRO server yet."
+      : "Monitoring visits could not be loaded.")), { status: response.status, code: body.code });
     return body.data;
   })(), write ? WRITE_TIMEOUT_MS : READ_TIMEOUT_MS, () => new RequestTimeoutError(write ? "MENRO has not confirmed this save. Check the saved outcome before trying again." : "Monitoring data could not be loaded in time. Please retry.", { ambiguous: Boolean(write) }));
 }
@@ -50,7 +53,9 @@ const draftSnapshot = (rows, remarks, date) => JSON.stringify([rows.map(row =>
   ["sampleId", "condition", "heightCentimeters", "diameterCentimeters", "remarks", "investigationOutcome", "searchFindings"]
     .map(field => String(row[field] ?? ""))), remarks, date]);
 
-export default function PermanentSampleMonitoringPage() {
+// `embedded`: rendered inside Survival Monitoring as the Staff "Submit Aggregate Monitoring Record" modal.
+// The same state, validation and API handlers serve both the embedded modal and the standalone route.
+export default function PermanentSampleMonitoringPage({ embedded = false, open: embeddedOpen = false, onClose } = {}) {
   const enabled = resolveVerifiedPlantingCohortEnabled();
   const { userRole } = useAuth();
   const [status, setStatus] = useState("");
@@ -78,7 +83,7 @@ export default function PermanentSampleMonitoringPage() {
   const [evidenceUrls, setEvidenceUrls] = useState({});
   const [searchParams] = useSearchParams();
   // One-time arrival request from the Staff "Submit Monitoring Record" action (?start=1).
-  const startRequested = useRef(searchParams.get("start") === "1");
+  const startRequested = useRef(embedded || searchParams.get("start") === "1");
   const [selectPrompt, setSelectPrompt] = useState(false);
   const [readiness, setReadiness] = useState(null);
   const unsaved = userRole === "staff" && ["DRAFT", "RETURNED"].includes(detail?.status) &&
@@ -428,6 +433,16 @@ export default function PermanentSampleMonitoringPage() {
     }
   };
 
+  const modalHeader = badge => <header className="psm-header"><div className="psm-header-main"><span className="psm-header-icon"><Trees size={22} aria-hidden="true" /></span><div><h2>Monitor Planted Trees</h2><p>Monitor registered sample trees and document their current survival conditions.</p></div></div>
+    <div className="psm-header-actions">{badge && <span className="psm-status-badge">{badge}</span>}<button type="button" className="psm-close" data-modal-close="" disabled={saving || reviewing} aria-label="Close monitoring visit"><X size={18} aria-hidden="true" /></button></div></header>;
+  if (!enabled && embedded) {
+    // Never fall back to the legacy aggregate form: state why the permanent-sample form is unavailable.
+    return <ModalDialog open={embeddedOpen} label="Monitor Planted Trees" className="psm-dialog" onClose={() => onClose?.()}>
+      {modalHeader("")}
+      <div className="psm-body"><p role="status">Permanent sample tree monitoring is not enabled in this environment.</p></div>
+      <footer className="psm-footer" />
+    </ModalDialog>;
+  }
   if (!enabled) {
     return (
       <main>
@@ -449,22 +464,8 @@ export default function PermanentSampleMonitoringPage() {
     userRole === "staff" && !detail?.writesPaused && ["DRAFT", "RETURNED"].includes(detail?.status);
   const completed = assessments.filter((assessment) => assessment.condition).length;
 
-  return (
-    <main className="cohort-page">
-      <h1>Permanent Sample Monitoring</h1>
-      {detail?.writesPaused && <p role="status">Changes are paused. Authorized visit and photo history remain available.</p>}
-      <p>Existing authorized visits only. Scheduling and visit creation are unavailable.</p>
-      <label>
-        Status
-        <select value={status} onChange={(event) => { if (allowDiscard()) setStatus(event.target.value); }}>
-          <option value="">All statuses</option>
-          {["DRAFT", "RETURNED", "PENDING_ADMIN_APPROVAL", "APPROVED"].map(
-            (value) => (
-              <option key={value}>{value}</option>
-            )
-          )}
-        </select>
-      </label>
+  const visitList = (
+    <>
       {error && <p role="alert" className="cohort-error">{error}</p>}
       {loading && <p role="status">Loading monitoring visits…</p>}
       {page && !loading && (
@@ -474,10 +475,14 @@ export default function PermanentSampleMonitoringPage() {
             <ul>
               {page.visits.map((visit) => (
                 <li key={visit.id}>
+                  {embedded ? <button type="button" className="psm-visit-choice" onClick={() => open(visit.id)}>
+                    {`Visit ${visit.visitDate || ""} · ${statusLabel(visit.status)} · ${visit.progress.completed}/${visit.progress.total} assessed`}
+                  </button> : <>
                   <button type="button" onClick={() => open(visit.id)}>
                     {visit.id}
                   </button>
                   {` · ${visit.status} · cohort ${visit.cohortId} · site ${visit.siteId} · ${visit.progress.completed}/${visit.progress.total} assessed · ${visit.progress.rechecking} rechecking`}
+                  </>}
                 </li>
               ))}
             </ul>
@@ -485,7 +490,7 @@ export default function PermanentSampleMonitoringPage() {
             <>
               <p role="status">No authorized monitoring visits are available.</p>
               <p>A visit appears here after MENRO creates it from an approved sampling plan and baseline.</p>
-              <Link to={`/${userRole}/survival-monitoring`}>Back to Survival Monitoring</Link>
+              {!embedded && <Link to={`/${userRole}/survival-monitoring`}>Back to Survival Monitoring</Link>}
               {readiness && <section className="psm-readiness" aria-labelledby="psm-readiness-title">
                 <h2 id="psm-readiness-title">Why no monitoring visit is available</h2>
                 {readiness.loading && <p role="status">Checking visit readiness…</p>}
@@ -506,9 +511,16 @@ export default function PermanentSampleMonitoringPage() {
           )}
         </>
       )}
-      {detail && <ModalDialog open={dialogOpen} label="Monitor Planted Trees" className="psm-dialog" dismissible={!saving && !reviewing} busy={saving || reviewing} onClose={() => setDialogOpen(false)}>
-        <header className="psm-header"><div className="psm-header-main"><span className="psm-header-icon"><Trees size={22} aria-hidden="true" /></span><div><h2>Monitor Planted Trees</h2><p>Monitor registered sample trees and document their current survival conditions.</p></div></div>
-          <div className="psm-header-actions"><span className="psm-status-badge">{statusLabel(detail.status)}</span><button type="button" className="psm-close" data-modal-close="" disabled={saving || reviewing} aria-label="Close monitoring visit"><X size={18} aria-hidden="true" /></button></div></header>
+    </>
+  );
+
+  const dialog = (detail || embedded) && <ModalDialog open={embedded ? embeddedOpen : dialogOpen} label="Monitor Planted Trees" className="psm-dialog" dismissible={!saving && !reviewing} busy={saving || reviewing} onClose={embedded ? () => onClose?.() : () => setDialogOpen(false)}>
+        {modalHeader(detail ? statusLabel(detail.status) : "")}
+        {!detail ? <>
+        {/* Embedded selection/blocker state: chosen visit, backend blocker or readiness reasons, never the legacy form. */}
+        <div className="psm-body psm-picker">{visitList}</div>
+        <footer className="psm-footer" />
+        </> : <>
         <div className="psm-body">
         <label className="psm-field">Verified Planting Report<select value={detail.id} disabled={saving || Boolean(unconfirmed)} onChange={event => open(event.target.value)}>{(page?.visits || [detail]).map(row => <option key={row.id} value={row.id}>{row.id === detail.id && detail.visitContext?.reportNumber
           ? `${detail.visitContext.reportNumber} · ${detail.visitContext.siteName || "Planting site"} · Visit ${row.visitDate || ""}`
@@ -614,8 +626,10 @@ export default function PermanentSampleMonitoringPage() {
         {informationEnabled() && <MonitoringInformationPanel key={detail.id} visitId={detail.id} readOnly={detail.writesPaused} />}
         </div>
         <footer className="psm-footer">{editable && <><button type="button" disabled={saving || Boolean(unconfirmed)} onClick={() => save(false)}>{saving ? "Saving..." : "Save Draft"}</button><button type="button" className="psm-primary" aria-label="Submit Visit" disabled={saving || Boolean(unconfirmed)} onClick={() => save(true)}>{saving ? "Submitting..." : "Submit Monitoring Visit"}</button></>}</footer>
-      </ModalDialog>}
-      {cameraOpen && <ModalDialog label="Monitoring camera" className="psm-camera-host" onClose={() => { setCameraOpen(false); setCameraSampleId(""); }}>
+        </>}
+      </ModalDialog>;
+
+  const camera = cameraOpen && <ModalDialog label="Monitoring camera" className="psm-camera-host" onClose={() => { setCameraOpen(false); setCameraSampleId(""); }}>
       <SecureCameraCapture
         open={cameraOpen}
         request={cameraRequest}
@@ -627,7 +641,28 @@ export default function PermanentSampleMonitoringPage() {
         }}
         onDiagnostic={({ message }) => { setError(message); setFieldErrors(current => ({ ...current, [cameraSampleId + ".evidence"]: message })); }}
       />
-      </ModalDialog>}
+      </ModalDialog>;
+
+  if (embedded) return <>{dialog}{camera}</>;
+  return (
+    <main className="cohort-page">
+      <h1>Permanent Sample Monitoring</h1>
+      {detail?.writesPaused && <p role="status">Changes are paused. Authorized visit and photo history remain available.</p>}
+      <p>Existing authorized visits only. Scheduling and visit creation are unavailable.</p>
+      <label>
+        Status
+        <select value={status} onChange={(event) => { if (allowDiscard()) setStatus(event.target.value); }}>
+          <option value="">All statuses</option>
+          {["DRAFT", "RETURNED", "PENDING_ADMIN_APPROVAL", "APPROVED"].map(
+            (value) => (
+              <option key={value}>{value}</option>
+            )
+          )}
+        </select>
+      </label>
+      {visitList}
+      {dialog}
+      {camera}
     </main>
   );
 }
