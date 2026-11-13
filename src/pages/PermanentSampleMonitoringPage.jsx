@@ -15,6 +15,7 @@ import {
 import { useAuth } from "../context/AuthContext";
 import { Trees, X } from "lucide-react";
 import { Link, useSearchParams } from "react-router-dom";
+import { readinessMessages, readinessTitle } from "../utils/sampleVisitReadiness";
 
 const STATUS_LABELS = { DRAFT: "Draft", RETURNED: "Returned for Correction", PENDING_ADMIN_APPROVAL: "Pending Admin Review", APPROVED: "Approved" };
 const statusLabel = value => STATUS_LABELS[value] || value;
@@ -79,6 +80,7 @@ export default function PermanentSampleMonitoringPage() {
   // One-time arrival request from the Staff "Submit Monitoring Record" action (?start=1).
   const startRequested = useRef(searchParams.get("start") === "1");
   const [selectPrompt, setSelectPrompt] = useState(false);
+  const [readiness, setReadiness] = useState(null);
   const unsaved = userRole === "staff" && ["DRAFT", "RETURNED"].includes(detail?.status) &&
     (Object.keys(pendingEvidence).length > 0 || Object.values(questions).some(value => value.trim()) ||
       savedDraft !== draftSnapshot(assessments, visitRemarks, dateMonitored));
@@ -154,6 +156,12 @@ export default function PermanentSampleMonitoringPage() {
           if (userRole === "staff" && editable.length === 1 && !data.nextCursor) await showVisit(editable[0].id);
           else setSelectPrompt(true);
         }
+        // No authorized visit on the first page: ask the backend why, so Staff see real blockers instead of a bare empty list.
+        if (!next && !(data.visits || []).length) {
+          setReadiness({ loading: true });
+          try { setReadiness({ data: await api("/verified-sample-monitoring/readiness") }); }
+          catch { setReadiness({ error: true }); }
+        } else setReadiness(null);
       } catch (requestError) {
         setError(
           requestError.status === 401
@@ -478,6 +486,17 @@ export default function PermanentSampleMonitoringPage() {
               <p role="status">No authorized monitoring visits are available.</p>
               <p>A visit appears here after MENRO creates it from an approved sampling plan and baseline.</p>
               <Link to={`/${userRole}/survival-monitoring`}>Back to Survival Monitoring</Link>
+              {readiness && <section className="psm-readiness" aria-labelledby="psm-readiness-title">
+                <h2 id="psm-readiness-title">Why no monitoring visit is available</h2>
+                {readiness.loading && <p role="status">Checking visit readiness…</p>}
+                {readiness.error && <p>Visit readiness details could not be loaded. Refresh to try again.</p>}
+                {readiness.data && !readiness.data.cohorts?.length && <p>No verified planting reports are ready for permanent-sample monitoring yet.</p>}
+                {(readiness.data?.cohorts || []).map(cohort => <article key={cohort.cohortId} className="psm-readiness-site">
+                  <h3>{readinessTitle(cohort)}</h3>
+                  <ul>{readinessMessages(cohort.reasons).map(message => <li key={message}>{message}</li>)}</ul>
+                </article>)}
+                {readiness.data?.truncated && <p>Only the first 25 planting reports are shown.</p>}
+              </section>}
             </>
           )}
           {page.nextCursor && (

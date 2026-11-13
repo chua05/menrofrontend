@@ -218,7 +218,18 @@ export async function authenticatedFetch(path, options = {}) {
   if (/^\/verified-sample-monitoring\/visits\/[^/]+\/review$/.test(url.pathname) && options.method === "POST") {
     return reviewResponse(decodeURIComponent(url.pathname.split("/")[3]), options, activeFixture);
   }
-  if (url.pathname === "/verified-sample-monitoring/visits") return listResponse(url, activeFixture);
+  if (url.pathname === "/verified-sample-monitoring/readiness") {
+    window.__PHASE3C_READINESS_CALLS__ = (window.__PHASE3C_READINESS_CALLS__ || 0) + 1;
+    if (activeFixture === "empty-readiness-error") return failure(500, "Readiness unavailable.");
+    if (activeFixture === "empty-no-cohorts") return response(200, { success: true, data: { cohorts: [], truncated: false, visitCreationAvailable: false, schedulingPolicyStatus: "PENDING_MENRO_APPROVAL" } });
+    return response(200, { success: true, data: { truncated: false, visitCreationAvailable: false, schedulingPolicyStatus: "PENDING_MENRO_APPROVAL", cohorts: [
+      { cohortId: "cohort-ready", reportNumber: "PR-READY", siteName: "Bical ready site", canCreateVisit: false,
+        reasons: [{ code: "OPEN_VISIT_EXISTS", visitStatus: "PENDING_ADMIN_APPROVAL", ownedByYou: false }, { code: "VISIT_SCHEDULING_POLICY_PENDING" }] },
+      { cohortId: "cohort-pending", reportNumber: null, siteName: null, canCreateVisit: false,
+        reasons: [{ code: "SAMPLING_POLICY_PENDING", pending: ["MINIMUM_SAMPLE_POLICY_PENDING"] }, { code: "SAMPLING_PLAN_NOT_APPROVED", planStatus: "DRAFT" }, { code: "VISIT_SCHEDULING_POLICY_PENDING" }] },
+    ] } });
+  }
+  if (url.pathname === "/verified-sample-monitoring/visits") return listResponse(url, ["empty-readiness-error", "empty-no-cohorts"].includes(activeFixture) ? "empty" : activeFixture);
   const detailMatch = url.pathname.match(/^\/verified-sample-monitoring\/visits\/([^/]+)$/);
   if (detailMatch) {
     const visitId = decodeURIComponent(detailMatch[1]);
