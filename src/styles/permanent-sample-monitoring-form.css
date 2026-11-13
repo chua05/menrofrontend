@@ -36,3 +36,8 @@
 @media(max-width:600px) { .psm-progress { grid-template-columns:1fr; }.psm-conditions { grid-template-columns:1fr; }.psm-header-main { gap:10px; }.psm-header-icon { width:36px;height:36px; } }
 .psm-dialog .psm-condition input[type=radio] { width:18px;min-width:18px;height:18px;margin:0;padding:0;border:0;box-sizing:border-box; }
 .psm-progress .psm-progress-card span { padding:0;background:none;border-radius:0; }
+
+/* Visit readiness explanation shown when no authorized visit exists */
+.psm-readiness { margin-top:16px;padding:16px;border:1px solid #dce5df;border-radius:12px;background:#fff;color:#173b28;max-width:760px; }
+.psm-readiness h2 { margin:0 0 10px;font-size:17px; }.psm-readiness-site { padding:12px 0;border-top:1px solid #e2e9e4; }.psm-readiness-site:first-of-type { border-top:0; }
+.psm-readiness h3 { margin:0 0 6px;font-size:15px;overflow-wrap:anywhere; }.psm-readiness ul { margin:0;padding-left:18px;line-height:1.55;color:#4f6357; }.psm-readiness p { overflow-wrap:anywhere; }

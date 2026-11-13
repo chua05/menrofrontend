@@ -260,6 +260,43 @@ test("primary destination reports when no authorized permanent-sample visit exis
   await expect(page.locator(".sm-modal")).toHaveCount(0);
 });
 
+test("empty visit list explains each site's readiness blockers in plain language", async ({ page }) => {
+  await isolate(page);
+  await page.goto("/staff/permanent-sample-monitoring?role=staff&fixture=empty");
+  const panel = page.getByRole("region", { name: "Why no monitoring visit is available" });
+  await expect(panel).toBeVisible();
+  await expect(panel.getByRole("heading", { name: "PR-READY · Bical ready site" })).toBeVisible();
+  await expect(panel.getByText("Another Staff member has an open visit for this site (Pending Admin Review).", { exact: true })).toBeVisible();
+  await expect(panel.getByRole("heading", { name: "Planting report · Planting site" })).toBeVisible();
+  await expect(panel.getByText("The MENRO sampling policy is incomplete: minimum sample size.", { exact: true })).toBeVisible();
+  await expect(panel.getByText("The sampling plan is not approved yet (current status: Draft).", { exact: true })).toBeVisible();
+  await expect(panel.getByText("New monitoring visits can start only after MENRO approves the visit scheduling policy.", { exact: true })).toHaveCount(2);
+  await expect(panel).not.toContainText(/OPEN_VISIT|_PENDING|cohort-ready/);
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+});
+
+test("readiness load failure keeps the empty-state explanation and never opens a form", async ({ page }) => {
+  await isolate(page);
+  await page.goto("/staff/permanent-sample-monitoring?role=staff&fixture=empty-readiness-error");
+  await expect(page.getByRole("status").filter({ hasText: "No authorized monitoring visits are available." })).toBeVisible();
+  await expect(page.getByText("Visit readiness details could not be loaded. Refresh to try again.", { exact: true })).toBeVisible();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+});
+
+test("readiness reports when no verified planting cohort exists yet", async ({ page }) => {
+  await isolate(page);
+  await page.goto("/staff/permanent-sample-monitoring?role=staff&fixture=empty-no-cohorts");
+  await expect(page.getByText("No verified planting reports are ready for permanent-sample monitoring yet.", { exact: true })).toBeVisible();
+});
+
+test("readiness is not requested when authorized visits exist", async ({ page }) => {
+  await isolate(page);
+  await page.goto("/staff/permanent-sample-monitoring?role=staff");
+  await expect(page.getByRole("button", { name: "VPMV-STAFF-001", exact: true })).toBeVisible();
+  await expect(page.getByRole("region", { name: "Why no monitoring visit is available" })).toHaveCount(0);
+  expect(await page.evaluate(() => window.__PHASE3C_READINESS_CALLS__ || 0)).toBe(0);
+});
+
 for (const viewport of [{ width: 1366, height: 800 }, { width: 768, height: 1024 }, { width: 390, height: 844 }, { width: 320, height: 640 }]) {
   test(`survival monitoring header actions fit without overlap at ${viewport.width}px`, async ({ page }) => {
     await page.setViewportSize(viewport);
