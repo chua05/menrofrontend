@@ -78,7 +78,6 @@ const NAVIGATION = {
           icon: Activity,
           to: "/admin/survival-monitoring",
         },
-        { label: "Permanent Sample Monitoring", icon: Activity, to: "/admin/permanent-sample-monitoring", cohortFeature: true },
         { label: "Permanent Sample Monitoring Analytics", icon: ChartNoAxesCombined, to: "/admin/permanent-sample-analytics", sampleAnalyticsFeature: true },
       ],
     },

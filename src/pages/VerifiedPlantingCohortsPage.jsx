@@ -163,7 +163,7 @@ export default function VerifiedPlantingCohortsPage({ embedded = false, view = "
       {!contextual && <><dt>Planting report</dt><dd>{selected.source?.plantingReportId ? <Link to={`/${userRole}/planting-reports?report=${encodeURIComponent(selected.source.plantingReportId)}`}>View source planting report</Link> : "Not recorded"}</dd></>}<dt>Site</dt><dd>{selected.source?.siteId ? <Link to={`/${userRole}/planting-sites?site=${encodeURIComponent(selected.source.siteId)}`}>View registered planting site</Link> : "Not recorded"}</dd>
       <dt>Sampling plan</dt><dd>{selected.samplingPlan?.status || "Not started"}</dd><dt>Baseline</dt><dd>{selected.baseline?.approvalStatus || selected.baselineStatus || "Not started"}</dd>
     </dl>{sampleAnalyticsEnabled() && <p><Link to={`/${userRole}/permanent-sample-analytics`}>View approved sample coverage and survival estimates</Link></p>}{view === "records" && (userRole === "admin"
-      ? <p>Open <Link to={`/${userRole}/survival-monitoring`}>Tree Survival Monitoring</Link> to review permanent sample plans and baseline records.</p>
+      ? <p>Review permanent sample plans and baseline records from the verified report's details on <Link to={`/${userRole}/planting-reports`}>Planting Reports</Link>.</p>
       : <p>Sampling plans and baselines are managed from the verified report's details on <Link to={`/${userRole}/planting-reports`}>Planting Reports</Link>.</p>)}</section>}
     {selected && view !== "records" && <>
       <SamplingPolicyReadiness key={selected.id} cohort={selected} role={userRole} onSaved={reload} />

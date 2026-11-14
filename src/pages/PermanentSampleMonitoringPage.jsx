@@ -153,12 +153,15 @@ export default function PermanentSampleMonitoringPage({ embedded = false, open: 
         resetEvidence();
         setDetail(null);
         setAssessments([]);
-        // Arrival from the Staff "Submit Monitoring Record" action: open the visit directly only when the
-        // complete authorized list has exactly one editable visit; otherwise Staff chooses from the list.
+        // Arrival from the single Survival Monitoring action: open the visit directly only when the complete
+        // authorized list has exactly one actionable visit (Staff: editable; Admin: awaiting review);
+        // otherwise the user chooses from the list.
         if (startRequested.current && !next) {
           startRequested.current = false;
-          const editable = (data.visits || []).filter(visit => ["DRAFT", "RETURNED"].includes(visit.status));
-          if (userRole === "staff" && editable.length === 1 && !data.nextCursor) await showVisit(editable[0].id);
+          const actionable = (data.visits || []).filter(visit => userRole === "admin"
+            ? visit.status === "PENDING_ADMIN_APPROVAL"
+            : ["DRAFT", "RETURNED"].includes(visit.status));
+          if (["staff", "admin"].includes(userRole) && actionable.length === 1 && !data.nextCursor) await showVisit(actionable[0].id);
           else setSelectPrompt(true);
         }
         // No authorized visit on the first page: ask the backend why, so Staff see real blockers instead of a bare empty list.
@@ -522,7 +525,9 @@ export default function PermanentSampleMonitoringPage({ embedded = false, open: 
         <div className="psm-body psm-picker">
           <label className="psm-field">Verified Planting Report<select value="" disabled aria-describedby="psm-shell-reason"><option value="">No authorized visit selected</option></select></label>
           {visitList}
-          <p className="psm-note" id="psm-shell-reason">{page?.visits?.length ? "Select an authorized monitoring visit above to load its registered sample trees." : "Assessment editing, evidence submission, Save Draft and Submit are unavailable until MENRO creates an authorized monitoring visit."}</p>
+          <p className="psm-note" id="psm-shell-reason">{page?.visits?.length ? "Select an authorized monitoring visit above to load its registered sample trees."
+            : userRole === "admin" ? "No monitoring visit is available for review. MENRO Staff record and submit visits; Admin reviews, approves or returns them."
+            : "Assessment editing, evidence submission, Save Draft and Submit are unavailable until MENRO creates an authorized monitoring visit."}</p>
           <PermanentSampleVisitShell describedBy="psm-shell-reason" />
         </div>
         <footer className="psm-footer"><button type="button" disabled aria-describedby="psm-shell-reason">Save Draft</button><button type="button" className="psm-primary" aria-label="Submit Visit" disabled aria-describedby="psm-shell-reason">Submit Monitoring Visit</button></footer>
@@ -536,6 +541,15 @@ export default function PermanentSampleMonitoringPage({ embedded = false, open: 
         <section className="psm-content">
           <p className="psm-note">{`${statusLabel(detail.status)} · Revision ${detail.version}`}</p>
           {!editable && <p role="status">{`${completed}/${assessments.length} assessments recorded.`}</p>}
+          {!editable && (
+            // Same seven-section form as Staff, read-only: Admin review and approved/submitted visits never get
+            // editing, capture, upload, Save Draft or Submit (all Staff-only in backend RBAC).
+            <PermanentSampleVisitForm readOnly inlineEvidenceHistory={false} detail={detail} assessments={assessments} activeTreeId={activeTreeId} onTree={setActiveTreeId}
+              errors={{}} onChange={() => {}} saving={false} onSave={() => {}} questions={{}} onQuestion={() => {}}
+              originalEnabled={false} pendingFor={() => null} onUpload={() => {}} onDiscard={() => {}} onCapture={() => {}}
+              evidenceUrls={evidenceUrls} evidenceKey={evidenceKey} onView={viewEvidence} visitRemarks={detail.visitRemarks || ""} onVisitRemarks={() => {}}
+              dateMonitored={detail.dateMonitored || ""} onDateMonitored={() => {}} />
+          )}
           {editable ? (
             <PermanentSampleVisitForm detail={detail} assessments={assessments} activeTreeId={activeTreeId} onTree={setActiveTreeId}
               errors={fieldErrors} onChange={updateAssessment} saving={saving || Boolean(unconfirmed)} onSave={save} questions={questions} onQuestion={(sampleId,value) => setQuestions(current => ({ ...current, [sampleId]: value }))}
@@ -546,6 +560,7 @@ export default function PermanentSampleMonitoringPage({ embedded = false, open: 
               evidenceUrls={evidenceUrls} evidenceKey={evidenceKey} onView={viewEvidence} visitRemarks={visitRemarks} onVisitRemarks={setVisitRemarks} dateMonitored={dateMonitored} onDateMonitored={value => { setDateMonitored(value); setFieldErrors(current => ({ ...current, dateMonitored: "" })); }}/>
           ) : (
             <>
+              <h3>{userRole === "admin" ? "Admin Review: Recorded Assessments and Evidence" : "Recorded Assessments and Evidence"}</h3>
               <div className="psm-info"><p>Planting site: {detail.visitContext?.siteName || "Not supplied"}</p><p>Planting report: {detail.visitContext?.reportNumber || detail.visitContext?.plantingReportId || "Not supplied"}</p><p>Date Monitored: {detail.dateMonitored || "Not recorded"}</p>{detail.visitRemarks && <p>Visit remarks: {detail.visitRemarks}</p>}</div>
               <p>{`Cohort ${detail.cohortId} · Site ${detail.siteId} · ${completed}/${assessments.length} assessments complete`}</p>
               {detail.reviewReasons && <p>{`Review reason: ${detail.reviewReasons}`}</p>}

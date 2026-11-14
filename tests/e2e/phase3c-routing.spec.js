@@ -57,13 +57,13 @@ test("same permanent tree in different visits never reuses cached private photos
   expect(await page.evaluate(() => window.__PHASE3C_REQUESTS__.at(-1))).toBe("/evidence/sample-monitoring/visits/VPMV-APPROVED-001/samples/TREE-001/evidence/0");
 });
 
-test("admin fixture opens the real admin monitoring route when the gate is enabled", async ({ page }) => {
+test("admin deep-link review route still works but has no sidebar item", async ({ page }) => {
   await isolate(page);
   await page.goto("/admin/permanent-sample-monitoring?role=admin");
   await expectMonitoringPage(page);
   await expect(
-    page.getByRole("link", { name: monitoringLabel, includeHidden: true })
-  ).toHaveCount(1);
+    page.getByRole("link", { name: monitoringLabel, exact: true, includeHidden: true })
+  ).toHaveCount(0);
 });
 
 test("replaced and cross-visit pending photo previews are revoked", async ({ page }) => {
@@ -131,14 +131,14 @@ const blueprintSections = ["1. Verified Planting Site Information", "2. Monitori
   "4. Permanent Sample Tree Records", "5. Individual Tree Assessment", "7. Automatic Monitoring Visit Summary"];
 
 const staffSubmissionControls = page => page.locator(".sm-header-actions").locator("button, a").filter({ hasText: /Submit|Monitor/ });
-async function openStaffMonitoring(page, fixture = "") {
-  await page.goto(`/staff/survival-monitoring?role=staff${fixture ? `&fixture=${fixture}` : ""}`);
+async function openStaffMonitoring(page, fixture = "", role = "staff") {
+  await page.goto(`/${role}/survival-monitoring?role=${role}${fixture ? `&fixture=${fixture}` : ""}`);
   await expect(page.getByRole("heading", { name: "Survival Monitoring" })).toBeVisible();
   await expect(staffSubmissionControls(page)).toHaveCount(1);
   const button = page.locator(".sm-header-actions").getByRole("button", { name: aggregateLabel, exact: true });
   await expect(button).toHaveClass(/sm-primary-button/);
   await button.click();
-  await expect(page).toHaveURL(/\/staff\/survival-monitoring/);
+  await expect(page).toHaveURL(new RegExp(`/${role}/survival-monitoring`));
   await expect(page.locator(".sm-modal")).toHaveCount(0);
   const dialog = page.getByRole("dialog", { name: "Monitor Planted Trees" });
   await expect(dialog).toBeVisible();
@@ -266,27 +266,54 @@ test("Admin arriving with a start request never auto-opens a Staff visit", async
   await expect(page.getByRole("dialog", { name: "Monitor Planted Trees" })).toHaveCount(0);
 });
 
-test("Admin keeps the baselines panel for plan and baseline approval but has no submission button", async ({ page }) => {
+test("Admin page matches Staff: one primary button, no baselines panel, no review link and no sidebar item", async ({ page }) => {
   await isolate(page);
   await mockLegacyMonitoringApi(page);
   await page.goto("/admin/survival-monitoring?role=admin");
   await expect(page.getByRole("heading", { name: "Survival Monitoring" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Permanent Sample Selection and Baselines" })).toBeVisible();
-  await expect(page.getByRole("button", { name: aggregateLabel, exact: true })).toHaveCount(0);
+  await expect(staffSubmissionControls(page)).toHaveCount(1);
+  await expect(page.locator(".sm-header-actions").getByRole("button", { name: aggregateLabel, exact: true })).toHaveClass(/sm-primary-button/);
+  await expect(page.getByRole("button", { name: "Permanent Sample Selection and Baselines" })).toHaveCount(0);
+  await expect(page.getByRole("link", { name: sampleTreeLabel, includeHidden: true })).toHaveCount(0);
+  await expect(page.getByRole("link", { name: monitoringLabel, exact: true, includeHidden: true })).toHaveCount(0);
+  await expect(page.getByRole("link", { name: "Survival Monitoring", exact: true, includeHidden: true })).toHaveCount(1);
 });
 
-test("Admin keeps a Monitor Permanent Sample Trees review link and has no Staff submission actions", async ({ page }) => {
+test("Admin single button opens the same seven-section shell read-only with Admin wording when nothing awaits review", async ({ page }) => {
   await isolate(page);
   await mockLegacyMonitoringApi(page);
-  await page.goto("/admin/survival-monitoring?role=admin");
-  const entry = page.locator(".sm-header-actions").getByRole("link", { name: sampleTreeLabel, exact: true });
-  await expect(entry).toBeVisible();
-  await expect(entry).toHaveAttribute("href", "/admin/permanent-sample-monitoring");
-  await expect(page.getByRole("link", { name: primaryLabel, exact: true })).toHaveCount(0);
-  await expect(page.getByRole("button", { name: aggregateLabel, exact: true })).toHaveCount(0);
-  await entry.click();
-  await expect(page).toHaveURL(/\/admin\/permanent-sample-monitoring$/);
-  await expectMonitoringPage(page);
+  const writes = [];
+  page.on("request", request => { if (request.method() !== "GET" && request.url().includes("/api/verified-sample-monitoring")) writes.push(request.url()); });
+  const dialog = await openStaffMonitoring(page, "empty", "admin");
+  for (const heading of [...blueprintSections, "6. Rechecking & Requester Clarification"]) await expect(dialog.getByRole("heading", { name: heading, exact: true })).toBeVisible();
+  await expect(dialog.getByRole("region", { name: "Why no monitoring visit is available" })).toBeVisible();
+  for (const name of ["Take Photo", "Upload Existing Photo", "Verify Photo Location", "Save Draft", "Submit Visit"])
+    await expect(dialog.getByRole("button", { name, exact: true })).toBeDisabled();
+  await expect(dialog.getByText(/MENRO Staff record and submit visits; Admin reviews, approves or returns them/)).toBeVisible();
+  expect(writes).toEqual([]);
+});
+
+test("Admin and Staff modals share the same seven-section layout", async ({ page }) => {
+  await isolate(page);
+  await mockLegacyMonitoringApi(page);
+  const layout = async role => { const dialog = await openStaffMonitoring(page, "empty", role);
+    return dialog.locator(".psm-shell .psm-section > h3").allTextContents(); };
+  const staff = await layout("staff"), admin = await layout("admin");
+  expect(staff).toHaveLength(7); expect(admin).toEqual(staff);
+});
+
+test("Admin single button opens the one visit awaiting review in the read-only seven-section form with review actions only", async ({ page }) => {
+  await isolate(page);
+  await mockLegacyMonitoringApi(page);
+  const dialog = await openStaffMonitoring(page, "review-pending", "admin");
+  await expect(dialog.locator(".psm-status-badge")).toHaveText("Pending Admin Review");
+  for (const heading of blueprintSections) await expect(dialog.getByRole("heading", { name: heading, exact: true })).toBeVisible();
+  await expect(dialog.getByRole("radiogroup", { name: "Tree Condition *" })).toBeVisible();
+  await expect(dialog.getByRole("radio", { name: "Healthy" })).toBeDisabled();
+  await expect(dialog.getByLabel("Date Monitored *", { exact: true })).toBeDisabled();
+  await expect(dialog.getByRole("button", { name: /Save .*Draft|Submit Visit|Take Photo|Capture verified photo|Upload verified photo/ })).toHaveCount(0);
+  await expect(dialog.getByRole("button", { name: "Approve Visit", exact: true })).toBeEnabled();
+  await expect(dialog.getByRole("button", { name: "Return for Correction", exact: true })).toBeEnabled();
 });
 
 test("disabled frontend gate: the single button explains unavailability in the modal and never opens the legacy form", async ({ page }) => {
