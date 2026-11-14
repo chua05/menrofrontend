@@ -39,7 +39,7 @@ function watchErrors(page) {
 test("Admin returns specific submitted fields, each with a required comment", async ({ page }) => {
   const problems = watchErrors(page);
   await login(page, "admin");
-  const drawer = await openReport(page, "Pending Admin Approval");
+  const drawer = await openReport(page, "Staff Submitted");
   await expect(drawer.locator(".pr-submission-item")).toHaveCount(2);
   await expect(drawer.getByRole("button", { name: "Return for Correction", exact: true })).toHaveCount(1);
   await drawer.getByRole("button", { name: "Return for Correction", exact: true }).click();
@@ -96,26 +96,26 @@ test("Staff can edit only the returned fields and resubmits directly to Admin", 
   await expect(form).toBeHidden({ timeout: 20_000 });
 
   const row = page.locator("tr", { hasText: SITE });
-  await expect(row.locator(".pr-review-line")).toHaveText("Review Status: Pending Admin Approval", { timeout: 20_000 });
+  await expect(row.locator(".pr-review-line")).toHaveText("Review Status: Submitted", { timeout: 20_000 });
   expect(problems).toEqual([]);
 });
 
-test("Admin sees the corrected revision with history and approves it to Completed", async ({ page }) => {
+test("Admin sees the corrected revision with history and verifies it to Verified", async ({ page }) => {
   const problems = watchErrors(page);
   await login(page, "admin");
-  const drawer = await openReport(page, "Pending Admin Approval");
+  const drawer = await openReport(page, "Staff Submitted");
   const items = drawer.locator(".pr-submission-item");
   await expect(items).toHaveCount(4, { timeout: 20_000 }); // returned revision (history) + corrected revision
   await expect(drawer).toContainText("Two seedlings wilted");
-  await expect(drawer.getByRole("button", { name: "Approve", exact: true })).toHaveCount(1);
-  await drawer.getByRole("button", { name: "Approve", exact: true }).click();
+  await expect(drawer.getByRole("button", { name: "Verify", exact: true })).toHaveCount(1);
+  await drawer.getByRole("button", { name: "Verify", exact: true }).click();
   const modal = page.locator(".pr-decision-modal");
-  await modal.getByRole("button", { name: "Approve Report" }).click();
+  await modal.getByRole("button", { name: "Verify Report" }).click();
   await expect(modal).toBeHidden({ timeout: 20_000 });
-  await expect(drawer.locator(".pr-drawer-heading-meta .pr-status-badge")).toHaveText(["Submitted", "Completed"]);
+  await expect(drawer.locator(".pr-drawer-heading-meta .pr-status-badge")).toHaveText(["Submitted", "Verified"]);
   await drawer.locator(".pr-drawer-close").click();
   const row = page.locator("tr", { hasText: SITE });
-  await expect(row.locator(".pr-review-line")).toHaveText("Review Status: Completed");
+  await expect(row.locator(".pr-review-line")).toHaveText("Review Status: Verified");
   await expect(row).toContainText("13 reported planted / 15 released"); // Narra 10 - 2 leftovers + Molave 5
   expect(problems).toEqual([]);
 });

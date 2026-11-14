@@ -90,10 +90,10 @@ test("KPI counts follow submission and review stages without double counting", (
     withStage("Rejected"),
   ];
   assert.deepEqual(reportKpiCounts(records), {
-    total: 8, awaiting: 2, pendingReview: 1, pendingApproval: 2, returned: 1, completed: 1,
+    total: 8, awaiting: 2, pendingReview: 1, pendingApproval: 2, returned: 1, completed: 1, submitted: 4,
   });
   assert.deepEqual(reportKpiCounts([]), {
-    total: 0, awaiting: 0, pendingReview: 0, pendingApproval: 0, returned: 0, completed: 0 });
+    total: 0, awaiting: 0, pendingReview: 0, pendingApproval: 0, returned: 0, completed: 0, submitted: 0 });
 });
 
 test("a report waiting on Staff and Admin counts in both queues and the filter agrees", () => {
@@ -130,7 +130,7 @@ test("legacy standalone reports filter by their review stage; superseded correct
   assert.equal(reportMatchesStatusFilter(approved, "completed"), true);
   assert.deepEqual(currentReports([approved, returnedOld, correction]).map((r) => r.id), ["r1", "r3"]);
   assert.deepEqual(reportKpiCounts([approved, returnedOld, correction]), {
-    total: 2, awaiting: 0, pendingReview: 1, pendingApproval: 0, returned: 0, completed: 1 });
-  assert.deepEqual(REPORT_STATUS_FILTERS.map((f) => f.label), ["Awaiting Submission", "Pending Review", "Pending Approval",
-    "Returned for Correction", "Awaiting Remaining Report", "Completed", "Rejected"]);
+    total: 2, awaiting: 0, pendingReview: 1, pendingApproval: 0, returned: 0, completed: 1, submitted: 2 });
+  assert.deepEqual(REPORT_STATUS_FILTERS.map((f) => f.label), ["Awaiting Submission", "Pending Review", "Pending Verification",
+    "Returned for Correction", "Awaiting Remaining Report", "Verified", "Rejected"]);
 });

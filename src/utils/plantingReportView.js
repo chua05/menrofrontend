@@ -175,15 +175,26 @@ export function reportSeedlingItems(record) {
 }
 
 // KPI counts come from the same submission/review helpers the table uses, so
-// cards and rows always agree.
+// cards and rows always agree. Keys are stable; only the Staff/Admin titles say
+// "Verification"/"Verified" for the stored Admin-approved ("Completed") stage.
 export const REPORT_KPIS = Object.freeze([
   { key: "total", title: "Total Reports", description: "All planting reports on record", tone: "total" },
   { key: "awaiting", title: "Awaiting Submission", description: "No participant submission yet", tone: "awaiting" },
-  { key: "pendingReview", title: "Pending Review", description: "Waiting for Staff review", tone: "review" },
-  { key: "pendingApproval", title: "Pending Approval", description: "Waiting for Admin approval", tone: "approval" },
+  { key: "pendingReview", title: "Pending Review", description: "Submitted, waiting for Staff review", tone: "review" },
+  { key: "pendingApproval", title: "Pending Verification", description: "Reviewed or Staff-submitted, waiting for Admin verification", tone: "approval" },
   { key: "returned", title: "Returned for Correction", description: "Sent back for correction", tone: "returned" },
-  { key: "completed", title: "Completed", description: "Approved and finalized", tone: "completed" },
+  { key: "completed", title: "Verified", description: "Verified by the MENRO Admin", tone: "completed" },
 ]);
+
+// Participants see their reports as Submitted regardless of internal review progress.
+export const PARTICIPANT_REPORT_KPIS = Object.freeze([
+  { key: "total", title: "Total Reports", description: "All your planting reports", tone: "total" },
+  { key: "awaiting", title: "Awaiting Submission", description: "Not submitted yet", tone: "awaiting" },
+  { key: "submitted", title: "Submitted", description: "Submitted to MENRO", tone: "completed" },
+  { key: "returned", title: "Returned for Correction", description: "Needs your correction", tone: "returned" },
+]);
+
+export const reportKpisFor = (role) => (role === "participant" ? PARTICIPANT_REPORT_KPIS : REPORT_KPIS);
 
 // Status keys shared by the KPI cards and the status filter. A report can be
 // in several queues at once (e.g. one submission with Staff, one with Admin).
@@ -195,6 +206,8 @@ export function reportStatusKeys(record) {
   if (stages.includes("Reviewed") || stages.includes("Pending Admin Approval")) keys.push("pendingApproval");
   if (stages.includes("Returned for Correction")) keys.push("returned");
   const review = reportReviewStatus(record);
+  // Participant-facing "Submitted": in review, awaiting verification or verified.
+  if (keys.includes("pendingReview") || keys.includes("pendingApproval") || review === "Completed" || review === AWAITING_REMAINING_REPORT) keys.push("submitted");
   if (review === "Completed") keys.push("completed");
   if (review === AWAITING_REMAINING_REPORT) keys.push("awaitingRemaining");
   if (review === "Rejected") keys.push("rejected");
@@ -204,12 +217,22 @@ export function reportStatusKeys(record) {
 export const REPORT_STATUS_FILTERS = Object.freeze([
   { key: "awaiting", label: "Awaiting Submission" },
   { key: "pendingReview", label: "Pending Review" },
-  { key: "pendingApproval", label: "Pending Approval" },
+  { key: "pendingApproval", label: "Pending Verification" },
   { key: "returned", label: "Returned for Correction" },
   { key: "awaitingRemaining", label: AWAITING_REMAINING_REPORT },
-  { key: "completed", label: "Completed" },
+  { key: "completed", label: "Verified" },
   { key: "rejected", label: "Rejected" },
 ]);
+
+export const PARTICIPANT_REPORT_STATUS_FILTERS = Object.freeze([
+  { key: "awaiting", label: "Awaiting Submission" },
+  { key: "submitted", label: "Submitted" },
+  { key: "returned", label: "Returned for Correction" },
+  { key: "awaitingRemaining", label: AWAITING_REMAINING_REPORT },
+  { key: "rejected", label: "Rejected" },
+]);
+
+export const reportStatusFiltersFor = (role) => (role === "participant" ? PARTICIPANT_REPORT_STATUS_FILTERS : REPORT_STATUS_FILTERS);
 
 export function reportMatchesStatusFilter(record, filterKey) {
   return filterKey === "All" || reportStatusKeys(record).includes(filterKey);
@@ -217,7 +240,7 @@ export function reportMatchesStatusFilter(record, filterKey) {
 
 export function reportKpiCounts(records) {
   const list = currentReports(records);
-  const counts = { total: list.length, awaiting: 0, pendingReview: 0, pendingApproval: 0, returned: 0, completed: 0 };
+  const counts = { total: list.length, awaiting: 0, pendingReview: 0, pendingApproval: 0, returned: 0, completed: 0, submitted: 0 };
   for (const record of list) {
     for (const key of reportStatusKeys(record)) if (key in counts && key !== "total") counts[key] += 1;
   }

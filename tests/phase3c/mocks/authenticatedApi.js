@@ -72,6 +72,9 @@ function listResponse(url, activeFixture) {
   if (activeFixture === "empty") return response(200, { success: true, data: { visits: [], nextCursor: null } });
   // Same shape as the backend gate: 409 with a code and no message.
   if (activeFixture === "server-disabled") return response(409, { success: false, code: "COHORT_WORKFLOW_DISABLED" });
+  // Production Admin list before the composite index is deployed: older backend (raw 400) and sanitized backend (503).
+  if (activeFixture === "index-missing-raw") return response(400, { success: false, code: 9, message: "9 FAILED_PRECONDITION: The query requires an index. You can create it here: https://console.firebase.google.com/v1/r/project/fixture/firestore/indexes?create_composite=CmBwcm9qZWN0cy9maXh0dXJlL2RhdGFiYXNlcy8oZGVmYXVsdCkvY29sbGVjdGlvbkdyb3Vwcy9zYW1wbGVNb25pdG9yaW5nVmlzaXRzL2luZGV4ZXMvXxABGg0KCXZpc2l0RGF0ZRACGgwKCF9fbmFtZV9fEAE" });
+  if (activeFixture === "index-missing") return response(503, { success: false, code: "MONITORING_QUERY_INDEX_MISSING", message: "Monitoring visits are temporarily unavailable because a required database index is not ready. Contact the MENRO system administrator." });
   if (activeFixture === "discovery-401") return failure(401, "Credentials required.");
   if (activeFixture === "discovery-403") return failure(403, "Forbidden.");
   if (activeFixture === "discovery-500") return failure(500, "Discovery unavailable.");

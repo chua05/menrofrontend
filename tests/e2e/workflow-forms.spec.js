@@ -1444,9 +1444,9 @@ test("Staff reviews a participant report: Return requires a reason, closes only 
   const card = page.getByRole("article", { name: "Submission sub-participant" });
   await expect(card.locator('[data-workflow-status="Pending Review"]')).toBeVisible();
   await expect(card.locator('[data-workflow-status="Pending Review"]')).toHaveClass(/pr-status-pending/);
-  await expect(card.getByRole("button", { name: "Approve", exact: true })).toHaveCount(0);
+  await expect(card.getByRole("button", { name: "Verify", exact: true })).toHaveCount(0);
   await expect(card.getByRole("button", { name: "Reject", exact: true })).toHaveCount(0);
-  await expect(card.getByRole("button", { name: "Forward to Admin", exact: true })).toBeVisible();
+  await expect(card.getByRole("button", { name: "Review", exact: true })).toBeVisible();
   await card.getByRole("button", { name: "Return for Correction", exact: true }).click();
   const dialog = page.getByRole("dialog", { name: "Return for Correction", exact: true });
   const reason = dialog.getByLabel(/Reason for Return/);
@@ -1467,7 +1467,7 @@ test("Staff reviews a participant report: Return requires a reason, closes only 
   await expect(dialog).toHaveCount(0);
   await expect(card.locator('[data-workflow-status="Returned for Correction"]')).toBeVisible();
   await expect(card.getByText("Retake the photo inside the site", { exact: true })).toBeVisible();
-  await expect(card.getByRole("button", { name: "Forward to Admin", exact: true })).toHaveCount(0);
+  await expect(card.getByRole("button", { name: "Review", exact: true })).toHaveCount(0);
   await expect(page.getByRole("status").filter({ hasText: "Planting report returned for correction." })).toBeVisible();
   expect(returnCalls).toHaveLength(1); fixture.check();
 });
@@ -1483,14 +1483,14 @@ test("Staff forwards a participant report to Admin with optional comments", asyn
   });
   await page.goto("/staff/planting-reports?role=staff&report=report-review");
   const card = page.getByRole("article", { name: "Submission sub-participant" });
-  await card.getByRole("button", { name: "Forward to Admin", exact: true }).click();
-  const dialog = page.getByRole("dialog", { name: "Forward to Admin for Approval?", exact: true });
+  await card.getByRole("button", { name: "Review", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "Review Planting Report?", exact: true });
   await expect(dialog.getByText("(optional)")).toBeVisible();
-  await dialog.getByRole("button", { name: "Forward to Admin", exact: true }).click();
+  await dialog.getByRole("button", { name: "Confirm Review", exact: true }).click();
   await expect(dialog).toHaveCount(0);
   const badge = card.locator('[data-workflow-status="Reviewed"]');
   await expect(badge).toBeVisible(); await expect(badge).toHaveClass(/pr-status-reviewed/);
-  await expect(card.getByText("Awaiting MENRO Admin approval.", { exact: true })).toBeVisible();
+  await expect(card.getByText("Awaiting MENRO Admin verification.", { exact: true })).toBeVisible();
   fixture.check();
 });
 
@@ -1513,8 +1513,8 @@ test("Admin decides only Staff-reviewed participant reports and keeps the modal 
   });
   await page.goto("/admin/planting-reports?role=admin&report=report-review");
   const waiting = page.getByRole("article", { name: "Submission sub-waiting" });
-  await expect(waiting.getByText("Awaiting MENRO Staff review before Admin approval.", { exact: true })).toBeVisible();
-  for (const action of ["Approve", "Reject", "Forward to Admin", "Return for Correction"]) await expect(waiting.getByRole("button", { name: action, exact: true })).toHaveCount(0);
+  await expect(waiting.getByText("Awaiting MENRO Staff review before Admin verification.", { exact: true })).toBeVisible();
+  for (const action of ["Verify", "Reject", "Review", "Return for Correction"]) await expect(waiting.getByRole("button", { name: action, exact: true })).toHaveCount(0);
   const card = page.getByRole("article", { name: "Submission sub-reviewed" });
   await expect(card.getByRole("button", { name: "Return for Correction", exact: true })).toHaveCount(0);
   await expect(card.getByText("Photos match the site", { exact: true })).toBeVisible();
@@ -1531,7 +1531,7 @@ test("Admin decides only Staff-reviewed participant reports and keeps the modal 
   const rejected = card.locator('[data-workflow-status="Rejected"]');
   await expect(rejected).toBeVisible(); await expect(rejected).toHaveClass(/pr-status-rejected/);
   await expect(card.getByText("Seedlings were planted outside the approved site", { exact: true })).toBeVisible();
-  await expect(card.getByRole("button", { name: "Approve", exact: true })).toHaveCount(0);
+  await expect(card.getByRole("button", { name: "Verify", exact: true })).toHaveCount(0);
   expect(attempts).toBe(2); fixture.check();
 });
 
@@ -1543,11 +1543,11 @@ test("Staff-submitted reports go directly to Admin with approve, reject and retu
   const card = page.getByRole("article", { name: "Submission sub-official" });
   const badge = card.locator('[data-workflow-status="Pending Admin Approval"]');
   await expect(badge).toBeVisible(); await expect(badge).toHaveClass(/pr-status-reviewed/);
-  for (const action of ["Approve", "Reject", "Return for Correction"]) await expect(card.getByRole("button", { name: action, exact: true })).toBeVisible();
-  await expect(card.getByRole("button", { name: "Forward to Admin", exact: true })).toHaveCount(0);
-  await card.getByRole("button", { name: "Approve", exact: true }).click();
-  const dialog = page.getByRole("dialog", { name: "Approve Planting Report?", exact: true });
-  await expect(dialog.getByText("marks this submission Completed", { exact: false })).toBeVisible();
+  for (const action of ["Verify", "Reject", "Return for Correction"]) await expect(card.getByRole("button", { name: action, exact: true })).toBeVisible();
+  await expect(card.getByRole("button", { name: "Review", exact: true })).toHaveCount(0);
+  await card.getByRole("button", { name: "Verify", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "Verify Planting Report?", exact: true });
+  await expect(dialog.getByText("makes this report eligible for survival monitoring preparation", { exact: false })).toBeVisible();
   await dialog.getByRole("button", { name: "Cancel", exact: true }).click();
   await expect(dialog).toHaveCount(0);
   fixture.check();
@@ -1591,7 +1591,7 @@ test("participant corrects only their own returned submission; rejected reports 
   await page.goto("/participant/my-planting-reports?role=participant&report=report-review");
   await expect(page.getByRole("article", { name: "Submission sub-own-rejected" }).getByRole("button", { name: "Correct and Resubmit" })).toHaveCount(0);
   await expect(page.getByRole("article", { name: "Submission sub-other-returned" }).getByRole("button", { name: "Correct and Resubmit" })).toHaveCount(0);
-  for (const action of ["Forward to Admin", "Return for Correction", "Approve", "Reject"]) await expect(page.getByRole("button", { name: action, exact: true })).toHaveCount(0);
+  for (const action of ["Review", "Return for Correction", "Verify", "Reject"]) await expect(page.getByRole("button", { name: action, exact: true })).toHaveCount(0);
   await page.getByRole("article", { name: "Submission sub-own-returned" }).getByRole("button", { name: "Correct and Resubmit", exact: true }).click();
   const banner = page.getByRole("note", { name: "Correction details" });
   await expect(banner).toContainText("Retake the photo inside the site");
@@ -1740,3 +1740,50 @@ for (const [label, workflow, expected] of [
     fixture.check();
   });
 }
+
+// Stored stages stay truthful (data-workflow-status / data-review-status); only the visible label is role-specific.
+const roleLabelCases = [
+  ["Pending Review", {}, { participant: "Submitted", staff: "Submitted", admin: "Submitted" }],
+  ["Reviewed", { staffReviewedBy: "test-staff", staffReviewedByName: "Field Staff", staffReviewedAt: "2026-11-06T01:00:00.000Z" }, { participant: "Submitted", staff: "Reviewed", admin: "Reviewed" }],
+  ["Pending Admin Approval", { officialStaffReport: true, adminApprovalRequired: true, contributorId: "test-staff", authenticatedSubmitterUid: "test-staff" }, { staff: "Submitted", admin: "Staff Submitted" }],
+  ["Completed", { staffReviewStatus: "Accepted", adminDecisionBy: "test-admin", adminDecisionByName: "MENRO Admin", adminDecisionAt: "2026-11-07T01:00:00.000Z" }, { participant: "Submitted", staff: "Verified", admin: "Verified" }],
+];
+for (const [stage, extra, labels] of roleLabelCases) for (const [role, label] of Object.entries(labels))
+test(`${role} sees "${label}" for a stored ${stage} planting report`, async ({ page }) => {
+  const report = { ...reviewReport([reviewSubmission({ workflowStatus: stage, ...extra })]), ...(stage === "Completed" ? { reportingProgress: "Completed" } : {}) };
+  const fixture = await reviewFixture(page, () => report);
+  const base = role === "participant" ? "/participant/my-planting-reports" : `/${role}/planting-reports`;
+  await page.goto(`${base}?role=${role}`);
+  const line = page.locator(".pr-review-line").first();
+  await expect(line).toHaveAttribute("data-review-status", stage);
+  await expect(line).toHaveText(`Review Status: ${label}`);
+  await page.goto(`${base}?role=${role}&report=report-review`);
+  const badge = page.locator(`.pr-submission-item [data-workflow-status="${stage}"]`).first();
+  await expect(badge).toHaveText(label);
+  if (role === "participant") {
+    await expect(page.getByText(/Awaiting MENRO (Staff review|Admin verification)/)).toHaveCount(0);
+    await expect(page.getByText("Verified By / At")).toHaveCount(0);
+    await expect(page.getByText("Staff Review", { exact: true })).toHaveCount(0);
+    for (const title of ["Pending Review", "Pending Verification", "Verified"]) await expect(page.locator(".pr-kpi-title").filter({ hasText: new RegExp(`^${title}$`) })).toHaveCount(0);
+    await expect(page.locator(".pr-kpi-title").filter({ hasText: /^Submitted$/ })).toHaveCount(1);
+  }
+  fixture.check();
+});
+
+test("Staff cannot verify, and Admin cannot verify a participant report before Staff review", async ({ page }) => {
+  const report = reviewReport([reviewSubmission({ workflowStatus: "Pending Review" })]);
+  const fixture = await reviewFixture(page, () => report);
+  await page.goto("/admin/planting-reports?role=admin&report=report-review");
+  const card = page.getByRole("article", { name: "Submission sub-participant" });
+  await expect(card.locator('[data-workflow-status="Pending Review"]')).toHaveText("Submitted");
+  for (const action of ["Verify", "Reject", "Review"]) await expect(card.getByRole("button", { name: action, exact: true })).toHaveCount(0);
+  fixture.check();
+  const own = reviewReport([reviewSubmission({ id: "sub-official", workflowStatus: "Pending Admin Approval", officialStaffReport: true, adminApprovalRequired: true, contributorId: "test-staff", authenticatedSubmitterUid: "test-staff" })]);
+  await page.unrouteAll({ behavior: "ignoreErrors" });
+  const ownFixture = await reviewFixture(page, () => own);
+  await page.goto("/staff/planting-reports?role=staff&report=report-review");
+  const ownCard = page.getByRole("article", { name: "Submission sub-official" });
+  await expect(ownCard.locator('[data-workflow-status="Pending Admin Approval"]')).toHaveText("Submitted");
+  for (const action of ["Verify", "Review", "Reject"]) await expect(ownCard.getByRole("button", { name: action, exact: true })).toHaveCount(0);
+  ownFixture.check();
+});
