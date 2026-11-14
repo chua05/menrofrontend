@@ -23,13 +23,14 @@ async function login(page,role){
  await expect(page).toHaveURL(new RegExp(`/${role==="otherStaff"?"staff":role}/dashboard$`),{timeout:30000});return f;
 }
 const collection=page=>page.waitForResponse(r=>{const u=new URL(r.url());return r.request().method()==="GET"&&u.origin===backend&&u.pathname==="/api/verified-sample-monitoring/visits";},{timeout:30000});
-async function discover(page,role="staff"){await page.getByRole("button",{name:"Open sidebar",exact:true}).click();
- if(role==="admin"){const [response]=await Promise.all([collection(page),page.getByRole("link",{name:"Permanent Sample Monitoring",exact:true}).click()]);return response;}
- // Staff reach permanent-sample monitoring only through Survival Monitoring's single submission button.
+async function discover(page){await page.getByRole("button",{name:"Open sidebar",exact:true}).click();
+ // Staff and Admin reach permanent-sample monitoring only through Survival Monitoring's single button.
  await page.getByRole("link",{name:"Survival Monitoring",exact:true}).click();await expect(page.getByRole("heading",{name:"Survival Monitoring",exact:true})).toBeVisible({timeout:30000});
  const [response]=await Promise.all([collection(page),page.locator(".sm-header-actions").getByRole("button",{name:"Submit Aggregate Monitoring Record",exact:true}).click()]);
  await expect(page.getByRole("dialog",{name:"Monitor Planted Trees"})).toBeVisible();return response;}
-async function open(page,role){const f=await login(page,role);const r=await discover(page,role);const b=await r.json();expect(r.status()).toBe(200);expect(b.data.visits.some(v=>v.id===f.visitId)).toBe(true);if(role==="admin")await page.getByRole("button",{name:f.visitId,exact:true}).click();const dialog=page.getByRole("dialog",{name:"Monitor Planted Trees"});await expect(dialog).toBeVisible();await expect(dialog.getByRole("combobox",{name:"Verified Planting Report",exact:true})).toHaveValue(f.visitId);return f;}
+async function open(page,role){const f=await login(page,role);const r=await discover(page,role);const b=await r.json();expect(r.status()).toBe(200);expect(b.data.visits.some(v=>v.id===f.visitId)).toBe(true);const dialog=page.getByRole("dialog",{name:"Monitor Planted Trees"});if(role==="admin"){const pending=b.data.visits.filter(v=>v.status==="PENDING_ADMIN_APPROVAL");
+  // The modal auto-opens Admin's only visit awaiting review; otherwise Admin picks the visit in the modal.
+  if(!(pending.length===1&&!b.data.nextCursor))await dialog.locator(".psm-visit-choice").nth(b.data.visits.findIndex(v=>v.id===f.visitId)).click();}await expect(dialog).toBeVisible();await expect(dialog.getByRole("combobox",{name:"Verified Planting Report",exact:true})).toHaveValue(f.visitId);return f;}
 async function api(page,endpoint,method="GET",body){return page.evaluate(async({endpoint,method,body})=>{const {authenticatedFetch}=await import("/src/services/authenticatedApi.js");const r=await authenticatedFetch(endpoint,{method,...(body?{body:JSON.stringify(body),headers:{"Content-Type":"application/json"}}:{})});return{status:r.status,body:await r.json()};},{endpoint,method,body});}
 const detail=(page,id)=>api(page,`/verified-sample-monitoring/visits/${id}`);
 const selectTree=async(page,id)=>{const button=page.locator(".psm-tree-list button").filter({hasText:id});if(await button.getAttribute("aria-expanded")!=="true")await button.click();};
@@ -82,6 +83,14 @@ test("real Staff Survival Monitoring single button opens the seven-section perma
 });
 test("real Staff and Admin authentication discovers the two-tree fixture using actual modules",async({browser})=>{
  for(const role of ["staff","admin"]){const context=await browser.newContext();const page=await context.newPage();await isolate(page);const f=await open(page,role);for(const id of f.sampleIds)await expect(role==="admin"?page.locator(".psm-content > ul > li").filter({hasText:id}):page.getByText(id,{exact:true}).first()).toBeVisible();
+ if(role==="admin"){const dialog=page.getByRole("dialog",{name:"Monitor Planted Trees"});
+  // Same seven-section form, read-only for Admin: no Staff-only edit, capture, upload, Save Draft or Submit.
+  for(const heading of ["1. Verified Planting Site Information","2. Monitoring Summary & Automatic Schedule","3. Assessment Progress","4. Permanent Sample Tree Records","5. Individual Tree Assessment","7. Automatic Monitoring Visit Summary"])await expect(dialog.getByRole("heading",{name:heading,exact:true})).toBeVisible();
+  await expect(dialog.getByRole("button",{name:/Save .*Draft|Submit Visit|Take Photo|Capture verified photo|Upload verified photo/})).toHaveCount(0);
+  await expect(page.getByRole("link",{name:"Permanent Sample Monitoring",exact:true,includeHidden:true})).toHaveCount(0);
+  // Backend RBAC still rejects Staff-only writes from Admin.
+  const v=(await detail(page,f.visitId)).body.data;const write=await api(page,`/verified-sample-monitoring/visits/${f.visitId}`,"PUT",{expectedVersion:v.version,assessments:[],submit:false});expect(write.status).toBe(403);
+  const create=await api(page,`/verified-sample-monitoring/cohorts/${v.cohortId}/visits`,"POST",{testOnly:true});expect(create.status).toBe(403);}
  const authCode=await(await page.request.get(frontend+"/src/context/AuthContext.jsx")).text();const apiCode=await(await page.request.get(frontend+"/src/services/authenticatedApi.js")).text();expect(authCode).toContain("verifyMenroSession");expect(apiCode).toContain("assertFrontendIntegrationTokenAudience");expect(authCode+apiCode).not.toContain("tests/phase3c/mocks");await context.close();}
 });
 test("real route and API guards deny unauthenticated, Participant and non-owner Staff",async({browser,page})=>{

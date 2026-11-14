@@ -3893,7 +3893,8 @@ export default function PlantingPage() {
               </section>
 
               {/* Contextual permanent-sample setup: only for approved reports, never a page-level panel.
-                  Staff draft and submit sampling plans/baselines here; Admin approval stays in Survival Monitoring. */}
+                  Staff draft and submit sampling plans/baselines here; Admin reviews and approves them here
+                  (role-gated inside VerifiedPlantingCohortsPage and enforced by backend RBAC). */}
               {!isParticipant && resolveVerifiedPlantingCohortEnabled() && [WORKFLOW_STATUS.COMPLETED, AWAITING_REMAINING_REPORT].includes(reportReviewStatus(selectedRecord)) && (
                 <section className="pr-drawer-section pr-sample-setup" aria-labelledby="pr-sample-setup-title">
                   <div className="pr-drawer-section-title" id="pr-sample-setup-title">
@@ -3903,7 +3904,7 @@ export default function PlantingPage() {
                   <button type="button" className="pr-secondary-button" aria-expanded={showCohorts} aria-controls="pr-sample-setup-panel" onClick={() => setShowCohorts(value => !value)}>
                     {showCohorts ? "Hide sampling plan and baseline" : "View sampling plan and baseline"}
                   </button>
-                  {showCohorts && <div id="pr-sample-setup-panel"><VerifiedPlantingCohortsPage embedded plantingReportId={selectedRecord.id} view={userRole === "staff" ? "all" : "records"} /></div>}
+                  {showCohorts && <div id="pr-sample-setup-panel"><VerifiedPlantingCohortsPage embedded plantingReportId={selectedRecord.id} /></div>}
                 </section>
               )}
 

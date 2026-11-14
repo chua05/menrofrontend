@@ -946,20 +946,38 @@ test("staff manages sampling plans and baselines inside the approved report's de
   fixture.check();
 });
 
-test("admin sees the verified record in report details and keeps plan/baseline review in Survival Monitoring", async ({ page }) => {
+test("admin reviews plan/baseline readiness inside the approved report's details, not in Survival Monitoring", async ({ page }) => {
   const fixture = await setup(page, cohortRoutes());
-  await openReportsCohort(page, "admin");
-  await expect(page.getByRole("heading", { name: "Sampling Plan", exact: true })).toHaveCount(0);
-  await expect(page.getByRole("link", { name: "Tree Survival Monitoring", exact: true })).toHaveAttribute("href", "/admin/survival-monitoring");
+  const drawer = await openReportsCohort(page, "admin");
+  await expect(drawer.getByRole("heading", { name: "Sampling Plan", exact: true })).toBeVisible();
+  await expect(drawer.getByText(/MENRO decisions pending: approved minimum/)).toBeVisible();
+  await expect(drawer.getByRole("button", { name: "Submit plan for approval", exact: true })).toHaveCount(0);
+  await expect(drawer.getByRole("button", { name: /Save draft|Submit baseline for approval|Capture verified baseline photo/ })).toHaveCount(0);
+  await expect(drawer.getByRole("button", { name: "Approve sampling plan", exact: true })).toHaveCount(0); // policy snapshot still pending
+  await expect(drawer.getByRole("button", { name: /Create Visit/ })).toHaveCount(0);
   await page.getByRole("button", { name: "Close planting report details", exact: true }).click();
   await page.getByRole("button", { name: "Open sidebar", exact: true }).click();
   await expect(page.getByRole("link", { name: "Verified Planting Records", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("link", { name: "Permanent Sample Monitoring", exact: true, includeHidden: true })).toHaveCount(0);
   await page.goto("/admin/survival-monitoring?role=admin");
-  await page.getByRole("button", { name: "Permanent Sample Selection and Baselines", exact: true }).click();
-  await page.getByLabel("Verified cohort", { exact: true }).selectOption(cohortAccessFixture.id);
-  await expect(page.getByText(/MENRO decisions pending: approved minimum/)).toBeVisible();
-  await expect(page.getByRole("button", { name: "Submit plan for approval", exact: true })).toHaveCount(0);
-  await expect(page.getByRole("button", { name: /Create Visit/ })).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: "Survival Monitoring", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Permanent Sample Selection and Baselines", exact: true })).toHaveCount(0);
+  await expect(page.getByLabel("Verified cohort", { exact: true })).toHaveCount(0);
+  fixture.check();
+});
+
+test("admin approves a pending sampling plan from the report details using the existing approval endpoint", async ({ page }) => {
+  const pendingPlan = { ...cohortAccessFixture, samplingPolicySnapshot: null, samplingReadiness: null, samplingPlan: { status: "PENDING_ADMIN_APPROVAL", version: 3, selectedSamples: [{ permanentId: "TREE-001", species: "Narra", siteReference: "Plot A", selectionReason: "Documented", unitType: "tree" }] } };
+  const approvals = [];
+  const fixture = await setup(page, { ...cohortRoutes(),
+    "GET /api/verified-planting-cohorts": route => route.fulfill({ json: { success: true, data: [approvals.length ? { ...pendingPlan, samplingPlan: { ...pendingPlan.samplingPlan, status: "APPROVED", version: 4 } } : pendingPlan] } }),
+    [`POST /api/verified-planting-cohorts/${cohortAccessFixture.id}/sampling-plan/approve`]: (route, request) => { approvals.push(request.postDataJSON()); return route.fulfill({ json: { success: true, data: {} } }); } });
+  await page.goto("/admin/planting-reports?role=admin&report=report-1");
+  const drawer = page.getByRole("dialog", { name: /Planting report/ });
+  await drawer.getByRole("button", { name: "View sampling plan and baseline", exact: true }).click();
+  await drawer.getByRole("button", { name: "Approve sampling plan", exact: true }).click();
+  await expect(drawer.getByRole("status").filter({ hasText: "Sampling plan approved." })).toBeVisible();
+  expect(approvals).toEqual([{ expectedVersion: 3, approve: true }]);
   fixture.check();
 });
 
@@ -1044,7 +1062,7 @@ test("approved report without a linked cohort states it truthfully and pending r
   fixture.check();
 });
 
-for (const [role, path, name] of [["staff", "/staff/planting-reports?role=staff&report=report-1", "View sampling plan and baseline"], ["admin", "/admin/survival-monitoring?role=admin", "Permanent Sample Selection and Baselines"]])
+for (const [role, path, name] of [["staff", "/staff/planting-reports?role=staff&report=report-1", "View sampling plan and baseline"], ["admin", "/admin/planting-reports?role=admin&report=report-1", "View sampling plan and baseline"]])
 test(`${role} sampling action wraps at 320px without clipping`, async ({ page }) => {
   await setup(page, cohortRoutes()); await page.setViewportSize({ width: 320, height: 900 }); await page.goto(path);
   const button = page.getByRole("button", { name, exact: true });

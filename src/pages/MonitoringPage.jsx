@@ -1,9 +1,7 @@
-import VerifiedPlantingCohortsPage from "./VerifiedPlantingCohortsPage";
 import PermanentSampleMonitoringPage from "./PermanentSampleMonitoringPage";
-import { resolveVerifiedPlantingCohortEnabled } from "../utils/verifiedPlantingCohort";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createEvidenceAttempt, assertEvidenceComplete } from "../utils/evidenceAttempt";
-import { Link, useSearchParams } from "react-router-dom";
+import { useSearchParams } from "react-router-dom";
 import L from "leaflet";
 import {
   CONDITION_SUM_ERROR, EMPTY_MONITORING_EVIDENCE, clearSharedCountError, monitoringPreview,
@@ -425,7 +423,6 @@ async function apiRequest(
 }
 
 export default function MonitoringPage() {
-  const [showCohorts, setShowCohorts] = useState(false);
   const evidenceAttempt = useRef(createEvidenceAttempt());
   const [observationType, setObservationType] = useState("official");
   const { userRole, currentUser } = useAuth();
@@ -435,7 +432,6 @@ export default function MonitoringPage() {
   const isParticipant = userRole === "participant";
   const isStaff = userRole === "staff";
   const isAdmin = userRole === "admin";
-  const permanentSampleEnabled = resolveVerifiedPlantingCohortEnabled();
 
   const uploadInputRef = useRef(null);
   const previewUrlRef = useRef(null);
@@ -1479,10 +1475,6 @@ export default function MonitoringPage() {
 
   return (
     <div className="sm-page">
-      {permanentSampleEnabled && isAdmin && <section className="cohort-card">
-        <button type="button" className="sm-secondary-button sm-cohort-toggle" aria-expanded={showCohorts} onClick={() => setShowCohorts(value => !value)}>Permanent Sample Selection and Baselines</button>
-        {showCohorts && <VerifiedPlantingCohortsPage embedded view="sampling" />}
-      </section>}
       {/* PAGE HEADER */}
       <div className="sm-header">
         <div className="sm-heading-wrap">
@@ -1509,9 +1501,10 @@ export default function MonitoringPage() {
             <FiRefreshCw size={16} />
           </button>
 
-          {/* The single Staff submission action (label requested by MENRO). It opens the permanent-sample
-              visit form in the Monitor Planted Trees modal; per-tree data never goes to aggregate records. */}
-          {isStaff && (
+          {/* The single monitoring action for Staff and Admin (label requested by MENRO). It opens the shared
+              Monitor Planted Trees modal; per-tree data never goes to aggregate records. Backend RBAC decides
+              what each role can do there: Staff record and submit visits, Admin reviews them (read-only form). */}
+          {(isStaff || isAdmin) && (
             <button
               type="button"
               className="sm-primary-button"
@@ -1521,22 +1514,11 @@ export default function MonitoringPage() {
               Submit Aggregate Monitoring Record
             </button>
           )}
-
-          {/* Admin reviews permanent-sample visits; Admin never submits monitoring records. */}
-          {isAdmin && permanentSampleEnabled && (
-            <Link
-              className="sm-secondary-button sm-sample-tree-link"
-              to="/admin/permanent-sample-monitoring"
-            >
-              <FiActivity size={15} aria-hidden="true" />
-              Monitor Permanent Sample Trees
-            </Link>
-          )}
         </div>
       </div>
 
       {/* Mounted on first use and kept mounted, so unsaved per-tree edits survive closing and reopening. */}
-      {isStaff && sampleFormMounted && (
+      {(isStaff || isAdmin) && sampleFormMounted && (
         <PermanentSampleMonitoringPage embedded open={sampleFormOpen} onClose={() => setSampleFormOpen(false)} />
       )}
 
