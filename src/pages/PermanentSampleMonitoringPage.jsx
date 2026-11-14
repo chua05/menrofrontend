@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { authenticatedFetch } from "../services/authenticatedApi";
 import SecureCameraCapture from "../components/SecureCameraCapture";
 import ModalDialog from "../components/ModalDialog";
-import PermanentSampleVisitForm from "../components/PermanentSampleVisitForm";
+import PermanentSampleVisitForm, { PermanentSampleVisitShell } from "../components/PermanentSampleVisitForm";
 import { assessmentErrors } from "../utils/sampleMonitoringForm";
 import { withDeadline, RequestTimeoutError, READ_TIMEOUT_MS, WRITE_TIMEOUT_MS, UPLOAD_TIMEOUT_MS } from "../utils/requestTimeout";
 import "../styles/permanent-sample-monitoring-form.css";
@@ -517,9 +517,15 @@ export default function PermanentSampleMonitoringPage({ embedded = false, open: 
   const dialog = (detail || embedded) && <ModalDialog open={embedded ? embeddedOpen : dialogOpen} label="Monitor Planted Trees" className="psm-dialog" dismissible={!saving && !reviewing} busy={saving || reviewing} onClose={embedded ? () => onClose?.() : () => setDialogOpen(false)}>
         {modalHeader(detail ? statusLabel(detail.status) : "")}
         {!detail ? <>
-        {/* Embedded selection/blocker state: chosen visit, backend blocker or readiness reasons, never the legacy form. */}
-        <div className="psm-body psm-picker">{visitList}</div>
-        <footer className="psm-footer" />
+        {/* Embedded selection/blocker state: visit choice, backend blocker or readiness reasons above a read-only
+            seven-section form shell. Nothing is editable or submittable until a real authorized visit is opened. */}
+        <div className="psm-body psm-picker">
+          <label className="psm-field">Verified Planting Report<select value="" disabled aria-describedby="psm-shell-reason"><option value="">No authorized visit selected</option></select></label>
+          {visitList}
+          <p className="psm-note" id="psm-shell-reason">{page?.visits?.length ? "Select an authorized monitoring visit above to load its registered sample trees." : "Assessment editing, evidence submission, Save Draft and Submit are unavailable until MENRO creates an authorized monitoring visit."}</p>
+          <PermanentSampleVisitShell describedBy="psm-shell-reason" />
+        </div>
+        <footer className="psm-footer"><button type="button" disabled aria-describedby="psm-shell-reason">Save Draft</button><button type="button" className="psm-primary" aria-label="Submit Visit" disabled aria-describedby="psm-shell-reason">Submit Monitoring Visit</button></footer>
         </> : <>
         <div className="psm-body">
         <label className="psm-field">Verified Planting Report<select value={detail.id} disabled={saving || Boolean(unconfirmed)} onChange={event => open(event.target.value)}>{(page?.visits || [detail]).map(row => <option key={row.id} value={row.id}>{row.id === detail.id && detail.visitContext?.reportNumber

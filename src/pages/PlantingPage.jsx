@@ -32,6 +32,7 @@ import PhotoRequirementsDialog from "../components/PhotoRequirementsDialog";
 import PlantingEvidenceMap from "../components/PlantingEvidenceMap";
 import EventAttendancePanel from "../components/EventAttendancePanel";
 import {
+  AWAITING_REMAINING_REPORT,
   REPORT_KPIS,
   REPORT_STATUS_FILTERS,
   currentReports,
@@ -2527,6 +2528,7 @@ export default function PlantingPage() {
     setDecision("");
     setDecisionFieldError("");
     setDecisionError("");
+    setShowCohorts(false);
     setShowViewModal(false);
   }
 
@@ -2767,11 +2769,6 @@ export default function PlantingPage() {
         )}
       </div>
 
-      {!isParticipant && resolveVerifiedPlantingCohortEnabled() && <section className="pr-panel pr-cohort-integration">
-        <button type="button" className="pr-secondary-button" aria-expanded={showCohorts} onClick={() => setShowCohorts(value => !value)}>Verified Planting Cohorts</button>
-        {/* Staff register sampling plans and baselines here; Admin reviews them from Survival Monitoring. */}
-        {showCohorts && <VerifiedPlantingCohortsPage embedded view={userRole === "staff" ? "all" : "records"} />}
-      </section>}
       <div className="pr-cards" role="list" aria-label="Planting report summary">
         {REPORT_KPIS.map((kpi) => (
           <div key={kpi.key} className={`pr-kpi-card pr-kpi-${kpi.tone}`} role="listitem" data-kpi={kpi.key}>
@@ -3894,6 +3891,21 @@ export default function PlantingPage() {
                   formatDateTime={formatDateTime}
                 />
               </section>
+
+              {/* Contextual permanent-sample setup: only for approved reports, never a page-level panel.
+                  Staff draft and submit sampling plans/baselines here; Admin approval stays in Survival Monitoring. */}
+              {!isParticipant && resolveVerifiedPlantingCohortEnabled() && [WORKFLOW_STATUS.COMPLETED, AWAITING_REMAINING_REPORT].includes(reportReviewStatus(selectedRecord)) && (
+                <section className="pr-drawer-section pr-sample-setup" aria-labelledby="pr-sample-setup-title">
+                  <div className="pr-drawer-section-title" id="pr-sample-setup-title">
+                    <FiCheckCircle size={15} />
+                    Permanent Sample Monitoring Setup
+                  </div>
+                  <button type="button" className="pr-secondary-button" aria-expanded={showCohorts} aria-controls="pr-sample-setup-panel" onClick={() => setShowCohorts(value => !value)}>
+                    {showCohorts ? "Hide sampling plan and baseline" : "View sampling plan and baseline"}
+                  </button>
+                  {showCohorts && <div id="pr-sample-setup-panel"><VerifiedPlantingCohortsPage embedded plantingReportId={selectedRecord.id} view={userRole === "staff" ? "all" : "records"} /></div>}
+                </section>
+              )}
 
               <section className="pr-drawer-section">
                 <div className="pr-drawer-section-title">

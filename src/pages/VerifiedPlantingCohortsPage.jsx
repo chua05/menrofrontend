@@ -22,9 +22,11 @@ async function api(path, options = {}) {
   return payload.data;
 }
 
-export default function VerifiedPlantingCohortsPage({ embedded = false, view = "all" }) {
-  const Container = embedded ? "section" : "main";
-  const Heading = embedded ? "h2" : "h1";
+// plantingReportId: contextual mode inside a planting report's details; only that report's cohort is shown and preselected.
+export default function VerifiedPlantingCohortsPage({ embedded = false, view = "all", plantingReportId = "" }) {
+  const contextual = Boolean(plantingReportId);
+  const Container = embedded || contextual ? "section" : "main";
+  const Heading = contextual ? "h3" : embedded ? "h2" : "h1";
   const { userRole } = useAuth();
   const enabled = resolveVerifiedPlantingCohortEnabled();
   const [cohorts, setCohorts] = useState([]);
@@ -56,17 +58,18 @@ export default function VerifiedPlantingCohortsPage({ embedded = false, view = "
 
   const loadCohorts = async () => {
     const data = await api("/verified-planting-cohorts");
-    return Array.isArray(data) ? data : [];
+    const rows = Array.isArray(data) ? data : [];
+    return contextual ? rows.filter((cohort) => cohort.source?.plantingReportId === plantingReportId) : rows;
   };
   const reload = async () => setCohorts(await loadCohorts());
 
   useEffect(() => {
     if (!enabled) return undefined;
     let current = true;
-    loadCohorts().then((data) => { if (current) setCohorts(data); })
+    loadCohorts().then((data) => { if (!current) return; setCohorts(data); if (contextual && data.length === 1) setSelectedId(data[0].id); })
       .catch((err) => { if (current) setError(err.message); }).finally(() => { if (current) setCohortsLoading(false); });
     return () => { current = false; };
-  }, [enabled]);
+  }, [enabled, plantingReportId]); // eslint-disable-line react-hooks/exhaustive-deps -- loadCohorts only reads plantingReportId
   useEffect(() => {
     if (!hasSelectedCohort) return;
     const frame = window.requestAnimationFrame(() => {
@@ -149,19 +152,19 @@ export default function VerifiedPlantingCohortsPage({ embedded = false, view = "
 
   if (!enabled) return <main className="cohort-page"><h1>Verified Planting Cohorts</h1><p role="status">{visibleCohortMessage(false)}</p></main>;
   return <Container className="cohort-page">
-    <Heading>Verified Planting Cohorts</Heading>
-    <p className="cohort-notice">Approved planting records and permanent samples. Existing schedules and official KPIs remain unchanged; sample and visit creation is never automatic.</p>
+    <Heading>{contextual ? "Permanent Sample Setup" : "Verified Planting Cohorts"}</Heading>
+    <p className="cohort-notice">{contextual ? "Sampling plan and baseline for this verified planting report. Admin approval is required for each; visit creation is never automatic." : "Approved planting records and permanent samples. Existing schedules and official KPIs remain unchanged; sample and visit creation is never automatic."}</p>
     {error && <p className="cohort-error" role="alert">{error}</p>}{message && <p className="cohort-success" role="status">{message}</p>}
-    <label htmlFor="verified-cohort-selection">Verified cohort</label><select id="verified-cohort-selection" value={selectedId} onChange={(event) => setSelectedId(event.target.value)}><option value="">Select a cohort</option>{cohorts.map((cohort) => <option key={cohort.id} value={cohort.id}>{cohort.id} — {cohort.verifiedPlantedQuantity} verified trees</option>)}</select>
+    {(!contextual || cohorts.length > 1) && <><label htmlFor="verified-cohort-selection">Verified cohort</label><select id="verified-cohort-selection" value={selectedId} onChange={(event) => setSelectedId(event.target.value)}><option value="">Select a cohort</option>{cohorts.map((cohort) => <option key={cohort.id} value={cohort.id}>{cohort.id} — {cohort.verifiedPlantedQuantity} verified trees</option>)}</select></>}
     {cohortsLoading && <p role="status">Loading authorized verified cohorts...</p>}
-    {!cohortsLoading && !cohorts.length && !error && <p role="status">No authorized verified cohorts are available.</p>}
+    {!cohortsLoading && !cohorts.length && !error && <p role="status">{contextual ? "No verified planting cohort is linked to this report. Cohorts are recorded only when a report is approved while verified-cohort recording is enabled; earlier reports are not backfilled." : "No authorized verified cohorts are available."}</p>}
     {selected && <section className="cohort-card"><h3>Verified planting record</h3><dl>
       <dt>Cohort</dt><dd>{selected.id}</dd><dt>Verified planted quantity</dt><dd>{selected.verifiedPlantedQuantity}</dd>
-      <dt>Planting report</dt><dd>{selected.source?.plantingReportId ? <Link to={`/${userRole}/planting-reports?report=${encodeURIComponent(selected.source.plantingReportId)}`}>View source planting report</Link> : "Not recorded"}</dd><dt>Site</dt><dd>{selected.source?.siteId ? <Link to={`/${userRole}/planting-sites?site=${encodeURIComponent(selected.source.siteId)}`}>View registered planting site</Link> : "Not recorded"}</dd>
+      {!contextual && <><dt>Planting report</dt><dd>{selected.source?.plantingReportId ? <Link to={`/${userRole}/planting-reports?report=${encodeURIComponent(selected.source.plantingReportId)}`}>View source planting report</Link> : "Not recorded"}</dd></>}<dt>Site</dt><dd>{selected.source?.siteId ? <Link to={`/${userRole}/planting-sites?site=${encodeURIComponent(selected.source.siteId)}`}>View registered planting site</Link> : "Not recorded"}</dd>
       <dt>Sampling plan</dt><dd>{selected.samplingPlan?.status || "Not started"}</dd><dt>Baseline</dt><dd>{selected.baseline?.approvalStatus || selected.baselineStatus || "Not started"}</dd>
     </dl>{sampleAnalyticsEnabled() && <p><Link to={`/${userRole}/permanent-sample-analytics`}>View approved sample coverage and survival estimates</Link></p>}{view === "records" && (userRole === "admin"
       ? <p>Open <Link to={`/${userRole}/survival-monitoring`}>Tree Survival Monitoring</Link> to review permanent sample plans and baseline records.</p>
-      : <p>Sampling plans and baselines are managed in the Verified Planting Cohorts panel on <Link to={`/${userRole}/planting-reports`}>Planting Reports</Link>.</p>)}</section>}
+      : <p>Sampling plans and baselines are managed from the verified report's details on <Link to={`/${userRole}/planting-reports`}>Planting Reports</Link>.</p>)}</section>}
     {selected && view !== "records" && <>
       <SamplingPolicyReadiness key={selected.id} cohort={selected} role={userRole} onSaved={reload} />
       <section className="cohort-card"><h2>Sampling Plan</h2><p>Provisional target: <strong>{samplingBlocked ? "Pending MENRO approval" : target}</strong> samples ({selected.samplingPlan?.provisionalPolicy || "test-only ceil(verified quantity × 10%)"}).</p>

@@ -16,6 +16,57 @@ function SpeciesQuantities({ rows, fallback }) {
   return <div><dt>Species and Quantities</dt><dd><ul className="psm-species">{rows.map((row, index) => <li key={`${index}-${row.species}`}>
     {row.verifiedPlantedQuantity == null ? `${row.species}: quantity not recorded` : `${row.species}: ${row.verifiedPlantedQuantity} planted`}</li>)}</ul></dd></div>;
 }
+// Read-only layout of the seven monitoring sections shown before an authorized visit is selected.
+// Every value is an honest empty state; no site, schedule, Tree ID or approval is implied and every control is disabled.
+export function PermanentSampleVisitShell({ describedBy }) {
+  const none = "No authorized visit selected";
+  const disabledProps = { disabled: true, "aria-describedby": describedBy };
+  return <fieldset className="psm-shell" disabled aria-describedby={describedBy}>
+    <legend className="psm-shell-legend">Monitoring form (read-only until an authorized visit is selected)</legend>
+    <section className="psm-section"><h3>1. Verified Planting Site Information</h3>
+      <dl className="psm-info">{["Planting Report ID", "Planting Site", "Address / Barangay", "Planting Report Status", "Planting Date", "Verified Planted Quantity",
+        "Approved Sample Target", "Sampling Plan Status", "Registered Sample Trees", "Species and Quantities"].map(label => <Reference key={label} label={label} value={none} />)}
+        <Reference label="Monitoring Visit Number" value="Not assigned" /></dl>
+    </section>
+    <section className="psm-section"><h3>2. Monitoring Summary &amp; Automatic Schedule</h3><dl className="psm-info">
+      <Reference label="Start Monitoring Date" value={PENDING_SCHEDULE} /><Reference label="Next Monitoring Date" value={PENDING_SCHEDULE} />
+      <Reference label="Monitoring Visit" value="Not assigned" /><Reference label="Schedule Status" value={PENDING_SCHEDULE} /></dl>
+      <div className="psm-field"><label htmlFor="sample-shell-date-monitored">Date Monitored *</label><input id="sample-shell-date-monitored" type="date" value="" readOnly {...disabledProps} /></div>
+      <p className="psm-note">Scheduled dates come only from an authorized visit created under an approved MENRO schedule.</p>
+    </section>
+    <section className="psm-section"><h3>3. Assessment Progress</h3><div className="psm-progress">
+      {[["Assessed", "Healthy, Damaged or Dead"], ["Needs Rechecking", "Unresolved"], ["Not Assessed", "No condition recorded"]].map(([label, hint]) =>
+        <div className="psm-progress-card" key={label}><span>{label}</span><strong>0</strong><small>{hint}</small></div>)}</div>
+      <p role="status">No registered sample trees are loaded.</p>
+    </section>
+    <section className="psm-section"><h3>4. Permanent Sample Tree Records</h3>
+      <p>No registered Tree IDs are available. Tree IDs come from an Admin-approved sampling plan and baseline.</p></section>
+    <section className="psm-section"><h3>5. Individual Tree Assessment</h3>
+      <p>Select a registered Tree ID from an authorized visit to record its assessment.</p>
+      <h4 className="psm-heading"><Camera size={18} /> Monitoring Photo</h4><div className="psm-photo-box"><Camera size={28} /><strong>Monitoring Photo Evidence</strong>
+        <div className="psm-actions"><button type="button" className="psm-primary" {...disabledProps}><Camera size={17} /> Take Photo</button>
+          <button type="button" {...disabledProps}><Image size={17} /> Upload Existing Photo</button></div></div>
+      <h4 className="psm-heading"><MapPin size={18} /> Photo Location Verification</h4><div className="psm-location"><div className="psm-location-title"><strong>Location Verification</strong>
+        <button type="button" {...disabledProps}>Verify Photo Location</button></div>
+        <p>The site map, registered tree location and evidence GPS appear after an authorized visit and Tree ID are selected.</p></div>
+      <h4>Tree Measurements</h4><div className="psm-measurements">
+        <div className="psm-field"><label htmlFor="sample-shell-height">Height (cm)</label><input id="sample-shell-height" type="number" value="" readOnly {...disabledProps} /></div>
+        <div className="psm-field"><label htmlFor="sample-shell-diameter">Diameter (cm)</label><input id="sample-shell-diameter" type="number" value="" readOnly {...disabledProps} /></div></div>
+      <div className="psm-field"><span className="psm-label" id="sample-shell-condition-label">Tree Condition *</span>
+        <div className="psm-conditions" role="radiogroup" aria-labelledby="sample-shell-condition-label">{SAMPLE_CONDITIONS.map(value => <div className="psm-condition" key={value}>
+          <label><input type="radio" name="sample-shell-condition" value={value} checked={false} readOnly {...disabledProps} />{value}</label><small>{definitions[value]}</small></div>)}</div></div>
+      <div className="psm-field"><label htmlFor="sample-shell-remarks">Remarks</label><textarea id="sample-shell-remarks" value="" rows={3} readOnly {...disabledProps} /></div>
+      <h4>Assessment History</h4><p>No previous assessment or baseline reference is loaded.</p>
+    </section>
+    <section className="psm-section"><h3>6. Rechecking &amp; Requester Clarification</h3>
+      <p>Not applicable until a registered tree is assessed as Needs Rechecking in an authorized visit.</p>
+      <label><input type="checkbox" checked={false} readOnly {...disabledProps} /> Request additional information from Requester</label></section>
+    <section className="psm-section psm-summary"><h3 className="psm-heading"><Trees size={18} /> 7. Automatic Monitoring Visit Summary</h3><dl className="psm-info">
+      {[["Healthy", 0], ["Damaged (Living)", 0], ["Confirmed Dead", 0], ["Needs Rechecking", 0], ["Not Assessed", 0], ["Total Registered Sample Trees", 0], ["Assessment Completion Count", "0 / 0"]].map(([label, value]) => <Reference key={label} label={label} value={value} />)}</dl>
+      <p>Official Sample Survival Status: No authorized visit selected.</p>
+      <div className="psm-field"><label htmlFor="sample-shell-visit-remarks">Overall Visit Remarks (Optional)</label><textarea id="sample-shell-visit-remarks" value="" rows={3} readOnly {...disabledProps} /></div></section>
+  </fieldset>;
+}
 export default function PermanentSampleVisitForm({ detail, assessments, activeTreeId, onTree, errors, onChange, onSave,
   saving, onCapture, onUpload, originalEnabled = false, onOriginal, pendingFor, onDiscard, onView, evidenceUrls, evidenceKey, visitRemarks, onVisitRemarks, dateMonitored, onDateMonitored, questions, onQuestion, readOnly = false }) {
   const [clarifications, setClarifications] = useState({});
