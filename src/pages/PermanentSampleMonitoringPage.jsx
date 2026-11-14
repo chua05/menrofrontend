@@ -16,6 +16,7 @@ import { useAuth } from "../context/AuthContext";
 import { Trees, X } from "lucide-react";
 import { Link, useSearchParams } from "react-router-dom";
 import { readinessMessages, readinessTitle } from "../utils/sampleVisitReadiness";
+import { monitoringApiErrorMessage } from "../utils/monitoringApiError";
 
 const STATUS_LABELS = { DRAFT: "Draft", RETURNED: "Returned for Correction", PENDING_ADMIN_APPROVAL: "Pending Admin Review", APPROVED: "Approved" };
 const statusLabel = value => STATUS_LABELS[value] || value;
@@ -26,10 +27,8 @@ async function api(path, options = {}) {
   return withDeadline((async () => {
     const response = await authenticatedFetch(path, options);
     const body = await response.json().catch(() => ({}));
-    // The backend gate answers 409 COHORT_WORKFLOW_DISABLED without a message; say what it means.
-    if (!response.ok || !body.success) throw Object.assign(new Error(body.message || (body.code === "COHORT_WORKFLOW_DISABLED"
-      ? "Permanent sample tree monitoring is not enabled on the MENRO server yet."
-      : "Monitoring visits could not be loaded.")), { status: response.status, code: body.code });
+    // Gate-disabled and missing-index responses get plain text; raw Firebase errors and links are never shown.
+    if (!response.ok || !body.success) throw Object.assign(new Error(monitoringApiErrorMessage(body)), { status: response.status, code: body.code });
     return body.data;
   })(), write ? WRITE_TIMEOUT_MS : READ_TIMEOUT_MS, () => new RequestTimeoutError(write ? "MENRO has not confirmed this save. Check the saved outcome before trying again." : "Monitoring data could not be loaded in time. Please retry.", { ambiguous: Boolean(write) }));
 }

@@ -87,7 +87,7 @@ export default function PermanentSampleVisitForm({ detail, assessments, activeTr
   return <>
     <section className="psm-section"><h3>1. Verified Planting Site Information</h3>
       <dl className="psm-info"><Reference label="Planting Report ID" value={context?.reportNumber||context?.plantingReportId}/><Reference label="Planting Site" value={context?.siteName}/>
-        <Reference label="Address / Barangay" value={context?.barangay}/><Reference label="Planting Report Status" value={context?.reportStatus}/>
+        <Reference label="Address / Barangay" value={context?.barangay}/><Reference label="Planting Report Status" value={context?.reportStatus==="Completed"?"Verified":context?.reportStatus}/>
         <Reference label="Planting Date" value={context?.plantingDate}/><Reference label="Verified Planted Quantity" value={context?.verifiedPlantedQuantity}/>
         <Reference label="Approved Sample Target" value={context?.approvedSampleTarget}/><Reference label="Sampling Plan Status" value={PLAN_STATUS[context?.planStatus] || context?.planStatus}/>
         <Reference label="Registered Sample Trees" value={context?.registeredSampleTrees??assessments.length}/>

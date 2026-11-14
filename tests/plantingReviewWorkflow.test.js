@@ -99,8 +99,8 @@ test("history keeps the server order and highlights returns and rejections", () 
   ]);
   assert.deepEqual(entries.map((entry) => entry.tone), ["default", "rejected", "returned"]);
   assert.equal(entries[1].by, "admin-uid");
-  assert.equal(waitingMessage(participant(), "admin"), "Awaiting MENRO Staff review before Admin approval.");
-  assert.equal(waitingMessage(official(), "staff"), "Awaiting MENRO Admin approval.");
+  assert.equal(waitingMessage(participant(), "admin"), "Awaiting MENRO Staff review before Admin verification.");
+  assert.equal(waitingMessage(official(), "staff"), "Awaiting MENRO Admin verification.");
 });
 
 test("View Report never shows the upload prompt and uses the read-only evidence map", () => {
@@ -110,4 +110,22 @@ test("View Report never shows the upload prompt and uses the read-only evidence 
   assert.doesNotMatch(drawer, /Upload or take a photo first/);
   assert.match(drawer, /<PlantingEvidenceMap/);
   assert.doesNotMatch(source("components/PlantingEvidenceMap.jsx"), /Upload or take a photo first/);
+});
+
+test("role labels present stored stages without rewriting them", async () => {
+  const { roleWorkflowLabel, WORKFLOW_STATUS: S } = await import("../src/utils/plantingReviewWorkflow.js");
+  const expect = {
+    participant: [["Pending Review", "Submitted"], ["Reviewed", "Submitted"], ["Pending Admin Approval", "Submitted"], ["Completed", "Submitted"], ["Returned for Correction", "Returned for Correction"], ["Rejected", "Rejected"]],
+    staff: [["Pending Review", "Submitted"], ["Reviewed", "Reviewed"], ["Pending Admin Approval", "Submitted"], ["Completed", "Verified"], ["Returned for Correction", "Returned for Correction"], ["Rejected", "Rejected"]],
+    admin: [["Pending Review", "Submitted"], ["Reviewed", "Reviewed"], ["Pending Admin Approval", "Staff Submitted"], ["Completed", "Verified"], ["Returned for Correction", "Returned for Correction"], ["Rejected", "Rejected"]],
+  };
+  for (const [role, rows] of Object.entries(expect)) for (const [stage, label] of rows) assert.equal(roleWorkflowLabel(stage, role), label, `${role} ${stage}`);
+  assert.equal(S.COMPLETED, "Completed", "the stored Admin-approved stage keeps its name");
+  assert.equal(roleWorkflowLabel("Awaiting Remaining Report", "participant"), "Awaiting Remaining Report");
+});
+
+test("participants get no internal waiting message", async () => {
+  const { waitingMessage } = await import("../src/utils/plantingReviewWorkflow.js");
+  assert.equal(waitingMessage({ workflowStatus: "Reviewed" }, "participant"), "");
+  assert.equal(waitingMessage({ workflowStatus: "Pending Review" }, "participant"), "");
 });

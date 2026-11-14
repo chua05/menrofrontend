@@ -64,7 +64,7 @@ async function expectCompactCards(page) {
   const cards = page.locator(".pr-kpi-card");
   await expect(cards).toHaveCount(6);
   await expect(cards.locator(".pr-kpi-title")).toHaveText([
-    "Total Reports", "Awaiting Submission", "Pending Review", "Pending Approval", "Returned for Correction", "Completed"]);
+    "Total Reports", "Awaiting Submission", "Pending Review", "Pending Verification", "Returned for Correction", "Verified"]);
   await expect(cards.locator("svg")).toHaveCount(0);
   const boxes = await cards.evaluateAll((nodes) => nodes.map((node) => node.getBoundingClientRect()));
   for (const box of boxes) {
@@ -129,9 +129,9 @@ async function decide(page, role, startStatus, buttonName, confirmName, endStatu
   return { before, problems };
 }
 
-test("staff sees KPI cards and table from saved data, and Forward to Admin updates them", async ({ page }) => {
+test("staff sees KPI cards and table from saved data, and Review updates them", async ({ page }) => {
   await login(page, "staff", "planting-view.staff@example.test");
-  const { before, problems } = await decide(page, "staff", "Pending Review", "Forward to Admin", "Forward to Admin", "Reviewed");
+  const { before, problems } = await decide(page, "staff", "Submitted", "Review", "Confirm Review", "Reviewed");
   await page.reload();
   await expectRow(page, "Reviewed");
   const after = await expectKpisMatchTable(page);
@@ -140,11 +140,11 @@ test("staff sees KPI cards and table from saved data, and Forward to Admin updat
   expect(problems).toEqual([]);
 });
 
-test("admin approval of the final report marks it Completed, leftovers included", async ({ page }) => {
+test("admin verification of the final report marks it Verified, leftovers included", async ({ page }) => {
   await login(page, "admin", "planting-view.admin@example.test");
-  const { before, problems } = await decide(page, "admin", "Reviewed", "Approve", "Approve Report", "Completed");
+  const { before, problems } = await decide(page, "admin", "Reviewed", "Verify", "Verify Report", "Verified");
   await page.reload();
-  const row = await expectRow(page, "Completed");
+  const row = await expectRow(page, "Verified");
   await expect(row).toContainText("25 reported planted / 40 released");
   const after = await expectKpisMatchTable(page);
   expect(after.pendingApproval).toBe(before.pendingApproval - 1);

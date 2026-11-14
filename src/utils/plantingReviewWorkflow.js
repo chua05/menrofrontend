@@ -39,18 +39,36 @@ export const WORKFLOW_STATUS_CLASS = Object.freeze({
   [WORKFLOW_STATUS.REJECTED]: "pr-status-rejected",
 });
 
+// Role-specific presentation of a stored review stage. Stored statuses are never rewritten:
+//   Participant: every in-progress or verified stage reads "Submitted" (Returned/Rejected stay visible
+//                because the submitter must act on them).
+//   Staff:       Pending Review -> Submitted, Reviewed -> Reviewed, own Pending Admin Approval -> Submitted,
+//                Completed -> Verified.
+//   Admin:       Pending Review -> Submitted, Reviewed -> Reviewed, Pending Admin Approval -> Staff Submitted,
+//                Completed -> Verified.
+// "Completed" is the stored Admin-approved stage; "Verified" is only its Staff/Admin label.
+export function roleWorkflowLabel(stage, role) {
+  const S = WORKFLOW_STATUS;
+  if (role === "participant") return [S.PENDING_REVIEW, S.REVIEWED, S.PENDING_ADMIN_APPROVAL, S.COMPLETED].includes(stage) ? "Submitted" : stage;
+  if (role !== "staff" && role !== "admin") return stage;
+  if (stage === S.PENDING_REVIEW) return "Submitted";
+  if (stage === S.PENDING_ADMIN_APPROVAL) return role === "admin" ? "Staff Submitted" : "Submitted";
+  if (stage === S.COMPLETED) return "Verified";
+  return stage;
+}
+
 export const DECISIONS = Object.freeze({
   forward: {
     endpoint: "forward",
-    title: "Forward to Admin for Approval?",
-    subtitle: "Confirm that you reviewed the submitted details, photos and GPS verification. The MENRO Admin makes the final decision.",
-    confirm: "Forward to Admin",
-    busy: "Forwarding...",
+    title: "Review Planting Report?",
+    subtitle: "Confirm that you reviewed the submitted details, photos and GPS verification. The report is then marked Reviewed and sent to the MENRO Admin, who makes the final verification.",
+    confirm: "Confirm Review",
+    busy: "Reviewing...",
     reasonLabel: "Review Comments",
     reasonRequired: false,
     placeholder: "Optional comments for the MENRO Admin",
     tone: "primary",
-    success: "Planting report reviewed and forwarded to the MENRO Admin for approval.",
+    success: "Planting report reviewed. It is now waiting for MENRO Admin verification.",
   },
   return: {
     endpoint: "return",
@@ -67,15 +85,15 @@ export const DECISIONS = Object.freeze({
   },
   approve: {
     endpoint: "approve",
-    title: "Approve Planting Report?",
-    subtitle: "Approval marks this submission Completed, confirms the planted quantity and makes it eligible for survival monitoring.",
-    confirm: "Approve Report",
-    busy: "Approving...",
-    reasonLabel: "Approval Remarks",
+    title: "Verify Planting Report?",
+    subtitle: "Verification confirms the planted quantity and makes this report eligible for survival monitoring preparation. Sampling plans, baselines and monitoring visits still require their own approval.",
+    confirm: "Verify Report",
+    busy: "Verifying...",
+    reasonLabel: "Verification Remarks",
     reasonRequired: false,
     placeholder: "Optional remarks",
     tone: "primary",
-    success: "Planting report approved. Planted quantities are confirmed.",
+    success: "Planting report verified. Planted quantities are confirmed.",
   },
   reject: {
     endpoint: "reject",
@@ -113,9 +131,10 @@ export function decisionReasonError(decision, value) {
 }
 
 export function waitingMessage(submission, role) {
+  if (role === "participant") return ""; // Participants see "Submitted" only; internal review stages stay internal.
   const status = submissionWorkflowStatus(submission);
-  if (status === WORKFLOW_STATUS.PENDING_REVIEW) return role === "admin" ? "Awaiting MENRO Staff review before Admin approval." : "Awaiting MENRO Staff review.";
-  if (status === WORKFLOW_STATUS.REVIEWED || status === WORKFLOW_STATUS.PENDING_ADMIN_APPROVAL) return "Awaiting MENRO Admin approval.";
+  if (status === WORKFLOW_STATUS.PENDING_REVIEW) return role === "admin" ? "Awaiting MENRO Staff review before Admin verification." : "Awaiting MENRO Staff review.";
+  if (status === WORKFLOW_STATUS.REVIEWED || status === WORKFLOW_STATUS.PENDING_ADMIN_APPROVAL) return "Awaiting MENRO Admin verification.";
   return "";
 }
 

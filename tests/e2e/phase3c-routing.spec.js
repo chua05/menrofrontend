@@ -229,6 +229,20 @@ test("zero authorized visits still render the seven-section form shell read-only
   expect(writes).toEqual([]);
 });
 
+for (const fixture of ["index-missing-raw", "index-missing"])
+test(`Admin modal never shows the raw Firestore index error (${fixture}) and does not overflow`, async ({ page }) => {
+  await isolate(page);
+  await mockLegacyMonitoringApi(page);
+  await page.setViewportSize({ width: 390, height: 900 });
+  const dialog = await openStaffMonitoring(page, fixture, "admin");
+  await expect(dialog.getByRole("alert")).toHaveText(/required database index is not ready/);
+  await expect(dialog).not.toContainText(/FAILED_PRECONDITION|console\.firebase|create_composite/);
+  await expect(dialog.getByRole("heading", { name: "1. Verified Planting Site Information", exact: true })).toBeVisible();
+  for (const name of ["Save Draft", "Submit Visit"]) await expect(dialog.getByRole("button", { name, exact: true })).toBeDisabled();
+  const body = dialog.locator(".psm-body");
+  expect(await body.evaluate(node => node.scrollWidth <= node.clientWidth + 1)).toBe(true);
+});
+
 test("a disabled backend gate is explained inside the Staff modal", async ({ page }) => {
   await isolate(page);
   await mockLegacyMonitoringApi(page);
