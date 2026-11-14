@@ -1558,7 +1558,7 @@ button:disabled {
 .pr-official-dialog textarea.pr-textarea:not([aria-invalid="true"]) { border-color: #dce3de; }
 .pr-official-dialog .pr-section { min-width: 0; }
 .pr-official-dialog .pr-preview-footer { display: block; }
-.pr-cohort-integration { padding: 12px; margin-bottom: 16px; }
+.pr-sample-setup .cohort-page { margin-top: 12px; }
 @media (max-width: 600px) { .pr-photo-actions > button { width: 100%; justify-content: center; } }
 
 /* Keep embedded workflow controls inside narrow viewports. */

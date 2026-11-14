@@ -204,6 +204,31 @@ test("zero authorized visits show the backend blockers inside the Staff modal an
   await expect(dialog.getByLabel("Total Trees Checked", { exact: true })).toHaveCount(0);
 });
 
+test("zero authorized visits still render the seven-section form shell read-only with truthful empty values", async ({ page }) => {
+  await isolate(page);
+  await mockLegacyMonitoringApi(page);
+  const writes = [];
+  page.on("request", request => { if (request.method() !== "GET" && request.url().includes("/api/verified-sample-monitoring")) writes.push(request.url()); });
+  const dialog = await openStaffMonitoring(page, "empty");
+  for (const heading of ["1. Verified Planting Site Information", "2. Monitoring Summary & Automatic Schedule", "3. Assessment Progress",
+    "4. Permanent Sample Tree Records", "5. Individual Tree Assessment", "6. Rechecking & Requester Clarification", "7. Automatic Monitoring Visit Summary"])
+    await expect(dialog.getByRole("heading", { name: heading, exact: true })).toBeVisible();
+  await expect(dialog.locator(".psm-shell").getByText("No authorized visit selected", { exact: true }).first()).toBeVisible();
+  await expect(dialog.getByText("Pending Official Schedule", { exact: true }).first()).toBeVisible();
+  await expect(dialog.getByText(/No registered Tree IDs are available/)).toBeVisible();
+  await expect(dialog.locator(".psm-shell").getByText(/^Approved$/)).toHaveCount(0);
+  await expect(dialog.getByRole("combobox", { name: "Verified Planting Report", exact: true })).toBeDisabled();
+  await expect(dialog.getByLabel("Date Monitored *", { exact: true })).toBeDisabled();
+  for (const name of ["Take Photo", "Upload Existing Photo", "Verify Photo Location", "Save Draft", "Submit Visit"])
+    await expect(dialog.getByRole("button", { name, exact: true })).toBeDisabled();
+  await expect(dialog.getByLabel("Height (cm)", { exact: true })).toBeDisabled();
+  await expect(dialog.getByRole("radio", { name: "Healthy" })).toBeDisabled();
+  await expect(dialog.getByRole("checkbox", { name: /Request additional information/ })).toBeDisabled();
+  await expect(dialog.getByRole("button", { name: "Submit Visit", exact: true })).toHaveText("Submit Monitoring Visit");
+  await expect(dialog.getByText(/unavailable until MENRO creates an authorized monitoring visit/)).toBeVisible();
+  expect(writes).toEqual([]);
+});
+
 test("a disabled backend gate is explained inside the Staff modal", async ({ page }) => {
   await isolate(page);
   await mockLegacyMonitoringApi(page);
