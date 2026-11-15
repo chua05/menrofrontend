@@ -11,6 +11,7 @@ const PENDING = {
   FIRST_VISIT_DELAY_PENDING: "first visit timing",
 };
 const status = value => STATUS[value] || "Not available";
+export const readinessStatusLabel = status;
 const MESSAGES = {
   WRITES_PAUSED: () => "Permanent-sample changes are currently paused by MENRO.",
   SAMPLING_POLICY_SNAPSHOT_MISSING: () => "This planting report has no MENRO-approved sampling policy.",

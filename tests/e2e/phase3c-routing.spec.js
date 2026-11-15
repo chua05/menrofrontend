@@ -124,7 +124,7 @@ test("participant legacy monitoring links redirect to planting reports without s
   await expect(page.getByRole("link", { name: "My Planting Reports" })).toBeVisible();
 });
 
-const aggregateLabel = "Submit Aggregate Monitoring Record";
+const aggregateLabel = "Monitor Planted Trees";
 const primaryLabel = "Submit Monitoring Record";
 const sampleTreeLabel = "Monitor Permanent Sample Trees";
 const blueprintSections = ["1. Verified Planting Site Information", "2. Monitoring Summary & Automatic Schedule", "3. Assessment Progress",

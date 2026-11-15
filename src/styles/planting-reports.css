@@ -1559,6 +1559,13 @@ button:disabled {
 .pr-official-dialog .pr-section { min-width: 0; }
 .pr-official-dialog .pr-preview-footer { display: block; }
 .pr-sample-setup .cohort-page { margin-top: 12px; }
+.pr-monitoring-status-list { display: grid; gap: 8px; margin: 0; }
+.pr-monitoring-status-row { display: grid; grid-template-columns: minmax(0, 11rem) minmax(0, 1fr); gap: 4px 12px; }
+.pr-monitoring-status-row dt { font-weight: 600; color: #475569; }
+.pr-monitoring-status-row dd { margin: 0; overflow-wrap: anywhere; }
+.pr-monitoring-status-note { margin: 10px 0 0; color: #334155; }
+.pr-monitoring-status-reasons { margin: 8px 0 0; padding-left: 20px; color: #334155; }
+@media (max-width: 480px) { .pr-monitoring-status-row { grid-template-columns: minmax(0, 1fr); } }
 @media (max-width: 600px) { .pr-photo-actions > button { width: 100%; justify-content: center; } }
 
 /* Keep embedded workflow controls inside narrow viewports. */

@@ -26,7 +26,7 @@ const collection=page=>page.waitForResponse(r=>{const u=new URL(r.url());return 
 async function discover(page){await page.getByRole("button",{name:"Open sidebar",exact:true}).click();
  // Staff and Admin reach permanent-sample monitoring only through Survival Monitoring's single button.
  await page.getByRole("link",{name:"Survival Monitoring",exact:true}).click();await expect(page.getByRole("heading",{name:"Survival Monitoring",exact:true})).toBeVisible({timeout:30000});
- const [response]=await Promise.all([collection(page),page.locator(".sm-header-actions").getByRole("button",{name:"Submit Aggregate Monitoring Record",exact:true}).click()]);
+ const [response]=await Promise.all([collection(page),page.locator(".sm-header-actions").getByRole("button",{name:"Monitor Planted Trees",exact:true}).click()]);
  await expect(page.getByRole("dialog",{name:"Monitor Planted Trees"})).toBeVisible();return response;}
 async function open(page,role){const f=await login(page,role);const r=await discover(page,role);const b=await r.json();expect(r.status()).toBe(200);expect(b.data.visits.some(v=>v.id===f.visitId)).toBe(true);const dialog=page.getByRole("dialog",{name:"Monitor Planted Trees"});if(role==="admin"){const pending=b.data.visits.filter(v=>v.status==="PENDING_ADMIN_APPROVAL");
   // The modal auto-opens Admin's only visit awaiting review; otherwise Admin picks the visit in the modal.
@@ -68,7 +68,7 @@ test("real Staff Survival Monitoring single button opens the seven-section perma
  await expect(page).toHaveURL(/\/staff\/survival-monitoring$/);await expect(page.getByRole("heading",{name:"Survival Monitoring",exact:true})).toBeVisible({timeout:30000});
  await expect(page.getByRole("button",{name:"Permanent Sample Selection and Baselines"})).toHaveCount(0);
  await expect(page.locator(".sm-header-actions").locator("button, a").filter({hasText:/Submit|Monitor/})).toHaveCount(1);
- const only=page.locator(".sm-header-actions").getByRole("button",{name:"Submit Aggregate Monitoring Record",exact:true});
+ const only=page.locator(".sm-header-actions").getByRole("button",{name:"Monitor Planted Trees",exact:true});
  const [response]=await Promise.all([collection(page),only.click()]);expect(response.status()).toBe(200);await expect(page).toHaveURL(/\/staff\/survival-monitoring$/);
  const listed=(await response.json()).data;expect(listed.visits.filter(v=>["DRAFT","RETURNED"].includes(v.status)).map(v=>v.id)).toEqual([f.visitId]);expect(listed.nextCursor).toBeNull();
  // One editable authorized visit: it opens directly inside the Monitor Planted Trees modal.

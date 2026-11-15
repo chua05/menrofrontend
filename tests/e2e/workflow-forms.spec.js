@@ -902,8 +902,13 @@ const cohortAccessFixture = { id: "VPC-fixture", verifiedPlantedQuantity: 10, so
 // Approved (non-parent, workflowStatus Completed) report linked to cohortAccessFixture.
 const approvedCohortReport = { id: "report-1", reportNumber: "RPT-2099-001", workflowStatus: "Completed", participantName: "Fixture Requester", siteId: "site-1", siteName: "Fixture Site", barangay: "Bical", quantityPlanted: 10, photos: [] };
 const otherCohortFixture = { ...cohortAccessFixture, id: "VPC-other", source: { plantingReportId: "report-other", siteId: "site-2" } };
+// Actual readiness response shape from GET /verified-sample-monitoring/readiness (production keeps visit creation blocked).
+const cohortReadinessFixture = { cohorts: [{ cohortId: "VPC-fixture", reportNumber: "RPT-2099-001", siteName: "Fixture Site", canCreateVisit: false, reasons: [
+  { code: "SAMPLING_POLICY_PENDING", pending: ["MINIMUM_SAMPLE_POLICY_PENDING"] }, { code: "SAMPLING_PLAN_NOT_APPROVED", planStatus: "DRAFT" },
+  { code: "BASELINE_NOT_APPROVED", baselineStatus: "NOT_STARTED" }, { code: "VISIT_SCHEDULING_POLICY_PENDING" }] }], truncated: false, visitCreationAvailable: false, schedulingPolicyStatus: "PENDING_MENRO_APPROVAL" };
 const cohortRoutes = (reports = [approvedCohortReport]) => ({
   "GET /api/verified-planting-cohorts": route => route.fulfill({ json: { success: true, data: [otherCohortFixture, cohortAccessFixture] } }),
+  "GET /api/verified-sample-monitoring/readiness": route => route.fulfill({ json: { success: true, data: cohortReadinessFixture } }),
   "GET /api/planting-reports": route => route.fulfill({ json: { success: true, data: reports } }),
   ...Object.fromEntries(reports.flatMap(report => [
     [`GET /api/planting-reports/${report.id}`, route => route.fulfill({ json: { success: true, data: report } })],
@@ -922,7 +927,9 @@ async function openReportsCohort(page, role) {
   // Only this report's cohort is shown and preselected; no cross-report selector.
   await expect(drawer.getByLabel("Verified cohort", { exact: true })).toHaveCount(0);
   await expect(drawer.getByRole("heading", { name: "Verified planting record", exact: true })).toBeVisible();
-  await expect(drawer.getByText(cohortAccessFixture.id, { exact: true })).toBeVisible();
+  // The cohort ID appears in the setup panel and in the read-only Monitoring Status section.
+  await expect(drawer.locator("#pr-sample-setup-panel").getByText(cohortAccessFixture.id, { exact: true })).toBeVisible();
+  await expect(drawer.locator("section.pr-monitoring-status").getByText(cohortAccessFixture.id, { exact: true })).toBeVisible();
   await expect(drawer.getByText(otherCohortFixture.id)).toHaveCount(0);
   await expect(drawer.getByRole("link", { name: "View registered planting site", exact: true })).toHaveAttribute("href", "/" + role + "/planting-sites?site=site-1");
   return drawer;
@@ -981,6 +988,68 @@ test("admin approves a pending sampling plan from the report details using the e
   fixture.check();
 });
 
+
+const monitoringStatusOf = drawer => drawer.locator("section.pr-monitoring-status");
+const lookupCalls = fixture => fixture.calls.filter(call => ["GET /api/verified-planting-cohorts", "GET /api/verified-sample-monitoring/readiness"].includes(call.key));
+
+for (const role of ["staff", "admin"]) test(role + " sees a read-only pending-MENRO-policy Monitoring Status for a Staff spot-check report, with no cohort lookup", async ({ page }) => {
+  const spotCheck = { ...approvedCohortReport, reportingPolicy: { monitoring: "STAFF_SPOT_CHECK", reporting: "REQUIRED" } };
+  const fixture = await setup(page, cohortRoutes([spotCheck]));
+  await page.goto("/" + role + "/planting-reports?role=" + role + "&report=report-1");
+  const status = monitoringStatusOf(page.getByRole("dialog", { name: /Planting report/ }));
+  await expect(status.getByText("Monitoring Status", { exact: true })).toBeVisible();
+  await expect(status).toContainText("Staff spot-check");
+  await expect(status).toContainText("Monitoring workflow pending MENRO policy");
+  await expect(status).not.toContainText("VPC-");
+  await expect(status.getByRole("button")).toHaveCount(0);
+  await expect(status.getByRole("link")).toHaveCount(0);
+  expect(lookupCalls(fixture)).toEqual([]);
+  fixture.check();
+});
+
+for (const role of ["staff", "admin"]) test(role + " sees the existing permanent-sample cohort with actual plan, baseline and visit-readiness status", async ({ page }) => {
+  const permanent = { ...approvedCohortReport, reportingPolicy: { monitoring: "PERMANENT_SAMPLE", reporting: "REQUIRED" } };
+  const fixture = await setup(page, cohortRoutes([permanent]));
+  await page.goto("/" + role + "/planting-reports?role=" + role + "&report=report-1");
+  const status = monitoringStatusOf(page.getByRole("dialog", { name: /Planting report/ }));
+  await expect(status).toContainText("Permanent-sample monitoring");
+  await expect(status).toContainText("VPC-fixture");
+  await expect(status).not.toContainText("VPC-other");
+  await expect(status).toContainText("Sampling planDraft");
+  await expect(status).toContainText("BaselineNot Started");
+  await expect(status).toContainText("Not ready for a monitoring visit.");
+  const reasons = status.getByRole("list", { name: "Why no monitoring visit is available" });
+  await expect(reasons).toContainText("The MENRO sampling policy is incomplete: minimum sample size.");
+  await expect(reasons).toContainText("New monitoring visits can start only after MENRO approves the visit scheduling policy.");
+  await expect(status.getByRole("button")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /Create Visit|Approve Visit|Monitor Planted Trees/ })).toHaveCount(0);
+  fixture.check();
+});
+
+test("permanent-sample report without a cohort says so and never invents a cohort ID or readiness", async ({ page }) => {
+  const permanent = { ...approvedCohortReport, reportingPolicy: { monitoring: "PERMANENT_SAMPLE", reporting: "REQUIRED" } };
+  const fixture = await setup(page, { ...cohortRoutes([permanent]),
+    "GET /api/verified-planting-cohorts": route => route.fulfill({ json: { success: true, data: [otherCohortFixture] } }),
+    "GET /api/verified-sample-monitoring/readiness": route => route.fulfill({ status: 403, json: { success: false, message: "Permanent-sample pilot access is unavailable." } }) });
+  await page.goto("/admin/planting-reports?role=admin&report=report-1");
+  const status = monitoringStatusOf(page.getByRole("dialog", { name: /Planting report/ }));
+  await expect(status).toContainText("No permanent-sample cohort exists for this report.");
+  await expect(status).not.toContainText("VPC-");
+  await expect(status).not.toContainText("Ready for a monitoring visit");
+  await expect(status.getByRole("button")).toHaveCount(0);
+  fixture.check();
+});
+
+test("participant report details have no Monitoring Status and make no cohort or readiness requests", async ({ page }) => {
+  const own = { ...approvedCohortReport, participantId: "test-participant", reportingPolicy: { monitoring: "PERMANENT_SAMPLE", reporting: "REQUIRED" } };
+  const fixture = await setup(page, { ...cohortRoutes([own]), "GET /api/planting-reports/my-reports": route => route.fulfill({ json: { success: true, data: [own] } }) });
+  await page.goto("/participant/my-planting-reports?role=participant&report=report-1");
+  await expect(page.getByRole("dialog", { name: /Planting report/ })).toBeVisible();
+  await expect(page.locator("section.pr-monitoring-status")).toHaveCount(0);
+  await expect(page.getByText("Monitoring Status", { exact: true })).toHaveCount(0);
+  expect(lookupCalls(fixture)).toEqual([]);
+  fixture.check();
+});
 
 test("Participant evidence is invalidated on release, event and site changes", async ({ page }) => {
   let delayVerification = false, releaseVerification;
@@ -1426,7 +1495,11 @@ async function reviewFixture(page, current, overrides = {}) {
   const photos = {};
   for (let index = 0; index < 4; index += 1) photos[`GET /api/evidence/planting-reports/report-review/photos/${index}`] = route => route.fulfill({ status: 200, contentType: "image/png", body: reviewPng });
   return setup(page, { "GET /api/planting-reports": list, "GET /api/planting-reports/my-reports": list,
-    "GET /api/planting-reports/report-review/verification-logs": route => route.fulfill({ json: { success: true, data: [] } }), ...photos, ...overrides });
+    "GET /api/planting-reports/report-review/verification-logs": route => route.fulfill({ json: { success: true, data: [] } }),
+    // Verified reports load the read-only Monitoring Status (no cohort exists for this fixture).
+    "GET /api/verified-planting-cohorts": route => route.fulfill({ json: { success: true, data: [] } }),
+    "GET /api/verified-sample-monitoring/readiness": route => route.fulfill({ json: { success: true, data: { cohorts: [], truncated: false, visitCreationAvailable: false } } }),
+    ...photos, ...overrides });
 }
 
 test("Staff reviews a participant report: Return requires a reason, closes only after success and blocks repeats", async ({ page }) => {

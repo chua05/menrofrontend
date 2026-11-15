@@ -52,7 +52,7 @@ const draftSnapshot = (rows, remarks, date) => JSON.stringify([rows.map(row =>
   ["sampleId", "condition", "heightCentimeters", "diameterCentimeters", "remarks", "investigationOutcome", "searchFindings"]
     .map(field => String(row[field] ?? ""))), remarks, date]);
 
-// `embedded`: rendered inside Survival Monitoring as the Staff "Submit Aggregate Monitoring Record" modal.
+// `embedded`: rendered inside Survival Monitoring as the Staff/Admin "Monitor Planted Trees" modal.
 // The same state, validation and API handlers serve both the embedded modal and the standalone route.
 export default function PermanentSampleMonitoringPage({ embedded = false, open: embeddedOpen = false, onClose } = {}) {
   const enabled = resolveVerifiedPlantingCohortEnabled();

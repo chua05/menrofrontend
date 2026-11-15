@@ -1511,7 +1511,7 @@ export default function MonitoringPage() {
               onClick={() => { setSampleFormMounted(true); setSampleFormOpen(true); }}
             >
               <FiPlus size={15} aria-hidden="true" />
-              Submit Aggregate Monitoring Record
+              Monitor Planted Trees
             </button>
           )}
         </div>
