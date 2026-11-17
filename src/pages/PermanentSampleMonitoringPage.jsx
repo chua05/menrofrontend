@@ -643,7 +643,8 @@ export default function PermanentSampleMonitoringPage({ embedded = false, open: 
             </>
           )}
         </section>
-        {informationEnabled() && <MonitoringInformationPanel key={detail.id} visitId={detail.id} readOnly={detail.writesPaused} />}
+        {/* Requester Clarification questions are a Staff monitoring action; Admin sees them read-only. */}
+        {informationEnabled() && <MonitoringInformationPanel key={detail.id} visitId={detail.id} readOnly={detail.writesPaused || userRole !== "staff"} />}
         </div>
         <footer className="psm-footer">{editable && <><button type="button" disabled={saving || Boolean(unconfirmed)} onClick={() => save(false)}>{saving ? "Saving..." : "Save Draft"}</button><button type="button" className="psm-primary" aria-label="Submit Visit" disabled={saving || Boolean(unconfirmed)} onClick={() => save(true)}>{saving ? "Submitting..." : "Submit Monitoring Visit"}</button></>}</footer>
         </>}

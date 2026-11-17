@@ -10,6 +10,8 @@ const ROLE_EMAILS = {
   participant: "phase2.participant@example.test",
   other: "phase2.other@example.test",
   staff: "phase2.staff@example.test",
+  // A second Staff account: Staff cannot review or return their own observation.
+  reviewer: "phase2.reviewer@example.test",
   admin: "phase2.admin@example.test",
 };
 const EVIDENCE_DATES = {
@@ -124,15 +126,25 @@ async function resubmitReturnedObservation(page, reportNumber, evidenceName) {
 }
 
 test.describe.serial("Monitoring Phase 2 authenticated workflows", () => {
-  test("A: Staff submits, Staff reviews, and Admin approves", async ({ browser }) => {
+  test("A: Staff submits, another Staff member reviews, and Admin approves", async ({ browser }) => {
     const staff = await browser.newPage();
     await login(staff, "staff");
     await openMonitoring(staff, "staff");
     await submitObservation(staff, "phase2-report-a", "valid-original.jpg");
     await expect(recordRow(staff, "TEST-PHASE2-A")).toHaveCount(1);
-    await performAction(staff, "TEST-PHASE2-A", "Review");
-    await expect(staff.getByText("Reviewed", { exact: true })).toBeVisible();
+    // The reporter cannot review their own observation.
+    await openRecord(staff, "TEST-PHASE2-A");
+    await expect(staff.getByRole("button", { name: "Review", exact: true })).toHaveCount(0);
+    await expect(staff.getByRole("button", { name: "Return for Rechecking", exact: true })).toHaveCount(0);
+    await expect(staff.getByText("You reported this observation. Another MENRO Staff member must review it.")).toBeVisible();
     await staff.context().close();
+
+    const reviewer = await browser.newPage();
+    await login(reviewer, "reviewer");
+    await openMonitoring(reviewer, "staff");
+    await performAction(reviewer, "TEST-PHASE2-A", "Review");
+    await expect(reviewer.getByText("Reviewed", { exact: true })).toBeVisible();
+    await reviewer.context().close();
 
     const admin = await browser.newPage();
     await login(admin, "admin");
@@ -158,11 +170,22 @@ test.describe.serial("Monitoring Phase 2 authenticated workflows", () => {
     await submittingStaff.context().close();
 
     const staffReturn = await browser.newPage();
-    await login(staffReturn, "staff");
+    await login(staffReturn, "reviewer");
     await openMonitoring(staffReturn, "staff");
     await performAction(staffReturn, "TEST-PHASE2-B", "Return for Rechecking", "Replace the out-of-site evidence.");
     await expect(staffReturn.getByText("Returned for Rechecking", { exact: true })).toBeVisible();
+    // Only the original Staff reporter corrects it; the returning Staff member sees the reason but no action.
+    await expect(staffReturn.getByText("Returned for rechecking: Replace the out-of-site evidence.")).toBeVisible();
+    await expect(staffReturn.getByRole("button", { name: "Edit and Resubmit" })).toHaveCount(0);
     await staffReturn.context().close();
+
+    const adminView = await browser.newPage();
+    await login(adminView, "admin");
+    await openMonitoring(adminView, "admin");
+    await openRecord(adminView, "TEST-PHASE2-B");
+    await expect(adminView.getByText("Returned for rechecking: Replace the out-of-site evidence.")).toBeVisible();
+    await expect(adminView.getByRole("button", { name: "Edit and Resubmit" })).toHaveCount(0);
+    await adminView.context().close();
 
     const correction = await browser.newPage();
     await login(correction, "staff");
@@ -174,7 +197,7 @@ test.describe.serial("Monitoring Phase 2 authenticated workflows", () => {
     await correction.context().close();
 
     const staffReview = await browser.newPage();
-    await login(staffReview, "staff");
+    await login(staffReview, "reviewer");
     await openMonitoring(staffReview, "staff");
     await performAction(staffReview, "TEST-PHASE2-B", "Review");
     await staffReview.context().close();
@@ -192,8 +215,12 @@ test.describe.serial("Monitoring Phase 2 authenticated workflows", () => {
     await login(staff, "staff");
     await openMonitoring(staff, "staff");
     await submitObservation(staff, "phase2-report-c", "valid-third.jpg");
-    await performAction(staff, "TEST-PHASE2-C", "Review");
     await staff.context().close();
+    const reviewer = await browser.newPage();
+    await login(reviewer, "reviewer");
+    await openMonitoring(reviewer, "staff");
+    await performAction(reviewer, "TEST-PHASE2-C", "Review");
+    await reviewer.context().close();
 
     const admin = await browser.newPage();
     await login(admin, "admin");

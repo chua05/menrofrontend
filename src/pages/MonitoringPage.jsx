@@ -42,6 +42,7 @@ import ProtectedEvidenceImage from "../components/ProtectedEvidenceImage";
 import SecureCameraCapture from "../components/SecureCameraCapture";
 import { auth } from "../firebase/config";
 import { formatDisplayId } from "../utils/displayId";
+import { canResubmitObservation, canStaffReviewObservation, isOwnPendingObservation } from "../utils/monitoringObservationPermissions";
 import * as exifr from "exifr";
 import "../styles/survival-monitoring.css";
 
@@ -443,6 +444,8 @@ export default function MonitoringPage() {
     () => getCurrentUserIdentity(currentUser),
     [currentUser]
   );
+  // Ownership checks use only the authenticated account ID, never a display fallback.
+  const actorUid = String(currentUser?.uid || currentUser?.id || "");
 
   const [records, setRecords] = useState([]);
   const [plantingReports, setPlantingReports] = useState([]);
@@ -1510,7 +1513,8 @@ export default function MonitoringPage() {
               className="sm-primary-button"
               onClick={() => { setSampleFormMounted(true); setSampleFormOpen(true); }}
             >
-              <FiPlus size={15} aria-hidden="true" />
+              {/* Admin never creates monitoring records, so Admin's button has no add (+) icon. */}
+              {isStaff && <FiPlus size={15} aria-hidden="true" data-testid="monitor-planted-trees-add-icon" />}
               Monitor Planted Trees
             </button>
           )}
@@ -2635,11 +2639,14 @@ export default function MonitoringPage() {
                         {Array.isArray(entry.revisionHistory) && entry.revisionHistory.length > 1 && (
                           <div className="sm-helper">Revision history: {entry.revisionHistory.map((revision) => `Revision ${revision.revisionNumber}`).join(", ")}</div>
                         )}
-                        {isStaff && entry.workflowVersion >= 2 && entry.reviewStatus === "Pending Review" && (
+                        {canStaffReviewObservation({ entry, role: userRole, userId: actorUid }) && (
                           <div className="sm-review-actions">
                             <button type="button" className="sm-primary-button" onClick={() => runObservationAction(entry, "review")} disabled={actionLoading}>Review</button>
                             <button type="button" className="sm-secondary-button" onClick={() => runObservationAction(entry, "return")} disabled={actionLoading}>Return for Rechecking</button>
                           </div>
+                        )}
+                        {isOwnPendingObservation({ entry, role: userRole, userId: actorUid }) && (
+                          <p className="sm-helper" role="note">You reported this observation. Another MENRO Staff member must review it.</p>
                         )}
                         {isAdmin && entry.workflowVersion >= 2 && entry.reviewStatus === "Reviewed" && (
                           <div className="sm-review-actions">
@@ -2647,7 +2654,9 @@ export default function MonitoringPage() {
                             <button type="button" className="sm-secondary-button" onClick={() => runObservationAction(entry, "reject")} disabled={actionLoading}>Reject</button>
                           </div>
                         )}
-                        {isParticipant && entry.workflowVersion >= 2 && entry.reviewStatus === "Returned for Rechecking" && entry.originalReporterId === currentIdentity.id && (
+                        {/* Only the original Staff reporter corrects a returned observation. Participants keep
+                            read-only history (status and return reason above); they never get a resubmit action. */}
+                        {canResubmitObservation({ entry, role: userRole, userId: actorUid }) && (
                           <div className="sm-review-actions">
                             <button type="button" className="sm-primary-button" onClick={() => openCorrection(selectedRecord, entry)}>Edit and Resubmit</button>
                           </div>
