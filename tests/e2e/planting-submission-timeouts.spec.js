@@ -252,7 +252,7 @@ test("Staff: a lost save survives closing, reopening and reloading, is replayed 
   // The replay returned the saved correction instead of creating another one.
   await page.reload();
   const refreshed = page.locator("tr", { hasText: STAFF_SITE });
-  await expect(refreshed.locator(".pr-review-line")).toHaveText("Review Status: Submitted", { timeout: 20_000 });
+  await expect(refreshed.locator(".pr-review-line")).toHaveText("Status: Submitted", { timeout: 20_000 });
   await refreshed.getByRole("button", { name: /^View / }).click();
   await expect(page.getByRole("dialog", { name: /Planting report/ }).locator(".pr-submission-item")).toHaveCount(4, { timeout: 20_000 });
   expect(problems).toEqual([]);
@@ -269,7 +269,7 @@ test("Staff: a replay that MENRO definitively rejects clears the pending save an
   page.on("request", (request) => { if (isPost(request, "/api/planting-reports/official")) posts.push(request.url()); });
   await login(page, "staff", "/staff/planting-reports");
   const row = page.locator("tr", { hasText: STAFF_SITE });
-  await expect(row.locator(".pr-review-line")).toHaveText("Review Status: Returned for Correction", { timeout: 20_000 });
+  await expect(row.locator(".pr-review-line")).toHaveText("Status: Returned for Correction", { timeout: 20_000 });
   await row.getByRole("button", { name: /^View / }).click();
   await page.getByRole("dialog", { name: /Planting report/ }).getByRole("button", { name: "Correct Official Submission" }).click();
   const form = page.locator(".pr-official-dialog");
@@ -329,7 +329,7 @@ test("Staff: a replay that MENRO definitively rejects clears the pending save an
 
   await page.reload();
   const refreshed = page.locator("tr", { hasText: STAFF_SITE });
-  await expect(refreshed.locator(".pr-review-line")).toHaveText("Review Status: Submitted", { timeout: 20_000 });
+  await expect(refreshed.locator(".pr-review-line")).toHaveText("Status: Submitted", { timeout: 20_000 });
   await refreshed.getByRole("button", { name: /^View / }).click();
   const drawer = page.getByRole("dialog", { name: /Planting report/ });
   await expect(drawer.locator(".pr-submission-item")).toHaveCount(6, { timeout: 20_000 }); // original + two corrections, two types each

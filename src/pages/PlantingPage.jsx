@@ -2906,7 +2906,7 @@ export default function PlantingPage() {
                     <td className="pr-td">
                       {renderStatusBadge(reportSubmissionStatus(record))}
                       <div className="pr-review-line" data-review-status={reportReviewStatus(record)} data-review-stages={reportReviewStages(record).join("|")}>
-                        Review Status: <span className="pr-review-value">{[...new Set((reportReviewStages(record).length > 1 ? reportReviewStages(record) : [reportReviewStatus(record)]).map((stage) => roleWorkflowLabel(stage, userRole)))].join(" · ")}</span>
+                        Status: <span className="pr-review-value">{[...new Set((reportReviewStages(record).length > 1 ? reportReviewStages(record) : [reportReviewStatus(record)]).map((stage) => roleWorkflowLabel(stage, userRole)))].join(" · ")}</span>
                       </div>
                     </td>
                     <td className="pr-td pr-center">
@@ -4095,7 +4095,7 @@ export default function PlantingPage() {
 
                 {standaloneReview && (
                   <div className="pr-standalone-review">
-                    <div className="pr-info-label">Review Status</div>
+                    <div className="pr-info-label">Status</div>
                     {renderWorkflowBadge(submissionWorkflowStatus(standaloneReview))}
                     {standaloneReview.returnReason && <div className="pr-decision-reason pr-decision-reason-returned"><div className="pr-info-label">Reason for Return</div><p>{standaloneReview.returnReason}</p></div>}
                     {standaloneWaiting && canReview && <div className="pr-submission-waiting" role="status">{standaloneWaiting}</div>}

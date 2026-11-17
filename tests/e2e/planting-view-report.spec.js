@@ -78,7 +78,7 @@ async function expectRow(page, reviewStatus) {
   await expect(row).toHaveCount(1, { timeout: 20_000 });
   await expect(row.locator(".pr-status-badge")).toHaveText("Submitted");
   await expect(row.locator(".pr-status-badge")).toHaveClass(/pr-status-approved/);
-  await expect(row.locator(".pr-review-line")).toHaveText(`Review Status: ${reviewStatus}`);
+  await expect(row.locator(".pr-review-line")).toHaveText(`Status: ${reviewStatus}`);
   await expect(row).not.toContainText("Partial");
   await expect(row.locator(".pr-seedling-item")).toHaveText([/^Narra\s*25$/, /^Mahogany\s*15$/]);
   return row;
@@ -131,7 +131,7 @@ async function decide(page, role, startStatus, buttonName, confirmName, endStatu
 
 test("staff sees KPI cards and table from saved data, and Review updates them", async ({ page }) => {
   await login(page, "staff", "planting-view.staff@example.test");
-  const { before, problems } = await decide(page, "staff", "Submitted", "Review", "Confirm Review", "Reviewed");
+  const { before, problems } = await decide(page, "staff", "Awaiting Review", "Review", "Confirm Review", "Reviewed");
   await page.reload();
   await expectRow(page, "Reviewed");
   const after = await expectKpisMatchTable(page);

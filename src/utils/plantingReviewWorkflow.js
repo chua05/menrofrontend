@@ -42,8 +42,8 @@ export const WORKFLOW_STATUS_CLASS = Object.freeze({
 // Role-specific presentation of a stored review stage. Stored statuses are never rewritten:
 //   Participant: every in-progress or verified stage reads "Submitted" (Returned/Rejected stay visible
 //                because the submitter must act on them).
-//   Staff:       Pending Review -> Submitted, Reviewed -> Reviewed, own Pending Admin Approval -> Submitted,
-//                Completed -> Verified.
+//   Staff:       Pending Review -> Awaiting Review (a Participant report waiting for the Staff review),
+//                Reviewed -> Reviewed, own Pending Admin Approval -> Submitted, Completed -> Verified.
 //   Admin:       Pending Review -> Submitted, Reviewed -> Reviewed, Pending Admin Approval -> Staff Submitted,
 //                Completed -> Verified.
 // "Completed" is the stored Admin-approved stage; "Verified" is only its Staff/Admin label.
@@ -51,7 +51,7 @@ export function roleWorkflowLabel(stage, role) {
   const S = WORKFLOW_STATUS;
   if (role === "participant") return [S.PENDING_REVIEW, S.REVIEWED, S.PENDING_ADMIN_APPROVAL, S.COMPLETED].includes(stage) ? "Submitted" : stage;
   if (role !== "staff" && role !== "admin") return stage;
-  if (stage === S.PENDING_REVIEW) return "Submitted";
+  if (stage === S.PENDING_REVIEW) return role === "staff" ? "Awaiting Review" : "Submitted";
   if (stage === S.PENDING_ADMIN_APPROVAL) return role === "admin" ? "Staff Submitted" : "Submitted";
   if (stage === S.COMPLETED) return "Verified";
   return stage;

@@ -1819,7 +1819,7 @@ for (const [label, workflow, expected] of [
 
 // Stored stages stay truthful (data-workflow-status / data-review-status); only the visible label is role-specific.
 const roleLabelCases = [
-  ["Pending Review", {}, { participant: "Submitted", staff: "Submitted", admin: "Submitted" }],
+  ["Pending Review", {}, { participant: "Submitted", staff: "Awaiting Review", admin: "Submitted" }],
   ["Reviewed", { staffReviewedBy: "test-staff", staffReviewedByName: "Field Staff", staffReviewedAt: "2026-11-06T01:00:00.000Z" }, { participant: "Submitted", staff: "Reviewed", admin: "Reviewed" }],
   ["Pending Admin Approval", { officialStaffReport: true, adminApprovalRequired: true, contributorId: "test-staff", authenticatedSubmitterUid: "test-staff" }, { staff: "Submitted", admin: "Staff Submitted" }],
   ["Completed", { staffReviewStatus: "Accepted", adminDecisionBy: "test-admin", adminDecisionByName: "MENRO Admin", adminDecisionAt: "2026-11-07T01:00:00.000Z" }, { participant: "Submitted", staff: "Verified", admin: "Verified" }],
@@ -1832,7 +1832,7 @@ test(`${role} sees "${label}" for a stored ${stage} planting report`, async ({ p
   await page.goto(`${base}?role=${role}`);
   const line = page.locator(".pr-review-line").first();
   await expect(line).toHaveAttribute("data-review-status", stage);
-  await expect(line).toHaveText(`Review Status: ${label}`);
+  await expect(line).toHaveText(`Status: ${label}`);
   await page.goto(`${base}?role=${role}&report=report-review`);
   const badge = page.locator(`.pr-submission-item [data-workflow-status="${stage}"]`).first();
   await expect(badge).toHaveText(label);
@@ -1884,7 +1884,7 @@ async function expectFooterAtBottom(page) {
   expect(placement.bottomGap).toBeLessThanOrEqual(2);
 }
 
-test("Participant report: Submitted -> Staff Review -> Admin Verify, with actions only at the bottom and Verified only after Admin", async ({ page }) => {
+test("Participant report: Awaiting Review -> Staff Review -> Reviewed -> Admin Verify -> Verified, actions only at the bottom", async ({ page }) => {
   let report = reviewReport([reviewSubmission()]);
   const calls = [];
   const fixture = await reviewFixture(page, () => report, {
@@ -1895,17 +1895,19 @@ test("Participant report: Submitted -> Staff Review -> Admin Verify, with action
     },
     "PATCH /api/planting-reports/sub-participant/approve": route => {
       calls.push("approve");
-      report = reviewReport([reviewSubmission({ workflowStatus: "Completed", staffReviewStatus: "Accepted", staffReviewedBy: "test-staff", staffReviewedByName: "Field Staff",
-        adminDecisionBy: "test-admin", adminDecisionByName: "MENRO Admin", adminDecisionAt: "2026-11-07T01:00:00.000Z" })]);
+      report = { ...reviewReport([reviewSubmission({ workflowStatus: "Completed", staffReviewStatus: "Accepted", staffReviewedBy: "test-staff", staffReviewedByName: "Field Staff",
+        adminDecisionBy: "test-admin", adminDecisionByName: "MENRO Admin", adminDecisionAt: "2026-11-07T01:00:00.000Z" })]), reportingProgress: "Completed" };
       return route.fulfill({ json: { success: true, message: "Planting report approved.", data: report } });
     },
   });
   const drawer = page.locator(".pr-report-drawer");
   const card = page.getByRole("article", { name: "Submission sub-participant" });
+  const tableStatus = page.locator(".pr-review-line").first();
 
-  // Staff: Submitted. The automated GPS check (stored "Verified") is not shown as Verified.
+  // Staff: Awaiting Review. The automated GPS check (stored "Verified") is not shown as Verified.
   await page.goto("/staff/planting-reports?role=staff&report=report-review");
-  await expect(card.locator('[data-workflow-status="Pending Review"]')).toHaveText("Submitted");
+  await expect(tableStatus).toHaveText("Status: Awaiting Review");
+  await expect(card.locator('[data-workflow-status="Pending Review"]')).toHaveText("Awaiting Review");
   await expect(card.getByText("GPS Check Passed", { exact: true })).toBeVisible();
   await expect(drawer.getByText("Verified", { exact: true })).toHaveCount(0);
   await expectFooterAtBottom(page);
@@ -1914,6 +1916,7 @@ test("Participant report: Submitted -> Staff Review -> Admin Verify, with action
   await decisionsFor(page, "sub-participant").getByRole("button", { name: "Review", exact: true }).click();
   await page.getByRole("dialog", { name: "Review Planting Report?", exact: true }).getByRole("button", { name: "Confirm Review", exact: true }).click();
   await expect(card.locator('[data-workflow-status="Reviewed"]')).toHaveText("Reviewed");
+  await expect(tableStatus).toHaveText("Status: Reviewed");
   // Staff review never marks the report Verified, and Staff get no further actions.
   await expect(drawer.getByText("Verified", { exact: true })).toHaveCount(0);
   await expect(drawer.getByRole("button", { name: decisionNames })).toHaveCount(0);
@@ -1928,6 +1931,7 @@ test("Participant report: Submitted -> Staff Review -> Admin Verify, with action
   await decisionsFor(page, "sub-participant").getByRole("button", { name: "Verify", exact: true }).click();
   await page.getByRole("dialog", { name: "Verify Planting Report?", exact: true }).getByRole("button", { name: "Verify Report", exact: true }).click();
   await expect(card.locator('[data-workflow-status="Completed"]')).toHaveText("Verified");
+  await expect(tableStatus).toHaveText("Status: Verified");
   await expect(drawer.getByRole("button", { name: decisionNames })).toHaveCount(0);
   await expect(decisionFooter(page)).toHaveCount(0);
   expect(calls).toEqual(["forward", "approve"]);
@@ -1940,17 +1944,20 @@ test("Staff-submitted report: Staff never see Review; Admin sees Staff Submitted
   let report = reviewReport([official()]);
   const fixture = await reviewFixture(page, () => report, {
     "PATCH /api/planting-reports/sub-official/approve": route => {
-      report = reviewReport([official({ workflowStatus: "Completed", staffReviewStatus: "Accepted", adminDecisionBy: "test-admin", adminDecisionByName: "MENRO Admin", adminDecisionAt: "2026-11-07T01:00:00.000Z" })]);
+      report = { ...reviewReport([official({ workflowStatus: "Completed", staffReviewStatus: "Accepted", adminDecisionBy: "test-admin", adminDecisionByName: "MENRO Admin", adminDecisionAt: "2026-11-07T01:00:00.000Z" })]), reportingProgress: "Completed" };
       return route.fulfill({ json: { success: true, message: "Planting report approved.", data: report } });
     },
   });
   const drawer = page.locator(".pr-report-drawer");
   const card = page.getByRole("article", { name: "Submission sub-official" });
+  const tableStatus = page.locator(".pr-review-line").first();
   await page.goto("/staff/planting-reports?role=staff&report=report-review");
+  await expect(tableStatus).toHaveText("Status: Submitted");
   await expect(card.locator('[data-workflow-status="Pending Admin Approval"]')).toHaveText("Submitted");
   await expect(drawer.getByRole("button", { name: decisionNames })).toHaveCount(0);
 
   await page.goto("/admin/planting-reports?role=admin&report=report-review");
+  await expect(tableStatus).toHaveText("Status: Staff Submitted");
   await expect(card.locator('[data-workflow-status="Pending Admin Approval"]')).toHaveText("Staff Submitted");
   await expect(drawer.getByText("Verified", { exact: true })).toHaveCount(0);
   await expectFooterAtBottom(page);
@@ -1958,6 +1965,7 @@ test("Staff-submitted report: Staff never see Review; Admin sees Staff Submitted
   await decisionsFor(page, "sub-official").getByRole("button", { name: "Verify", exact: true }).click();
   await page.getByRole("dialog", { name: "Verify Planting Report?", exact: true }).getByRole("button", { name: "Verify Report", exact: true }).click();
   await expect(card.locator('[data-workflow-status="Completed"]')).toHaveText("Verified");
+  await expect(tableStatus).toHaveText("Status: Verified");
   await expect(decisionFooter(page)).toHaveCount(0);
   fixture.check();
 });
