@@ -54,8 +54,10 @@ import {
   MAX_DECISION_REASON_LENGTH,
   WORKFLOW_STATUS,
   WORKFLOW_STATUS_CLASS,
+  automatedCheckLabel,
   availableDecisions,
   buildEvidenceMarkers,
+  viewFooterDecisions,
   decisionReasonError,
   MAX_CORRECTION_COMMENT_LENGTH,
   correctionSelectionErrors,
@@ -151,6 +153,7 @@ const VERIFICATION_CLASSES = {
   "Fully Reported — Awaiting Review": "pr-status-reviewed",
   Completed: "pr-status-approved",
   Verified: "pr-status-approved",
+  "GPS Check Passed": "pr-status-reviewed",
   "Needs Review": "pr-status-reviewed",
   Accepted: "pr-status-approved",
 };
@@ -176,7 +179,9 @@ function displayReportStatus(status) {
       "partial": "Partial",
       "fully reported — awaiting review": "Fully Reported — Awaiting Review",
       "completed": "Completed",
-      "verified": "Verified",
+      // A stored "Verified" verificationStatus is the automated GPS/evidence check, not Admin
+      // verification (Admin approval stores "Approved"), so it is never labelled "Verified".
+      "verified": "GPS Check Passed",
       "needs review": "Needs Review",
       "invalid": "Invalid",
       "not required": "Not Required",
@@ -2720,6 +2725,10 @@ export default function PlantingPage() {
   }, [sites, viewSiteId, viewSiteName, viewBarangay]);
   const standaloneActions = standaloneReview ? availableDecisions(standaloneReview, userRole) : [];
   const standaloneWaiting = standaloneReview && !standaloneActions.length ? waitingMessage(standaloneReview, userRole) : "";
+  // Every workflow decision this role may take, shown once in the View Planting Report footer.
+  // availableDecisions mirrors the backend RBAC/state rules; the backend still enforces them.
+  const footerDecisions = viewFooterDecisions({ submissions: submissionsWithPhotoIndexes, standaloneReview, role: userRole,
+    isGroupLead: (submission) => isFinalReportGroupLead(submission, submissionsWithPhotoIndexes) });
   // Report-level photo index -> the submission that saved it (same order as the backend).
   const photoOwners = new Map(submissionsWithPhotoIndexes.flatMap((submission) =>
     submission.indexedPhotos.map((photo) => [photo.reportPhotoIndex, submission])));
@@ -4017,7 +4026,7 @@ export default function PlantingPage() {
                             <div className="pr-info-block"><div className="pr-info-label">Site / Event / Distribution</div><div className="pr-info-value">{selectedRecord.siteName || "—"} / {selectedRecord.eventName || submission.eventId || "—"} / {submission.requestId || selectedRecord.distributionId || "—"}</div></div>
                             <div className="pr-info-block"><div className="pr-info-label">Photo Coordinates</div><div className="pr-info-value">{submission.latitude ?? "—"}, {submission.longitude ?? "—"}</div></div>
                             <div className="pr-info-block"><div className="pr-info-label">GPS Accuracy</div><div className="pr-info-value">{submission.gpsAccuracyMeters !== null && submission.gpsAccuracyMeters !== undefined && Number.isFinite(Number(submission.gpsAccuracyMeters)) ? `± ${Math.round(Number(submission.gpsAccuracyMeters))} m` : "—"}</div></div>
-                            <div className="pr-info-block"><div className="pr-info-label">Automated Verification</div><div className="pr-info-value">{submission.verificationStatus || "Needs Review"}</div></div>
+                            <div className="pr-info-block"><div className="pr-info-label">Automated GPS Check</div><div className="pr-info-value">{automatedCheckLabel(submission.verificationStatus)}</div></div>
                             <div className="pr-info-block"><div className="pr-info-label">Verification Details</div><div className="pr-info-value">{(submission.verificationDetails || submission.suspiciousFlags || []).join(", ") || "No concerns recorded"}</div></div>
                             {submission.staffReviewedBy && !isParticipant && <div className="pr-info-block"><div className="pr-info-label">Staff Review</div><div className="pr-info-value">{submission.staffReviewedByName || submission.staffReviewedBy} / {formatDateTime(submission.staffReviewedAt)}</div>{submission.staffReviewRemarks && <div className="pr-info-subvalue">{submission.staffReviewRemarks}</div>}</div>}
                             {(submission.adminDecisionBy || (stage === WORKFLOW_STATUS.COMPLETED && submission.reviewedBy)) && !(isParticipant && stage === WORKFLOW_STATUS.COMPLETED) && <div className="pr-info-block"><div className="pr-info-label">{stage === WORKFLOW_STATUS.REJECTED ? "Rejected By / At" : stage === WORKFLOW_STATUS.RETURNED ? "Returned By / At" : "Verified By / At"}</div><div className="pr-info-value">{submission.adminDecisionByName || submission.reviewedByName || submission.adminDecisionBy || submission.reviewedBy} / {formatDateTime(submission.adminDecisionAt || submission.reviewedAt)}</div></div>}
@@ -4066,14 +4075,7 @@ export default function PlantingPage() {
                                 : "Reviewed together with the first seedling type of this final report."}
                             </div>
                           )}
-                          {actions.length > 0 && (
-                            <div className="pr-drawer-verification-actions" role="group" aria-label={`Decision for submission ${submission.id}`}>
-                              {actions.includes("forward") && <button type="button" className="pr-primary-button" onClick={() => openDecision(submission, "forward")} disabled={actionLoading}><FiSend size={14} />Review</button>}
-                              {actions.includes("approve") && <button type="button" className="pr-primary-button" onClick={() => openDecision(submission, "approve")} disabled={actionLoading}><FiCheckCircle size={14} />Verify</button>}
-                              {actions.includes("return") && <button type="button" className="pr-warning-button" onClick={() => openDecision(submission, "return")} disabled={actionLoading}><FiRotateCcw size={14} />Return for Correction</button>}
-                              {actions.includes("reject") && <button type="button" className="pr-danger-button" onClick={() => openDecision(submission, "reject")} disabled={actionLoading}><FiXCircle size={14} />Reject</button>}
-                            </div>
-                          )}
+                          {actions.length > 0 && <div className="pr-submission-waiting" role="note">The decision actions for this submission are at the bottom of this report.</div>}
                           {waiting && canReview && <div className="pr-submission-waiting" role="status">{waiting}</div>}
                           {correctable && ownSubmission && submission.officialStaffReport && userRole === "staff" && (
                             <div className="pr-drawer-verification-actions"><button type="button" className="pr-secondary-button" onClick={() => { setOfficialForm({ correction: { ...submission, groupRows: finalReportGroupRows(submission, submissionsWithPhotoIndexes) } }); setShowViewModal(false); }}><FiRotateCcw size={14} />Correct Official Submission</button></div>
@@ -4096,14 +4098,6 @@ export default function PlantingPage() {
                     <div className="pr-info-label">Review Status</div>
                     {renderWorkflowBadge(submissionWorkflowStatus(standaloneReview))}
                     {standaloneReview.returnReason && <div className="pr-decision-reason pr-decision-reason-returned"><div className="pr-info-label">Reason for Return</div><p>{standaloneReview.returnReason}</p></div>}
-                    {standaloneActions.length > 0 && (
-                      <div className="pr-drawer-verification-actions" role="group" aria-label="Decision for this planting report">
-                        {standaloneActions.includes("forward") && <button type="button" className="pr-primary-button" onClick={() => openDecision(standaloneReview, "forward")} disabled={actionLoading}><FiSend size={14} />Review</button>}
-                        {standaloneActions.includes("approve") && <button type="button" className="pr-primary-button" onClick={() => openDecision(standaloneReview, "approve")} disabled={actionLoading}><FiCheckCircle size={14} />Verify</button>}
-                        {standaloneActions.includes("return") && <button type="button" className="pr-warning-button" onClick={() => openDecision(standaloneReview, "return")} disabled={actionLoading}><FiRotateCcw size={14} />Return for Correction</button>}
-                        {standaloneActions.includes("reject") && <button type="button" className="pr-danger-button" onClick={() => openDecision(standaloneReview, "reject")} disabled={actionLoading}><FiXCircle size={14} />Reject</button>}
-                      </div>
-                    )}
                     {standaloneWaiting && canReview && <div className="pr-submission-waiting" role="status">{standaloneWaiting}</div>}
                   </div>
                 )}
@@ -4205,6 +4199,22 @@ export default function PlantingPage() {
                 )}
               </section>
             </div>
+            {/* The only place Review / Verify / Return / Reject appear: the bottom of the View Planting Report form. */}
+            {footerDecisions.length > 0 && (
+              <footer className="pr-drawer-footer" aria-label="Planting report workflow actions">
+                {footerDecisions.map(({ target, actions, label, name }) => (
+                  <div key={target.id || "standalone"} className="pr-drawer-footer-row">
+                    {footerDecisions.length > 1 && name && <span className="pr-drawer-footer-target">Submission {name}</span>}
+                    <div className="pr-drawer-verification-actions" role="group" aria-label={label}>
+                      {actions.includes("return") && <button type="button" className="pr-warning-button" onClick={() => openDecision(target, "return")} disabled={actionLoading}><FiRotateCcw size={14} />Return for Correction</button>}
+                      {actions.includes("reject") && <button type="button" className="pr-danger-button" onClick={() => openDecision(target, "reject")} disabled={actionLoading}><FiXCircle size={14} />Reject</button>}
+                      {actions.includes("forward") && <button type="button" className="pr-primary-button" onClick={() => openDecision(target, "forward")} disabled={actionLoading}><FiSend size={14} />Review</button>}
+                      {actions.includes("approve") && <button type="button" className="pr-primary-button" onClick={() => openDecision(target, "approve")} disabled={actionLoading}><FiCheckCircle size={14} />Verify</button>}
+                    </div>
+                  </div>
+                ))}
+              </footer>
+            )}
           </aside>
         </div>
       )}

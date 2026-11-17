@@ -1429,11 +1429,18 @@ button:disabled {
 .pr-history-marker.is-rejected { background: #fff3f2; color: #b42318; }
 .pr-history-title { color: #334139; font-size: 14px; font-weight: 700; }
 .pr-decision-overlay { z-index: 2010; }
+/* View Planting Report workflow actions: always at the bottom of the form. */
+.pr-drawer-footer { position: sticky; bottom: 0; z-index: 2; display: grid; gap: 10px; padding: 14px 22px; background: #fff; border-top: 1px solid #e6ebe8; box-shadow: 0 -6px 16px rgba(16, 24, 20, 0.06); }
+.pr-drawer-footer-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.pr-drawer-footer-target { color: #334139; font-size: 13px; font-weight: 700; overflow-wrap: anywhere; }
+.pr-drawer-footer .pr-drawer-verification-actions { margin-top: 0; margin-left: auto; flex-wrap: wrap; }
 
 @media (max-width: 640px) {
   .pr-drawer-backdrop { padding: max(8px, env(safe-area-inset-top)) 8px max(8px, env(safe-area-inset-bottom)); }
   .pr-report-drawer { width: 100%; max-height: calc(100dvh - 16px); border-radius: 12px; }
   .pr-drawer-header, .pr-drawer-body { padding: 16px; }
+  .pr-drawer-footer { padding: 12px 16px; }
+  .pr-drawer-footer .pr-drawer-verification-actions { width: 100%; margin-left: 0; }
   .pr-info-grid, .pr-location-grid { grid-template-columns: 1fr; }
   .pr-drawer-verification-actions { align-items: stretch; flex-direction: column; }
   .pr-drawer-verification-actions .pr-primary-button,

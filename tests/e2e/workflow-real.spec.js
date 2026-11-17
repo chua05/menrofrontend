@@ -79,7 +79,7 @@ test("real Staff draft-free official report, private attendance, Admin return, c
   const privateFile = await admin.evaluate(async id => { const { authenticatedFetch } = await import("/src/services/authenticatedApi.js"); const response = await authenticatedFetch(`/planting-reports/official/${id}/attendance`); return { status: response.status, type: response.headers.get("content-type"), bytes: Array.from(new Uint8Array(await response.arrayBuffer())) }; }, originalId);
   expect(privateFile.status).toBe(200); expect(privateFile.type).toBe("image/png"); expect(Buffer.from(privateFile.bytes).equals(png)).toBe(true);
   // Admin returns (not rejects) the Staff report so the original Staff submitter can correct it.
-  await admin.locator(".pr-submission-item").filter({ hasText: originalId }).getByRole("button", { name: "Return for Correction", exact: true }).click();
+  await admin.getByRole("group", { name: `Decision for submission ${originalId}` }).getByRole("button", { name: "Return for Correction", exact: true }).click();
   const returnDialog = admin.getByRole("dialog", { name: "Return for Correction", exact: true });
   await returnDialog.locator("#pr-decision-reason").fill("Correct the field count and leftover balance.");
   const returned = admin.waitForResponse(response => response.url().endsWith(`/${originalId}/return`)); await returnDialog.getByRole("button", { name: "Return for Correction", exact: true }).click();
@@ -95,7 +95,7 @@ test("real Staff draft-free official report, private attendance, Admin return, c
   expect(corrected.data.submissions.find(row => row.id === originalId).staffReviewStatus).toBe("Rejected"); expect(corrected.data.submissions.find(row => row.id === correctedId).revision).toBe(1);
   await expect(staff.getByRole("dialog", { name: "Correct Official Planting Report" })).toHaveCount(0, { timeout: 15000 });
   await openReport(admin, "admin", data.reportId);
-  await admin.locator(".pr-submission-item").filter({ hasText: correctedId }).getByRole("button", { name: "Verify", exact: true }).click();
+  await admin.getByRole("group", { name: `Decision for submission ${correctedId}` }).getByRole("button", { name: "Verify", exact: true }).click();
   const approvalResponse = admin.waitForResponse(response => response.url().endsWith(`/${correctedId}/approve`)); await admin.getByRole("dialog", { name: "Verify Planting Report?", exact: true }).getByRole("button", { name: "Verify Report", exact: true }).click();
   const approval = await approvalResponse; expect(approval.status(), await approval.text()).toBe(200); const approved = (await approval.json()).data;
   expect(approved.reportingProgress).toBe("Completed"); expect(approved.acceptedQuantity).toBe(7); expect(approved.acceptedLeftoverQuantity).toBe(3); expect(approved.remainingAvailableQuantity).toBe(0);
