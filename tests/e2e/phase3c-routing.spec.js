@@ -230,17 +230,14 @@ test("zero authorized visits still render the seven-section form shell read-only
 });
 
 for (const fixture of ["index-missing-raw", "index-missing"])
-test(`Admin modal never shows the raw Firestore index error (${fixture}) and does not overflow`, async ({ page }) => {
+test(`Admin review route never shows the raw Firestore index error (${fixture}) and does not overflow`, async ({ page }) => {
   await isolate(page);
-  await mockLegacyMonitoringApi(page);
   await page.setViewportSize({ width: 390, height: 900 });
-  const dialog = await openStaffMonitoring(page, fixture, "admin");
-  await expect(dialog.getByRole("alert")).toHaveText(/required database index is not ready/);
-  await expect(dialog).not.toContainText(/FAILED_PRECONDITION|console\.firebase|create_composite/);
-  await expect(dialog.getByRole("heading", { name: "1. Verified Planting Site Information", exact: true })).toBeVisible();
-  for (const name of ["Save Draft", "Submit Visit"]) await expect(dialog.getByRole("button", { name, exact: true })).toBeDisabled();
-  const body = dialog.locator(".psm-body");
-  expect(await body.evaluate(node => node.scrollWidth <= node.clientWidth + 1)).toBe(true);
+  await page.goto(`/admin/permanent-sample-monitoring?role=admin&fixture=${fixture}`);
+  await expect(page.getByRole("alert").first()).toHaveText(/required database index is not ready/);
+  await expect(page.locator("body")).not.toContainText(/FAILED_PRECONDITION|console\.firebase|create_composite/);
+  await expect(page.getByRole("button", { name: /Save Draft|Submit Visit/ })).toHaveCount(0);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)).toBe(true);
 });
 
 test("a disabled backend gate is explained inside the Staff modal", async ({ page }) => {
@@ -280,46 +277,46 @@ test("Admin arriving with a start request never auto-opens a Staff visit", async
   await expect(page.getByRole("dialog", { name: "Monitor Planted Trees" })).toHaveCount(0);
 });
 
-test("Admin page matches Staff: one primary button, no baselines panel, no review link and no sidebar item", async ({ page }) => {
+test("Admin page has no Monitor Planted Trees button, no baselines panel, no review link and no sidebar item", async ({ page }) => {
   await isolate(page);
   await mockLegacyMonitoringApi(page);
   await page.goto("/admin/survival-monitoring?role=admin");
   await expect(page.getByRole("heading", { name: "Survival Monitoring" })).toBeVisible();
-  await expect(staffSubmissionControls(page)).toHaveCount(1);
-  await expect(page.locator(".sm-header-actions").getByRole("button", { name: aggregateLabel, exact: true })).toHaveClass(/sm-primary-button/);
+  await expect(staffSubmissionControls(page)).toHaveCount(0);
+  await expect(page.getByRole("button", { name: aggregateLabel })).toHaveCount(0);
+  await expect(page.getByRole("dialog", { name: "Monitor Planted Trees" })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Permanent Sample Selection and Baselines" })).toHaveCount(0);
   await expect(page.getByRole("link", { name: sampleTreeLabel, includeHidden: true })).toHaveCount(0);
   await expect(page.getByRole("link", { name: monitoringLabel, exact: true, includeHidden: true })).toHaveCount(0);
   await expect(page.getByRole("link", { name: "Survival Monitoring", exact: true, includeHidden: true })).toHaveCount(1);
 });
 
-test("Admin single button opens the same seven-section shell read-only with Admin wording when nothing awaits review", async ({ page }) => {
+test("Admin Survival Monitoring never mounts the Staff monitoring modal and sends no monitoring writes", async ({ page }) => {
   await isolate(page);
   await mockLegacyMonitoringApi(page);
   const writes = [];
-  page.on("request", request => { if (request.method() !== "GET" && request.url().includes("/api/verified-sample-monitoring")) writes.push(request.url()); });
-  const dialog = await openStaffMonitoring(page, "empty", "admin");
-  for (const heading of [...blueprintSections, "6. Rechecking & Requester Clarification"]) await expect(dialog.getByRole("heading", { name: heading, exact: true })).toBeVisible();
-  await expect(dialog.getByRole("region", { name: "Why no monitoring visit is available" })).toBeVisible();
-  for (const name of ["Take Photo", "Upload Existing Photo", "Verify Photo Location", "Save Draft", "Submit Visit"])
-    await expect(dialog.getByRole("button", { name, exact: true })).toBeDisabled();
-  await expect(dialog.getByText(/MENRO Staff record and submit visits; Admin reviews, approves or returns them/)).toBeVisible();
+  page.on("request", request => { if (request.method() !== "GET" && /\/api\/(verified-sample-monitoring|monitoring|sample-monitoring-information)/.test(request.url())) writes.push(request.url()); });
+  await page.goto("/admin/survival-monitoring?role=admin&fixture=empty");
+  await expect(page.getByRole("heading", { name: "Survival Monitoring" })).toBeVisible();
+  await expect(page.locator(".sm-header-actions").getByRole("button", { name: /Monitor|Submit/ })).toHaveCount(0);
+  await expect(page.getByRole("dialog", { name: "Monitor Planted Trees" })).toHaveCount(0);
+  await expect(page.locator(".psm-shell")).toHaveCount(0);
   expect(writes).toEqual([]);
 });
 
-test("Admin and Staff modals share the same seven-section layout", async ({ page }) => {
+test("Staff keep the seven-section Monitor Planted Trees form", async ({ page }) => {
   await isolate(page);
   await mockLegacyMonitoringApi(page);
-  const layout = async role => { const dialog = await openStaffMonitoring(page, "empty", role);
-    return dialog.locator(".psm-shell .psm-section > h3").allTextContents(); };
-  const staff = await layout("staff"), admin = await layout("admin");
-  expect(staff).toHaveLength(7); expect(admin).toEqual(staff);
+  const dialog = await openStaffMonitoring(page, "empty", "staff");
+  expect(await dialog.locator(".psm-shell .psm-section > h3").allTextContents()).toHaveLength(7);
 });
 
-test("Admin single button opens the one visit awaiting review in the read-only seven-section form with review actions only", async ({ page }) => {
+test("Admin review route opens the one visit awaiting review in the read-only seven-section form with review actions only", async ({ page }) => {
   await isolate(page);
-  await mockLegacyMonitoringApi(page);
-  const dialog = await openStaffMonitoring(page, "review-pending", "admin");
+  await page.goto("/admin/permanent-sample-monitoring?role=admin&fixture=review-pending");
+  await page.getByRole("button", { name: "VPMV-PENDING-REVIEW-001", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "Monitor Planted Trees" });
+  await expect(dialog).toBeVisible();
   await expect(dialog.locator(".psm-status-badge")).toHaveText("Pending Admin Review");
   for (const heading of blueprintSections) await expect(dialog.getByRole("heading", { name: heading, exact: true })).toBeVisible();
   await expect(dialog.getByRole("radiogroup", { name: "Tree Condition *" })).toBeVisible();
@@ -850,14 +847,14 @@ test("Staff cannot review their own pending aggregate observation; a different S
   await expect(page.getByText("You reported this observation.")).toHaveCount(0);
 });
 
-test("Admin's single Monitor Planted Trees button has no add icon; Staff's keeps it", async ({ page }) => {
+test("Monitor Planted Trees appears only for Staff; Admin has no such button", async ({ page }) => {
   await isolate(page);
   await mockLegacyMonitoringApi(page);
-  for (const [role, icons] of [["staff", 1], ["admin", 0]]) {
+  for (const [role, buttons] of [["staff", 1], ["admin", 0]]) {
     await page.goto(`/${role}/survival-monitoring?role=${role}`);
-    const button = page.locator(".sm-header-actions").getByRole("button", { name: aggregateLabel, exact: true });
-    await expect(button).toHaveCount(1);
-    await expect(button.locator('[data-testid="monitor-planted-trees-add-icon"]')).toHaveCount(icons);
+    await expect(page.getByRole("heading", { name: "Survival Monitoring" })).toBeVisible();
+    await expect(page.getByRole("button", { name: aggregateLabel, exact: true })).toHaveCount(buttons);
+    await expect(page.locator('[data-testid="monitor-planted-trees-add-icon"]')).toHaveCount(buttons);
   }
 });
 

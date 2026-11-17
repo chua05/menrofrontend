@@ -122,6 +122,27 @@ export function availableDecisions(submission, role) {
   return [];
 }
 
+// The decision rows shown in the View Planting Report footer: one per actionable
+// submission (a final report's types are decided on their first row) plus a legacy
+// standalone report. Rows without an allowed decision are omitted.
+export function viewFooterDecisions({ submissions = [], standaloneReview = null, role, isGroupLead = () => true }) {
+  const rows = submissions.filter((submission) => isGroupLead(submission))
+    .map((submission) => ({ target: submission, actions: availableDecisions(submission, role),
+      label: `Decision for submission ${submission.id}`, name: submission.id }))
+    .filter((row) => row.actions.length > 0);
+  const standaloneActions = standaloneReview ? availableDecisions(standaloneReview, role) : [];
+  if (standaloneActions.length) rows.push({ target: standaloneReview, actions: standaloneActions, label: "Decision for this planting report", name: "" });
+  return rows;
+}
+
+// The automated GPS/evidence check stores verificationStatus "Verified". That is not an
+// Admin verification, so it is never shown as "Verified" (stored values are unchanged).
+export function automatedCheckLabel(status) {
+  const value = String(status || "").trim();
+  if (!value) return "Needs Review";
+  return value.toLowerCase() === "verified" ? "GPS Check Passed" : value;
+}
+
 export function decisionReasonError(decision, value) {
   const config = DECISIONS[decision];
   const reason = String(value || "").trim();

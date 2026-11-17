@@ -1504,17 +1504,17 @@ export default function MonitoringPage() {
             <FiRefreshCw size={16} />
           </button>
 
-          {/* The single monitoring action for Staff and Admin (label requested by MENRO). It opens the shared
-              Monitor Planted Trees modal; per-tree data never goes to aggregate records. Backend RBAC decides
-              what each role can do there: Staff record and submit visits, Admin reviews them (read-only form). */}
-          {(isStaff || isAdmin) && (
+          {/* The single monitoring action, for authorized MENRO Staff only (label requested by MENRO). It opens
+              the Monitor Planted Trees modal; per-tree data never goes to aggregate records. Admin never creates
+              or submits monitoring records, so Admin has no such button; Admin keeps read-only record details
+              and the review actions inside them (backend RBAC enforces both). */}
+          {isStaff && (
             <button
               type="button"
               className="sm-primary-button"
               onClick={() => { setSampleFormMounted(true); setSampleFormOpen(true); }}
             >
-              {/* Admin never creates monitoring records, so Admin's button has no add (+) icon. */}
-              {isStaff && <FiPlus size={15} aria-hidden="true" data-testid="monitor-planted-trees-add-icon" />}
+              <FiPlus size={15} aria-hidden="true" data-testid="monitor-planted-trees-add-icon" />
               Monitor Planted Trees
             </button>
           )}
@@ -1522,7 +1522,7 @@ export default function MonitoringPage() {
       </div>
 
       {/* Mounted on first use and kept mounted, so unsaved per-tree edits survive closing and reopening. */}
-      {(isStaff || isAdmin) && sampleFormMounted && (
+      {isStaff && sampleFormMounted && (
         <PermanentSampleMonitoringPage embedded open={sampleFormOpen} onClose={() => setSampleFormOpen(false)} />
       )}
 
