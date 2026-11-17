@@ -954,7 +954,8 @@ test("staff manages sampling plans and baselines inside the approved report's de
 });
 
 test("admin reviews plan/baseline readiness inside the approved report's details, not in Survival Monitoring", async ({ page }) => {
-  const fixture = await setup(page, cohortRoutes());
+  // Admin Survival Monitoring reads the read-only permanent-sample visit list for its Monitoring Records rows.
+  const fixture = await setup(page, { ...cohortRoutes(), "GET /api/verified-sample-monitoring/visits": route => route.fulfill({ json: { success: true, data: { visits: [], nextCursor: null, writesPaused: false } } }) });
   const drawer = await openReportsCohort(page, "admin");
   await expect(drawer.getByRole("heading", { name: "Sampling Plan", exact: true })).toBeVisible();
   await expect(drawer.getByText(/MENRO decisions pending: approved minimum/)).toBeVisible();

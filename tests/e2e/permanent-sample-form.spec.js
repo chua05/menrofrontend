@@ -45,12 +45,13 @@ async function setup(page,{error=0,timeout=false,returned=false,multiple=false,n
   if(path.startsWith("/evidence/sample-monitoring/"))return r.fulfill({status:200,contentType:"image/png",body:Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jXz8AAAAASUVORK5CYII=","base64")});
   state.unregistered.push([method,path]); return json(r,"Unregistered test API request",500);
  });
- await page.goto(role==="staff"?route:`/${role}/permanent-sample-monitoring?role=${role}`); await page.getByRole("button",{name:visitId,exact:true}).click(); await expect(page.getByRole("dialog",{name:"Monitor Planted Trees"})).toBeVisible();
+ await page.goto(role==="staff"?route:`/${role}/permanent-sample-monitoring?role=${role}`); await page.getByRole("button",{name:visitId,exact:true}).click(); await expect(page.getByRole("dialog",{name:role==="admin"?"Review Monitoring Visit":"Monitor Planted Trees",exact:true})).toBeVisible();
  return state;
 }
 const tree=async(page,id)=>{const button=page.locator(".psm-tree-list button").filter({hasText:id});if(await button.getAttribute("aria-expanded")!=="true")await button.click();};
 const active=page=>page.locator(".psm-tree");
-const modal=page=>page.getByRole("dialog",{name:"Monitor Planted Trees"});
+// Staff record visits in "Monitor Planted Trees"; Admin reviews them in "Review Monitoring Visit" (checked per role on open).
+const modal=page=>page.getByRole("dialog",{name:/^(Monitor Planted Trees|Review Monitoring Visit)$/});
 test("authoritative context, baseline units, tree navigation and unfinished edits persist",async({page})=>{
  const s=await setup(page);
  await expect(page.locator(".psm-info").getByText("PR-2026-FIXTURE",{exact:true})).toBeVisible();await expect(page.getByRole("combobox",{name:"Verified Planting Report",exact:true}).locator("option:checked")).toHaveText(/^PR-2026-FIXTURE · Bulan fixture site · Visit 2026-11-01$/);await page.getByLabel("Date Monitored *").fill("2026-11-01");

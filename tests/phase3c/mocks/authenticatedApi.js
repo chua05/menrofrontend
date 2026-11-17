@@ -64,7 +64,22 @@ const fixture = () => new URLSearchParams(window.location.search).get("fixture")
 const response = (status, body) => new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
 const failure = (status, message) => response(status, { success: false, message });
 
+// Admin Monitoring Records rows: one of each status, with the Admin-only display labels the backend adds.
+function adminRecordsResponse(paused) {
+  const decision = (window.__PHASE3C_REVIEWS__ || []).filter((entry) => entry.visitId === pendingReviewDetail.id).at(-1);
+  const labels = { reportNumber: "RPT-2026-101", siteName: "Bical Reforestation Site", barangay: "Bical", submittedByName: "Ana Staff" };
+  const pendingStatus = decision ? (decision.payload.approve ? "APPROVED" : "RETURNED") : "PENDING_ADMIN_APPROVAL";
+  return response(200, { success: true, data: { writesPaused: paused, nextCursor: null, visits: [
+    { ...draftVisit, id: "VPMV-ADMIN-DRAFT-001", actions: { view: true, saveDraft: false, submit: false, review: false } },
+    { ...baseVisit, ...labels, id: pendingReviewDetail.id, status: pendingStatus, version: pendingReviewDetail.version, dateMonitored: "2026-11-02",
+      progress: { completed: 2, total: 2, rechecking: 1 }, actions: { view: true, saveDraft: false, submit: false, review: !paused && pendingStatus === "PENDING_ADMIN_APPROVAL" } },
+    { ...baseVisit, ...labels, id: approvedDetail.id, status: "APPROVED", dateMonitored: "2026-10-01", submittedByName: "Ben Staff",
+      progress: { completed: 2, total: 2, rechecking: 0 }, actions: { view: true, saveDraft: false, submit: false, review: false } },
+  ] } });
+}
+
 function listResponse(url, activeFixture) {
+  if (activeFixture === "admin-records" || activeFixture === "admin-records-paused") return adminRecordsResponse(activeFixture === "admin-records-paused");
   if (activeFixture === "two-visits") return response(200, { success: true, data: { visits: [
     { ...returnedDetail, progress: { completed: 2, total: 2, rechecking: 0 } },
     { ...approvedDetail, progress: { completed: 2, total: 2, rechecking: 0 } },
@@ -239,6 +254,7 @@ export async function authenticatedFetch(path, options = {}) {
   if (detailMatch) {
     const visitId = decodeURIComponent(detailMatch[1]);
     if (options.method === "PUT") return saveResponse(visitId, options, activeFixture);
+    if (activeFixture === "admin-records-paused" && visitId === pendingReviewDetail.id) return response(200, { success: true, data: { ...pendingReviewDetail, writesPaused: true } });
     return detailResponse(visitId, activeFixture);
   }
   throw new Error(`Unregistered test API: ${path}`);

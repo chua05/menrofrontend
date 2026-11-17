@@ -52,9 +52,10 @@ const draftSnapshot = (rows, remarks, date) => JSON.stringify([rows.map(row =>
   ["sampleId", "condition", "heightCentimeters", "diameterCentimeters", "remarks", "investigationOutcome", "searchFindings"]
     .map(field => String(row[field] ?? ""))), remarks, date]);
 
-// `embedded`: rendered inside Survival Monitoring as the Staff/Admin "Monitor Planted Trees" modal.
+// `embedded`: rendered inside Survival Monitoring — the Staff "Monitor Planted Trees" modal, or (with
+// `reviewVisitId`) the Admin "Review Monitoring Visit" read-only form opened from the Monitoring Records table.
 // The same state, validation and API handlers serve both the embedded modal and the standalone route.
-export default function PermanentSampleMonitoringPage({ embedded = false, open: embeddedOpen = false, onClose } = {}) {
+export default function PermanentSampleMonitoringPage({ embedded = false, open: embeddedOpen = false, onClose, reviewVisitId = "", onReviewed } = {}) {
   const enabled = resolveVerifiedPlantingCohortEnabled();
   const { userRole } = useAuth();
   const [status, setStatus] = useState("");
@@ -82,7 +83,7 @@ export default function PermanentSampleMonitoringPage({ embedded = false, open: 
   const [evidenceUrls, setEvidenceUrls] = useState({});
   const [searchParams] = useSearchParams();
   // One-time arrival request from the Staff "Submit Monitoring Record" action (?start=1).
-  const startRequested = useRef(embedded || searchParams.get("start") === "1");
+  const startRequested = useRef(!reviewVisitId && (embedded || searchParams.get("start") === "1"));
   const [selectPrompt, setSelectPrompt] = useState(false);
   const [readiness, setReadiness] = useState(null);
   const unsaved = userRole === "staff" && ["DRAFT", "RETURNED"].includes(detail?.status) &&
@@ -186,9 +187,10 @@ export default function PermanentSampleMonitoringPage({ embedded = false, open: 
 
   useEffect(() => {
     if (!enabled || !["staff", "admin"].includes(userRole)) return undefined;
-    const timer = window.setTimeout(() => load(), 0);
+    // Admin opened one visit from the Monitoring Records table: load only that visit, no picker.
+    const timer = window.setTimeout(() => (reviewVisitId ? showVisit(reviewVisitId) : load()), 0);
     return () => window.clearTimeout(timer);
-  }, [enabled, load, userRole]);
+  }, [enabled, load, userRole, reviewVisitId, showVisit]);
 
   const allowDiscard = () => {
     if (!unsaved || window.confirm("This visit has unsaved assessments, photos or questions. Discard those changes?")) return true;
@@ -423,6 +425,7 @@ export default function PermanentSampleMonitoringPage({ embedded = false, open: 
       setDetail(data);
       setAssessments((data.sampleAssessments || []).map(formAssessment));
       setReviewReasons("");
+      onReviewed?.(data);
     } catch (requestError) {
       if (requestError.ambiguous) setUnconfirmed({ visitId: detail.id, review: approve, reasons: reviewReasons.trim() });
       setError(
@@ -435,11 +438,13 @@ export default function PermanentSampleMonitoringPage({ embedded = false, open: 
     }
   };
 
-  const modalHeader = badge => <header className="psm-header"><div className="psm-header-main"><span className="psm-header-icon"><Trees size={22} aria-hidden="true" /></span><div><h2>Monitor Planted Trees</h2><p>Monitor registered sample trees and document their current survival conditions.</p></div></div>
+  // Staff record visits ("Monitor Planted Trees"); Admin only reviews them.
+  const formTitle = userRole === "admin" ? "Review Monitoring Visit" : "Monitor Planted Trees";
+  const modalHeader = badge => <header className="psm-header"><div className="psm-header-main"><span className="psm-header-icon"><Trees size={22} aria-hidden="true" /></span><div><h2>{formTitle}</h2><p>{userRole === "admin" ? "Review Staff-recorded sample tree assessments and evidence." : "Monitor registered sample trees and document their current survival conditions."}</p></div></div>
     <div className="psm-header-actions">{badge && <span className="psm-status-badge">{badge}</span>}<button type="button" className="psm-close" data-modal-close="" disabled={saving || reviewing} aria-label="Close monitoring visit"><X size={18} aria-hidden="true" /></button></div></header>;
   if (!enabled && embedded) {
     // Never fall back to the legacy aggregate form: state why the permanent-sample form is unavailable.
-    return <ModalDialog open={embeddedOpen} label="Monitor Planted Trees" className="psm-dialog" onClose={() => onClose?.()}>
+    return <ModalDialog open={embeddedOpen} label={formTitle} className="psm-dialog" onClose={() => onClose?.()}>
       {modalHeader("")}
       <div className="psm-body"><p role="status">Permanent sample tree monitoring is not enabled in this environment.</p></div>
       <footer className="psm-footer" />
@@ -516,7 +521,7 @@ export default function PermanentSampleMonitoringPage({ embedded = false, open: 
     </>
   );
 
-  const dialog = (detail || embedded) && <ModalDialog open={embedded ? embeddedOpen : dialogOpen} label="Monitor Planted Trees" className="psm-dialog" dismissible={!saving && !reviewing} busy={saving || reviewing} onClose={embedded ? () => onClose?.() : () => setDialogOpen(false)}>
+  const dialog = (detail || embedded) && <ModalDialog open={embedded ? embeddedOpen : dialogOpen} label={formTitle} className="psm-dialog" dismissible={!saving && !reviewing} busy={saving || reviewing} onClose={embedded ? () => onClose?.() : () => setDialogOpen(false)}>
         {modalHeader(detail ? statusLabel(detail.status) : "")}
         {!detail ? <>
         {/* Embedded selection/blocker state: visit choice, backend blocker or readiness reasons above a read-only
@@ -524,12 +529,13 @@ export default function PermanentSampleMonitoringPage({ embedded = false, open: 
         <div className="psm-body psm-picker">
           <label className="psm-field">Verified Planting Report<select value="" disabled aria-describedby="psm-shell-reason"><option value="">No authorized visit selected</option></select></label>
           {visitList}
-          <p className="psm-note" id="psm-shell-reason">{page?.visits?.length ? "Select an authorized monitoring visit above to load its registered sample trees."
+          {!reviewVisitId && <p className="psm-note" id="psm-shell-reason">{page?.visits?.length ? "Select an authorized monitoring visit above to load its registered sample trees."
             : userRole === "admin" ? "No monitoring visit is available for review. MENRO Staff record and submit visits; Admin reviews, approves or returns them."
-            : "Assessment editing, evidence submission, Save Draft and Submit are unavailable until MENRO creates an authorized monitoring visit."}</p>
-          <PermanentSampleVisitShell describedBy="psm-shell-reason" />
+            : "Assessment editing, evidence submission, Save Draft and Submit are unavailable until MENRO creates an authorized monitoring visit."}</p>}
+          {/* The disabled Staff form shell (Take Photo, Upload, Save Draft, Submit) is never shown to Admin. */}
+          {userRole !== "admin" && <PermanentSampleVisitShell describedBy="psm-shell-reason" />}
         </div>
-        <footer className="psm-footer"><button type="button" disabled aria-describedby="psm-shell-reason">Save Draft</button><button type="button" className="psm-primary" aria-label="Submit Visit" disabled aria-describedby="psm-shell-reason">Submit Monitoring Visit</button></footer>
+        <footer className="psm-footer">{userRole !== "admin" && <><button type="button" disabled aria-describedby="psm-shell-reason">Save Draft</button><button type="button" className="psm-primary" aria-label="Submit Visit" disabled aria-describedby="psm-shell-reason">Submit Monitoring Visit</button></>}</footer>
         </> : <>
         <div className="psm-body">
         <label className="psm-field">Verified Planting Report<select value={detail.id} disabled={saving || Boolean(unconfirmed)} onChange={event => open(event.target.value)}>{(page?.visits || [detail]).map(row => <option key={row.id} value={row.id}>{row.id === detail.id && detail.visitContext?.reportNumber
@@ -578,13 +584,11 @@ export default function PermanentSampleMonitoringPage({ embedded = false, open: 
                     />
                   </label>
                   {reviewing && <p role="status">Submitting Admin decision…</p>}
-                  <button type="button" disabled={reviewing || Boolean(unconfirmed)} onClick={() => review(true)}>
-                    Approve Visit
-                  </button>
-                  <button type="button" disabled={reviewing || Boolean(unconfirmed)} onClick={() => review(false)}>
-                    Return for Correction
-                  </button>
+                  <p className="psm-note">Approve Visit and Return for Correction are at the bottom of this form.</p>
                 </section>
+              )}
+              {userRole === "admin" && detail.writesPaused && detail.status === "PENDING_ADMIN_APPROVAL" && (
+                <p role="status">Permanent-sample changes are paused, so Approve and Return are unavailable. This visit stays read-only.</p>
               )}
               {detail.status === "APPROVED" && <p role="status">Approved visits are read-only.</p>}
               <ul>
@@ -646,7 +650,10 @@ export default function PermanentSampleMonitoringPage({ embedded = false, open: 
         {/* Requester Clarification questions are a Staff monitoring action; Admin sees them read-only. */}
         {informationEnabled() && <MonitoringInformationPanel key={detail.id} visitId={detail.id} readOnly={detail.writesPaused || userRole !== "staff"} />}
         </div>
-        <footer className="psm-footer">{editable && <><button type="button" disabled={saving || Boolean(unconfirmed)} onClick={() => save(false)}>{saving ? "Saving..." : "Save Draft"}</button><button type="button" className="psm-primary" aria-label="Submit Visit" disabled={saving || Boolean(unconfirmed)} onClick={() => save(true)}>{saving ? "Submitting..." : "Submit Monitoring Visit"}</button></>}</footer>
+        <footer className="psm-footer">{userRole === "admin" && !detail.writesPaused && detail.status === "PENDING_ADMIN_APPROVAL" && <div role="group" aria-label="Admin visit decision" className="psm-admin-decision">
+          <button type="button" disabled={reviewing || Boolean(unconfirmed)} onClick={() => review(false)}>Return for Correction</button>
+          <button type="button" className="psm-primary" disabled={reviewing || Boolean(unconfirmed)} onClick={() => review(true)}>Approve Visit</button>
+        </div>}{editable && <><button type="button" disabled={saving || Boolean(unconfirmed)} onClick={() => save(false)}>{saving ? "Saving..." : "Save Draft"}</button><button type="button" className="psm-primary" aria-label="Submit Visit" disabled={saving || Boolean(unconfirmed)} onClick={() => save(true)}>{saving ? "Submitting..." : "Submit Monitoring Visit"}</button></>}</footer>
         </>}
       </ModalDialog>;
 
