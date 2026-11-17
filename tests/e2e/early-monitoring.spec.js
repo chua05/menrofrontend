@@ -9,8 +9,11 @@ const AGGREGATE_REPORT_NUMBERS = {"early-e2e-report-a":"TEST-EARLY-A","early-e2e
 const EMAILS = {
   participant: "phase2.participant@example.test",
   staff: "phase2.staff@example.test",
+  // A second Staff account: Staff cannot review or return their own observation.
+  reviewer: "phase2.reviewer@example.test",
   admin: "phase2.admin@example.test",
 };
+const ROUTE_ROLE = { reviewer: "staff" };
 
 async function login(page, role) {
   await page.goto("/login");
@@ -18,7 +21,7 @@ async function login(page, role) {
   await page.locator("#login-password").fill(PASSWORD);
   await page.locator("button.login-primary-btn").click();
   await expect(page).not.toHaveURL(/\/login/, { timeout: 20_000 });
-  await page.goto(`/${role}/survival-monitoring`);
+  await page.goto(`/${ROUTE_ROLE[role] || role}/survival-monitoring`);
   await expect(page.getByRole("heading", { name: "Survival Monitoring" })).toBeVisible();
 }
 
@@ -77,13 +80,16 @@ async function action(page, reportNumber, label, reason) {
 }
 
 test.describe.serial("Early Survival Monitoring authenticated acceptance", () => {
-  test("Staff submits Early, Staff reviews, and Admin approves without official KPI impact", async ({ browser }) => {
+  test("Staff submits Early, another Staff member reviews, and Admin approves without official KPI impact", async ({ browser }) => {
     const staff = await browser.newPage();
     await login(staff, "staff");
     await submit(staff, "early-e2e-report-a", "early-a.jpg", "2026-10-01");
     await expect(row(staff, "TEST-EARLY-A")).toContainText("Early: Submitted");
-    await action(staff, "TEST-EARLY-A", "Review");
     await staff.context().close();
+    const reviewer = await browser.newPage();
+    await login(reviewer, "reviewer");
+    await action(reviewer, "TEST-EARLY-A", "Review");
+    await reviewer.context().close();
 
     const admin = await browser.newPage();
     await login(admin, "admin");
@@ -98,8 +104,12 @@ test.describe.serial("Early Survival Monitoring authenticated acceptance", () =>
     const staff = await browser.newPage();
     await login(staff, "staff");
     await submit(staff, "early-e2e-report-b", "early-b-initial.jpg", "2026-10-01");
-    await action(staff, "TEST-EARLY-B", "Return for Rechecking", "Correct the early observation.");
     await staff.context().close();
+    const reviewer = await browser.newPage();
+    await login(reviewer, "reviewer");
+    await action(reviewer, "TEST-EARLY-B", "Return for Rechecking", "Correct the early observation.");
+    await expect(reviewer.getByRole("button", { name: "Edit and Resubmit" })).toHaveCount(0);
+    await reviewer.context().close();
 
     const correction = await browser.newPage();
     await login(correction, "staff");

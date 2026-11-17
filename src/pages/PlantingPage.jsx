@@ -1,4 +1,5 @@
 import VerifiedPlantingCohortsPage from "./VerifiedPlantingCohortsPage";
+import MonitoringStatusSection from "../components/MonitoringStatusSection";
 import { resolveVerifiedPlantingCohortEnabled } from "../utils/verifiedPlantingCohort";
 import PlantingPhotoControls from "../components/PlantingPhotoControls";
 import AttendanceUpload from "../components/AttendanceUpload";
@@ -3892,6 +3893,12 @@ export default function PlantingPage() {
                   formatDateTime={formatDateTime}
                 />
               </section>
+
+              {/* Read-only Monitoring Status for verified reports (Staff/Admin only); derived from the stored
+                  purpose policy and the existing cohort/readiness endpoints, never inferred. */}
+              {!isParticipant && [WORKFLOW_STATUS.COMPLETED, AWAITING_REMAINING_REPORT].includes(reportReviewStatus(selectedRecord)) && (
+                <MonitoringStatusSection report={selectedRecord} cohortEnabled={resolveVerifiedPlantingCohortEnabled()} />
+              )}
 
               {/* Contextual permanent-sample setup: only for approved reports, never a page-level panel.
                   Staff draft and submit sampling plans/baselines here; Admin reviews and approves them here

@@ -11,7 +11,7 @@ function fixture() {
    site:{siteName:"Bulan fixture site",latitude:12.662301,longitude:123.932983,coverageRadiusMeters:50},schedule:{startMonitoringDate:"2026-11-01",nextMonitoringDate:"2026-12-01",visitNumber:2,status:"Scheduled"},
    samples:["TREE-A","TREE-B"].map(sampleId=>({sampleId,species:"Narra",latitude:12.66231,longitude:123.93299,baseline:{heightCentimeters:70,diameterCentimeters:3,condition:"Healthy",date:"2026-10-01",remarks:"Baseline observed",photoCount:0}}))}}
 }
-async function setup(page,{error=0,timeout=false,returned=false,multiple=false,noSchedule=false}={}) {
+async function setup(page,{error=0,timeout=false,returned=false,multiple=false,noSchedule=false,role="staff"}={}) {
  const state={visit:fixture(),puts:[],uploads:[],questions:[],external:[],unregistered:[],reads:[]}; if(noSchedule)state.visit.visitContext.schedule={startMonitoringDate:null,nextMonitoringDate:null,visitNumber:null,status:null}; if(returned){state.visit.status="RETURNED";state.visit.sampleAssessments[0].evidenceHistory=[{revision:0}];}
  await page.addInitScript(()=>{window.__PHASE3C_GATE_ENABLED__="true";});
  await page.route("**/*",async r=>{
@@ -45,7 +45,7 @@ async function setup(page,{error=0,timeout=false,returned=false,multiple=false,n
   if(path.startsWith("/evidence/sample-monitoring/"))return r.fulfill({status:200,contentType:"image/png",body:Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jXz8AAAAASUVORK5CYII=","base64")});
   state.unregistered.push([method,path]); return json(r,"Unregistered test API request",500);
  });
- await page.goto(route); await page.getByRole("button",{name:visitId,exact:true}).click(); await expect(page.getByRole("dialog",{name:"Monitor Planted Trees"})).toBeVisible();
+ await page.goto(role==="staff"?route:`/${role}/permanent-sample-monitoring?role=${role}`); await page.getByRole("button",{name:visitId,exact:true}).click(); await expect(page.getByRole("dialog",{name:"Monitor Planted Trees"})).toBeVisible();
  return state;
 }
 const tree=async(page,id)=>{const button=page.locator(".psm-tree-list button").filter({hasText:id});if(await button.getAttribute("aria-expanded")!=="true")await button.click();};
@@ -221,4 +221,20 @@ test("sampling plan status in Section 1 is shown as a readable label, never a ra
   const status = section.locator("div").filter({ has: page.getByText("Sampling Plan Status", { exact: true }) }).locator("dd");
   await expect(status).toHaveText("Approved");
   await expect(section.getByText("APPROVED", { exact: true })).toHaveCount(0);
+});
+
+test("Admin sees Requester Clarification read-only: no question form and no request sent",async({page})=>{
+ const admin=await setup(page,{role:"admin"});
+ const panel=modal(page).getByRole("region",{name:"Optional requester information"});
+ await expect(panel).toBeVisible();
+ await expect(panel.getByRole("button",{name:"Request Information",exact:true})).toHaveCount(0);
+ await expect(panel.getByLabel("Question to the verified planting requester")).toHaveCount(0);
+ await expect(modal(page).getByRole("button",{name:"Save Draft"})).toHaveCount(0);
+ await expect(modal(page).getByRole("button",{name:"Submit Visit"})).toHaveCount(0);
+ expect(admin.questions).toEqual([]);expect(admin.puts).toEqual([]);expect(admin.unregistered).toEqual([]);
+});
+test("Staff keep the visit-level Requester Clarification form",async({page})=>{
+ await setup(page);
+ const panel=modal(page).getByRole("region",{name:"Optional requester information"}).last();
+ await expect(panel.getByRole("button",{name:"Request Information",exact:true})).toBeVisible();
 });

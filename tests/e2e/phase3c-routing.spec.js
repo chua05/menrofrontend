@@ -124,7 +124,7 @@ test("participant legacy monitoring links redirect to planting reports without s
   await expect(page.getByRole("link", { name: "My Planting Reports" })).toBeVisible();
 });
 
-const aggregateLabel = "Submit Aggregate Monitoring Record";
+const aggregateLabel = "Monitor Planted Trees";
 const primaryLabel = "Submit Monitoring Record";
 const sampleTreeLabel = "Monitor Permanent Sample Trees";
 const blueprintSections = ["1. Verified Planting Site Information", "2. Monitoring Summary & Automatic Schedule", "3. Assessment Progress",
@@ -802,4 +802,77 @@ test("archived and completed aggregate lifecycles and Admin users get no aggrega
   const adminRow = page.locator("tbody tr").filter({ hasText: "Bulan Test Site" });
   await adminRow.getByTitle("More actions").click();
   await expect(adminRow.getByRole("button", { name: "Record Aggregate Observation", exact: true })).toHaveCount(0);
+});
+
+// Aggregate observation role rules: only the original Staff reporter corrects a returned observation,
+// Staff never review their own observation, and Admin has no monitoring-creation affordances.
+const returnedEntry = (originalReporterId) => ({ id: "obs-returned", workflowVersion: 2, observationType: "official",
+  reviewStatus: "Returned for Rechecking", reviewVersion: 1, returnReason: "Recount the damaged trees.", originalReporterId,
+  monitoredDate: "2026-10-15", totalMonitored: 10, healthyCount: 9, damagedCount: 1, deadCount: 0, maturityStatus: "Immature" });
+const pendingEntry = (originalReporterId) => ({ ...returnedEntry(originalReporterId), id: "obs-pending", reviewStatus: "Pending Review", reviewVersion: 0, returnReason: "" });
+async function openLifecycleDetail(page, role, entry) {
+  await mockLegacyMonitoringApi(page, { monitoring: [{ ...aggregateLifecycle, history: [entry] }] });
+  await page.goto(`/${role}/survival-monitoring?role=${role}`);
+  await page.locator("tbody tr").filter({ hasText: "Bulan Test Site" }).getByTitle("View monitoring record").click();
+  await expect(page.getByRole("heading", { name: "Survival Monitoring Details" })).toBeVisible();
+}
+
+test("returned aggregate observation: Edit and Resubmit only for its original Staff reporter; reason stays visible", async ({ page }) => {
+  await isolate(page);
+  await openLifecycleDetail(page, "staff", returnedEntry("test-staff"));
+  await expect(page.getByText("Returned for rechecking: Recount the damaged trees.")).toBeVisible();
+  await page.getByRole("button", { name: "Edit and Resubmit" }).click();
+  await expect(page.locator(".sm-modal").getByRole("heading", { name: "Edit Returned Monitoring Observation" })).toBeVisible();
+});
+
+test("returned aggregate observation: other Staff and Admin see status and reason but no resubmit action", async ({ page }) => {
+  await isolate(page);
+  for (const [role, reporter] of [["staff", "other-staff"], ["admin", "test-staff"], ["admin", "test-admin"]]) {
+    await openLifecycleDetail(page, role, returnedEntry(reporter));
+    await expect(page.getByText("Returned for rechecking: Recount the damaged trees.")).toBeVisible();
+    await expect(page.getByRole("button", { name: "Edit and Resubmit" })).toHaveCount(0);
+    await page.unrouteAll({ behavior: "ignoreErrors" });
+    await isolate(page);
+  }
+});
+
+test("Staff cannot review their own pending aggregate observation; a different Staff member can", async ({ page }) => {
+  await isolate(page);
+  await openLifecycleDetail(page, "staff", pendingEntry("test-staff"));
+  await expect(page.getByRole("button", { name: "Review", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Return for Rechecking", exact: true })).toHaveCount(0);
+  await expect(page.getByText("You reported this observation. Another MENRO Staff member must review it.")).toBeVisible();
+  await page.unrouteAll({ behavior: "ignoreErrors" });
+  await isolate(page);
+  await openLifecycleDetail(page, "staff", pendingEntry("other-staff"));
+  await expect(page.getByRole("button", { name: "Review", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Return for Rechecking", exact: true })).toBeVisible();
+  await expect(page.getByText("You reported this observation.")).toHaveCount(0);
+});
+
+test("Admin's single Monitor Planted Trees button has no add icon; Staff's keeps it", async ({ page }) => {
+  await isolate(page);
+  await mockLegacyMonitoringApi(page);
+  for (const [role, icons] of [["staff", 1], ["admin", 0]]) {
+    await page.goto(`/${role}/survival-monitoring?role=${role}`);
+    const button = page.locator(".sm-header-actions").getByRole("button", { name: aggregateLabel, exact: true });
+    await expect(button).toHaveCount(1);
+    await expect(button.locator('[data-testid="monitor-planted-trees-add-icon"]')).toHaveCount(icons);
+  }
+});
+
+test("Admin keeps Archive with a confirmation; cancelling sends no archive request", async ({ page }) => {
+  await isolate(page);
+  await mockLegacyMonitoringApi(page, { monitoring: [aggregateLifecycle] });
+  const archiveCalls = [];
+  page.on("request", request => { if (request.url().includes("/archive")) archiveCalls.push(request.url()); });
+  await page.goto("/admin/survival-monitoring?role=admin");
+  const row = page.locator("tbody tr").filter({ hasText: "Bulan Test Site" });
+  await row.getByTitle("More actions").click();
+  let prompt = "";
+  page.once("dialog", dialog => { prompt = dialog.message(); return dialog.dismiss(); });
+  await row.getByRole("button", { name: "Archive Record", exact: true }).click();
+  await expect.poll(() => prompt).toContain("Archive monitoring record");
+  expect(archiveCalls).toEqual([]);
+  await expect(row).toHaveCount(1);
 });
