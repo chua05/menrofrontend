@@ -4,7 +4,7 @@ import { authenticatedFetch } from "../services/authenticatedApi";
 import { monitoringApiErrorMessage } from "../utils/monitoringApiError";
 import { withDeadline, RequestTimeoutError, READ_TIMEOUT_MS } from "../utils/requestTimeout";
 import { resolveVerifiedPlantingCohortEnabled } from "../utils/verifiedPlantingCohort";
-import { canDecideVisit, submittedVisits, visitMatchesRecordFilters, visitStatusLabel } from "../utils/adminMonitoringVisitReview";
+import { canDecideVisit, createLatestRequestGate, loadSubmittedVisitPages, visitMatchesRecordFilters, visitStatusLabel } from "../utils/adminMonitoringVisitReview";
 import { createEvidenceAttempt, assertEvidenceComplete } from "../utils/evidenceAttempt";
 import { useSearchParams } from "react-router-dom";
 import L from "leaflet";
@@ -55,7 +55,9 @@ const API_BASE_URL =
   import.meta.env.VITE_API_URL || "http://localhost:5000/api";
 
 const MAX_PHOTO_SIZE = 10 * 1024 * 1024;
-const MAX_SAMPLE_VISIT_PAGES = 4;
+// Admin Monitoring Records visit rows: read every page; the guard (10,000 rows) only stops a runaway cursor.
+const SAMPLE_VISIT_PAGE_SIZE = 50;
+const MAX_SAMPLE_VISIT_PAGES = 200;
 const MONITORING_CHART_INITIAL_SIZE = { width: 640, height: 260 };
 
 const CONDITION_META = {
@@ -845,31 +847,34 @@ export default function MonitoringPage() {
   ]);
 
   // Unfiltered authorized list (existing index), paged client-side; drafts dropped by submittedVisits.
+  // Every page is read (drafts share the pages, so stopping early could hide older pending visits); the
+  // page guard only stops a runaway cursor. Only the newest load may update the table, so a slow earlier
+  // load (initial, Retry or post-decision refresh) never overwrites newer rows.
+  const [sampleVisitsGate] = useState(createLatestRequestGate);
+  useEffect(() => () => sampleVisitsGate.cancel(), [sampleVisitsGate]);
   const loadSampleVisits = useCallback(async () => {
     if (!sampleVisitsEnabled) return;
-    setSampleVisitsState((current) => ({ ...current, loading: true, error: "" }));
+    const current = sampleVisitsGate.begin();
+    setSampleVisitsState((state) => ({ ...state, loading: true, error: "" }));
     try {
-      let cursor = "", rows = [], writesPaused = false, pages = 0;
-      do {
-        const query = new URLSearchParams({ limit: "50" });
+      const result = await loadSubmittedVisitPages(({ cursor, limit }) => {
+        const query = new URLSearchParams({ limit: String(limit), labels: "1" });
         if (cursor) query.set("cursor", cursor);
-        const data = await withDeadline((async () => {
+        return withDeadline((async () => {
           const response = await authenticatedFetch(`/verified-sample-monitoring/visits?${query}`);
           const body = await response.json().catch(() => ({}));
           if (!response.ok || !body.success) throw new Error(monitoringApiErrorMessage(body));
           return body.data || {};
         })(), READ_TIMEOUT_MS, () => new RequestTimeoutError("Monitoring visits could not be loaded in time. Please retry."));
-        rows = rows.concat(submittedVisits(data.visits));
-        writesPaused = writesPaused || Boolean(data.writesPaused);
-        cursor = data.nextCursor || "";
-        pages += 1;
-      } while (cursor && pages < MAX_SAMPLE_VISIT_PAGES);
-      setSampleVisits(rows);
-      setSampleVisitsState({ loading: false, error: "", writesPaused, truncated: Boolean(cursor) });
+      }, { pageSize: SAMPLE_VISIT_PAGE_SIZE, maxPages: MAX_SAMPLE_VISIT_PAGES, isCurrent: current });
+      if (!result || !current()) return;
+      setSampleVisits(result.rows);
+      setSampleVisitsState({ loading: false, error: "", writesPaused: result.writesPaused, labelsIncomplete: result.labelsIncomplete, truncated: result.truncated });
     } catch (error) {
-      setSampleVisitsState((current) => ({ ...current, loading: false, error: error.message || "Monitoring visits could not be loaded." }));
+      if (!current()) return;
+      setSampleVisitsState((state) => ({ ...state, loading: false, error: error.message || "Monitoring visits could not be loaded." }));
     }
-  }, [sampleVisitsEnabled]);
+  }, [sampleVisitsEnabled, sampleVisitsGate]);
 
   useEffect(() => {
     if (!sampleVisitsEnabled) return undefined;
@@ -1928,7 +1933,8 @@ export default function MonitoringPage() {
             </p>
           )}
           {sampleVisitsEnabled && sampleVisitsState.writesPaused && <p role="status" className="sm-site-sub">Permanent-sample changes are paused. Visits stay viewable; Approve and Return are unavailable.</p>}
-          {sampleVisitsEnabled && sampleVisitsState.truncated && <p role="status" className="sm-site-sub">Only the 200 most recent permanent-sample visits are listed.</p>}
+          {sampleVisitsEnabled && sampleVisitsState.labelsIncomplete && <p role="status" className="sm-site-sub">Some submitter, report or site labels could not be loaded and are shown as unavailable.</p>}
+          {sampleVisitsEnabled && sampleVisitsState.truncated && <p role="alert" className="sm-site-sub">Not every permanent-sample visit could be listed (more than {(MAX_SAMPLE_VISIT_PAGES * SAMPLE_VISIT_PAGE_SIZE).toLocaleString()} visits). Contact the system administrator.</p>}
         </div>
 
         <div className="sm-table-wrap">
@@ -2057,7 +2063,7 @@ export default function MonitoringPage() {
                       <td>—</td>
                       <td>
                         {visitStatusLabel(visit.status)}
-                        <span className="sm-site-sub">Submitted by {visit.submittedByName || "MENRO Staff"}</span>
+                        <span className="sm-site-sub">{visit.submittedByName === null ? "Submitter unavailable" : `Submitted by ${visit.submittedByName || "MENRO Staff"}`}</span>
                         <span className="sm-site-sub">Monitored {visit.dateMonitored ? formatDate(visit.dateMonitored) : "date not recorded"}</span>
                       </td>
                       <td>{`${visit.progress?.completed ?? 0}/${visit.progress?.total ?? 0} sample trees assessed`}</td>

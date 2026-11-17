@@ -266,7 +266,9 @@ export default function PermanentSampleMonitoringPage({ embedded = false, open: 
       if (unconfirmed.review !== undefined) {
         if (data.status !== (unconfirmed.review ? "APPROVED" : "RETURNED") || !unconfirmed.review && data.reviewReasons !== unconfirmed.reasons) { setError("The review outcome is not confirmed. Check again before another decision."); return; }
         setSavedDraft(draftSnapshot(data.sampleAssessments.map(formAssessment), data.visitRemarks || "", data.dateMonitored || dateMonitored));
-      resetEvidence(); setDetail(data); setAssessments(data.sampleAssessments.map(formAssessment)); setVisitRemarks(data.visitRemarks || ""); setDateMonitored(data.dateMonitored || dateMonitored); setUnconfirmed(null); setError(""); return;
+      resetEvidence(); setDetail(data); setAssessments(data.sampleAssessments.map(formAssessment)); setVisitRemarks(data.visitRemarks || ""); setDateMonitored(data.dateMonitored || dateMonitored); setUnconfirmed(null); setError("");
+      // A confirmed (previously timed-out) decision refreshes the Admin Monitoring Records table too.
+      onReviewed?.(data); return;
       }
       const equivalent = (left, right) => ["sampleId", "condition", "remarks", "investigationOutcome", "searchFindings"].every(key => String(left[key] || "").trim() === String(right[key] || "").trim()) && ["heightCentimeters", "diameterCentimeters"].every(key => (left[key] === "" || left[key] == null ? null : Number(left[key])) === (right[key] === "" || right[key] == null ? null : Number(right[key])));
       const matches = data.version > unconfirmed.expectedVersion && data.status === (unconfirmed.submit ? "PENDING_ADMIN_APPROVAL" : "DRAFT") && data.sampleAssessments.length === unconfirmed.assessments.length && unconfirmed.assessments.every(row => data.sampleAssessments.some(saved => equivalent(row, saved))) && String(data.visitRemarks || "") === unconfirmed.visitRemarks.trim() && data.dateMonitored === unconfirmed.dateMonitored;
@@ -529,7 +531,11 @@ export default function PermanentSampleMonitoringPage({ embedded = false, open: 
         <div className="psm-body psm-picker">
           <label className="psm-field">Verified Planting Report<select value="" disabled aria-describedby="psm-shell-reason"><option value="">No authorized visit selected</option></select></label>
           {visitList}
-          {!reviewVisitId && <p className="psm-note" id="psm-shell-reason">{page?.visits?.length ? "Select an authorized monitoring visit above to load its registered sample trees."
+          {/* Review mode (one visit from Monitoring Records) keeps the description the select points to. */}
+          {reviewVisitId ? <p className="psm-note" id="psm-shell-reason">{error && !loading
+            ? "The selected monitoring visit could not be opened. Close this form and try again from Monitoring Records."
+            : "Loading the selected monitoring visit…"}</p>
+          : <p className="psm-note" id="psm-shell-reason">{page?.visits?.length ? "Select an authorized monitoring visit above to load its registered sample trees."
             : userRole === "admin" ? "No monitoring visit is available for review. MENRO Staff record and submit visits; Admin reviews, approves or returns them."
             : "Assessment editing, evidence submission, Save Draft and Submit are unavailable until MENRO creates an authorized monitoring visit."}</p>}
           {/* The disabled Staff form shell (Take Photo, Upload, Save Draft, Submit) is never shown to Admin. */}

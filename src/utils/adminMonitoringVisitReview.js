@@ -35,3 +35,32 @@ export function visitMatchesRecordFilters(visit, { search = "", site = "All", sp
   return [visit.id, visit.reportNumber, visit.siteName, visit.barangay, visit.submittedByName, visitStatusLabel(visit.status), "permanent sample visit"]
     .filter(Boolean).join(" ").toLowerCase().includes(term);
 }
+
+// Reads every page of the authorized visit list. Drafts share the pages with submitted visits, so the
+// loop never stops early on a row count: it ends when the cursor ends, repeats, or the runaway guard is
+// reached (reported as truncated). Returns null as soon as a newer load has superseded this one.
+export async function loadSubmittedVisitPages(fetchPage, { pageSize = 50, maxPages = 200, isCurrent = () => true } = {}) {
+  let cursor = "", rows = [], writesPaused = false, labelsIncomplete = false, pages = 0;
+  const seen = new Set();
+  do {
+    const data = (await fetchPage({ cursor, limit: pageSize })) || {};
+    if (!isCurrent()) return null;
+    rows = rows.concat(submittedVisits(data.visits));
+    writesPaused = writesPaused || Boolean(data.writesPaused);
+    labelsIncomplete = labelsIncomplete || Boolean(data.labelsIncomplete);
+    if (cursor) seen.add(cursor);
+    cursor = data.nextCursor || "";
+    pages += 1;
+  } while (cursor && !seen.has(cursor) && pages < maxPages);
+  return { rows, writesPaused, labelsIncomplete, truncated: Boolean(cursor) };
+}
+
+// Latest-request-only guard: begin() returns an isCurrent() check that turns false once a newer
+// request begins or the owner cancels (unmount), so slower earlier responses are discarded.
+export function createLatestRequestGate() {
+  let latest = 0;
+  return {
+    begin() { const request = ++latest; return () => request === latest; },
+    cancel() { latest += 1; },
+  };
+}
