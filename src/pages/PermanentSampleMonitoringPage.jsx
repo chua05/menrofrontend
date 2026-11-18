@@ -55,9 +55,14 @@ const draftSnapshot = (rows, remarks, date) => JSON.stringify([rows.map(row =>
 // `embedded`: rendered inside Survival Monitoring — the Staff "Monitor Planted Trees" modal, or (with
 // `reviewVisitId`) the Admin "Review Monitoring Visit" read-only form opened from the Monitoring Records table.
 // The same state, validation and API handlers serve both the embedded modal and the standalone route.
-export default function PermanentSampleMonitoringPage({ embedded = false, open: embeddedOpen = false, onClose, reviewVisitId = "", onReviewed } = {}) {
+// `setupPendingReports` (Staff, embedded): read-only tracking rows for verified planting reports that have no
+// authorized monitoring visit yet. They can be selected to view truthful readiness; nothing becomes editable.
+export default function PermanentSampleMonitoringPage({ embedded = false, open: embeddedOpen = false, onClose, reviewVisitId = "", onReviewed, setupPendingReports = [] } = {}) {
   const enabled = resolveVerifiedPlantingCohortEnabled();
   const { userRole } = useAuth();
+  const pendingReports = userRole === "staff" && !reviewVisitId && Array.isArray(setupPendingReports) ? setupPendingReports : [];
+  const [pendingReportId, setPendingReportId] = useState("");
+  const pendingReport = pendingReports.find(row => row.plantingReportId === pendingReportId) || null;
   const [status, setStatus] = useState("");
   const [page, setPage] = useState(null);
   const [detail, setDetail] = useState(null);
@@ -204,8 +209,26 @@ export default function PermanentSampleMonitoringPage({ embedded = false, open: 
     if (unconfirmed) { if (detail?.id === visitId) { setDialogOpen(true); return; } setError("Check the saved outcome before switching visits."); return; }
     if (!refresh && detail?.id === visitId) { setDialogOpen(true); return; }
     if (!allowDiscard()) return;
+    setPendingReportId("");
     await showVisit(visitId);
   };
+
+  // Selecting a setup-pending verified report leaves any open visit (after the usual unsaved-changes check)
+  // and shows that report's read-only readiness. It never creates a visit or enables editing.
+  const choosePendingReport = (reportId) => {
+    if (operationBusy.current) return;
+    if (unconfirmed) { setError("Check the saved outcome before switching visits."); return; }
+    if (detail) {
+      if (!allowDiscard()) return;
+      resetEvidence(); setDetail(null); setAssessments([]);
+    }
+    setError("");
+    setPendingReportId(reportId);
+  };
+  const pendingOptions = pendingReports.length > 0 && <optgroup label="Setup Pending">
+    {pendingReports.map(row => <option key={row.plantingReportId} value={`pending:${row.plantingReportId}`}>
+      {`${row.reportNumber || "Verified planting report"} · ${row.siteName || "Planting site"} · ${row.status}`}</option>)}
+  </optgroup>;
 
   const updateAssessment = (sampleId, field, value) => {
     const resolved = field === "condition" && value !== "Needs Rechecking";
@@ -529,24 +552,38 @@ export default function PermanentSampleMonitoringPage({ embedded = false, open: 
         {/* Embedded selection/blocker state: visit choice, backend blocker or readiness reasons above a read-only
             seven-section form shell. Nothing is editable or submittable until a real authorized visit is opened. */}
         <div className="psm-body psm-picker">
-          <label className="psm-field">Verified Planting Report<select value="" disabled aria-describedby="psm-shell-reason"><option value="">No authorized visit selected</option></select></label>
+          <label className="psm-field">Verified Planting Report<select value={pendingReport ? `pending:${pendingReport.plantingReportId}` : ""}
+            disabled={!pendingReports.length} aria-describedby="psm-shell-reason"
+            onChange={event => { const value = event.target.value; if (value.startsWith("pending:")) choosePendingReport(value.slice(8)); else setPendingReportId(""); }}>
+            <option value="">No authorized visit selected</option>{pendingOptions}</select></label>
           {visitList}
+          {pendingReport && <section className="psm-readiness psm-setup-pending" aria-labelledby="psm-setup-pending-title" data-setup-pending-report={pendingReport.plantingReportId}>
+            <h2 id="psm-setup-pending-title">Setup pending: {pendingReport.reportNumber || "Verified planting report"}</h2>
+            <dl className="psm-info">
+              <div><dt>Monitoring requirement</dt><dd>{pendingReport.requirement}</dd></div>
+              <div><dt>Monitoring status</dt><dd>{pendingReport.status}</dd></div>
+              {pendingReport.setup && <div><dt>Setup progress</dt><dd>{pendingReport.setup}</dd></div>}
+            </dl>
+            {pendingReport.notes.map(note => <p key={note}>{note}</p>)}
+            {pendingReport.reasons.length > 0 && <ul aria-label="Why this report has no monitoring visit">{pendingReport.reasons.map(reason => <li key={reason}>{reason}</li>)}</ul>}
+          </section>}
           {/* Review mode (one visit from Monitoring Records) keeps the description the select points to. */}
           {reviewVisitId ? <p className="psm-note" id="psm-shell-reason">{error && !loading
             ? "The selected monitoring visit could not be opened. Close this form and try again from Monitoring Records."
             : "Loading the selected monitoring visit…"}</p>
-          : <p className="psm-note" id="psm-shell-reason">{page?.visits?.length ? "Select an authorized monitoring visit above to load its registered sample trees."
+          : <p className="psm-note" id="psm-shell-reason">{pendingReport ? "This verified planting report has no authorized monitoring visit yet. Assessment editing, evidence, Save Draft and Submit stay unavailable until MENRO creates one."
+            : page?.visits?.length ? "Select an authorized monitoring visit above to load its registered sample trees."
             : userRole === "admin" ? "No monitoring visit is available for review. MENRO Staff record and submit visits; Admin reviews, approves or returns them."
             : "Assessment editing, evidence submission, Save Draft and Submit are unavailable until MENRO creates an authorized monitoring visit."}</p>}
           {/* The disabled Staff form shell (Take Photo, Upload, Save Draft, Submit) is never shown to Admin. */}
-          {userRole !== "admin" && <PermanentSampleVisitShell describedBy="psm-shell-reason" />}
+          {userRole !== "admin" && <PermanentSampleVisitShell describedBy="psm-shell-reason" report={pendingReport} />}
         </div>
         <footer className="psm-footer">{userRole !== "admin" && <><button type="button" disabled aria-describedby="psm-shell-reason">Save Draft</button><button type="button" className="psm-primary" aria-label="Submit Visit" disabled aria-describedby="psm-shell-reason">Submit Monitoring Visit</button></>}</footer>
         </> : <>
         <div className="psm-body">
-        <label className="psm-field">Verified Planting Report<select value={detail.id} disabled={saving || Boolean(unconfirmed)} onChange={event => open(event.target.value)}>{(page?.visits || [detail]).map(row => <option key={row.id} value={row.id}>{row.id === detail.id && detail.visitContext?.reportNumber
+        <label className="psm-field">Verified Planting Report<select value={detail.id} disabled={saving || Boolean(unconfirmed)} onChange={event => { const value = event.target.value; if (value.startsWith("pending:")) choosePendingReport(value.slice(8)); else open(value); }}>{(page?.visits || [detail]).map(row => <option key={row.id} value={row.id}>{row.id === detail.id && detail.visitContext?.reportNumber
           ? `${detail.visitContext.reportNumber} · ${detail.visitContext.siteName || "Planting site"} · Visit ${row.visitDate || ""}`
-          : `Visit ${row.visitDate || row.id} · ${statusLabel(row.status)}`}</option>)}</select></label>
+          : `Visit ${row.visitDate || row.id} · ${statusLabel(row.status)}`}</option>)}{pendingOptions}</select></label>
         {error && <p role="alert" className="psm-error">{error}</p>}
         {unconfirmed ? <button type="button" disabled={saving} onClick={reconcile}>Check saved outcome</button> : <button type="button" disabled={saving || reviewing} onClick={() => open(detail.id, true)}>Reload visit</button>}
         <section className="psm-content">

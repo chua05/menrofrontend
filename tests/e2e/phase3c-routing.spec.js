@@ -13,10 +13,11 @@ async function expectMonitoringPage(page) {
   await expect(page.getByRole("heading", { name: monitoringLabel })).toBeVisible();
 }
 
-async function mockLegacyMonitoringApi(page, { monitoring = [] } = {}) {
+async function mockLegacyMonitoringApi(page, { monitoring = [], plantingReports = null } = {}) {
   await page.route("http://localhost:5000/api/**", (route) => {
     const url = new URL(route.request().url());
-    const data = url.pathname === "/api/monitoring" ? monitoring
+    const data = ["/api/monitoring", "/api/monitoring/my-records"].includes(url.pathname) ? monitoring
+      : plantingReports && ["/api/planting-reports", "/api/planting-reports/my-reports"].includes(url.pathname) ? plantingReports
       : url.pathname === "/api/planting-reports" ? [{
         id: "phase3c-staff-report",
         reportNumber: "TEST-STAFF-MONITORING",
@@ -206,7 +207,8 @@ test("zero authorized visits show the backend blockers inside the Staff modal an
 
 test("zero authorized visits still render the seven-section form shell read-only with truthful empty values", async ({ page }) => {
   await isolate(page);
-  await mockLegacyMonitoringApi(page);
+  // No verified planting report either, so nothing is selectable (Setup Pending is covered separately).
+  await mockLegacyMonitoringApi(page, { plantingReports: [] });
   const writes = [];
   page.on("request", request => { if (request.method() !== "GET" && request.url().includes("/api/verified-sample-monitoring")) writes.push(request.url()); });
   const dialog = await openStaffMonitoring(page, "empty");
@@ -1053,4 +1055,147 @@ test("review-mode form keeps an accessible description when the selected visit c
   await expect(select).toHaveAccessibleDescription(/could not be opened/);
   await expect(dialog.locator("#psm-shell-reason")).toHaveCount(1);
   await expect(dialog.getByRole("button", { name: /Approve Visit|Return for Correction|Save Draft|Submit/ })).toHaveCount(0);
+});
+
+// Read-only tracking of Admin-verified planting reports in Survival Monitoring (no records are created).
+const verifiedReport = (id, reportNumber, monitoring, extra = {}) => ({ id, reportNumber, verificationStatus: "Completed", reportingProgress: "Completed",
+  siteName: `${reportNumber} Site`, barangay: "Bical", plantingDate: "2026-10-01", acceptedQuantity: 20, ...(monitoring ? { reportingPolicy: { monitoring } } : {}), ...extra });
+const trackingReports = [
+  verifiedReport("report-spot", "RPT-2026-020", "STAFF_SPOT_CHECK"),
+  verifiedReport("report-perm", "RPT-2026-101", "PERMANENT_SAMPLE"),
+  verifiedReport("report-cohort", "RPT-2026-102", "PERMANENT_SAMPLE"),
+  verifiedReport("report-legacy", "RPT-2026-103", null),
+  verifiedReport("report-tracked", "RPT-2026-104", "STAFF_SPOT_CHECK"),
+  { ...verifiedReport("report-pending", "RPT-2026-105", "STAFF_SPOT_CHECK"), verificationStatus: "Pending", reportingProgress: "Awaiting Submission" },
+];
+const trackedLifecycle = { id: "MON-TRACKED-001", monitoringNumber: "MON-2026-004", plantingReportId: "report-tracked", plantingReportNumber: "RPT-2026-104",
+  siteName: "RPT-2026-104 Site", barangay: "Bical", species: "Narra", condition: "Healthy", status: "Active Monitoring", history: [] };
+// cohort-pending matches the mock readiness entry (sampling plan draft, scheduling policy pending).
+const trackingCohorts = [{ id: "cohort-pending", verifiedPlantedQuantity: 18, source: { plantingReportId: "report-cohort" }, samplingPlan: { status: "DRAFT" }, baseline: { approvalStatus: "NOT_STARTED" } }];
+const trackingRow = (page, id) => page.locator(`tr[data-tracking-row="${id}"]`);
+const shellValue = (dialog, label) => dialog.locator(".psm-shell dt", { hasText: label }).locator("xpath=following-sibling::dd");
+async function openTracking(page, role, { fixture = "", gate = true, cohorts = trackingCohorts } = {}) {
+  await isolate(page, gate);
+  await page.addInitScript(rows => { window.__PHASE3C_COHORTS__ = rows; }, cohorts);
+  await mockLegacyMonitoringApi(page, { monitoring: [trackedLifecycle], plantingReports: trackingReports });
+  const writes = [];
+  page.on("request", request => { if (request.method() !== "GET" && request.url().includes("/api/")) writes.push(request.url()); });
+  await page.goto(`/${role}/survival-monitoring?role=${role}${fixture ? `&fixture=${fixture}` : ""}`);
+  await expect(page.getByRole("heading", { name: "Survival Monitoring" })).toBeVisible();
+  return writes;
+}
+
+for (const role of ["staff", "admin"]) test(`${role} Monitoring Lifecycles list Admin-verified reports as tracking-only rows with their actual monitoring status`, async ({ page }) => {
+  const writes = await openTracking(page, role, { fixture: role === "admin" ? "admin-records" : "" });
+  const table = page.locator(".sm-records-card table.sm-table");
+  await expect(table.getByText("MON-2026-004")).toBeVisible();
+  await expect(page.locator("tr[data-tracking-row]")).toHaveCount(4);
+  await expect(trackingRow(page, "report-spot")).toContainText("Awaiting MENRO spot-check procedure");
+  await expect(trackingRow(page, "report-spot")).toContainText("Staff spot-check");
+  await expect(trackingRow(page, "report-perm")).toContainText("Monitoring setup pending");
+  await expect(trackingRow(page, "report-cohort")).toContainText("Monitoring setup in progress");
+  await expect(trackingRow(page, "report-cohort")).toContainText("Sampling plan: Draft · Baseline: Not Started · Visit: Not ready");
+  await expect(trackingRow(page, "report-legacy")).toContainText("Awaiting first observation");
+  // A report with an actual lifecycle is shown only by that lifecycle; unverified reports are not tracked.
+  await expect(trackingRow(page, "report-tracked")).toHaveCount(0);
+  await expect(trackingRow(page, "report-pending")).toHaveCount(0);
+  for (const id of ["report-spot", "report-perm", "report-cohort", "report-legacy"]) {
+    const row = trackingRow(page, id);
+    await expect(row).toContainText("Tracking only");
+    await expect(row).toContainText("No observation yet");
+    await expect(row.getByRole("button")).toHaveCount(0);
+    await expect(row.getByRole("link")).toHaveCount(1);
+  }
+  await expect(trackingRow(page, "report-spot").getByRole("link", { name: "View verified planting report RPT-2026-020" }))
+    .toHaveAttribute("href", `/${role}/planting-reports?report=report-spot`);
+  // Tracking rows are never counted as monitoring records or observations.
+  const footer = page.locator(".sm-table-footer");
+  await expect(footer).toContainText(role === "admin" ? "of 3 records" : "of 1 records");
+  await expect(footer).toContainText("4 verified planting reports awaiting monitoring (tracking only, not monitoring records)");
+  for (const label of ["Approved Full Cohorts", "Total Trees Monitored"])
+    await expect(page.locator(".sm-kpi-label", { hasText: label }).locator("xpath=following-sibling::div[contains(@class,'sm-kpi-value')]")).toHaveText("0");
+  if (role === "admin") await expect(page.locator(".sm-header-actions").getByRole("button", { name: /Monitor|Submit|Create/ })).toHaveCount(0);
+  // Existing filters: species/condition exclude tracking rows; search matches their status.
+  await page.locator(".sm-search-wrap input").fill("spot-check");
+  await expect(page.locator("tr[data-tracking-row]")).toHaveCount(1);
+  await page.locator(".sm-search-wrap input").fill("");
+  await page.locator("select").filter({ hasText: "All Conditions" }).selectOption("Healthy");
+  await expect(page.locator("tr[data-tracking-row]")).toHaveCount(0);
+  await expect(table.getByText("MON-2026-004")).toBeVisible();
+  expect(writes).toEqual([]);
+});
+
+test("Staff Monitor Planted Trees offers verified reports under Setup Pending with truthful readiness and nothing editable", async ({ page }) => {
+  const writes = await openTracking(page, "staff", { fixture: "empty" });
+  await page.locator(".sm-header-actions").getByRole("button", { name: "Monitor Planted Trees", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "Monitor Planted Trees" });
+  await expect(dialog).toBeVisible();
+  const select = dialog.getByRole("combobox", { name: "Verified Planting Report", exact: true });
+  await expect(select).toBeEnabled();
+  await expect(select.locator('optgroup[label="Setup Pending"] option')).toHaveCount(4);
+  await expect(select.locator('option[value="pending:report-tracked"], option[value="pending:report-pending"]')).toHaveCount(0);
+  await select.selectOption("pending:report-spot");
+  const pending = dialog.locator('section[data-setup-pending-report="report-spot"]');
+  await expect(pending.getByRole("heading", { name: "Setup pending: RPT-2026-020" })).toBeVisible();
+  await expect(pending).toContainText("Staff spot-check");
+  await expect(pending).toContainText("Awaiting MENRO spot-check procedure");
+  await expect(pending).toContainText(/Monitoring workflow pending MENRO policy/);
+  await expect(shellValue(dialog, "Planting Report ID")).toHaveText("RPT-2026-020");
+  await expect(shellValue(dialog, "Planting Report Status")).toHaveText("Verified");
+  await expect(shellValue(dialog, "Sampling Plan Status")).toHaveText("Not applicable (Staff spot-check)");
+  await expect(select).toHaveAccessibleDescription(/no authorized monitoring visit yet/);
+  for (const name of ["Take Photo", "Upload Existing Photo", "Verify Photo Location", "Save Draft", "Submit Visit"])
+    await expect(dialog.getByRole("button", { name, exact: true })).toBeDisabled();
+  await expect(dialog.getByLabel("Date Monitored *", { exact: true })).toBeDisabled();
+  await select.selectOption("pending:report-cohort");
+  const cohort = dialog.locator('section[data-setup-pending-report="report-cohort"]');
+  await expect(cohort).toContainText("Sampling plan: Draft · Baseline: Not Started · Visit: Not ready");
+  await expect(cohort.getByRole("list", { name: "Why this report has no monitoring visit" })).toContainText("New monitoring visits can start only after MENRO approves the visit scheduling policy.");
+  await expect(shellValue(dialog, "Sampling Plan Status")).toHaveText("Draft");
+  await expect(shellValue(dialog, "Verified Planted Quantity")).toHaveText("18");
+  await expect(dialog.getByRole("button", { name: "Save Draft", exact: true })).toBeDisabled();
+  expect(writes).toEqual([]);
+});
+
+test("real visit selection still works beside Setup Pending reports", async ({ page }) => {
+  await openTracking(page, "staff", { fixture: "returned" });
+  await page.locator(".sm-header-actions").getByRole("button", { name: "Monitor Planted Trees", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "Monitor Planted Trees" });
+  const select = dialog.getByRole("combobox", { name: "Verified Planting Report", exact: true });
+  await expect(select).toHaveValue("VPMV-RETURNED-001");
+  await expect(select.locator('optgroup[label="Setup Pending"] option')).toHaveCount(4);
+  await select.selectOption("pending:report-perm");
+  await expect(dialog.locator('section[data-setup-pending-report="report-perm"]')).toContainText("Monitoring setup pending");
+  await expect(dialog.getByRole("button", { name: "Save Draft", exact: true })).toBeDisabled();
+  await dialog.locator(".psm-visit-choice").first().click();
+  await expect(select).toHaveValue("VPMV-RETURNED-001");
+  await expect(dialog.locator("section[data-setup-pending-report]")).toHaveCount(0);
+});
+
+test("a failed monitoring-setup lookup keeps tracking rows truthful and can be retried", async ({ page }) => {
+  await openTracking(page, "staff", { fixture: "tracking-cohort-error" });
+  const header = page.locator(".sm-records-header");
+  await expect(header.getByRole("alert")).toContainText("Monitoring setup status for verified planting reports could not be loaded");
+  await expect(trackingRow(page, "report-cohort")).toContainText("Monitoring setup status unavailable");
+  await expect(trackingRow(page, "report-spot")).toContainText("Awaiting MENRO spot-check procedure");
+  await page.evaluate(() => { window.__PHASE3C_COHORTS_RECOVERED__ = true; });
+  await header.getByRole("button", { name: "Retry setup status" }).click();
+  await expect(trackingRow(page, "report-cohort")).toContainText("Monitoring setup in progress");
+  await expect(header.getByRole("alert")).toHaveCount(0);
+});
+
+test("feature-disabled: tracking rows stay truthful and no cohort or readiness lookup is made", async ({ page }) => {
+  await openTracking(page, "staff", { gate: false });
+  await expect(trackingRow(page, "report-perm")).toContainText("Permanent-sample monitoring not available");
+  await expect(trackingRow(page, "report-spot")).toContainText("Awaiting MENRO spot-check procedure");
+  expect(await page.evaluate(() => [window.__PHASE3C_COHORT_CALLS__ || 0, window.__PHASE3C_READINESS_CALLS__ || 0])).toEqual([0, 0]);
+});
+
+test("Participants never reach tracking rows or trigger setup lookups", async ({ page }) => {
+  await isolate(page);
+  await mockLegacyMonitoringApi(page, { monitoring: [trackedLifecycle], plantingReports: trackingReports });
+  await page.goto("/participant/survival-monitoring?role=participant");
+  await expect(page).toHaveURL(/\/participant\/my-planting-reports/);
+  await expect(page.locator("tr[data-tracking-row]")).toHaveCount(0);
+  expect(await page.evaluate(() => window.__PHASE3C_COHORT_CALLS__ || 0)).toBe(0);
 });
