@@ -23,7 +23,7 @@ async function login(page, role) {
 async function openReport(page, reviewStatus) {
   const row = page.locator("tr", { hasText: SITE });
   await expect(row).toHaveCount(1, { timeout: 20_000 });
-  await expect(row.locator(".pr-review-line")).toHaveText(`Review Status: ${reviewStatus}`);
+  await expect(row.locator(".pr-review-line")).toHaveText(`Status: ${reviewStatus}`);
   await row.getByRole("button", { name: /^View / }).click();
   const drawer = page.getByRole("dialog", { name: /Planting report/ });
   await expect(drawer).toBeVisible();
@@ -96,7 +96,7 @@ test("Staff can edit only the returned fields and resubmits directly to Admin", 
   await expect(form).toBeHidden({ timeout: 20_000 });
 
   const row = page.locator("tr", { hasText: SITE });
-  await expect(row.locator(".pr-review-line")).toHaveText("Review Status: Submitted", { timeout: 20_000 });
+  await expect(row.locator(".pr-review-line")).toHaveText("Status: Submitted", { timeout: 20_000 });
   expect(problems).toEqual([]);
 });
 
@@ -115,7 +115,7 @@ test("Admin sees the corrected revision with history and verifies it to Verified
   await expect(drawer.locator(".pr-drawer-heading-meta .pr-status-badge")).toHaveText(["Submitted", "Verified"]);
   await drawer.locator(".pr-drawer-close").click();
   const row = page.locator("tr", { hasText: SITE });
-  await expect(row.locator(".pr-review-line")).toHaveText("Review Status: Verified");
+  await expect(row.locator(".pr-review-line")).toHaveText("Status: Verified");
   await expect(row).toContainText("13 reported planted / 15 released"); // Narra 10 - 2 leftovers + Molave 5
   expect(problems).toEqual([]);
 });

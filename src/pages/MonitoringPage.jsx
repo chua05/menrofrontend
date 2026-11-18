@@ -1,5 +1,10 @@
 import PermanentSampleMonitoringPage from "./PermanentSampleMonitoringPage";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { authenticatedFetch } from "../services/authenticatedApi";
+import { monitoringApiErrorMessage } from "../utils/monitoringApiError";
+import { withDeadline, RequestTimeoutError, READ_TIMEOUT_MS } from "../utils/requestTimeout";
+import { resolveVerifiedPlantingCohortEnabled } from "../utils/verifiedPlantingCohort";
+import { canDecideVisit, createLatestRequestGate, loadSubmittedVisitPages, visitMatchesRecordFilters, visitStatusLabel } from "../utils/adminMonitoringVisitReview";
 import { createEvidenceAttempt, assertEvidenceComplete } from "../utils/evidenceAttempt";
 import { useSearchParams } from "react-router-dom";
 import L from "leaflet";
@@ -50,6 +55,9 @@ const API_BASE_URL =
   import.meta.env.VITE_API_URL || "http://localhost:5000/api";
 
 const MAX_PHOTO_SIZE = 10 * 1024 * 1024;
+// Admin Monitoring Records visit rows: read every page; the guard (10,000 rows) only stops a runaway cursor.
+const SAMPLE_VISIT_PAGE_SIZE = 50;
+const MAX_SAMPLE_VISIT_PAGES = 200;
 const MONITORING_CHART_INITIAL_SIZE = { width: 640, height: 260 };
 
 const CONDITION_META = {
@@ -470,6 +478,11 @@ export default function MonitoringPage() {
   const [editingObservation, setEditingObservation] = useState(null);
   const [sampleFormMounted, setSampleFormMounted] = useState(false);
   const [sampleFormOpen, setSampleFormOpen] = useState(false);
+  // Admin only: Staff-submitted permanent-sample visits shown as rows in Monitoring Records.
+  const sampleVisitsEnabled = isAdmin && resolveVerifiedPlantingCohortEnabled();
+  const [sampleVisits, setSampleVisits] = useState([]);
+  const [sampleVisitsState, setSampleVisitsState] = useState({ loading: false, error: "", writesPaused: false, truncated: false });
+  const [reviewVisitId, setReviewVisitId] = useState("");
   const [retainEvidenceRevision, setRetainEvidenceRevision] = useState("");
   const [openActionMenuId, setOpenActionMenuId] = useState(null);
 
@@ -769,9 +782,9 @@ export default function MonitoringPage() {
 
   const siteOptions = useMemo(
     () =>
-      [...new Set(visibleRecords.map((record) => record.siteName).filter(Boolean))]
+      [...new Set([...visibleRecords, ...sampleVisits].map((record) => record.siteName).filter(Boolean))]
         .sort((a, b) => a.localeCompare(b)),
-    [visibleRecords]
+    [visibleRecords, sampleVisits]
   );
 
   const speciesOptions = useMemo(
@@ -832,6 +845,47 @@ export default function MonitoringPage() {
     dateFrom,
     dateTo,
   ]);
+
+  // Unfiltered authorized list (existing index), paged client-side; drafts dropped by submittedVisits.
+  // Every page is read (drafts share the pages, so stopping early could hide older pending visits); the
+  // page guard only stops a runaway cursor. Only the newest load may update the table, so a slow earlier
+  // load (initial, Retry or post-decision refresh) never overwrites newer rows.
+  const [sampleVisitsGate] = useState(createLatestRequestGate);
+  useEffect(() => () => sampleVisitsGate.cancel(), [sampleVisitsGate]);
+  const loadSampleVisits = useCallback(async () => {
+    if (!sampleVisitsEnabled) return;
+    const current = sampleVisitsGate.begin();
+    setSampleVisitsState((state) => ({ ...state, loading: true, error: "" }));
+    try {
+      const result = await loadSubmittedVisitPages(({ cursor, limit }) => {
+        const query = new URLSearchParams({ limit: String(limit), labels: "1" });
+        if (cursor) query.set("cursor", cursor);
+        return withDeadline((async () => {
+          const response = await authenticatedFetch(`/verified-sample-monitoring/visits?${query}`);
+          const body = await response.json().catch(() => ({}));
+          if (!response.ok || !body.success) throw new Error(monitoringApiErrorMessage(body));
+          return body.data || {};
+        })(), READ_TIMEOUT_MS, () => new RequestTimeoutError("Monitoring visits could not be loaded in time. Please retry."));
+      }, { pageSize: SAMPLE_VISIT_PAGE_SIZE, maxPages: MAX_SAMPLE_VISIT_PAGES, isCurrent: current });
+      if (!result || !current()) return;
+      setSampleVisits(result.rows);
+      setSampleVisitsState({ loading: false, error: "", writesPaused: result.writesPaused, labelsIncomplete: result.labelsIncomplete, truncated: result.truncated });
+    } catch (error) {
+      if (!current()) return;
+      setSampleVisitsState((state) => ({ ...state, loading: false, error: error.message || "Monitoring visits could not be loaded." }));
+    }
+  }, [sampleVisitsEnabled, sampleVisitsGate]);
+
+  useEffect(() => {
+    if (!sampleVisitsEnabled) return undefined;
+    const timer = window.setTimeout(() => loadSampleVisits(), 0);
+    return () => window.clearTimeout(timer);
+  }, [sampleVisitsEnabled, loadSampleVisits]);
+
+  const filteredSampleVisits = useMemo(() => sampleVisits.filter((visit) => visitMatchesRecordFilters(visit, {
+    search: searchTerm, site: siteFilter, species: speciesFilter, condition: conditionFilter, from: dateFrom, to: dateTo,
+  })), [sampleVisits, searchTerm, siteFilter, speciesFilter, conditionFilter, dateFrom, dateTo]);
+  const totalRows = filteredRecords.length + filteredSampleVisits.length;
 
   const officialEntries = useMemo(() => visibleRecords.flatMap((record) => {
     const approved = (record.history || []).filter((entry) =>
@@ -1521,6 +1575,13 @@ export default function MonitoringPage() {
         </div>
       </div>
 
+      {/* Admin: the read-only seven-section form for one visit chosen from Monitoring Records. Remounted per
+          visit; Approve/Return sit at its bottom and refresh the table after a decision. */}
+      {sampleVisitsEnabled && reviewVisitId && (
+        <PermanentSampleMonitoringPage key={reviewVisitId} embedded open reviewVisitId={reviewVisitId}
+          onClose={() => setReviewVisitId("")} onReviewed={() => loadSampleVisits()} />
+      )}
+
       {/* Mounted on first use and kept mounted, so unsaved per-tree edits survive closing and reopening. */}
       {isStaff && sampleFormMounted && (
         <PermanentSampleMonitoringPage embedded open={sampleFormOpen} onClose={() => setSampleFormOpen(false)} />
@@ -1864,6 +1925,16 @@ export default function MonitoringPage() {
       <section className="sm-records-card">
         <div className="sm-records-header">
           <h2>Monitoring Lifecycles</h2>
+          {sampleVisitsEnabled && sampleVisitsState.loading && <p role="status" className="sm-site-sub">Loading permanent-sample monitoring visits…</p>}
+          {sampleVisitsEnabled && sampleVisitsState.error && (
+            <p role="alert" className="sm-site-sub">
+              {sampleVisitsState.error} Aggregate monitoring records are unaffected.{" "}
+              <button type="button" className="sm-text-button" onClick={loadSampleVisits}>Retry</button>
+            </p>
+          )}
+          {sampleVisitsEnabled && sampleVisitsState.writesPaused && <p role="status" className="sm-site-sub">Permanent-sample changes are paused. Visits stay viewable; Approve and Return are unavailable.</p>}
+          {sampleVisitsEnabled && sampleVisitsState.labelsIncomplete && <p role="status" className="sm-site-sub">Some submitter, report or site labels could not be loaded and are shown as unavailable.</p>}
+          {sampleVisitsEnabled && sampleVisitsState.truncated && <p role="alert" className="sm-site-sub">Not every permanent-sample visit could be listed (more than {(MAX_SAMPLE_VISIT_PAGES * SAMPLE_VISIT_PAGE_SIZE).toLocaleString()} visits). Contact the system administrator.</p>}
         </div>
 
         <div className="sm-table-wrap">
@@ -1881,7 +1952,7 @@ export default function MonitoringPage() {
               </tr>
             </thead>
 
-            {filteredRecords.length > 0 && (
+            {totalRows > 0 && (
               <tbody>
                 {filteredRecords.map((record) => {
                   const meta =
@@ -1973,11 +2044,50 @@ export default function MonitoringPage() {
                     </tr>
                   );
                 })}
+                {/* Admin only: Staff-submitted permanent-sample visits (never drafts). View opens the read-only
+                    seven-section form; Approve/Return appear at its bottom only for eligible pending visits. */}
+                {filteredSampleVisits.map((visit) => {
+                  const decidable = canDecideVisit(visit, { writesPaused: sampleVisitsState.writesPaused });
+                  return (
+                    <tr key={`visit-${visit.id}`} data-sample-visit-row={visit.id}>
+                      <td>
+                        <span className="sm-record-id">{visit.id}</span>
+                        <span className="sm-site-sub">Permanent sample visit</span>
+                      </td>
+                      <td>{visit.reportNumber || "—"}</td>
+                      <td>
+                        <strong className="sm-site-name">{visit.siteName || "—"}</strong>
+                        {visit.barangay && <span className="sm-site-sub">Barangay {visit.barangay}</span>}
+                      </td>
+                      <td>{formatDate(visit.visitDate)}<span className="sm-site-sub">Scheduled visit</span></td>
+                      <td>—</td>
+                      <td>
+                        {visitStatusLabel(visit.status)}
+                        <span className="sm-site-sub">{visit.submittedByName === null ? "Submitter unavailable" : `Submitted by ${visit.submittedByName || "MENRO Staff"}`}</span>
+                        <span className="sm-site-sub">Monitored {visit.dateMonitored ? formatDate(visit.dateMonitored) : "date not recorded"}</span>
+                      </td>
+                      <td>{`${visit.progress?.completed ?? 0}/${visit.progress?.total ?? 0} sample trees assessed`}</td>
+                      <td>
+                        <div className="sm-row-actions">
+                          <button
+                            type="button"
+                            className="sm-row-icon-button"
+                            title={decidable ? "View monitoring visit (awaiting Admin review)" : "View monitoring visit"}
+                            aria-label={`View monitoring visit ${visit.id}`}
+                            onClick={() => setReviewVisitId(visit.id)}
+                          >
+                            <FiEye size={14} />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             )}
           </table>
 
-          {filteredRecords.length === 0 && (
+          {totalRows === 0 && (
             <div className="sm-empty-state">
               <div className="sm-empty-illustration">
                 <FiFileText size={28} />
@@ -1987,7 +2097,7 @@ export default function MonitoringPage() {
               <strong>
                 {loadError
                   ? "Monitoring data unavailable"
-                  : visibleRecords.length === 0
+                  : visibleRecords.length === 0 && sampleVisits.length === 0
                   ? "No monitoring records yet"
                   : "No matching monitoring records"}
               </strong>
@@ -1995,7 +2105,7 @@ export default function MonitoringPage() {
               <p>
                 {loadError
                   ? "Refresh the page to try loading your records again."
-                  : visibleRecords.length === 0
+                  : visibleRecords.length === 0 && sampleVisits.length === 0
                   ? isParticipant
                     ? "Your monitoring records will appear here after you submit updates for verified planting reports."
                     : "Survival monitoring records will appear here after MENRO Staff submit authorized observations."
@@ -2007,8 +2117,8 @@ export default function MonitoringPage() {
 
         <div className="sm-table-footer">
           <span>
-            Showing {filteredRecords.length === 0 ? 0 : 1} to{" "}
-            {filteredRecords.length} of {filteredRecords.length} records
+            Showing {totalRows === 0 ? 0 : 1} to{" "}
+            {totalRows} of {totalRows} records
           </span>
 
           <div className="sm-pagination">

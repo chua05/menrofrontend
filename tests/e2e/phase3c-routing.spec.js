@@ -274,7 +274,7 @@ test("Admin arriving with a start request never auto-opens a Staff visit", async
   await isolate(page);
   await page.goto("/admin/permanent-sample-monitoring?role=admin&fixture=returned&start=1");
   await expect(page.getByRole("button", { name: "VPMV-RETURNED-001", exact: true })).toBeVisible();
-  await expect(page.getByRole("dialog", { name: "Monitor Planted Trees" })).toHaveCount(0);
+  await expect(page.getByRole("dialog", { name: /Monitor Planted Trees|Review Monitoring Visit/ })).toHaveCount(0);
 });
 
 test("Admin page has no Monitor Planted Trees button, no baselines panel, no review link and no sidebar item", async ({ page }) => {
@@ -299,7 +299,7 @@ test("Admin Survival Monitoring never mounts the Staff monitoring modal and send
   await page.goto("/admin/survival-monitoring?role=admin&fixture=empty");
   await expect(page.getByRole("heading", { name: "Survival Monitoring" })).toBeVisible();
   await expect(page.locator(".sm-header-actions").getByRole("button", { name: /Monitor|Submit/ })).toHaveCount(0);
-  await expect(page.getByRole("dialog", { name: "Monitor Planted Trees" })).toHaveCount(0);
+  await expect(page.getByRole("dialog", { name: /Monitor Planted Trees|Review Monitoring Visit/ })).toHaveCount(0);
   await expect(page.locator(".psm-shell")).toHaveCount(0);
   expect(writes).toEqual([]);
 });
@@ -315,7 +315,7 @@ test("Admin review route opens the one visit awaiting review in the read-only se
   await isolate(page);
   await page.goto("/admin/permanent-sample-monitoring?role=admin&fixture=review-pending");
   await page.getByRole("button", { name: "VPMV-PENDING-REVIEW-001", exact: true }).click();
-  const dialog = page.getByRole("dialog", { name: "Monitor Planted Trees" });
+  const dialog = page.getByRole("dialog", { name: "Review Monitoring Visit" });
   await expect(dialog).toBeVisible();
   await expect(dialog.locator(".psm-status-badge")).toHaveText("Pending Admin Review");
   for (const heading of blueprintSections) await expect(dialog.getByRole("heading", { name: heading, exact: true })).toBeVisible();
@@ -713,7 +713,7 @@ test("admin validates return reason and posts one versioned approval decision", 
   await page.goto("/admin/permanent-sample-monitoring?role=admin&fixture=review-pending");
   await page.getByRole("button", { name: "VPMV-PENDING-REVIEW-001" }).click();
   await page.getByRole("button", { name: "Return for Correction" }).click();
-  await expect(page.getByRole("dialog",{name:"Monitor Planted Trees"}).getByRole("alert")).toContainText("A return reason is required");
+  await expect(page.getByRole("dialog",{name:"Review Monitoring Visit"}).getByRole("alert")).toContainText("A return reason is required");
   expect(await page.evaluate(() => window.__PHASE3C_REVIEWS__ || [])).toHaveLength(0);
 
   await page.getByRole("button", { name: "Approve Visit" }).click();
@@ -752,13 +752,13 @@ test("stale and failed admin reviews retain the authoritative pending state", as
   await page.goto("/admin/permanent-sample-monitoring?role=admin&fixture=review-stale");
   await page.getByRole("button", { name: "VPMV-PENDING-REVIEW-001" }).click();
   await page.getByRole("button", { name: "Approve Visit" }).click();
-  await expect(page.getByRole("dialog",{name:"Monitor Planted Trees"}).getByRole("alert")).toContainText("This monitoring visit changed.");
+  await expect(page.getByRole("dialog",{name:"Review Monitoring Visit"}).getByRole("alert")).toContainText("This monitoring visit changed.");
   await expect(page.getByText("Pending Admin Review · Revision 11")).toBeVisible();
 
   await page.goto("/admin/permanent-sample-monitoring?role=admin&fixture=review-failure");
   await page.getByRole("button", { name: "VPMV-PENDING-REVIEW-001" }).click();
   await page.getByRole("button", { name: "Approve Visit" }).click();
-  await expect(page.getByRole("dialog",{name:"Monitor Planted Trees"}).getByRole("alert")).toContainText("Review service is unavailable.");
+  await expect(page.getByRole("dialog",{name:"Review Monitoring Visit"}).getByRole("alert")).toContainText("Review service is unavailable.");
 });
 
 // Historical aggregate monitoring: follow-up observations for an existing lifecycle stay available from the
@@ -872,4 +872,185 @@ test("Admin keeps Archive with a confirmation; cancelling sends no archive reque
   await expect.poll(() => prompt).toContain("Archive monitoring record");
   expect(archiveCalls).toEqual([]);
   await expect(row).toHaveCount(1);
+});
+
+// Admin Monitoring Records: Staff-submitted permanent-sample visits share the existing table and View action.
+const visitRow = (page, id) => page.locator(`tr[data-sample-visit-row="${id}"]`);
+async function openAdminRecords(page, fixture = "admin-records") {
+  await isolate(page);
+  await mockLegacyMonitoringApi(page, { monitoring: [{ id: "MON-AGG-001", monitoringNumber: "MON-2026-001", plantingReportId: "phase3c-staff-report", plantingReportNumber: "TEST-STAFF-MONITORING", siteName: "Bulan Test Site", barangay: "Bulan", species: "Narra", condition: "Healthy", status: "Active Monitoring", history: [] }] });
+  const writes = [];
+  page.on("request", request => { if (request.method() !== "GET" && /\/api\/(monitoring|sample-monitoring-information)/.test(request.url())) writes.push(request.url()); });
+  await page.goto(`/admin/survival-monitoring?role=admin&fixture=${fixture}`);
+  await expect(page.getByRole("heading", { name: "Survival Monitoring" })).toBeVisible();
+  return writes;
+}
+
+test("Admin Monitoring Records lists submitted permanent-sample visits beside aggregate records, never drafts, with no separate section", async ({ page }) => {
+  await openAdminRecords(page);
+  const table = page.locator(".sm-records-card table.sm-table");
+  await expect(table.getByText("MON-2026-001")).toBeVisible();
+  const pending = visitRow(page, "VPMV-PENDING-REVIEW-001");
+  await expect(pending).toContainText("RPT-2026-101");
+  await expect(pending).toContainText("Bical Reforestation Site");
+  await expect(pending).toContainText("Pending Admin Review");
+  await expect(pending).toContainText("Submitted by Ana Staff");
+  await expect(pending).toContainText("Monitored");
+  await expect(pending).toContainText("2/2 sample trees assessed");
+  await expect(visitRow(page, "VPMV-APPROVED-001")).toContainText("Approved");
+  await expect(visitRow(page, "VPMV-APPROVED-001")).toContainText("Submitted by Ben Staff");
+  await expect(visitRow(page, "VPMV-ADMIN-DRAFT-001")).toHaveCount(0);
+  await expect(page.getByText(/Monitoring Visits for Review/)).toHaveCount(0);
+  await expect(page.locator(".sm-records-card")).toHaveCount(1);
+  await expect(page.locator(".sm-table-footer")).toContainText("of 3 records");
+  await expect(page.locator(".sm-header-actions").getByRole("button", { name: /Monitor|Submit|Create/ })).toHaveCount(0);
+  await expect(pending.getByRole("button")).toHaveCount(1);
+  await expect(pending.getByRole("button", { name: "View monitoring visit VPMV-PENDING-REVIEW-001" })).toBeVisible();
+});
+
+test("existing Monitoring Records filters apply to visit rows", async ({ page }) => {
+  await openAdminRecords(page);
+  const search = page.locator(".sm-search-wrap input");
+  await search.fill("Ana Staff");
+  await expect(visitRow(page, "VPMV-PENDING-REVIEW-001")).toBeVisible();
+  await expect(visitRow(page, "VPMV-APPROVED-001")).toHaveCount(0);
+  await expect(page.locator(".sm-records-card").getByText("MON-2026-001")).toHaveCount(0);
+  await search.fill("");
+  await page.locator("select").filter({ hasText: "All Conditions" }).selectOption("Healthy");
+  await expect(visitRow(page, "VPMV-PENDING-REVIEW-001")).toHaveCount(0);
+  await expect(page.locator(".sm-records-card").getByText("MON-2026-001")).toBeVisible();
+});
+
+test("View opens the Admin read-only seven-section form titled Review Monitoring Visit with Approve and Return only at the bottom", async ({ page }) => {
+  const writes = await openAdminRecords(page);
+  await visitRow(page, "VPMV-PENDING-REVIEW-001").getByRole("button", { name: /View monitoring visit/ }).click();
+  const dialog = page.getByRole("dialog", { name: "Review Monitoring Visit" });
+  await expect(dialog).toBeVisible();
+  await expect(page.getByRole("dialog", { name: "Monitor Planted Trees" })).toHaveCount(0);
+  await expect(dialog.getByRole("heading", { name: "Review Monitoring Visit", exact: true })).toBeVisible();
+  await expect(dialog.locator(".psm-status-badge")).toHaveText("Pending Admin Review");
+  for (const heading of blueprintSections) await expect(dialog.getByRole("heading", { name: heading, exact: true })).toBeVisible();
+  await expect(dialog.getByRole("radio", { name: "Healthy" })).toBeDisabled();
+  await expect(dialog.getByRole("button", { name: /Save .*Draft|Save Draft|Submit|Take Photo|Capture verified photo|Upload|Create/ })).toHaveCount(0);
+  await expect(dialog.locator(".psm-shell")).toHaveCount(0);
+  const decision = dialog.locator("footer.psm-footer").getByRole("group", { name: "Admin visit decision" });
+  await expect(decision.getByRole("button", { name: "Approve Visit", exact: true })).toBeEnabled();
+  await expect(decision.getByRole("button", { name: "Return for Correction", exact: true })).toBeEnabled();
+  await expect(dialog.getByRole("button", { name: "Approve Visit", exact: true })).toHaveCount(1);
+  await expect(dialog.getByRole("button", { name: "Return for Correction", exact: true })).toHaveCount(1);
+  const footerIsLast = await dialog.locator("footer.psm-footer").evaluate(node => node === node.parentElement.lastElementChild);
+  expect(footerIsLast).toBe(true);
+  await decision.getByRole("button", { name: "Approve Visit", exact: true }).click();
+  await expect(dialog.locator(".psm-status-badge")).toHaveText("Approved");
+  await expect(dialog.getByRole("button", { name: /Approve Visit|Return for Correction/ })).toHaveCount(0);
+  expect(await page.evaluate(() => window.__PHASE3C_REVIEWS__.map(entry => [entry.visitId, entry.payload.approve]))).toEqual([["VPMV-PENDING-REVIEW-001", true]]);
+  await dialog.getByRole("button", { name: "Close monitoring visit" }).click();
+  await expect(visitRow(page, "VPMV-PENDING-REVIEW-001")).toContainText("Approved");
+  expect(writes).toEqual([]);
+});
+
+test("Return for Correction from the bottom still requires a reason", async ({ page }) => {
+  await openAdminRecords(page);
+  await visitRow(page, "VPMV-PENDING-REVIEW-001").getByRole("button", { name: /View monitoring visit/ }).click();
+  const dialog = page.getByRole("dialog", { name: "Review Monitoring Visit" });
+  await dialog.locator("footer.psm-footer").getByRole("button", { name: "Return for Correction", exact: true }).click();
+  await expect(dialog.getByRole("alert")).toContainText("A return reason is required");
+  expect(await page.evaluate(() => window.__PHASE3C_REVIEWS__ || [])).toEqual([]);
+  await dialog.getByLabel("Return reason").fill("Recheck TREE-002 tag.");
+  await dialog.locator("footer.psm-footer").getByRole("button", { name: "Return for Correction", exact: true }).click();
+  await expect(dialog.locator(".psm-status-badge")).toHaveText("Returned for Correction");
+  await dialog.getByRole("button", { name: "Close monitoring visit" }).click();
+  await expect(visitRow(page, "VPMV-PENDING-REVIEW-001")).toContainText("Returned for Correction");
+});
+
+test("approved visits open read-only with no Approve or Return", async ({ page }) => {
+  await openAdminRecords(page);
+  await visitRow(page, "VPMV-APPROVED-001").getByRole("button", { name: /View monitoring visit/ }).click();
+  const dialog = page.getByRole("dialog", { name: "Review Monitoring Visit" });
+  await expect(dialog.locator(".psm-status-badge")).toHaveText("Approved");
+  await expect(dialog.getByRole("button", { name: /Approve Visit|Return for Correction|Save|Submit|Take Photo|Upload/ })).toHaveCount(0);
+});
+
+test("write-paused visits stay viewable but never offer Approve or Return", async ({ page }) => {
+  await openAdminRecords(page, "admin-records-paused");
+  await expect(page.locator(".sm-records-header")).toContainText("Permanent-sample changes are paused");
+  await visitRow(page, "VPMV-PENDING-REVIEW-001").getByRole("button", { name: /View monitoring visit/ }).click();
+  const dialog = page.getByRole("dialog", { name: "Review Monitoring Visit" });
+  await expect(dialog).toContainText("Approve and Return are unavailable");
+  await expect(dialog.getByRole("button", { name: /Approve Visit|Return for Correction/ })).toHaveCount(0);
+});
+
+test("visit list errors are plain text, retryable, and leave aggregate records intact", async ({ page }) => {
+  await openAdminRecords(page, "index-missing-raw");
+  const header = page.locator(".sm-records-header");
+  await expect(header.getByRole("alert")).toContainText("required database index is not ready");
+  await expect(header).not.toContainText(/FAILED_PRECONDITION|console\.firebase|create_composite/);
+  await expect(header.getByRole("button", { name: "Retry" })).toBeVisible();
+  await expect(page.locator(".sm-records-card").getByText("MON-2026-001")).toBeVisible();
+});
+
+test("feature-disabled gate: Admin records load no visit rows and request no visit list", async ({ page }) => {
+  await isolate(page, false);
+  await mockLegacyMonitoringApi(page);
+  await page.goto("/admin/survival-monitoring?role=admin&fixture=admin-records");
+  await expect(page.getByRole("heading", { name: "Survival Monitoring" })).toBeVisible();
+  await expect(page.locator("tr[data-sample-visit-row]")).toHaveCount(0);
+  expect(await page.evaluate(() => (window.__PHASE3C_REQUESTS__ || []).filter(path => String(path).startsWith("/verified-sample-monitoring/visits")))).toEqual([]);
+});
+
+test("Staff Survival Monitoring shows no Admin visit rows and keeps Monitor Planted Trees", async ({ page }) => {
+  await isolate(page);
+  await mockLegacyMonitoringApi(page);
+  await page.goto("/staff/survival-monitoring?role=staff&fixture=admin-records");
+  await expect(page.locator(".sm-header-actions").getByRole("button", { name: "Monitor Planted Trees", exact: true })).toBeVisible();
+  await expect(page.locator("tr[data-sample-visit-row]")).toHaveCount(0);
+});
+
+test("Admin Monitoring Records reads every page: a pending visit behind six draft-only pages is listed and reviewable", async ({ page }) => {
+  await openAdminRecords(page, "admin-records-many-pages");
+  const pending = visitRow(page, "VPMV-PENDING-REVIEW-001");
+  await expect(pending).toContainText("Pending Admin Review");
+  await expect(visitRow(page, "VPMV-APPROVED-001")).toBeVisible();
+  await expect(page.locator("tr[data-sample-visit-row^='VPMV-DRAFT-']")).toHaveCount(0);
+  await expect(page.locator(".sm-records-header")).not.toContainText("Not every permanent-sample visit");
+  const listCalls = await page.evaluate(() => window.__PHASE3C_REQUESTS__.filter(path => String(path).startsWith("/verified-sample-monitoring/visits?")));
+  expect(listCalls).toHaveLength(7);
+  for (const path of listCalls) expect(path).toContain("labels=1");
+  await pending.getByRole("button", { name: /View monitoring visit/ }).click();
+  await expect(page.getByRole("dialog", { name: "Review Monitoring Visit" }).locator("footer.psm-footer").getByRole("button", { name: "Approve Visit", exact: true })).toBeEnabled();
+});
+
+test("a timed-out Approve confirmed with Check saved outcome refreshes the Monitoring Records row", async ({ page }) => {
+  await page.clock.install();
+  await openAdminRecords(page, "admin-records-review-timeout");
+  await visitRow(page, "VPMV-PENDING-REVIEW-001").getByRole("button", { name: /View monitoring visit/ }).click();
+  const dialog = page.getByRole("dialog", { name: "Review Monitoring Visit" });
+  await dialog.locator("footer.psm-footer").getByRole("button", { name: "Approve Visit", exact: true }).click();
+  await page.clock.runFor(61_000);
+  await expect(dialog.getByRole("button", { name: "Check saved outcome" })).toBeVisible();
+  await expect(dialog.getByRole("button", { name: "Approve Visit", exact: true })).toBeDisabled();
+  await dialog.getByRole("button", { name: "Check saved outcome" }).click();
+  await expect(dialog.locator(".psm-status-badge")).toHaveText("Approved");
+  await expect(dialog.getByRole("button", { name: /Approve Visit|Return for Correction/ })).toHaveCount(0);
+  await dialog.getByRole("button", { name: "Close monitoring visit" }).click();
+  await expect(visitRow(page, "VPMV-PENDING-REVIEW-001")).toContainText("Approved");
+  expect(await page.evaluate(() => window.__PHASE3C_REVIEWS__.length)).toBe(1);
+});
+
+test("failed label lookups show Submitter unavailable and a notice, never a guessed name", async ({ page }) => {
+  await openAdminRecords(page, "admin-records-labels-incomplete");
+  const pending = visitRow(page, "VPMV-PENDING-REVIEW-001");
+  await expect(pending).toContainText("Submitter unavailable");
+  await expect(pending).not.toContainText("Submitted by");
+  await expect(page.locator(".sm-records-header")).toContainText("labels could not be loaded");
+});
+
+test("review-mode form keeps an accessible description when the selected visit cannot be opened", async ({ page }) => {
+  await openAdminRecords(page, "admin-records-detail-error");
+  await visitRow(page, "VPMV-PENDING-REVIEW-001").getByRole("button", { name: /View monitoring visit/ }).click();
+  const dialog = page.getByRole("dialog", { name: "Review Monitoring Visit" });
+  const select = dialog.getByRole("combobox", { name: "Verified Planting Report" });
+  await expect(select).toHaveAccessibleDescription(/could not be opened/);
+  await expect(dialog.locator("#psm-shell-reason")).toHaveCount(1);
+  await expect(dialog.getByRole("button", { name: /Approve Visit|Return for Correction|Save Draft|Submit/ })).toHaveCount(0);
 });

@@ -43,3 +43,5 @@
 .psm-readiness h3 { margin:0 0 6px;font-size:15px;overflow-wrap:anywhere; }.psm-readiness ul { margin:0;padding-left:18px;line-height:1.55;color:#4f6357; }.psm-readiness p { overflow-wrap:anywhere; }
 .psm-shell { border:0;margin:0;padding:0;min-width:0;opacity:.88; }.psm-shell-legend { position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap; }.psm-shell button:disabled,.psm-shell input:disabled,.psm-shell textarea:disabled,.psm-footer button:disabled { cursor:not-allowed; }
 .psm-dialog .cohort-error,.psm-dialog .psm-error { overflow-wrap:anywhere;word-break:break-word;max-width:100%; }
+.psm-admin-decision { display:flex; gap:12px; justify-content:flex-end; flex-wrap:wrap; }
+@media(max-width:600px) { .psm-admin-decision { width:100%; } .psm-admin-decision button { flex:1; } }

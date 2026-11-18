@@ -64,7 +64,31 @@ const fixture = () => new URLSearchParams(window.location.search).get("fixture")
 const response = (status, body) => new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
 const failure = (status, message) => response(status, { success: false, message });
 
+// Admin Monitoring Records rows: one of each status, with the Admin-only display labels the backend adds.
+function adminRecordsResponse(paused, { labelsIncomplete = false, nextCursor = null } = {}) {
+  const decision = (window.__PHASE3C_REVIEWS__ || []).filter((entry) => entry.visitId === pendingReviewDetail.id).at(-1);
+  const labels = labelsIncomplete ? { reportNumber: null, siteName: null, barangay: null, submittedByName: null }
+    : { reportNumber: "RPT-2026-101", siteName: "Bical Reforestation Site", barangay: "Bical", submittedByName: "Ana Staff" };
+  const pendingStatus = decision ? (decision.payload.approve ? "APPROVED" : "RETURNED") : "PENDING_ADMIN_APPROVAL";
+  return response(200, { success: true, data: { writesPaused: paused, nextCursor, ...(labelsIncomplete ? { labelsIncomplete: true } : {}), visits: [
+    { ...draftVisit, id: "VPMV-ADMIN-DRAFT-001", actions: { view: true, saveDraft: false, submit: false, review: false } },
+    { ...baseVisit, ...labels, id: pendingReviewDetail.id, status: pendingStatus, version: pendingReviewDetail.version, dateMonitored: "2026-11-02",
+      progress: { completed: 2, total: 2, rechecking: 1 }, actions: { view: true, saveDraft: false, submit: false, review: !paused && pendingStatus === "PENDING_ADMIN_APPROVAL" } },
+    { ...baseVisit, ...labels, id: approvedDetail.id, status: "APPROVED", dateMonitored: "2026-10-01", submittedByName: "Ben Staff",
+      progress: { completed: 2, total: 2, rechecking: 0 }, actions: { view: true, saveDraft: false, submit: false, review: false } },
+  ] } });
+}
+
 function listResponse(url, activeFixture) {
+  if (["admin-records", "admin-records-paused", "admin-records-review-timeout", "admin-records-detail-error"].includes(activeFixture)) return adminRecordsResponse(activeFixture === "admin-records-paused");
+  if (activeFixture === "admin-records-labels-incomplete") return adminRecordsResponse(false, { labelsIncomplete: true });
+  if (activeFixture === "admin-records-many-pages") {
+    // Six full pages of Staff drafts (beyond the old 4-page cap) before the submitted visits on page 7.
+    const page = Number(String(url.searchParams.get("cursor") || "PAGE-0").replace("PAGE-", ""));
+    if (page >= 6) return adminRecordsResponse(false);
+    return response(200, { success: true, data: { writesPaused: false, nextCursor: `PAGE-${page + 1}`, visits: Array.from({ length: 50 }, (_, row) => ({
+      ...draftVisit, id: `VPMV-DRAFT-P${page}-${row}`, actions: { view: true, saveDraft: false, submit: false, review: false } })) } });
+  }
   if (activeFixture === "two-visits") return response(200, { success: true, data: { visits: [
     { ...returnedDetail, progress: { completed: 2, total: 2, rechecking: 0 } },
     { ...approvedDetail, progress: { completed: 2, total: 2, rechecking: 0 } },
@@ -187,6 +211,8 @@ function reviewResponse(visitId, options, activeFixture) {
   if (visitId !== pendingReviewDetail.id) return failure(404, "Monitoring visit not found.");
   const payload = JSON.parse(options.body || "{}");
   window.__PHASE3C_REVIEWS__ = [...(window.__PHASE3C_REVIEWS__ || []), { visitId, payload }];
+  // Saved by MENRO, but the response never arrives: the form must reconcile with "Check saved outcome".
+  if (activeFixture === "admin-records-review-timeout") return new Promise(() => {});
   const status = payload.approve ? "APPROVED" : "RETURNED";
   return response(200, { success: true, data: {
     ...pendingReviewDetail,
@@ -239,6 +265,12 @@ export async function authenticatedFetch(path, options = {}) {
   if (detailMatch) {
     const visitId = decodeURIComponent(detailMatch[1]);
     if (options.method === "PUT") return saveResponse(visitId, options, activeFixture);
+    if (activeFixture === "admin-records-paused" && visitId === pendingReviewDetail.id) return response(200, { success: true, data: { ...pendingReviewDetail, writesPaused: true } });
+    if (activeFixture === "admin-records-detail-error" && visitId === pendingReviewDetail.id) return failure(500, "Detail unavailable.");
+    if (activeFixture === "admin-records-review-timeout" && visitId === pendingReviewDetail.id) {
+      const decision = (window.__PHASE3C_REVIEWS__ || []).filter((entry) => entry.visitId === visitId).at(-1);
+      if (decision) return response(200, { success: true, data: { ...pendingReviewDetail, status: decision.payload.approve ? "APPROVED" : "RETURNED", reviewReasons: String(decision.payload.reasons || "") } });
+    }
     return detailResponse(visitId, activeFixture);
   }
   throw new Error(`Unregistered test API: ${path}`);

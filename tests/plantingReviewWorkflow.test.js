@@ -116,7 +116,7 @@ test("role labels present stored stages without rewriting them", async () => {
   const { roleWorkflowLabel, WORKFLOW_STATUS: S } = await import("../src/utils/plantingReviewWorkflow.js");
   const expect = {
     participant: [["Pending Review", "Submitted"], ["Reviewed", "Submitted"], ["Pending Admin Approval", "Submitted"], ["Completed", "Submitted"], ["Returned for Correction", "Returned for Correction"], ["Rejected", "Rejected"]],
-    staff: [["Pending Review", "Submitted"], ["Reviewed", "Reviewed"], ["Pending Admin Approval", "Submitted"], ["Completed", "Verified"], ["Returned for Correction", "Returned for Correction"], ["Rejected", "Rejected"]],
+    staff: [["Pending Review", "Awaiting Review"], ["Reviewed", "Reviewed"], ["Pending Admin Approval", "Submitted"], ["Completed", "Verified"], ["Returned for Correction", "Returned for Correction"], ["Rejected", "Rejected"]],
     admin: [["Pending Review", "Submitted"], ["Reviewed", "Reviewed"], ["Pending Admin Approval", "Staff Submitted"], ["Completed", "Verified"], ["Returned for Correction", "Returned for Correction"], ["Rejected", "Rejected"]],
   };
   for (const [role, rows] of Object.entries(expect)) for (const [stage, label] of rows) assert.equal(roleWorkflowLabel(stage, role), label, `${role} ${stage}`);
