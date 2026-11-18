@@ -20,6 +20,33 @@ test("policy type comes only from the stored reportingPolicy", () => {
   assert.equal(monitoringPolicyOf(report("SOMETHING_ELSE")), "UNKNOWN");
 });
 
+test("nested policy definitions and compatible flat snapshots keep the stored method", () => {
+  for (const method of ["NONE", "STAFF_SPOT_CHECK", "PERMANENT_SAMPLE", "PENDING_MENRO_POLICY"]) {
+    const nested = { id: "report-1", reportingPolicy: { definition: { monitoring: method } } };
+    const matching = { id: "report-1", reportingPolicy: { monitoring: method, definition: { monitoring: method } } };
+    assert.equal(monitoringPolicyOf(nested), method);
+    assert.equal(monitoringPolicyOf(matching), method);
+    assert.equal(needsCohortLookup(nested, true), method === "PERMANENT_SAMPLE");
+    assert.equal(monitoringPolicyOf({ reportingPolicy: { monitoring: "", definition: { monitoring: method } } }), method);
+  }
+  assert.equal(monitoringPolicyOf({ reportingPolicy: { definition: {} } }), "UNKNOWN");
+  assert.equal(monitoringPolicyOf({ reportingPolicy: { definition: { monitoring: "OTHER" } } }), "UNKNOWN");
+});
+
+test("conflicting policy snapshots stay unknown without mutating them or looking up a cohort", () => {
+  for (const [flat, nested] of [["NONE", "STAFF_SPOT_CHECK"], ["STAFF_SPOT_CHECK", "PERMANENT_SAMPLE"], ["PERMANENT_SAMPLE", "NONE"]]) {
+    const stored = { id: "report-1", reportingPolicy: { monitoring: flat, definition: { monitoring: nested } } };
+    const original = JSON.stringify(stored);
+    assert.equal(monitoringPolicyOf(stored), "UNKNOWN");
+    assert.equal(needsCohortLookup(stored, true), false);
+    const status = describeMonitoringStatus({ report: stored, ...ready() });
+    assert.equal(status.requirement, "Unrecognized Monitoring Method");
+    assert.deepEqual(status.rows, []);
+    assert.match(status.notes.join(" "), /not recognized/);
+    assert.equal(JSON.stringify(stored), original);
+  }
+});
+
 test("Staff spot-check reports say the workflow is pending MENRO policy and never look up or show a cohort", () => {
   assert.equal(needsCohortLookup(report("STAFF_SPOT_CHECK"), true), false);
   // Even if a cohort list were supplied, a spot-check report shows none.

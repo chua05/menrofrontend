@@ -19,7 +19,12 @@ export const MONITORING_POLICY = Object.freeze({
 export function monitoringPolicyOf(report = {}) {
   const policy = report?.reportingPolicy;
   if (!policy) return MONITORING_POLICY.LEGACY;
-  const value = policy.monitoring;
+  // Current snapshots store the method under definition; retain older flat snapshots.
+  // Conflicting stored methods require review, never a guessed exemption or workflow.
+  const flat = String(policy.monitoring || "").trim();
+  const nested = String(policy.definition?.monitoring || "").trim();
+  if (flat && nested && flat !== nested) return MONITORING_POLICY.UNKNOWN;
+  const value = nested || flat;
   return [MONITORING_POLICY.NONE, MONITORING_POLICY.STAFF_SPOT_CHECK, MONITORING_POLICY.PERMANENT_SAMPLE, MONITORING_POLICY.PENDING_MENRO_POLICY].includes(value)
     ? value : MONITORING_POLICY.UNKNOWN;
 }
