@@ -10,6 +10,7 @@ import { useSearchParams } from "react-router-dom";
 import { deriveTrackingRows, isVerifiedPlantingReport, trackingMatchesRecordFilters, trackingNeedsCohortLookup } from "../utils/monitoringTracking";
 import { monitoringDisplayId } from "../utils/monitoringRecordView";
 import MonitoringTrackingDetails from "../components/MonitoringTrackingDetails";
+import ModalDialog from "../components/ModalDialog";
 import L from "leaflet";
 import {
   CONDITION_SUM_ERROR, EMPTY_MONITORING_EVIDENCE, clearSharedCountError, monitoringPreview,
@@ -2651,20 +2652,23 @@ export default function MonitoringPage() {
 
       {/* MONITORING DETAILS DRAWER */}
       {trackingDetails && (
-        <MonitoringTrackingDetails row={trackingDetails} userRole={userRole} onClose={() => setTrackingDetailsId("")} />
+        <MonitoringTrackingDetails row={trackingDetails} onClose={() => setTrackingDetailsId("")} />
       )}
 
       {showDetails && selectedRecord && (
+        // Centered Monitoring Record Details popup (same modal behavior and layout as View Planting Report).
+        <ModalDialog label="Monitoring Record Details" onClose={closeDetails} returnFocusSelector=".sm-records-card">
         <div
-          className="sm-drawer-backdrop"
+          className="sm-record-modal-backdrop"
           onMouseDown={(event) => {
             if (event.target === event.currentTarget) closeDetails();
           }}
         >
-          <aside className="sm-details-drawer">
-            <div className="sm-drawer-header">
+          <section className="sm-record-modal sm-record-modal-full" data-monitoring-record={selectedRecord.id}>
+            <div className="sm-drawer-header sm-record-modal-header">
               <div>
                 <h2>Monitoring Record Details</h2>
+                <p className="sm-record-modal-subtitle">Survival Monitoring</p>
                 <div className="sm-drawer-meta">
                   <span
                     className="sm-condition-badge"
@@ -2676,14 +2680,15 @@ export default function MonitoringPage() {
                   >
                     {selectedRecord.condition}
                   </span>
-                  <span>{monitoringDisplayId(selectedRecord)}</span>
+                  <span>Monitoring ID: {monitoringDisplayId(selectedRecord)}</span>
                 </div>
               </div>
 
               <button
                 type="button"
-                className="sm-modal-close"
+                className="sm-modal-close sm-record-modal-close"
                 onClick={closeDetails}
+                aria-label="Close monitoring record details"
               >
                 <FiX size={19} />
               </button>
@@ -2891,8 +2896,9 @@ export default function MonitoringPage() {
 
               </section>
             </div>
-          </aside>
+          </section>
         </div>
+        </ModalDialog>
       )}
       <SecureCameraCapture
         open={cameraOpen}
