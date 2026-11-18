@@ -1,7 +1,8 @@
 import { FiClipboard, FiX } from "react-icons/fi";
 import ModalDialog from "./ModalDialog";
 import { formatDisplayId } from "../utils/displayId";
-import { MONITORING_ID_NOT_ASSIGNED } from "../utils/monitoringRecordView";
+import { MONITORING_ID_NOT_ASSIGNED, monitoringStatusTone } from "../utils/monitoringRecordView";
+import { TRACKING_STATUS } from "../utils/monitoringTracking";
 
 // Same presentation as the Survival Monitoring page's dates.
 const formatDate = (value) => {
@@ -40,7 +41,7 @@ export default function MonitoringTrackingDetails({ row, onClose }) {
                 <div className="sm-record-info-label">Monitoring ID</div>
                 <div className="sm-record-summary-id">{MONITORING_ID_NOT_ASSIGNED}</div>
               </div>
-              <span className="sm-record-status-badge">{row.stage}</span>
+              <span className={`sm-record-status-badge sm-status-${monitoringStatusTone(row.stage)}`}>{row.stage}</span>
             </div>
 
             <div className="sm-record-info-grid">
@@ -51,8 +52,9 @@ export default function MonitoringTrackingDetails({ row, onClose }) {
               <Info label="Next Monitoring Date" value={row.nextLabel} />
               <Info label="Latest Condition" value="Not yet monitored" />
             </div>
-            {/* The specific setup blocker (stored policy/readiness), shown once and briefly. */}
-            <p className="sm-setup-blocker" role="note">Setup status: {row.status}</p>
+            {/* The specific setup blocker (stored policy/readiness), shown once and briefly. The Staff
+                Spot-Check policy explanation is omitted; nothing here enables a submission. */}
+            {row.status !== TRACKING_STATUS.SPOT_CHECK && <p className="sm-setup-blocker" role="note">Setup status: {row.status}</p>}
 
             <section className="sm-record-history" aria-labelledby="sm-record-history-title">
               <h3 id="sm-record-history-title">Monitoring History</h3>

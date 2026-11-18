@@ -7,8 +7,8 @@ import { resolveVerifiedPlantingCohortEnabled } from "../utils/verifiedPlantingC
 import { canDecideVisit, createLatestRequestGate, loadSubmittedVisitPages, visitMatchesRecordFilters, visitStatusLabel } from "../utils/adminMonitoringVisitReview";
 import { createEvidenceAttempt, assertEvidenceComplete } from "../utils/evidenceAttempt";
 import { useSearchParams } from "react-router-dom";
-import { deriveTrackingRows, isVerifiedPlantingReport, trackingMatchesRecordFilters, trackingNeedsCohortLookup } from "../utils/monitoringTracking";
-import { isAwaitingMonitoringSetup, lifecycleMethodLabel, monitoringDisplayId, monitoringSetupBlocker } from "../utils/monitoringRecordView";
+import { TRACKING_STATUS, deriveTrackingRows, isVerifiedPlantingReport, trackingMatchesRecordFilters, trackingNeedsCohortLookup } from "../utils/monitoringTracking";
+import { isAwaitingMonitoringSetup, lifecycleMethodLabel, monitoringDisplayId, monitoringSetupBlocker, monitoringStatusLabel, monitoringStatusTone } from "../utils/monitoringRecordView";
 import MonitoringTrackingDetails from "../components/MonitoringTrackingDetails";
 import ModalDialog from "../components/ModalDialog";
 import L from "leaflet";
@@ -61,6 +61,13 @@ const API_BASE_URL =
 const MAX_PHOTO_SIZE = 10 * 1024 * 1024;
 // Admin Monitoring Records visit rows: read every page; the guard (10,000 rows) only stops a runaway cursor.
 const SAMPLE_VISIT_PAGE_SIZE = 50;
+// Rows per page in the Monitoring Records table (lifecycles, tracking-only rows and visits together).
+const RECORDS_TABLE_PAGE_SIZE = 10;
+
+// Status badge using the MENRO record badge palette (same shape/colors as Planting Reports).
+function MonitoringStatusBadge({ label }) {
+  return <span className={`sm-status-badge sm-status-${monitoringStatusTone(label)}`}>{label}</span>;
+}
 const MAX_SAMPLE_VISIT_PAGES = 200;
 const MONITORING_CHART_INITIAL_SIZE = { width: 640, height: 260 };
 
@@ -314,8 +321,11 @@ function normalizeMonitoringRecord(record) {
         damaged,
         totalChecked
       ),
+    // A registered lifecycle with no observation (and no stored counts) is not "Healthy".
     condition:
       latest?.condition || record?.condition ||
+      (!latest && record?.totalMonitored === undefined && record?.healthyCount === undefined && record?.healthy === undefined
+        ? "Not Yet Monitored" : null) ||
       deriveCondition(
         healthy,
         damaged,
@@ -854,6 +864,9 @@ export default function MonitoringPage() {
     return visibleRecords.filter((record) => {
       const searchableText = [
         record.id,
+        record.monitoringNumber,
+        record.plantingReportNumber,
+        monitoringStatusLabel(record.status),
         record.plantingReportId,
         record.siteName,
         record.barangay,
@@ -945,6 +958,22 @@ export default function MonitoringPage() {
     search: searchTerm, site: siteFilter, species: speciesFilter, condition: conditionFilter, from: dateFrom, to: dateTo,
   })), [trackingRows, searchTerm, siteFilter, speciesFilter, conditionFilter, dateFrom, dateTo]);
   const tableRows = totalRows + filteredTrackingRows.length;
+  // Client-side pagination over the displayed rows in table order: lifecycles, tracking rows, visits.
+  // The page resets to 1 whenever a filter changes (keyed state, no effect needed).
+  const recordsFilterKey = JSON.stringify([searchTerm, siteFilter, speciesFilter, conditionFilter, dateFrom, dateTo]);
+  const [recordsPageState, setRecordsPageState] = useState({ key: recordsFilterKey, page: 1 });
+  // Any filter change stores page 1 (React's adjust-state-while-rendering pattern), so restoring an
+  // earlier filter never brings back the page that was open before.
+  if (recordsPageState.key !== recordsFilterKey) setRecordsPageState({ key: recordsFilterKey, page: 1 });
+  const recordsPageCount = Math.max(1, Math.ceil(tableRows / RECORDS_TABLE_PAGE_SIZE));
+  const recordsPage = Math.min(recordsPageState.key === recordsFilterKey ? recordsPageState.page : 1, recordsPageCount);
+  const setRecordsPage = (page) => setRecordsPageState({ key: recordsFilterKey, page });
+  const pageStart = (recordsPage - 1) * RECORDS_TABLE_PAGE_SIZE;
+  const pageEnd = Math.min(pageStart + RECORDS_TABLE_PAGE_SIZE, tableRows);
+  const pageSlice = (list, offset) => list.slice(Math.max(0, pageStart - offset), Math.max(0, pageEnd - offset));
+  const pagedRecords = pageSlice(filteredRecords, 0);
+  const pagedTrackingRows = pageSlice(filteredTrackingRows, filteredRecords.length);
+  const pagedSampleVisits = pageSlice(filteredSampleVisits, filteredRecords.length + filteredTrackingRows.length);
 
   const officialEntries = useMemo(() => visibleRecords.flatMap((record) => {
     const approved = (record.history || []).filter((entry) =>
@@ -2019,7 +2048,7 @@ export default function MonitoringPage() {
 
             {tableRows > 0 && (
               <tbody>
-                {filteredRecords.map((record) => {
+                {pagedRecords.map((record) => {
                   const meta =
                     CONDITION_META[record.condition] || CONDITION_META.Healthy;
 
@@ -2041,7 +2070,10 @@ export default function MonitoringPage() {
                       </td>
                       <td>{isAwaitingMonitoringSetup(record) ? "Awaiting Policy Decision" : formatDate(record.startMonitoringDate)}</td>
                       <td>{isAwaitingMonitoringSetup(record) ? "Not Scheduled" : record.nextMonitoringDate ? formatDate(record.nextMonitoringDate) : monitoringScheduleLabel(record)}</td>
-                      <td>{record.status}<span className="sm-site-sub">{lifecycleMethodLabel(record)}</span><span className="sm-site-sub">{earlyMonitoringLabel(record)}</span></td>
+                      <td>
+                        <MonitoringStatusBadge label={monitoringStatusLabel(record.status) || "—"} />
+                        <span className="sm-site-sub">{earlyMonitoringLabel(record)}</span>
+                      </td>
                       <td>
                         <span
                           className="sm-condition-badge"
@@ -2111,7 +2143,7 @@ export default function MonitoringPage() {
                 })}
                 {/* Staff/Admin: verified planting reports with no monitoring record yet. Tracking only — no
                     observation, approval or monitoring action; View opens the report and its Monitoring Status. */}
-                {filteredTrackingRows.map((row) => (
+                {pagedTrackingRows.map((row) => (
                   <tr key={`tracking-${row.plantingReportId}`} data-tracking-row={row.plantingReportId} data-monitoring-policy={row.policy} className="sm-tracking-row">
                     <td>
                       <span className="sm-record-id sm-record-id-pending">Not yet assigned</span>
@@ -2126,12 +2158,17 @@ export default function MonitoringPage() {
                     <td>{row.startMonitoringDate ? <>{formatDate(row.startMonitoringDate)}<span className="sm-site-sub">{row.policy === "LEGACY" ? "Opens for first observation" : "First visit due"}</span></> : row.startLabel}</td>
                     <td>{row.nextLabel}</td>
                     <td>
-                      <strong className="sm-tracking-stage">{row.stage}</strong>
-                      <span className="sm-site-sub">{row.status}</span>
-                      <span className="sm-site-sub">{row.requirement}</span>
+                      <MonitoringStatusBadge label={row.stage} />
+                      {/* Specific readiness reason; the Staff Spot-Check policy explanation and the
+                          monitoring method are not repeated in the table (method stays in details). */}
+                      {row.status !== TRACKING_STATUS.SPOT_CHECK && <span className="sm-site-sub">{row.status}</span>}
                       {row.setup && <span className="sm-site-sub">{row.setup}</span>}
                     </td>
-                    <td>Not yet monitored<span className="sm-site-sub">No observation yet</span></td>
+                    <td>
+                      <span className="sm-condition-badge" style={{ background: CONDITION_META["Not Yet Monitored"].soft, color: CONDITION_META["Not Yet Monitored"].color }}>
+                        Not Yet Monitored
+                      </span>
+                    </td>
                     <td>
                       <div className="sm-row-actions">
                         <button
@@ -2149,7 +2186,7 @@ export default function MonitoringPage() {
                 ))}
                 {/* Admin only: Staff-submitted permanent-sample visits (never drafts). View opens the read-only
                     seven-section form; Approve/Return appear at its bottom only for eligible pending visits. */}
-                {filteredSampleVisits.map((visit) => {
+                {pagedSampleVisits.map((visit) => {
                   const decidable = canDecideVisit(visit, { writesPaused: sampleVisitsState.writesPaused });
                   return (
                     <tr key={`visit-${visit.id}`} data-sample-visit-row={visit.id}>
@@ -2165,7 +2202,7 @@ export default function MonitoringPage() {
                       <td>{formatDate(visit.visitDate)}<span className="sm-site-sub">Scheduled visit</span></td>
                       <td>—</td>
                       <td>
-                        {visitStatusLabel(visit.status)}
+                        <MonitoringStatusBadge label={visitStatusLabel(visit.status)} />
                         <span className="sm-site-sub">{visit.submittedByName === null ? "Submitter unavailable" : `Submitted by ${visit.submittedByName || "MENRO Staff"}`}</span>
                         <span className="sm-site-sub">Monitored {visit.dateMonitored ? formatDate(visit.dateMonitored) : "date not recorded"}</span>
                       </td>
@@ -2219,9 +2256,10 @@ export default function MonitoringPage() {
         </div>
 
         <div className="sm-table-footer">
-          <span>
-            Showing {totalRows === 0 ? 0 : 1} to{" "}
-            {totalRows} of {totalRows} records
+          {/* Rows shown vs. persistent monitoring records: tracking-only rows are never counted as records. */}
+          <span data-records-count={totalRows} data-tracking-count={filteredTrackingRows.length}>
+            Showing {tableRows === 0 ? 0 : pageStart + 1} to {pageEnd} of {tableRows} {tableRows === 1 ? "row" : "rows"}
+            {" · "}{totalRows} monitoring {totalRows === 1 ? "record" : "records"}
             {filteredTrackingRows.length > 0 && (
               <span className="sm-tracking-count">
                 {" · "}{filteredTrackingRows.length} verified planting {filteredTrackingRows.length === 1 ? "report" : "reports"} awaiting monitoring (tracking only, not monitoring records)
@@ -2229,17 +2267,22 @@ export default function MonitoringPage() {
             )}
           </span>
 
-          <div className="sm-pagination">
-            <button type="button" disabled>
+          <nav className="sm-pagination" aria-label="Monitoring records pages">
+            <button type="button" aria-label="Previous page" disabled={recordsPage <= 1} onClick={() => setRecordsPage(recordsPage - 1)}>
               ‹
             </button>
-            <button type="button" className="is-active">
-              1
-            </button>
-            <button type="button" disabled>
+            {Array.from({ length: recordsPageCount }, (_, index) => index + 1)
+              .filter((page) => recordsPageCount <= 7 || Math.abs(page - recordsPage) <= 2 || page === 1 || page === recordsPageCount)
+              .map((page) => (
+                <button key={page} type="button" className={page === recordsPage ? "is-active" : undefined}
+                  aria-label={`Page ${page}`} aria-current={page === recordsPage ? "page" : undefined} onClick={() => setRecordsPage(page)}>
+                  {page}
+                </button>
+              ))}
+            <button type="button" aria-label="Next page" disabled={recordsPage >= recordsPageCount} onClick={() => setRecordsPage(recordsPage + 1)}>
               ›
             </button>
-          </div>
+          </nav>
         </div>
       </section>
 
@@ -2730,7 +2773,7 @@ export default function MonitoringPage() {
                   </div>
                   <div>
                     <span>Lifecycle Status</span>
-                    <strong>{selectedRecord.status || "—"}</strong>
+                    <strong>{monitoringStatusLabel(selectedRecord.status) || "—"}</strong>
                   </div>
                   <div>
                     <span>Monitoring Entries</span>

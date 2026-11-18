@@ -20,10 +20,27 @@ test("monitoring method is separate from status, and awaiting-setup records name
   assert.equal(lifecycleMethodLabel({}), "Historical Aggregate Monitoring");
   assert.equal(lifecycleMethodLabel({ monitoringMethod: "SOMETHING_NEW" }), "Unrecognized Monitoring Method");
   assert.equal(isAwaitingMonitoringSetup(spot), true);
-  assert.match(monitoringSetupBlocker(spot), /spot-check procedure and schedule/);
+  // Staff Spot-Check shows no policy explanation; it stays awaiting setup (no submission) regardless.
+  assert.equal(monitoringSetupBlocker(spot), "");
   assert.match(monitoringSetupBlocker({ ...spot, monitoringMethod: "PERMANENT_SAMPLE" }), /sampling plan, baseline and visit scheduling/);
   // An aggregate lifecycle with an approved schedule has no blocker and is not awaiting setup.
   const scheduled = { status: "Available for Monitoring", startMonitoringDate: "2026-10-15" };
   assert.equal(isAwaitingMonitoringSetup(scheduled), false);
   assert.equal(monitoringSetupBlocker(scheduled), "");
+});
+
+test("awaiting-setup status is displayed as Awaiting Monitoring Submission without changing the stored status", async () => {
+  const { AWAITING_SUBMISSION_LABEL, isAwaitingMonitoringSetup, monitoringStatusLabel, monitoringStatusTone } = await import("../src/utils/monitoringRecordView.js");
+  const record = Object.freeze({ scheduleStatus: "AWAITING_MONITORING_POLICY", status: "Awaiting Monitoring Setup", monitoringMethod: "STAFF_SPOT_CHECK" });
+  assert.equal(AWAITING_SUBMISSION_LABEL, "Awaiting Monitoring Submission");
+  assert.equal(monitoringStatusLabel(record.status), "Awaiting Monitoring Submission");
+  // The stored value and the submission gate are untouched by the display label.
+  assert.equal(record.status, "Awaiting Monitoring Setup");
+  assert.equal(isAwaitingMonitoringSetup(record), true);
+  assert.equal(isAwaitingMonitoringSetup({ status: "Awaiting Monitoring Submission" }), false, "the display label never stands in for the stored status");
+  // Other statuses pass through unchanged.
+  for (const status of ["Available for Monitoring", "Not Yet Available", "Next Monitoring Scheduled", "Monitoring Completed"]) assert.equal(monitoringStatusLabel(status), status);
+  assert.equal(monitoringStatusLabel(undefined), "");
+  assert.deepEqual(["Awaiting Monitoring Submission", "Available for Monitoring", "Monitoring Completed", "Monitoring Requirement Not Recognized"].map(monitoringStatusTone),
+    ["pending", "active", "complete", "default"]);
 });
