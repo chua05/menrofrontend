@@ -112,7 +112,9 @@ async function decide(page, role, startStatus, buttonName, confirmName, endStatu
   await expect.poll(() => image.evaluate((img) => img.complete && img.naturalWidth > 0)).toBe(true);
   await expect(drawer.locator(".pr-evidence-map-section .pr-location-map-legend")).toContainText(/(Verified|Unverified) \(1\)/);
 
-  await submission.first().getByRole("button", { name: buttonName, exact: true }).click();
+  // Review/Verify live only in the View modal's bottom footer, never inside a submission card.
+  await expect(submission.getByRole("button", { name: buttonName, exact: true })).toHaveCount(0);
+  await drawer.locator("footer.pr-drawer-footer").getByRole("button", { name: buttonName, exact: true }).click();
   const modal = page.locator(".pr-decision-modal");
   await expect(modal).toBeVisible();
   await modal.getByRole("button", { name: confirmName }).click();
