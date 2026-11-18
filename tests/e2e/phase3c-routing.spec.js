@@ -1133,6 +1133,25 @@ for (const role of ["staff", "admin"]) test(`${role} Monitoring Lifecycles list 
   expect(writes).toEqual([]);
 });
 
+for (const role of ["staff", "admin"]) test(`${role} reads nested Staff spot-check policy without authorizing monitoring`, async ({ page }) => {
+  await isolate(page);
+  const report = verifiedReport("nested-policy-report", "RPT-NESTED-FIXTURE", null, {
+    reportingPolicy: { definition: { monitoring: "STAFF_SPOT_CHECK" } },
+  });
+  await mockLegacyMonitoringApi(page, { monitoring: [], plantingReports: [report] });
+  const writes = [];
+  page.on("request", request => { if (request.method() !== "GET" && request.url().includes("/api/")) writes.push(request.url()); });
+  await page.goto(`/${role}/survival-monitoring?role=${role}&fixture=empty`);
+  const row = trackingRow(page, report.id);
+  await expect(row).toContainText("Staff Spot-Check");
+  await expect(row).toContainText("Awaiting Monitoring Setup");
+  await expect(row).toContainText("Awaiting Policy Decision");
+  await expect(row).toContainText("Not Scheduled");
+  await expect(row.getByRole("button")).toHaveCount(1);
+  await expect(row.getByRole("button", { name: /Submit|Record|Approve|Return|Create/ })).toHaveCount(0);
+  expect(writes).toEqual([]);
+});
+
 test("Staff Monitor Planted Trees offers verified reports under Setup Pending with truthful readiness and nothing editable", async ({ page }) => {
   const writes = await openTracking(page, "staff", { fixture: "empty" });
   await page.locator(".sm-header-actions").getByRole("button", { name: "Monitor Planted Trees", exact: true }).click();

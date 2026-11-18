@@ -32,6 +32,23 @@ test("each stored monitoring policy shows its truthful tracking status without c
   assert.ok(rows.every(row => row.kind === "tracking"));
 });
 
+test("nested spot-check and pending policies stay awaiting setup; conflicts never authorize monitoring", () => {
+  const nested = (id, method) => verified(id, null, { reportingPolicy: { definition: { monitoring: method } } });
+  const conflict = verified("conflict", "NONE", { reportingPolicy: { monitoring: "NONE", definition: { monitoring: "PERMANENT_SAMPLE" } } });
+  const reports = [nested("spot", "STAFF_SPOT_CHECK"), nested("pending", "PENDING_MENRO_POLICY"), nested("none", "NONE"), conflict];
+  const original = JSON.stringify(reports);
+  const rows = deriveTrackingRows({ ...ready, reports });
+  assert.deepEqual(rows.map(row => [row.plantingReportId, row.policy, row.status]), [
+    ["spot", "STAFF_SPOT_CHECK", TRACKING_STATUS.SPOT_CHECK],
+    ["pending", "PENDING_MENRO_POLICY", TRACKING_STATUS.POLICY_PENDING],
+    ["conflict", "UNKNOWN", TRACKING_STATUS.UNKNOWN],
+  ]);
+  assert.ok(rows.every(row => row.startMonitoringDate === "" && row.cohort === null));
+  assert.match(rows[0].notes.join(" "), /have not been approved/);
+  assert.equal(trackingNeedsCohortLookup(reports, true), false);
+  assert.equal(JSON.stringify(reports), original);
+});
+
 test("a permanent-sample cohort shows actual sampling, baseline and visit readiness", () => {
   const readiness = { cohorts: [{ cohortId: "VPC-perm", canCreateVisit: false, reasons: [{ code: "SAMPLING_PLAN_NOT_APPROVED", planStatus: "DRAFT" }, { code: "VISIT_SCHEDULING_POLICY_PENDING" }] }] };
   const [row] = deriveTrackingRows({ ...ready, reports: [verified("perm", "PERMANENT_SAMPLE")], cohorts: [cohort("perm")], readiness });
