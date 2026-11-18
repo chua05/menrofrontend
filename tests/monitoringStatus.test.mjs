@@ -24,7 +24,7 @@ test("Staff spot-check reports say the workflow is pending MENRO policy and neve
   assert.equal(needsCohortLookup(report("STAFF_SPOT_CHECK"), true), false);
   // Even if a cohort list were supplied, a spot-check report shows none.
   const status = describeMonitoringStatus({ report: report("STAFF_SPOT_CHECK"), ...ready() });
-  assert.equal(status.requirement, "Staff spot-check");
+  assert.equal(status.requirement, "Staff Spot-Check");
   assert.match(status.notes.join(" "), /Monitoring workflow pending MENRO policy/);
   assert.deepEqual(status.rows, []);
   assert.deepEqual(status.reasons, []);

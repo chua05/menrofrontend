@@ -26,7 +26,7 @@ test("each stored monitoring policy shows its truthful tracking status without c
     ["legacy", "LEGACY", TRACKING_STATUS.LEGACY],
     ["odd", "UNKNOWN", TRACKING_STATUS.UNKNOWN],
   ]);
-  assert.equal(rows[0].requirement, "Staff spot-check");
+  assert.equal(rows[0].requirement, "Staff Spot-Check");
   assert.match(rows[0].notes.join(" "), /pending MENRO policy/);
   assert.equal(rows[0].cohort, null);
   assert.ok(rows.every(row => row.kind === "tracking"));
@@ -50,7 +50,7 @@ test("a pending MENRO policy is tracked as pending: not exempt, not monitored, n
   const [row] = deriveTrackingRows({ ...ready, reports: [report], cohorts: [cohort("pending")] });
   assert.equal(row.policy, "PENDING_MENRO_POLICY");
   assert.equal(row.status, TRACKING_STATUS.POLICY_PENDING);
-  assert.equal(row.requirement, "Monitoring policy pending MENRO decision");
+  assert.equal(row.requirement, "Pending MENRO Policy Decision");
   assert.match(row.notes.join(" "), /neither waived nor authorized/);
   assert.equal(row.setup, "");
   assert.equal(trackingNeedsCohortLookup([report], true), false);

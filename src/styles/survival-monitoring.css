@@ -1863,3 +1863,7 @@
   .sm-record-modal-header, .sm-record-modal-body, .sm-record-modal .sm-drawer-body, .sm-record-modal .sm-record-modal-header.sm-drawer-header { padding: 16px; }
   .sm-record-info-grid { grid-template-columns: 1fr; }
 }
+/* The native <dialog> (ModalDialog) has an opaque UA background; keep it transparent so the Survival
+   Monitoring page stays visible behind the dimmed overlay, exactly like View Planting Report. */
+.menro-modal-dialog.sm-record-dialog { background: transparent; }
+.sm-setup-blocker { margin: 12px 0 0; padding: 12px 14px; border: 1px solid #e2e7e4; border-radius: 9px; background: #fafbfa; color: #334139; font-size: 13.5px; line-height: 1.55; }
