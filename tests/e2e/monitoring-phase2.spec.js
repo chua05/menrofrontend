@@ -92,7 +92,7 @@ async function openRecord(page, reportNumber) {
   const row = recordRow(page, reportNumber);
   await expect(row).toHaveCount(1);
   await row.getByTitle("View monitoring record").click();
-  await expect(page.getByRole("heading", { name: "Survival Monitoring Details" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Monitoring Record Details" })).toBeVisible();
 }
 
 async function performAction(page, reportNumber, action, reason) {

@@ -70,7 +70,7 @@ async function action(page, reportNumber, label, reason) {
   const record = row(page, reportNumber);
   await expect(record).toHaveCount(1);
   await record.getByTitle("View monitoring record").click();
-  await expect(page.getByRole("heading", { name: "Survival Monitoring Details" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Monitoring Record Details" })).toBeVisible();
   page.once("dialog", (dialog) => dialog.accept(reason));
   await page.getByRole("button", { name: label, exact: true }).click();
   const message = { Review: "Monitoring observation reviewed.",

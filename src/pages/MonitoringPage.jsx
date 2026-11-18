@@ -6,8 +6,10 @@ import { withDeadline, RequestTimeoutError, READ_TIMEOUT_MS } from "../utils/req
 import { resolveVerifiedPlantingCohortEnabled } from "../utils/verifiedPlantingCohort";
 import { canDecideVisit, createLatestRequestGate, loadSubmittedVisitPages, visitMatchesRecordFilters, visitStatusLabel } from "../utils/adminMonitoringVisitReview";
 import { createEvidenceAttempt, assertEvidenceComplete } from "../utils/evidenceAttempt";
-import { Link, useSearchParams } from "react-router-dom";
+import { useSearchParams } from "react-router-dom";
 import { deriveTrackingRows, isVerifiedPlantingReport, trackingMatchesRecordFilters, trackingNeedsCohortLookup } from "../utils/monitoringTracking";
+import { monitoringDisplayId } from "../utils/monitoringRecordView";
+import MonitoringTrackingDetails from "../components/MonitoringTrackingDetails";
 import L from "leaflet";
 import {
   CONDITION_SUM_ERROR, EMPTY_MONITORING_EVIDENCE, clearSharedCountError, monitoringPreview,
@@ -824,7 +826,11 @@ export default function MonitoringPage() {
     cohortEnabled: cohortFeatureEnabled,
     cohortState: trackingLookup ? trackingLookupCurrent.cohortState : "idle", cohorts: trackingLookupCurrent.cohorts,
     readinessState: trackingLookup ? trackingLookupCurrent.readinessState : "idle", readiness: trackingLookupCurrent.readiness,
-  }) : []), [trackingEnabled, plantingReports, records, sampleVisits, cohortFeatureEnabled, trackingLookup, trackingLookupCurrent]);
+    sites,
+  }) : []), [trackingEnabled, plantingReports, records, sampleVisits, cohortFeatureEnabled, trackingLookup, trackingLookupCurrent, sites]);
+  // Tracking row opened in the read-only Monitoring Record Details drawer (no navigation).
+  const [trackingDetailsId, setTrackingDetailsId] = useState("");
+  const trackingDetails = trackingRows.find((row) => row.plantingReportId === trackingDetailsId) || null;
   const trackingLookupFailed = trackingLookup && (trackingLookupCurrent.cohortState === "error" || trackingLookupCurrent.readinessState === "error");
 
   const siteOptions = useMemo(
@@ -1523,7 +1529,7 @@ export default function MonitoringPage() {
   async function archiveRecord(record) {
     const confirmed =
       window.confirm(
-        `Archive monitoring record ${formatDisplayId("MON", record.monitoringNumber, record.monitoringId, record.id)}? It will be removed from the active list but kept in Firestore.`
+        `Archive monitoring record ${monitoringDisplayId(record)}? It will be removed from the active list but kept in Firestore.`
       );
 
     if (!confirmed) return;
@@ -2019,7 +2025,7 @@ export default function MonitoringPage() {
                   return (
                     <tr key={record.id}>
                       <td>
-                        <span className="sm-record-id">{formatDisplayId("MON", record.monitoringNumber, record.monitoringId, record.id)}</span>
+                        <span className="sm-record-id">{monitoringDisplayId(record)}</span>
                       </td>
                       <td>{formatDisplayId("RPT", record.plantingReportNumber, record.plantingReportId)}</td>
                       <td>
@@ -2107,32 +2113,35 @@ export default function MonitoringPage() {
                 {filteredTrackingRows.map((row) => (
                   <tr key={`tracking-${row.plantingReportId}`} data-tracking-row={row.plantingReportId} data-monitoring-policy={row.policy} className="sm-tracking-row">
                     <td>
+                      <span className="sm-record-id sm-record-id-pending">Not yet assigned</span>
                       <span className="sm-tracking-badge">Tracking only</span>
                       <span className="sm-site-sub">Verified planting report · no monitoring record yet</span>
                     </td>
                     <td>{formatDisplayId("RPT", row.reportNumber, row.plantingReportId)}</td>
                     <td>
-                      <strong className="sm-site-name">{row.siteName || "—"}</strong>
+                      <strong className="sm-site-name">{row.siteName || "Site not recorded"}</strong>
                       {row.barangay && <span className="sm-site-sub">Barangay {row.barangay}</span>}
                     </td>
-                    <td>Not scheduled</td>
-                    <td>—</td>
+                    <td>{row.startMonitoringDate ? <>{formatDate(row.startMonitoringDate)}<span className="sm-site-sub">{row.policy === "LEGACY" ? "Opens for first observation" : "First visit due"}</span></> : row.startLabel}</td>
+                    <td>{row.nextLabel}</td>
                     <td>
-                      {row.status}
+                      <strong className="sm-tracking-stage">{row.stage}</strong>
+                      <span className="sm-site-sub">{row.status}</span>
                       <span className="sm-site-sub">{row.requirement}</span>
                       {row.setup && <span className="sm-site-sub">{row.setup}</span>}
                     </td>
-                    <td>No observation yet</td>
+                    <td>Not yet monitored<span className="sm-site-sub">No observation yet</span></td>
                     <td>
                       <div className="sm-row-actions">
-                        <Link
+                        <button
+                          type="button"
                           className="sm-row-icon-button"
-                          to={`/${userRole}/planting-reports?report=${encodeURIComponent(row.plantingReportId)}`}
-                          title="View the verified planting report and its Monitoring Status"
-                          aria-label={`View verified planting report ${row.reportNumber || row.plantingReportId}`}
+                          title="View monitoring record details"
+                          aria-label={`View monitoring record details for ${row.reportNumber || row.plantingReportId}`}
+                          onClick={() => setTrackingDetailsId(row.plantingReportId)}
                         >
                           <FiEye size={14} />
-                        </Link>
+                        </button>
                       </div>
                     </td>
                   </tr>
@@ -2641,6 +2650,10 @@ export default function MonitoringPage() {
       )}
 
       {/* MONITORING DETAILS DRAWER */}
+      {trackingDetails && (
+        <MonitoringTrackingDetails row={trackingDetails} userRole={userRole} onClose={() => setTrackingDetailsId("")} />
+      )}
+
       {showDetails && selectedRecord && (
         <div
           className="sm-drawer-backdrop"
@@ -2651,7 +2664,7 @@ export default function MonitoringPage() {
           <aside className="sm-details-drawer">
             <div className="sm-drawer-header">
               <div>
-                <h2>Survival Monitoring Details</h2>
+                <h2>Monitoring Record Details</h2>
                 <div className="sm-drawer-meta">
                   <span
                     className="sm-condition-badge"
@@ -2663,7 +2676,7 @@ export default function MonitoringPage() {
                   >
                     {selectedRecord.condition}
                   </span>
-                  <span>{formatDisplayId("MON", selectedRecord.monitoringNumber, selectedRecord.monitoringId, selectedRecord.id)}</span>
+                  <span>{monitoringDisplayId(selectedRecord)}</span>
                 </div>
               </div>
 

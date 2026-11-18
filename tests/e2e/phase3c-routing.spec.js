@@ -813,7 +813,7 @@ async function openLifecycleDetail(page, role, entry) {
   await mockLegacyMonitoringApi(page, { monitoring: [{ ...aggregateLifecycle, history: [entry] }] });
   await page.goto(`/${role}/survival-monitoring?role=${role}`);
   await page.locator("tbody tr").filter({ hasText: "Bulan Test Site" }).getByTitle("View monitoring record").click();
-  await expect(page.getByRole("heading", { name: "Survival Monitoring Details" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Monitoring Record Details" })).toBeVisible();
 }
 
 test("returned aggregate observation: Edit and Resubmit only for its original Staff reporter; reason stays visible", async ({ page }) => {
@@ -1103,11 +1103,19 @@ for (const role of ["staff", "admin"]) test(`${role} Monitoring Lifecycles list 
     const row = trackingRow(page, id);
     await expect(row).toContainText("Tracking only");
     await expect(row).toContainText("No observation yet");
-    await expect(row.getByRole("button")).toHaveCount(0);
-    await expect(row.getByRole("link")).toHaveCount(1);
+    await expect(row).toContainText("Not yet assigned");
+    await expect(row).toContainText("Not yet monitored");
+    // One action only: the eye icon opens Monitoring Record Details; no monitoring or navigation actions.
+    await expect(row.getByRole("button")).toHaveCount(1);
+    await expect(row.getByRole("link")).toHaveCount(0);
   }
-  await expect(trackingRow(page, "report-spot").getByRole("link", { name: "View verified planting report RPT-2026-020" }))
-    .toHaveAttribute("href", `/${role}/planting-reports?report=report-spot`);
+  // Headline stage, truthful schedule labels and the lifecycle's real sequential Monitoring ID.
+  await expect(trackingRow(page, "report-spot")).toContainText("Awaiting Monitoring Setup");
+  await expect(trackingRow(page, "report-spot")).toContainText("Awaiting Policy Decision");
+  await expect(trackingRow(page, "report-spot")).toContainText("Not Scheduled");
+  await expect(trackingRow(page, "report-legacy")).toContainText("Awaiting Submission");
+  await expect(trackingRow(page, "report-legacy")).toContainText("Opens for first observation");
+  await expect(table.locator("tr", { hasText: "RPT-2026-104" }).locator(".sm-record-id")).toHaveText("MON-2026-004");
   // Tracking rows are never counted as monitoring records or observations.
   const footer = page.locator(".sm-table-footer");
   await expect(footer).toContainText(role === "admin" ? "of 3 records" : "of 1 records");
@@ -1198,4 +1206,42 @@ test("Participants never reach tracking rows or trigger setup lookups", async ({
   await expect(page).toHaveURL(/\/participant\/my-planting-reports/);
   await expect(page.locator("tr[data-tracking-row]")).toHaveCount(0);
   expect(await page.evaluate(() => window.__PHASE3C_COHORT_CALLS__ || 0)).toBe(0);
+});
+
+for (const role of ["staff", "admin"]) test(`${role} eye icon opens read-only Monitoring Record Details for a tracking row without navigating`, async ({ page }) => {
+  const writes = await openTracking(page, role, { fixture: role === "admin" ? "admin-records" : "" });
+  const before = page.url();
+  await trackingRow(page, "report-cohort").getByRole("button", { name: "View monitoring record details for RPT-2026-102" }).click();
+  const drawer = page.getByRole("dialog", { name: "Monitoring Record Details" });
+  await expect(drawer).toBeVisible();
+  expect(page.url()).toBe(before);
+  await expect(drawer).toContainText("Monitoring ID: Not yet assigned");
+  await expect(drawer).toContainText("RPT-2026-102");
+  await expect(drawer).toContainText("RPT-2026-102 Site");
+  await expect(drawer).toContainText("Bical");
+  await expect(drawer).toContainText("18");
+  await expect(drawer).toContainText("Permanent-sample monitoring");
+  await expect(drawer).toContainText("Awaiting Monitoring Setup");
+  await expect(drawer).toContainText("Sampling plan: Draft · Baseline: Not Started · Visit: Not ready");
+  await expect(drawer.getByRole("list", { name: "Why monitoring cannot start yet" })).toContainText("visit scheduling policy");
+  await expect(drawer).toContainText("Not yet monitored.");
+  await expect(drawer).toContainText("No monitoring observations have been submitted for this planting report.");
+  // Read-only: no monitoring, approval or editing controls for either role.
+  await expect(drawer.getByRole("button", { name: /Save|Submit|Approve|Return|Reject|Monitor|Edit|Archive/ })).toHaveCount(0);
+  await drawer.getByRole("button", { name: "Close monitoring record details" }).click();
+  await expect(drawer).toHaveCount(0);
+  await trackingRow(page, "report-spot").getByRole("button", { name: /View monitoring record details/ }).click();
+  await expect(page.getByRole("dialog", { name: "Monitoring Record Details" })).toContainText("Staff spot-check");
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("dialog", { name: "Monitoring Record Details" })).toHaveCount(0);
+  expect(writes).toEqual([]);
+});
+
+test("a monitoring lifecycle without a sequential number never shows a fabricated Monitoring ID", async ({ page }) => {
+  await isolate(page);
+  await mockLegacyMonitoringApi(page, { plantingReports: [], monitoring: [{ ...trackedLifecycle, id: "MON-0a1b2c3d4e5f60718293", monitoringNumber: "" }] });
+  await page.goto("/staff/survival-monitoring?role=staff");
+  const row = page.locator(".sm-records-card table.sm-table tbody tr").first();
+  await expect(row.locator(".sm-record-id")).toHaveText("Not yet assigned");
+  await expect(page.locator(".sm-records-card")).not.toContainText(/MON-[A-Z0-9]{7}\b/);
 });
