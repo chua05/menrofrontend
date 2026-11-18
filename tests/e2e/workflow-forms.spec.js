@@ -746,27 +746,24 @@ async function expectAutomaticApproval(modal) {
   await expect(modal).not.toContainText(/Admin Final Purpose Policy|Policy version:|Pending thresholds|organization precedence/i);
   await expect(modal.getByRole("button", { name: /Change Requirements/i })).toHaveCount(0);
 }
-const automaticApprovalBlocked = "This request cannot be approved yet. MENRO must first confirm its reporting and monitoring requirements. No approval was saved.";
-
-test("Staff review stays independent and automatic Admin approval blocks an unresolved Other-purpose request", async ({ page }) => {
+test("Staff review stays independent and automatic Admin approval records an unresolved Other-purpose policy as pending", async ({ page }) => {
   let request = { ...ownRequest("Pending", "citizen-requester"), purposePolicyManaged: true, purpose: "Habitat activity", purposePolicyCandidate: { purpose: "Other", policyVersion: 0 }, workflow: { ...ownRequest().workflow, purpose: "Other", purposeOther: "Habitat activity" } };
   let reviewed = false, approvalAttempts = 0;
   const fixture = await setup(page, { "GET /api/seedling-requests": route => route.fulfill({ json: { success: true, data: [request] } }),
     "PATCH /api/seedling-requests/staff-own-request/review": (route, req) => { expect(req.postDataJSON()).not.toHaveProperty("policyProposal"); reviewed = true; request = { ...request, status: "Reviewed", requestVersion: 4 }; return route.fulfill({ json: { success: true, data: request } }); },
     "PATCH /api/seedling-requests/staff-own-request/approve": (route, req) => {
       approvalAttempts++; expect(req.postDataJSON()).toEqual({ expectedVersion: 4 });
-      return route.fulfill({ status: 409, json: { success: false, message: "An explicit Admin reporting/monitoring policy decision is required before approval.", fieldErrors: { policyReason: "Resolve the pending purpose/organization policy." } } });
+      request = { ...request, status: "Approved", requestVersion: 5, approvedPurposePolicy: { policyStatus: "PENDING_MENRO_POLICY", pendingReasons: ["OTHER_PURPOSE", "CONDITIONAL_THRESHOLD_PENDING"], definition: { reporting: "PENDING_MENRO_POLICY", monitoring: "PENDING_MENRO_POLICY" }, override: null, source: "ADMIN_APPROVED_REQUEST_POLICY_PENDING" } };
+      return route.fulfill({ json: { success: true, data: request } });
     } });
   await page.goto("/staff/requests?role=staff"); await page.getByRole("button", { name: "View details for REQ-2099-001", exact: true }).click(); await page.getByRole("button", { name: "Review", exact: true }).click();
-  const reviewDialog = page.locator(".sr-decision-modal").filter({ has: page.getByRole("heading", { name: "Review Seedling Request", exact: true }) });
-  await expect(reviewDialog).toBeVisible(); await expectAutomaticApproval(reviewDialog);
-  await page.getByRole("button", { name: "Complete Review", exact: true }).click(); await expect(page.getByRole("button", { name: "Complete Review", exact: true })).toHaveCount(0); expect(reviewed).toBe(true);
+  const review = page.getByRole("dialog").filter({ has: page.getByRole("heading", { name: "Review Seedling Request", exact: true }) }); await expect(review).toBeVisible(); await expect(review.getByText(/Staff Policy Proposal|Reporting Requirement|Monitoring Requirement|Reason for Policy/)).toHaveCount(0);
+  await review.getByRole("button", { name: "Complete Review", exact: true }).click(); await expect(review).toHaveCount(0); expect(reviewed).toBe(true);
   await page.goto("/admin/requests?role=admin"); await page.getByRole("button", { name: "View details for REQ-2099-001", exact: true }).click(); await page.getByRole("button", { name: "Approve", exact: true }).click();
-  const modal = page.locator(".sr-decision-modal"), confirm = modal.getByRole("button", { name: "Confirm Approval", exact: true });
-  await expectAutomaticApproval(modal); await confirm.click();
-  await expect(modal.getByRole("alert")).toHaveText(automaticApprovalBlocked); await expect(confirm).toBeDisabled();
-  await confirm.evaluate(node => node.click()); expect(approvalAttempts).toBe(1); expect(request.status).toBe("Reviewed");
-  await expect(modal.getByRole("button", { name: "Cancel", exact: true })).toBeEnabled(); fixture.check();
+  const modal = page.locator(".sr-decision-modal"); await expectAutomaticApproval(modal);
+  await modal.getByRole("button", { name: "Confirm Approval", exact: true }).click(); await expect(modal).toHaveCount(0);
+  await expect(page.getByText("Pending MENRO policy decision", { exact: true })).toBeVisible();
+  expect(approvalAttempts).toBe(1); expect(request.status).toBe("Approved"); expect(request.approvedPurposePolicy.override).toBeNull(); fixture.check();
 });
 
 const automaticApprovalScenarios = [
@@ -800,21 +797,40 @@ for (const scenario of automaticApprovalScenarios) test(`Admin automatic approva
 });
 
 for (const scenario of [
-  { label: "missing quantity threshold", purpose: "Agroforestry / Fruit Tree", sector: "Resident / Individual" },
-  { label: "unresolved organization rule", purpose: "Household / Backyard", sector: "Government Agency" },
-]) test(`Admin automatic approval stays blocked for ${scenario.label}`, async ({ page }) => {
-  const request = { ...ownRequest("Reviewed", "citizen-requester"), purposePolicyManaged: true, purpose: scenario.purpose,
+  { label: "missing quantity threshold", purpose: "Agroforestry / Fruit Tree", sector: "Resident / Individual", pendingReasons: ["CONDITIONAL_THRESHOLD_PENDING"] },
+  { label: "unresolved organization rule", purpose: "Household / Backyard", sector: "Government Agency", pendingReasons: ["ORGANIZATION_POLICY_PENDING"] },
+]) test(`Admin automatic approval records pending MENRO policy for ${scenario.label}`, async ({ page }) => {
+  let request = { ...ownRequest("Reviewed", "citizen-requester"), purposePolicyManaged: true, purpose: scenario.purpose,
     workflow: { ...ownRequest().workflow, purpose: scenario.purpose, sector: scenario.sector } };
-  let attempts = 0;
+  const originalSchedule = structuredClone(request.originalSchedule); let attempts = 0;
   const fixture = await setup(page, {
     "GET /api/seedling-requests": route => route.fulfill({ json: { success: true, data: [request] } }),
     "PATCH /api/seedling-requests/staff-own-request/approve": (route, req) => { attempts++; expect(req.postDataJSON()).toEqual({ expectedVersion: 3 });
-      return route.fulfill({ status: 409, json: { success: false, message: "An explicit Admin reporting/monitoring policy decision is required before approval.", fieldErrors: { policyReason: "Resolve the pending purpose/organization policy." } } }); },
+      request = { ...request, status: "Approved", requestVersion: 4, approvedPurposePolicy: { policyStatus: "PENDING_MENRO_POLICY", pendingReasons: scenario.pendingReasons, definition: { reporting: "PENDING_MENRO_POLICY", monitoring: "PENDING_MENRO_POLICY" }, override: null } };
+      return route.fulfill({ json: { success: true, data: request } }); },
   });
   await page.goto("/admin/requests?role=admin"); await page.getByRole("button", { name: "View details for REQ-2099-001", exact: true }).click(); await page.getByRole("button", { name: "Approve", exact: true }).click();
   const modal = page.locator(".sr-decision-modal"); await expectAutomaticApproval(modal); await modal.getByRole("button", { name: "Confirm Approval", exact: true }).click();
-  await expect(modal.getByRole("alert")).toHaveText(automaticApprovalBlocked); await expect(modal.getByRole("button", { name: "Confirm Approval", exact: true })).toBeDisabled();
-  await modal.getByRole("button", { name: "Cancel", exact: true }).click(); await expect(modal).toHaveCount(0); expect(attempts).toBe(1); expect(request.status).toBe("Reviewed"); fixture.check();
+  await expect(modal).toHaveCount(0); await expect(page.getByText("Pending MENRO policy decision", { exact: true })).toBeVisible();
+  expect(attempts).toBe(1); expect(request.status).toBe("Approved"); expect(request.originalSchedule).toEqual(originalSchedule); fixture.check();
+});
+
+test("automatic approval surfaces a policy validation failure without permanently locking the decision", async ({ page }) => {
+  let request = { ...ownRequest("Reviewed", "citizen-requester"), purposePolicyManaged: true }, attempts = 0;
+  const fixture = await setup(page, {
+    "GET /api/seedling-requests": route => route.fulfill({ json: { success: true, data: [request] } }),
+    "PATCH /api/seedling-requests/staff-own-request/approve": (route, req) => {
+      expect(req.postDataJSON()).toEqual({ expectedVersion: 3 }); attempts++;
+      if (attempts === 1) return route.fulfill({ status: 409, json: { success: false, message: "Policy validation changed.", fieldErrors: { policyReason: "Refresh policy metadata." } } });
+      request = { ...request, status: "Approved", requestVersion: 4, approvedPurposePolicy: { policyStatus: "PENDING_MENRO_POLICY", definition: { reporting: "PENDING_MENRO_POLICY", monitoring: "PENDING_MENRO_POLICY" }, override: null } };
+      return route.fulfill({ json: { success: true, data: request } });
+    },
+  });
+  await page.goto("/admin/requests?role=admin"); await page.getByRole("button", { name: "View details for REQ-2099-001", exact: true }).click(); await page.getByRole("button", { name: "Approve", exact: true }).click();
+  const modal = page.locator(".sr-decision-modal"), confirm = modal.getByRole("button", { name: "Confirm Approval", exact: true }); await expectAutomaticApproval(modal); await confirm.click();
+  await expect(modal.getByRole("alert")).toHaveText("Approval requirements could not be validated. Refresh the request and try again. No approval was saved.");
+  await expect(confirm).toBeEnabled(); expect(attempts).toBe(1); expect(request.status).toBe("Reviewed");
+  await confirm.click(); await expect(modal).toHaveCount(0); expect(attempts).toBe(2); fixture.check();
 });
 
 for (const failure of [

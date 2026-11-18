@@ -52,6 +52,7 @@ import "../styles/seedling-requests.css";
 import ParticipantSaplingRequestWizard from "./ParticipantSaplingRequestWizard";
 import { getRequesterDetailField } from "../utils/requesterDetails";
 import { ownsSeedlingRequest, canProcessSeedlingRequest } from "../utils/requestOwnership";
+import { approvedPolicyLabel } from "../utils/purposePolicyStatus";
 
 
 const TABS = [
@@ -1515,7 +1516,7 @@ useEffect(() => {
   };
 
   const submitDecision = async () => {
-    if (actionLoading || !decisionModal?.request?.id || (decisionModal.action === "approve" && decisionModal.policyBlocked)) return;
+    if (actionLoading || !decisionModal?.request?.id) return;
 
     const { request, action } = decisionModal;
     let payload;
@@ -1577,8 +1578,7 @@ useEffect(() => {
         // If backend indicates a guest-invitation/server-secret configuration
         // issue, surface a safe administrative message instead of raw text.
         if ((error.status === 400 || error.status === 409) && error.fieldErrors?.policyReason) {
-          setDecisionModal(current => current ? { ...current, policyBlocked: true } : current);
-          setDecisionError("This request cannot be approved yet. MENRO must first confirm its reporting and monitoring requirements. No approval was saved.");
+          setDecisionError("Approval requirements could not be validated. Refresh the request and try again. No approval was saved.");
         } else if (/GUEST_INVITATION_SECRET|invitation secret|guest invitation|secret/i.test(rawMessage)) {
           setDecisionError(
             "Unable to approve the request due to a server configuration error. Please contact the system administrator."
@@ -2987,6 +2987,7 @@ useEffect(() => {
                   subvalue={selectedRequest.contactNumber || "—"}
                 />
                 <DetailItem label="Purpose / Activity" value={selectedRequest.purpose} />
+                {selectedRequest.approvedPurposePolicy && <DetailItem label="Reporting & Monitoring Policy" value={approvedPolicyLabel(selectedRequest.approvedPurposePolicy)} />}
                 <DetailItem label="Preferred Release Date" value={formatDate(selectedRequest.preferredReleaseDate)} />
                 <DetailItem label="Event Name" value={selectedRequest.eventName} fullWidth />
                 <DetailItem label="Barangay" value={selectedRequest.eventBarangay || selectedRequest.barangay} />
@@ -4517,7 +4518,7 @@ function AdminDecisionModal({
             }
             onClick={onSubmit}
             disabled={
-              loading || (isApprove && modal.policyBlocked === true) ||
+              loading ||
               (!isApprove && !rejectionChoice.trim())
             }
           >
