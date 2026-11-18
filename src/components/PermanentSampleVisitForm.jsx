@@ -18,14 +18,31 @@ function SpeciesQuantities({ rows, fallback }) {
 }
 // Read-only layout of the seven monitoring sections shown before an authorized visit is selected.
 // Every value is an honest empty state; no site, schedule, Tree ID or approval is implied and every control is disabled.
-export function PermanentSampleVisitShell({ describedBy }) {
+// `report` (optional): a setup-pending verified planting report (read-only tracking row). Only its known report
+// details fill section 1; sampling values appear only when a permanent-sample cohort actually exists.
+export function PermanentSampleVisitShell({ describedBy, report = null }) {
   const none = "No authorized visit selected";
   const disabledProps = { disabled: true, "aria-describedby": describedBy };
+  const cohort = report?.cohort || null;
+  const noCohort = report ? (report.policy === "STAFF_SPOT_CHECK" ? "Not applicable (Staff spot-check)"
+    : report.policy === "PENDING_MENRO_POLICY" ? "Pending MENRO monitoring policy" : "No permanent-sample cohort") : none;
+  const values = report ? {
+    "Planting Report ID": report.reportNumber || "Not available",
+    "Planting Site": report.siteName || "Not available",
+    "Address / Barangay": report.barangay || "Not available",
+    "Planting Report Status": "Verified",
+    "Planting Date": report.plantingDate || "Not available",
+    "Verified Planted Quantity": report.verifiedPlantedQuantity ?? "Not available",
+    "Approved Sample Target": cohort ? cohort.approvedSampleTarget ?? "Not approved" : noCohort,
+    "Sampling Plan Status": cohort ? cohort.samplingPlanStatus : noCohort,
+    "Registered Sample Trees": cohort ? cohort.registeredSampleTrees ?? "None registered" : noCohort,
+    "Species and Quantities": "Shown after an authorized visit is created",
+  } : {};
   return <fieldset className="psm-shell" disabled aria-describedby={describedBy}>
     <legend className="psm-shell-legend">Monitoring form (read-only until an authorized visit is selected)</legend>
     <section className="psm-section"><h3>1. Verified Planting Site Information</h3>
       <dl className="psm-info">{["Planting Report ID", "Planting Site", "Address / Barangay", "Planting Report Status", "Planting Date", "Verified Planted Quantity",
-        "Approved Sample Target", "Sampling Plan Status", "Registered Sample Trees", "Species and Quantities"].map(label => <Reference key={label} label={label} value={none} />)}
+        "Approved Sample Target", "Sampling Plan Status", "Registered Sample Trees", "Species and Quantities"].map(label => <Reference key={label} label={label} value={report ? values[label] : none} />)}
         <Reference label="Monitoring Visit Number" value="Not assigned" /></dl>
     </section>
     <section className="psm-section"><h3>2. Monitoring Summary &amp; Automatic Schedule</h3><dl className="psm-info">

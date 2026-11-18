@@ -9,6 +9,8 @@ export const MONITORING_POLICY = Object.freeze({
   NONE: "NONE",
   STAFF_SPOT_CHECK: "STAFF_SPOT_CHECK",
   PERMANENT_SAMPLE: "PERMANENT_SAMPLE",
+  // Approved request whose purpose/organization policy MENRO has not set yet: not exempt, not authorized.
+  PENDING_MENRO_POLICY: "PENDING_MENRO_POLICY",
   UNKNOWN: "UNKNOWN",
 });
 
@@ -18,7 +20,7 @@ export function monitoringPolicyOf(report = {}) {
   const policy = report?.reportingPolicy;
   if (!policy) return MONITORING_POLICY.LEGACY;
   const value = policy.monitoring;
-  return [MONITORING_POLICY.NONE, MONITORING_POLICY.STAFF_SPOT_CHECK, MONITORING_POLICY.PERMANENT_SAMPLE].includes(value)
+  return [MONITORING_POLICY.NONE, MONITORING_POLICY.STAFF_SPOT_CHECK, MONITORING_POLICY.PERMANENT_SAMPLE, MONITORING_POLICY.PENDING_MENRO_POLICY].includes(value)
     ? value : MONITORING_POLICY.UNKNOWN;
 }
 
@@ -33,6 +35,7 @@ const REQUIREMENT_LABEL = {
   NONE: "No monitoring required",
   STAFF_SPOT_CHECK: "Staff spot-check",
   PERMANENT_SAMPLE: "Permanent-sample monitoring",
+  PENDING_MENRO_POLICY: "Monitoring policy pending MENRO decision",
   UNKNOWN: "Unrecognized monitoring requirement",
 };
 
@@ -71,6 +74,10 @@ export function describeMonitoringStatus({ report, cohortEnabled, cohortState = 
   if (policy === MONITORING_POLICY.STAFF_SPOT_CHECK) {
     result.notes.push("Monitoring workflow pending MENRO policy. Staff spot-check procedures, schedule and evidence rules have not been approved, so no monitoring visit or observation can be recorded for this report yet.");
     result.notes.push("Staff spot-check reports do not receive a permanent-sample cohort.");
+    return result;
+  }
+  if (policy === MONITORING_POLICY.PENDING_MENRO_POLICY) {
+    result.notes.push("MENRO has not yet decided the reporting and monitoring policy for this purpose or requester type. Monitoring is neither waived nor authorized, so no cohort, monitoring visit or observation can be recorded until MENRO sets it.");
     return result;
   }
   if (policy === MONITORING_POLICY.UNKNOWN) {

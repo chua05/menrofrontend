@@ -223,6 +223,12 @@ function reviewResponse(visitId, options, activeFixture) {
 }
 
 export async function authenticatedFetch(path, options = {}) {
+  // Read-only cohort list used by Survival Monitoring tracking rows (GET only).
+  if (String(path) === "/verified-planting-cohorts" && (!options.method || options.method === "GET")) {
+    window.__PHASE3C_COHORT_CALLS__ = (window.__PHASE3C_COHORT_CALLS__ || 0) + 1;
+    if (fixture() === "tracking-cohort-error" && !window.__PHASE3C_COHORTS_RECOVERED__) return failure(500, "Cohorts unavailable.");
+    return response(200, { success: true, data: window.__PHASE3C_COHORTS__ || [] });
+  }
   if (!String(path).startsWith("/verified-sample-monitoring/") && !String(path).startsWith("/evidence-capture-sessions") && !String(path).startsWith("/evidence/")) throw new Error(`Unregistered test API: ${path}`);
   window.__PHASE3C_REQUESTS__ = [...(window.__PHASE3C_REQUESTS__ || []), String(path)];
   const activeFixture = fixture();

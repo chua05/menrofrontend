@@ -1827,3 +1827,8 @@
   .sm-header-actions .sm-primary-button + .sm-aggregate-action { grid-column: 1 / -1; }
   .sm-secondary-button.sm-aggregate-action, .sm-header-actions .sm-primary-link { white-space: normal; text-align: center; min-width: 0; }
 }
+
+/* Read-only tracking rows: verified planting reports with no monitoring record yet. */
+.sm-tracking-row td { background: #fbfcf7; }
+.sm-tracking-badge { display: inline-block; padding: 2px 8px; border: 1px dashed #8aa596; border-radius: 999px; color: #3f5a4a; font-size: 12px; font-weight: 700; }
+.sm-tracking-count { color: #5b6b62; }

@@ -6,7 +6,8 @@ import { withDeadline, RequestTimeoutError, READ_TIMEOUT_MS } from "../utils/req
 import { resolveVerifiedPlantingCohortEnabled } from "../utils/verifiedPlantingCohort";
 import { canDecideVisit, createLatestRequestGate, loadSubmittedVisitPages, visitMatchesRecordFilters, visitStatusLabel } from "../utils/adminMonitoringVisitReview";
 import { createEvidenceAttempt, assertEvidenceComplete } from "../utils/evidenceAttempt";
-import { useSearchParams } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
+import { deriveTrackingRows, isVerifiedPlantingReport, trackingMatchesRecordFilters, trackingNeedsCohortLookup } from "../utils/monitoringTracking";
 import L from "leaflet";
 import {
   CONDITION_SUM_ERROR, EMPTY_MONITORING_EVIDENCE, clearSharedCountError, monitoringPreview,
@@ -588,10 +589,7 @@ export default function MonitoringPage() {
 
         setPlantingReports(
           reports.filter(
-            (report) =>
-              report?.archived !== true &&
-              (["approved", "verified"].includes(String(report?.verificationStatus || "").trim().toLowerCase()) ||
-                String(report?.reportingProgress || "").trim().toLowerCase() === "completed")
+            (report) => isVerifiedPlantingReport(report)
           )
         );
         setSites(Array.isArray(sitesResponse.data) ? sitesResponse.data : []);
@@ -692,10 +690,7 @@ export default function MonitoringPage() {
             ? plantingResponse.data
             : []
         ).filter(
-          (report) =>
-            report?.archived !== true &&
-            (["approved", "verified"].includes(String(report?.verificationStatus || "").trim().toLowerCase()) ||
-              String(report?.reportingProgress || "").trim().toLowerCase() === "completed")
+          (report) => isVerifiedPlantingReport(report)
         )
       );
 
@@ -780,11 +775,63 @@ export default function MonitoringPage() {
     );
   }, [records, isParticipant, currentIdentity.id]);
 
+  // Staff/Admin read-only tracking: Admin-verified planting reports that have no actual monitoring
+  // lifecycle yet, derived from records already loaded. No monitoring record, cohort or visit is created,
+  // tracking rows are never counted as monitoring records or observations, and stored policies are shown as-is.
+  const trackingEnabled = isStaff || isAdmin;
+  const cohortFeatureEnabled = resolveVerifiedPlantingCohortEnabled();
+  const trackingLookup = trackingEnabled && trackingNeedsCohortLookup(plantingReports, cohortFeatureEnabled, records);
+  // Stable key of the reports that can become tracking rows; readiness is requested only when one has a cohort.
+  const trackingCandidateKey = useMemo(() => {
+    const tracked = new Set(records.map((record) => String(record.plantingReportId || "")));
+    return plantingReports.filter((report) => isVerifiedPlantingReport(report) && !tracked.has(String(getPlantingReportId(report))))
+      .map((report) => String(getPlantingReportId(report))).sort().join("|");
+  }, [plantingReports, records]);
+  const [trackingLookupRun, setTrackingLookupRun] = useState(0);
+  const [trackingLookupState, setTrackingLookupState] = useState({ run: -1, cohortState: "idle", cohorts: [], readinessState: "idle", readiness: null });
+  useEffect(() => {
+    if (!trackingLookup) return undefined;
+    let active = true;
+    const run = trackingLookupRun;
+    const read = async (path) => {
+      const response = await authenticatedFetch(path);
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok || !payload.success) throw new Error("unavailable");
+      return payload.data;
+    };
+    const update = (patch) => active && setTrackingLookupState((state) => ({ ...(state.run === run ? state : { run, cohortState: "loading", cohorts: [], readinessState: "loading", readiness: null }), ...patch }));
+    const candidates = new Set(trackingCandidateKey.split("|").filter(Boolean));
+    read("/verified-planting-cohorts")
+      .then(async (data) => {
+        const cohorts = Array.isArray(data) ? data : [];
+        update({ cohortState: "ready", cohorts });
+        // Visit readiness only describes cohorts; skip the request when no tracked report has one.
+        if (!cohorts.some((cohort) => candidates.has(String(cohort?.source?.plantingReportId || "")))) {
+          update({ readinessState: "ready", readiness: { cohorts: [] } });
+          return;
+        }
+        try { update({ readinessState: "ready", readiness: await read("/verified-sample-monitoring/readiness") }); }
+        catch { update({ readinessState: "error" }); }
+      })
+      .catch(() => update({ cohortState: "error", readinessState: "error" }));
+    return () => { active = false; };
+  }, [trackingLookup, trackingLookupRun, trackingCandidateKey]);
+  const trackingLookupCurrent = useMemo(() => (trackingLookupState.run === trackingLookupRun ? trackingLookupState
+    : { cohortState: "loading", cohorts: [], readinessState: "loading", readiness: null }), [trackingLookupState, trackingLookupRun]);
+  const trackingRows = useMemo(() => (trackingEnabled ? deriveTrackingRows({
+    reports: plantingReports, lifecycles: records,
+    visitCohortIds: new Set(sampleVisits.map((visit) => String(visit.cohortId || "")).filter(Boolean)),
+    cohortEnabled: cohortFeatureEnabled,
+    cohortState: trackingLookup ? trackingLookupCurrent.cohortState : "idle", cohorts: trackingLookupCurrent.cohorts,
+    readinessState: trackingLookup ? trackingLookupCurrent.readinessState : "idle", readiness: trackingLookupCurrent.readiness,
+  }) : []), [trackingEnabled, plantingReports, records, sampleVisits, cohortFeatureEnabled, trackingLookup, trackingLookupCurrent]);
+  const trackingLookupFailed = trackingLookup && (trackingLookupCurrent.cohortState === "error" || trackingLookupCurrent.readinessState === "error");
+
   const siteOptions = useMemo(
     () =>
-      [...new Set([...visibleRecords, ...sampleVisits].map((record) => record.siteName).filter(Boolean))]
+      [...new Set([...visibleRecords, ...sampleVisits, ...trackingRows].map((record) => record.siteName).filter(Boolean))]
         .sort((a, b) => a.localeCompare(b)),
-    [visibleRecords, sampleVisits]
+    [visibleRecords, sampleVisits, trackingRows]
   );
 
   const speciesOptions = useMemo(
@@ -885,7 +932,12 @@ export default function MonitoringPage() {
   const filteredSampleVisits = useMemo(() => sampleVisits.filter((visit) => visitMatchesRecordFilters(visit, {
     search: searchTerm, site: siteFilter, species: speciesFilter, condition: conditionFilter, from: dateFrom, to: dateTo,
   })), [sampleVisits, searchTerm, siteFilter, speciesFilter, conditionFilter, dateFrom, dateTo]);
+  // Actual monitoring records (aggregate lifecycles and permanent-sample visits). Tracking rows are counted separately.
   const totalRows = filteredRecords.length + filteredSampleVisits.length;
+  const filteredTrackingRows = useMemo(() => trackingRows.filter((row) => trackingMatchesRecordFilters(row, {
+    search: searchTerm, site: siteFilter, species: speciesFilter, condition: conditionFilter, from: dateFrom, to: dateTo,
+  })), [trackingRows, searchTerm, siteFilter, speciesFilter, conditionFilter, dateFrom, dateTo]);
+  const tableRows = totalRows + filteredTrackingRows.length;
 
   const officialEntries = useMemo(() => visibleRecords.flatMap((record) => {
     const approved = (record.history || []).filter((entry) =>
@@ -1584,7 +1636,7 @@ export default function MonitoringPage() {
 
       {/* Mounted on first use and kept mounted, so unsaved per-tree edits survive closing and reopening. */}
       {isStaff && sampleFormMounted && (
-        <PermanentSampleMonitoringPage embedded open={sampleFormOpen} onClose={() => setSampleFormOpen(false)} />
+        <PermanentSampleMonitoringPage embedded open={sampleFormOpen} onClose={() => setSampleFormOpen(false)} setupPendingReports={trackingRows} />
       )}
 
       {isParticipant && loadError && (
@@ -1934,6 +1986,12 @@ export default function MonitoringPage() {
           )}
           {sampleVisitsEnabled && sampleVisitsState.writesPaused && <p role="status" className="sm-site-sub">Permanent-sample changes are paused. Visits stay viewable; Approve and Return are unavailable.</p>}
           {sampleVisitsEnabled && sampleVisitsState.labelsIncomplete && <p role="status" className="sm-site-sub">Some submitter, report or site labels could not be loaded and are shown as unavailable.</p>}
+          {trackingLookupFailed && (
+            <p role="alert" className="sm-site-sub">
+              Monitoring setup status for verified planting reports could not be loaded. Verified reports are still listed.{" "}
+              <button type="button" className="sm-text-button" onClick={() => setTrackingLookupRun((run) => run + 1)}>Retry setup status</button>
+            </p>
+          )}
           {sampleVisitsEnabled && sampleVisitsState.truncated && <p role="alert" className="sm-site-sub">Not every permanent-sample visit could be listed (more than {(MAX_SAMPLE_VISIT_PAGES * SAMPLE_VISIT_PAGE_SIZE).toLocaleString()} visits). Contact the system administrator.</p>}
         </div>
 
@@ -1952,7 +2010,7 @@ export default function MonitoringPage() {
               </tr>
             </thead>
 
-            {totalRows > 0 && (
+            {tableRows > 0 && (
               <tbody>
                 {filteredRecords.map((record) => {
                   const meta =
@@ -2044,6 +2102,41 @@ export default function MonitoringPage() {
                     </tr>
                   );
                 })}
+                {/* Staff/Admin: verified planting reports with no monitoring record yet. Tracking only — no
+                    observation, approval or monitoring action; View opens the report and its Monitoring Status. */}
+                {filteredTrackingRows.map((row) => (
+                  <tr key={`tracking-${row.plantingReportId}`} data-tracking-row={row.plantingReportId} data-monitoring-policy={row.policy} className="sm-tracking-row">
+                    <td>
+                      <span className="sm-tracking-badge">Tracking only</span>
+                      <span className="sm-site-sub">Verified planting report · no monitoring record yet</span>
+                    </td>
+                    <td>{formatDisplayId("RPT", row.reportNumber, row.plantingReportId)}</td>
+                    <td>
+                      <strong className="sm-site-name">{row.siteName || "—"}</strong>
+                      {row.barangay && <span className="sm-site-sub">Barangay {row.barangay}</span>}
+                    </td>
+                    <td>Not scheduled</td>
+                    <td>—</td>
+                    <td>
+                      {row.status}
+                      <span className="sm-site-sub">{row.requirement}</span>
+                      {row.setup && <span className="sm-site-sub">{row.setup}</span>}
+                    </td>
+                    <td>No observation yet</td>
+                    <td>
+                      <div className="sm-row-actions">
+                        <Link
+                          className="sm-row-icon-button"
+                          to={`/${userRole}/planting-reports?report=${encodeURIComponent(row.plantingReportId)}`}
+                          title="View the verified planting report and its Monitoring Status"
+                          aria-label={`View verified planting report ${row.reportNumber || row.plantingReportId}`}
+                        >
+                          <FiEye size={14} />
+                        </Link>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
                 {/* Admin only: Staff-submitted permanent-sample visits (never drafts). View opens the read-only
                     seven-section form; Approve/Return appear at its bottom only for eligible pending visits. */}
                 {filteredSampleVisits.map((visit) => {
@@ -2087,7 +2180,7 @@ export default function MonitoringPage() {
             )}
           </table>
 
-          {totalRows === 0 && (
+          {tableRows === 0 && (
             <div className="sm-empty-state">
               <div className="sm-empty-illustration">
                 <FiFileText size={28} />
@@ -2097,7 +2190,7 @@ export default function MonitoringPage() {
               <strong>
                 {loadError
                   ? "Monitoring data unavailable"
-                  : visibleRecords.length === 0 && sampleVisits.length === 0
+                  : visibleRecords.length === 0 && sampleVisits.length === 0 && trackingRows.length === 0
                   ? "No monitoring records yet"
                   : "No matching monitoring records"}
               </strong>
@@ -2105,7 +2198,7 @@ export default function MonitoringPage() {
               <p>
                 {loadError
                   ? "Refresh the page to try loading your records again."
-                  : visibleRecords.length === 0 && sampleVisits.length === 0
+                  : visibleRecords.length === 0 && sampleVisits.length === 0 && trackingRows.length === 0
                   ? isParticipant
                     ? "Your monitoring records will appear here after you submit updates for verified planting reports."
                     : "Survival monitoring records will appear here after MENRO Staff submit authorized observations."
@@ -2119,6 +2212,11 @@ export default function MonitoringPage() {
           <span>
             Showing {totalRows === 0 ? 0 : 1} to{" "}
             {totalRows} of {totalRows} records
+            {filteredTrackingRows.length > 0 && (
+              <span className="sm-tracking-count">
+                {" · "}{filteredTrackingRows.length} verified planting {filteredTrackingRows.length === 1 ? "report" : "reports"} awaiting monitoring (tracking only, not monitoring records)
+              </span>
+            )}
           </span>
 
           <div className="sm-pagination">
