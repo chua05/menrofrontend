@@ -227,7 +227,7 @@ export default function PermanentSampleMonitoringPage({ embedded = false, open: 
   };
   const pendingOptions = pendingReports.length > 0 && <optgroup label="Setup Pending">
     {pendingReports.map(row => <option key={row.plantingReportId} value={`pending:${row.plantingReportId}`}>
-      {`${row.reportNumber || "Verified planting report"} · ${row.siteName || "Planting site"} · ${row.status}`}</option>)}
+      {`${row.reportNumber || "Verified planting report"} · ${row.siteName || "Planting site"} · ${row.stage || row.status}`}</option>)}
   </optgroup>;
 
   const updateAssessment = (sampleId, field, value) => {
@@ -561,7 +561,8 @@ export default function PermanentSampleMonitoringPage({ embedded = false, open: 
             <h2 id="psm-setup-pending-title">Setup pending: {pendingReport.reportNumber || "Verified planting report"}</h2>
             <dl className="psm-info">
               <div><dt>Monitoring requirement</dt><dd>{pendingReport.requirement}</dd></div>
-              <div><dt>Monitoring status</dt><dd>{pendingReport.status}</dd></div>
+              <div><dt>Monitoring status</dt><dd>{pendingReport.stage || pendingReport.status}</dd></div>
+              {pendingReport.stage && <div><dt>Readiness</dt><dd>{pendingReport.status}</dd></div>}
               {pendingReport.setup && <div><dt>Setup progress</dt><dd>{pendingReport.setup}</dd></div>}
             </dl>
             {pendingReport.notes.map(note => <p key={note}>{note}</p>)}

@@ -6,6 +6,28 @@
 import { MONITORING_POLICY, describeMonitoringStatus, monitoringPolicyOf } from "./monitoringStatus.js";
 import { readinessStatusLabel } from "./sampleVisitReadiness.js";
 
+// Headline monitoring stage of a tracking row (user-facing), mapped only from stored policy, cohort and readiness.
+export const TRACKING_STAGE = Object.freeze({
+  AWAITING_SETUP: "Awaiting Monitoring Setup",
+  AWAITING_SUBMISSION: "Awaiting Submission",
+  NOT_YET_AVAILABLE: "Not Yet Available",
+  READY_FOR_VISIT: "Ready for Monitoring Visit",
+  CHECKING: "Checking Monitoring Setup",
+  UNAVAILABLE: "Setup Status Unavailable",
+  NOT_AVAILABLE: "Monitoring Not Available",
+  UNKNOWN: "Monitoring Requirement Not Recognized",
+});
+// Legacy aggregate lifecycles open 14 days after the authoritative planting date (backend baseLifecycle rule).
+export const LEGACY_START_OFFSET_DAYS = 14;
+export const SCHEDULE_LABEL = Object.freeze({ POLICY: "Awaiting Policy Decision", NOT_SCHEDULED: "Not Scheduled" });
+const addDays = (date, days) => {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date || "")) return "";
+  const value = new Date(`${date}T00:00:00Z`); value.setUTCDate(value.getUTCDate() + days);
+  return value.toISOString().slice(0, 10);
+};
+export const todayInManila = () => new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Manila", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
+
+// Specific reason shown under the headline stage.
 export const TRACKING_STATUS = Object.freeze({
   SPOT_CHECK: "Awaiting MENRO spot-check procedure",
   POLICY_PENDING: "Awaiting MENRO monitoring policy",
@@ -50,7 +72,8 @@ function verifiedQuantity(report, cohort) {
  * @param {object} [input.readiness]
  */
 export function deriveTrackingRows({ reports = [], lifecycles = [], visitCohortIds = new Set(), cohortEnabled = false,
-  cohortState = "idle", cohorts = [], readinessState = "idle", readiness = null } = {}) {
+  cohortState = "idle", cohorts = [], readinessState = "idle", readiness = null, sites = [], today = todayInManila() } = {}) {
+  const siteById = new Map((Array.isArray(sites) ? sites : []).map((site) => [String(site?.id || site?.siteId || ""), site]).filter(([id]) => id));
   // A report that already has an actual monitoring lifecycle (archived or not) is represented by it.
   const tracked = new Set((Array.isArray(lifecycles) ? lifecycles : []).map((record) => String(record?.plantingReportId || "")).filter(Boolean));
   const rows = [];
@@ -85,13 +108,37 @@ export function deriveTrackingRows({ reports = [], lifecycles = [], visitCohortI
         : readinessEntry?.canCreateVisit === true ? TRACKING_STATUS.READY : TRACKING_STATUS.SETUP_IN_PROGRESS;
     }
 
+    // Headline stage and schedule labels. Only existing rules produce dates: the legacy aggregate
+    // +14-day opening and a backend-computed permanent-sample first visit date. Nothing else is scheduled.
+    const plantingDate = String(report.plantingDate || report.eventDate || "").slice(0, 10);
+    let stage = TRACKING_STAGE.AWAITING_SETUP;
+    let startMonitoringDate = "", startLabel = SCHEDULE_LABEL.POLICY;
+    if (status === TRACKING_STATUS.CHECKING) stage = TRACKING_STAGE.CHECKING;
+    else if (status === TRACKING_STATUS.UNAVAILABLE) stage = TRACKING_STAGE.UNAVAILABLE;
+    else if (status === TRACKING_STATUS.NOT_AVAILABLE) stage = TRACKING_STAGE.NOT_AVAILABLE;
+    else if (status === TRACKING_STATUS.UNKNOWN) stage = TRACKING_STAGE.UNKNOWN;
+    else if (status === TRACKING_STATUS.READY) stage = TRACKING_STAGE.READY_FOR_VISIT;
+    else if (policy === MONITORING_POLICY.LEGACY) {
+      startMonitoringDate = addDays(plantingDate, LEGACY_START_OFFSET_DAYS);
+      if (!startMonitoringDate) { stage = TRACKING_STAGE.AWAITING_SETUP; startLabel = "Planting date not recorded"; }
+      else stage = today >= startMonitoringDate ? TRACKING_STAGE.AWAITING_SUBMISSION : TRACKING_STAGE.NOT_YET_AVAILABLE;
+    }
+    if (!startMonitoringDate && cohort?.samplingReadiness?.firstVisitDueDate && Array.isArray(cohort.samplingReadiness.pending) && !cohort.samplingReadiness.pending.length) {
+      startMonitoringDate = cohort.samplingReadiness.firstVisitDueDate;
+    }
+    const site = siteById.get(String(report.siteId || ""));
+
     rows.push({
       kind: "tracking",
       plantingReportId: reportId,
       reportNumber: report.reportNumber || "",
-      siteName: report.siteName || "",
-      barangay: report.barangay || "",
-      plantingDate: String(report.plantingDate || report.eventDate || "").slice(0, 10),
+      siteName: report.siteName || site?.siteName || site?.name || "",
+      barangay: report.barangay || site?.barangay || "",
+      plantingDate,
+      stage,
+      startMonitoringDate,
+      startLabel: startMonitoringDate ? "" : startLabel,
+      nextLabel: SCHEDULE_LABEL.NOT_SCHEDULED,
       verifiedPlantedQuantity: verifiedQuantity(report, cohort),
       policy,
       requirement: described.requirement,
@@ -117,7 +164,7 @@ export function trackingMatchesRecordFilters(row, { search = "", site = "All", s
   if (site !== "All" && row.siteName !== site) return false;
   const term = String(search || "").trim().toLowerCase();
   if (!term) return true;
-  return [row.reportNumber, row.siteName, row.barangay, row.status, row.requirement, row.setup, "verified planting report", "tracking"]
+  return [row.reportNumber, row.siteName, row.barangay, row.stage, row.status, row.requirement, row.setup, "verified planting report", "tracking"]
     .filter(Boolean).join(" ").toLowerCase().includes(term);
 }
 

@@ -97,3 +97,42 @@ test("cohort lookups run only for permanent-sample or legacy verified reports wi
   assert.equal(trackingNeedsCohortLookup([{ id: "x", reportingPolicy: { monitoring: "PERMANENT_SAMPLE" }, reportingProgress: "Awaiting Submission" }], true), false);
   assert.equal(trackingNeedsCohortLookup([verified("l", null)], true, [{ plantingReportId: "l" }]), false, "a report with a lifecycle needs no lookup");
 });
+
+test("headline stages and schedule labels come only from stored policy and existing rules", async () => {
+  const { TRACKING_STAGE, SCHEDULE_LABEL } = await import("../src/utils/monitoringTracking.js");
+  const rows = deriveTrackingRows({ ...ready, today: "2026-11-18", cohorts: [], readiness: { cohorts: [] }, reports: [
+    verified("spot", "STAFF_SPOT_CHECK", { plantingDate: "2026-10-01" }),
+    verified("pending", "PENDING_MENRO_POLICY", { plantingDate: "2026-10-01" }),
+    verified("perm", "PERMANENT_SAMPLE", { plantingDate: "2026-10-01" }),
+    verified("legacy-open", null, { plantingDate: "2026-10-01" }),
+    verified("legacy-soon", null, { plantingDate: "2026-11-10" }),
+    verified("legacy-nodate", null),
+  ] });
+  const by = Object.fromEntries(rows.map(row => [row.plantingReportId, row]));
+  for (const id of ["spot", "pending", "perm"]) {
+    assert.equal(by[id].stage, TRACKING_STAGE.AWAITING_SETUP, id);
+    assert.equal(by[id].startMonitoringDate, "", `${id}: no invented start date`);
+    assert.equal(by[id].startLabel, SCHEDULE_LABEL.POLICY);
+    assert.equal(by[id].nextLabel, SCHEDULE_LABEL.NOT_SCHEDULED);
+  }
+  assert.equal(by.spot.status, TRACKING_STATUS.SPOT_CHECK, "the specific reason stays visible");
+  // Legacy aggregate lifecycles open 14 days after planting (existing backend rule); Staff can submit from then.
+  assert.deepEqual([by["legacy-open"].startMonitoringDate, by["legacy-open"].stage], ["2026-10-15", TRACKING_STAGE.AWAITING_SUBMISSION]);
+  assert.deepEqual([by["legacy-soon"].startMonitoringDate, by["legacy-soon"].stage], ["2026-11-24", TRACKING_STAGE.NOT_YET_AVAILABLE]);
+  assert.deepEqual([by["legacy-nodate"].startMonitoringDate, by["legacy-nodate"].stage, by["legacy-nodate"].startLabel], ["", TRACKING_STAGE.AWAITING_SETUP, "Planting date not recorded"]);
+  // A permanent-sample first visit date is shown only when the backend computed it from a complete policy.
+  const withDue = deriveTrackingRows({ ...ready, today: "2026-11-18", reports: [verified("perm", "PERMANENT_SAMPLE")], readiness: { cohorts: [] },
+    cohorts: [cohort("perm", { samplingReadiness: { pending: [], firstVisitDueDate: "2026-12-01" } })] });
+  assert.equal(withDue[0].startMonitoringDate, "2026-12-01");
+  const pendingDue = deriveTrackingRows({ ...ready, today: "2026-11-18", reports: [verified("perm", "PERMANENT_SAMPLE")], readiness: { cohorts: [] },
+    cohorts: [cohort("perm", { samplingReadiness: { pending: ["FIRST_VISIT_DELAY_PENDING"], firstVisitDueDate: "2026-12-01" } })] });
+  assert.equal(pendingDue[0].startMonitoringDate, "");
+});
+
+test("site and barangay labels fall back to the registered planting site, never a guess", () => {
+  const [row] = deriveTrackingRows({ ...ready, reports: [verified("s", "STAFF_SPOT_CHECK", { siteName: "", barangay: "", siteId: "site-9" })],
+    sites: [{ id: "site-9", siteName: "Bical Reforestation Site", barangay: "Bical" }] });
+  assert.deepEqual([row.siteName, row.barangay], ["Bical Reforestation Site", "Bical"]);
+  const [unknown] = deriveTrackingRows({ ...ready, reports: [verified("u", "STAFF_SPOT_CHECK", { siteName: "", barangay: "", siteId: "missing" })], sites: [] });
+  assert.deepEqual([unknown.siteName, unknown.barangay], ["", ""]);
+});
