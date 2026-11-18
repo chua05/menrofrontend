@@ -8,7 +8,8 @@ import { readinessStatusLabel } from "./sampleVisitReadiness.js";
 
 // Headline monitoring stage of a tracking row (user-facing), mapped only from stored policy, cohort and readiness.
 export const TRACKING_STAGE = Object.freeze({
-  AWAITING_SETUP: "Awaiting Monitoring Setup",
+  // Display wording only; tracking rows never enable a submission.
+  AWAITING_SETUP: "Awaiting Monitoring Submission",
   AWAITING_SUBMISSION: "Awaiting Submission",
   NOT_YET_AVAILABLE: "Not Yet Available",
   READY_FOR_VISIT: "Ready for Monitoring Visit",

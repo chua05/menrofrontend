@@ -904,7 +904,7 @@ test("Admin Monitoring Records lists submitted permanent-sample visits beside ag
   await expect(visitRow(page, "VPMV-ADMIN-DRAFT-001")).toHaveCount(0);
   await expect(page.getByText(/Monitoring Visits for Review/)).toHaveCount(0);
   await expect(page.locator(".sm-records-card")).toHaveCount(1);
-  await expect(page.locator(".sm-table-footer")).toContainText("of 3 records");
+  await expect(page.locator(".sm-table-footer")).toContainText("Showing 1 to 3 of 3 rows · 3 monitoring records");
   await expect(page.locator(".sm-header-actions").getByRole("button", { name: /Monitor|Submit|Create/ })).toHaveCount(0);
   await expect(pending.getByRole("button")).toHaveCount(1);
   await expect(pending.getByRole("button", { name: "View monitoring visit VPMV-PENDING-REVIEW-001" })).toBeVisible();
@@ -1090,8 +1090,10 @@ for (const role of ["staff", "admin"]) test(`${role} Monitoring Lifecycles list 
   const table = page.locator(".sm-records-card table.sm-table");
   await expect(table.getByText("MON-2026-004")).toBeVisible();
   await expect(page.locator("tr[data-tracking-row]")).toHaveCount(4);
-  await expect(trackingRow(page, "report-spot")).toContainText("Awaiting MENRO spot-check procedure");
-  await expect(trackingRow(page, "report-spot")).toContainText("Staff Spot-Check");
+  // The Staff Spot-Check method and its policy explanation are not repeated in the table.
+  await expect(trackingRow(page, "report-spot")).not.toContainText("Awaiting MENRO spot-check procedure");
+  await expect(trackingRow(page, "report-spot")).not.toContainText("Staff Spot-Check");
+  await expect(trackingRow(page, "report-perm")).not.toContainText("Permanent Sample Monitoring");
   await expect(trackingRow(page, "report-perm")).toContainText("Monitoring setup pending");
   await expect(trackingRow(page, "report-cohort")).toContainText("Monitoring setup in progress");
   await expect(trackingRow(page, "report-cohort")).toContainText("Sampling plan: Draft · Baseline: Not Started · Visit: Not ready");
@@ -1102,15 +1104,15 @@ for (const role of ["staff", "admin"]) test(`${role} Monitoring Lifecycles list 
   for (const id of ["report-spot", "report-perm", "report-cohort", "report-legacy"]) {
     const row = trackingRow(page, id);
     await expect(row).toContainText("Tracking only");
-    await expect(row).toContainText("No observation yet");
     await expect(row).toContainText("Not yet assigned");
-    await expect(row).toContainText("Not yet monitored");
+    await expect(row.locator(".sm-condition-badge")).toHaveText("Not Yet Monitored");
     // One action only: the eye icon opens Monitoring Record Details; no monitoring or navigation actions.
     await expect(row.getByRole("button")).toHaveCount(1);
     await expect(row.getByRole("link")).toHaveCount(0);
   }
   // Headline stage, truthful schedule labels and the lifecycle's real sequential Monitoring ID.
-  await expect(trackingRow(page, "report-spot")).toContainText("Awaiting Monitoring Setup");
+  await expect(trackingRow(page, "report-spot").locator(".sm-status-badge")).toHaveText("Awaiting Monitoring Submission");
+  await expect(trackingRow(page, "report-spot")).not.toContainText("Awaiting Monitoring Setup");
   await expect(trackingRow(page, "report-spot")).toContainText("Awaiting Policy Decision");
   await expect(trackingRow(page, "report-spot")).toContainText("Not Scheduled");
   await expect(trackingRow(page, "report-legacy")).toContainText("Awaiting Submission");
@@ -1118,7 +1120,7 @@ for (const role of ["staff", "admin"]) test(`${role} Monitoring Lifecycles list 
   await expect(table.locator("tr", { hasText: "RPT-2026-104" }).locator(".sm-record-id")).toHaveText("MON-2026-004");
   // Tracking rows are never counted as monitoring records or observations.
   const footer = page.locator(".sm-table-footer");
-  await expect(footer).toContainText(role === "admin" ? "of 3 records" : "of 1 records");
+  await expect(footer).toContainText(role === "admin" ? "Showing 1 to 7 of 7 rows · 3 monitoring records" : "Showing 1 to 5 of 5 rows · 1 monitoring record");
   await expect(footer).toContainText("4 verified planting reports awaiting monitoring (tracking only, not monitoring records)");
   for (const label of ["Approved Full Cohorts", "Total Trees Monitored"])
     await expect(page.locator(".sm-kpi-label", { hasText: label }).locator("xpath=following-sibling::div[contains(@class,'sm-kpi-value')]")).toHaveText("0");
@@ -1143,8 +1145,8 @@ for (const role of ["staff", "admin"]) test(`${role} reads nested Staff spot-che
   page.on("request", request => { if (request.method() !== "GET" && request.url().includes("/api/")) writes.push(request.url()); });
   await page.goto(`/${role}/survival-monitoring?role=${role}&fixture=empty`);
   const row = trackingRow(page, report.id);
-  await expect(row).toContainText("Staff Spot-Check");
-  await expect(row).toContainText("Awaiting Monitoring Setup");
+  await expect(row).not.toContainText("Staff Spot-Check");
+  await expect(row.locator(".sm-status-badge")).toHaveText("Awaiting Monitoring Submission");
   await expect(row).toContainText("Awaiting Policy Decision");
   await expect(row).toContainText("Not Scheduled");
   await expect(row.getByRole("button")).toHaveCount(1);
@@ -1204,7 +1206,7 @@ test("a failed monitoring-setup lookup keeps tracking rows truthful and can be r
   const header = page.locator(".sm-records-header");
   await expect(header.getByRole("alert")).toContainText("Monitoring setup status for verified planting reports could not be loaded");
   await expect(trackingRow(page, "report-cohort")).toContainText("Monitoring setup status unavailable");
-  await expect(trackingRow(page, "report-spot")).toContainText("Awaiting MENRO spot-check procedure");
+  await expect(trackingRow(page, "report-spot").locator(".sm-status-badge")).toHaveText("Awaiting Monitoring Submission");
   await page.evaluate(() => { window.__PHASE3C_COHORTS_RECOVERED__ = true; });
   await header.getByRole("button", { name: "Retry setup status" }).click();
   await expect(trackingRow(page, "report-cohort")).toContainText("Monitoring setup in progress");
@@ -1214,7 +1216,7 @@ test("a failed monitoring-setup lookup keeps tracking rows truthful and can be r
 test("feature-disabled: tracking rows stay truthful and no cohort or readiness lookup is made", async ({ page }) => {
   await openTracking(page, "staff", { gate: false });
   await expect(trackingRow(page, "report-perm")).toContainText("Permanent-sample monitoring not available");
-  await expect(trackingRow(page, "report-spot")).toContainText("Awaiting MENRO spot-check procedure");
+  await expect(trackingRow(page, "report-spot").locator(".sm-status-badge")).toHaveText("Awaiting Monitoring Submission");
   expect(await page.evaluate(() => [window.__PHASE3C_COHORT_CALLS__ || 0, window.__PHASE3C_READINESS_CALLS__ || 0])).toEqual([0, 0]);
 });
 
@@ -1254,7 +1256,7 @@ for (const role of ["staff", "admin"]) test(`${role} eye icon opens a centered r
   const summary = dialog.locator(".sm-record-summary");
   await expect(summary).toContainText("Monitoring ID");
   await expect(summary).toContainText("Not yet assigned");
-  await expect(summary.locator(".sm-record-status-badge")).toHaveText("Awaiting Monitoring Setup");
+  await expect(summary.locator(".sm-record-status-badge")).toHaveText("Awaiting Monitoring Submission");
   const info = label => dialog.locator(".sm-record-info-block", { hasText: label }).locator(".sm-record-info-value");
   await expect(info("Planting Report ID")).toHaveText("RPT-2026-102");
   await expect(info("Planting Site")).toHaveText("RPT-2026-102 Site, Barangay Bical");
@@ -1276,7 +1278,11 @@ for (const role of ["staff", "admin"]) test(`${role} eye icon opens a centered r
   expect(await page.evaluate(() => document.body.style.overflow)).not.toBe("hidden");
   const spotEye = trackingRow(page, "report-spot").getByRole("button", { name: /View monitoring record details/ });
   await spotEye.click();
-  await expect(page.getByRole("dialog", { name: "Monitoring Record Details" }).locator(".sm-record-info-block", { hasText: "Monitoring Method" })).toContainText("Staff Spot-Check");
+  const spotDialog = page.getByRole("dialog", { name: "Monitoring Record Details" });
+  await expect(spotDialog.locator(".sm-record-info-block", { hasText: "Monitoring Method" })).toContainText("Staff Spot-Check");
+  // No spot-check policy explanation as a status description.
+  await expect(spotDialog.locator(".sm-setup-blocker")).toHaveCount(0);
+  await expect(spotDialog).not.toContainText("Awaiting MENRO spot-check procedure");
   await page.keyboard.press("Escape");
   await expect(page.getByRole("dialog", { name: "Monitoring Record Details" })).toHaveCount(0);
   await expect(spotEye).toBeFocused();
@@ -1334,8 +1340,9 @@ test("a lifecycle registered at verification shows its real MON ID, method and s
   const row = page.locator(".sm-records-card table.sm-table tbody tr", { hasText: "MON-2026-005" });
   await expect(row).toHaveCount(1);
   await expect(row.locator(".sm-record-id")).toHaveText("MON-2026-005");
-  await expect(row).toContainText("Awaiting Monitoring Setup");
-  await expect(row).toContainText("Staff Spot-Check");
+  await expect(row.locator(".sm-status-badge")).toHaveText("Awaiting Monitoring Submission");
+  await expect(row).not.toContainText("Staff Spot-Check");
+  await expect(row.locator(".sm-condition-badge")).toHaveText("Not Yet Monitored");
   await expect(row).toContainText("Awaiting Policy Decision");
   await expect(row).toContainText("Not Scheduled");
   // No duplicate tracking row for a report that has a real lifecycle.
@@ -1347,8 +1354,10 @@ test("a lifecycle registered at verification shows its real MON ID, method and s
   await row.getByRole("button", { name: "View monitoring record" }).click();
   const dialog = page.getByRole("dialog", { name: "Monitoring Record Details" });
   await expect(dialog).toContainText("Monitoring ID: MON-2026-005");
-  await expect(dialog).toContainText("Staff Spot-Check");
-  await expect(dialog.getByRole("note")).toContainText("spot-check procedure and schedule");
+  await expect(dialog).toContainText("Staff Spot-Check"); // Monitoring Method field
+  await expect(dialog.locator(".sm-detail-grid div", { hasText: "Lifecycle Status" }).locator("strong")).toHaveText("Awaiting Monitoring Submission");
+  await expect(dialog.getByRole("note")).toHaveCount(0);
+  await expect(dialog).not.toContainText("spot-check procedure and schedule");
   await expect(dialog.getByRole("button", { name: /Record Aggregate Observation|Approve|Return|Submit|Save/ })).toHaveCount(0);
 });
 
@@ -1362,4 +1371,72 @@ for (const kind of ["tracking", "record"]) test(`Monitoring Record Details (${ki
   expect(await dialog.evaluate(node => getComputedStyle(node).backgroundColor)).toBe("rgba(0, 0, 0, 0)");
   const overlay = await dialog.locator(".sm-record-modal-backdrop").evaluate(node => { const s = getComputedStyle(node); return [s.backgroundColor, s.backdropFilter, s.position]; });
   expect(overlay).toEqual(["rgba(16, 24, 20, 0.48)", "blur(2px)", "fixed"]);
+});
+
+// Monitoring Records table: real MON IDs, paginated rows and record counts that never include tracking rows,
+// with the same table tokens as the Planting Reports table (pr-th / pr-td / pr-id-text / pr-status-badge / pr-view-button).
+const pagedLifecycles = Array.from({ length: 12 }, (_, index) => {
+  const n = String(index + 1).padStart(3, "0");
+  return { ...registeredLifecycle, id: `MON-PAGE-${n}`, monitoringNumber: `MON-2026-${n}`, plantingReportId: `paged-report-${n}`, plantingReportNumber: `RPT-PAGE-${n}` };
+});
+for (const role of ["staff", "admin"]) test(`${role} Monitoring Records paginate lifecycles with real MON IDs and count tracking rows separately`, async ({ page }) => {
+  await isolate(page);
+  await mockLegacyMonitoringApi(page, { monitoring: pagedLifecycles, plantingReports: [verifiedReport("report-spot", "RPT-2026-020", null, { reportingPolicy: { definition: { monitoring: "STAFF_SPOT_CHECK" } } })] });
+  const writes = [];
+  page.on("request", request => { if (request.method() !== "GET" && request.url().includes("/api/")) writes.push(request.url()); });
+  await page.goto(`/${role}/survival-monitoring?role=${role}&fixture=empty`);
+  const rows = page.locator(".sm-records-card table.sm-table tbody tr");
+  const footer = page.locator(".sm-table-footer");
+  await expect(rows).toHaveCount(10);
+  await expect(footer).toContainText("Showing 1 to 10 of 13 rows · 12 monitoring records · 1 verified planting report awaiting monitoring (tracking only, not monitoring records)");
+  await expect(rows.locator(".sm-record-id").first()).toHaveText("MON-2026-001");
+  await page.getByRole("button", { name: "Next page" }).click();
+  await expect(rows).toHaveCount(3);
+  await expect(footer).toContainText("Showing 11 to 13 of 13 rows · 12 monitoring records");
+  await expect(page.getByRole("button", { name: "Page 2" })).toHaveAttribute("aria-current", "page");
+  await expect(rows.locator(".sm-record-id")).toHaveText(["MON-2026-011", "MON-2026-012", "Not yet assigned"]);
+  // The historical report with no lifecycle stays a tracking-only fallback, never a fabricated MON ID.
+  await expect(page.locator('tr[data-tracking-row="report-spot"] .sm-record-id')).toHaveText("Not yet assigned");
+  await expect(page.getByRole("button", { name: "Next page" })).toBeDisabled();
+  // Search by the real Monitoring ID resets to page 1.
+  await page.locator(".sm-search-wrap input").fill("MON-2026-012");
+  await expect(rows).toHaveCount(1);
+  await expect(rows.locator(".sm-record-id")).toHaveText("MON-2026-012");
+  await expect(footer).toContainText("Showing 1 to 1 of 1 row · 1 monitoring record");
+  await page.locator(".sm-search-wrap input").fill("");
+  await expect(rows).toHaveCount(10);
+  // KPIs come only from approved observations, never from registered lifecycles.
+  await expect(page.locator(".sm-kpi-label", { hasText: "Total Trees Monitored" }).locator("xpath=following-sibling::div[contains(@class,'sm-kpi-value')]")).toHaveText("0");
+  // Planting Reports table tokens.
+  const style = (locator, props) => locator.evaluate((node, keys) => Object.fromEntries(keys.map(key => [key, getComputedStyle(node)[key]])), props);
+  // th/td font sizes come from the app-wide #root readability rule shared by both tables, so they are not pinned here.
+  expect(await style(page.locator(".sm-table th").first(), ["backgroundColor", "color", "fontWeight", "textTransform", "paddingTop", "paddingLeft"]))
+    .toEqual({ backgroundColor: "rgb(247, 249, 248)", color: "rgb(88, 102, 94)", fontWeight: "700", textTransform: "uppercase", paddingTop: "14px", paddingLeft: "15px" });
+  expect(await style(rows.first().locator("td").first(), ["color", "paddingTop", "borderBottomColor"]))
+    .toEqual({ color: "rgb(68, 81, 73)", paddingTop: "15px", borderBottomColor: "rgb(237, 240, 238)" });
+  expect(await style(rows.first().locator(".sm-record-id"), ["color", "fontSize", "fontWeight"])).toEqual({ color: "rgb(23, 100, 58)", fontSize: "14px", fontWeight: "700" });
+  const badge = rows.first().locator(".sm-status-badge");
+  await expect(badge).toHaveText("Awaiting Monitoring Submission");
+  expect(await style(badge, ["color", "backgroundColor", "borderRadius", "fontSize", "fontWeight"]))
+    .toEqual({ color: "rgb(146, 64, 14)", backgroundColor: "rgb(254, 243, 199)", borderRadius: "999px", fontSize: "13px", fontWeight: "700" });
+  const eye = rows.first().getByRole("button", { name: "View monitoring record" });
+  expect(await eye.evaluate(node => [node.getBoundingClientRect().width, node.getBoundingClientRect().height, getComputedStyle(node).borderRadius])).toEqual([40, 40, "8px"]);
+  // Spot-check policy explanations are not shown as table status text, and submission stays unavailable.
+  await expect(page.locator(".sm-records-card table.sm-table")).not.toContainText(/Staff Spot-Check|Awaiting MENRO spot-check procedure|Awaiting Monitoring Setup/);
+  if (role === "staff") {
+    await rows.first().getByRole("button", { name: "More actions" }).click();
+    await expect(page.getByRole("button", { name: "Record Aggregate Observation" })).toHaveCount(0);
+  }
+  expect(writes).toEqual([]);
+});
+
+test("Monitoring Records table keeps the phone layout without page-level horizontal scrolling", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 800 });
+  await isolate(page);
+  await mockLegacyMonitoringApi(page, { monitoring: pagedLifecycles, plantingReports: [] });
+  await page.goto("/staff/survival-monitoring?role=staff&fixture=empty");
+  await expect(page.locator(".sm-records-card table.sm-table tbody tr")).toHaveCount(10);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  expect(await page.locator(".sm-table-wrap").evaluate(node => getComputedStyle(node).overflowX)).toBe("auto");
+  await expect(page.getByRole("navigation", { name: "Monitoring records pages" })).toBeVisible();
 });
