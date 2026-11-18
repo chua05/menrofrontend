@@ -8,7 +8,7 @@ import { canDecideVisit, createLatestRequestGate, loadSubmittedVisitPages, visit
 import { createEvidenceAttempt, assertEvidenceComplete } from "../utils/evidenceAttempt";
 import { useSearchParams } from "react-router-dom";
 import { deriveTrackingRows, isVerifiedPlantingReport, trackingMatchesRecordFilters, trackingNeedsCohortLookup } from "../utils/monitoringTracking";
-import { monitoringDisplayId } from "../utils/monitoringRecordView";
+import { isAwaitingMonitoringSetup, lifecycleMethodLabel, monitoringDisplayId, monitoringSetupBlocker } from "../utils/monitoringRecordView";
 import MonitoringTrackingDetails from "../components/MonitoringTrackingDetails";
 import ModalDialog from "../components/ModalDialog";
 import L from "leaflet";
@@ -2039,9 +2039,9 @@ export default function MonitoringPage() {
                           </span>
                         )}
                       </td>
-                      <td>{formatDate(record.startMonitoringDate)}</td>
-                      <td>{record.nextMonitoringDate ? formatDate(record.nextMonitoringDate) : monitoringScheduleLabel(record)}</td>
-                      <td>{record.status}<span className="sm-site-sub">{earlyMonitoringLabel(record)}</span></td>
+                      <td>{isAwaitingMonitoringSetup(record) ? "Awaiting Policy Decision" : formatDate(record.startMonitoringDate)}</td>
+                      <td>{isAwaitingMonitoringSetup(record) ? "Not Scheduled" : record.nextMonitoringDate ? formatDate(record.nextMonitoringDate) : monitoringScheduleLabel(record)}</td>
+                      <td>{record.status}<span className="sm-site-sub">{lifecycleMethodLabel(record)}</span><span className="sm-site-sub">{earlyMonitoringLabel(record)}</span></td>
                       <td>
                         <span
                           className="sm-condition-badge"
@@ -2084,7 +2084,7 @@ export default function MonitoringPage() {
 
                               {openActionMenuId === record.id && (
                                 <div className="sm-action-menu">
-                                  {isStaff && !record.archived && record.status !== "Monitoring Completed" && (
+                                  {isStaff && !record.archived && record.status !== "Monitoring Completed" && !isAwaitingMonitoringSetup(record) && (
                                     <button
                                       type="button"
                                       onClick={() => openAggregateObservation(record)}
@@ -2657,7 +2657,7 @@ export default function MonitoringPage() {
 
       {showDetails && selectedRecord && (
         // Centered Monitoring Record Details popup (same modal behavior and layout as View Planting Report).
-        <ModalDialog label="Monitoring Record Details" onClose={closeDetails} returnFocusSelector=".sm-records-card">
+        <ModalDialog label="Monitoring Record Details" className="sm-record-dialog" onClose={closeDetails} returnFocusSelector=".sm-records-card">
         <div
           className="sm-record-modal-backdrop"
           onMouseDown={(event) => {
@@ -2717,12 +2717,16 @@ export default function MonitoringPage() {
                     <strong>{formatDate(selectedRecord.authoritativePlantingDate)}</strong>
                   </div>
                   <div>
+                    <span>Monitoring Method</span>
+                    <strong>{lifecycleMethodLabel(selectedRecord)}</strong>
+                  </div>
+                  <div>
                     <span>Start Monitoring Date</span>
-                    <strong>{formatDate(selectedRecord.startMonitoringDate)}</strong>
+                    <strong>{isAwaitingMonitoringSetup(selectedRecord) ? "Awaiting Policy Decision" : formatDate(selectedRecord.startMonitoringDate)}</strong>
                   </div>
                   <div>
                     <span>Next Monitoring Date</span>
-                    <strong>{selectedRecord.nextMonitoringDate ? formatDate(selectedRecord.nextMonitoringDate) : monitoringScheduleLabel(selectedRecord)}</strong>
+                    <strong>{isAwaitingMonitoringSetup(selectedRecord) ? "Not Scheduled" : selectedRecord.nextMonitoringDate ? formatDate(selectedRecord.nextMonitoringDate) : monitoringScheduleLabel(selectedRecord)}</strong>
                   </div>
                   <div>
                     <span>Lifecycle Status</span>
@@ -2738,9 +2742,10 @@ export default function MonitoringPage() {
                   </div>
                   <div>
                     <span>Monitoring Ends</span>
-                    <strong>{formatDate(selectedRecord.monitoringEndDate)}</strong>
+                    <strong>{isAwaitingMonitoringSetup(selectedRecord) ? "Not Scheduled" : formatDate(selectedRecord.monitoringEndDate)}</strong>
                   </div>
                 </div>
+                {monitoringSetupBlocker(selectedRecord) && <p className="sm-helper sm-setup-blocker" role="note">{monitoringSetupBlocker(selectedRecord)}</p>}
               </section>
 
               {selectedRecord.history?.length > 0 && (

@@ -1091,7 +1091,7 @@ for (const role of ["staff", "admin"]) test(`${role} Monitoring Lifecycles list 
   await expect(table.getByText("MON-2026-004")).toBeVisible();
   await expect(page.locator("tr[data-tracking-row]")).toHaveCount(4);
   await expect(trackingRow(page, "report-spot")).toContainText("Awaiting MENRO spot-check procedure");
-  await expect(trackingRow(page, "report-spot")).toContainText("Staff spot-check");
+  await expect(trackingRow(page, "report-spot")).toContainText("Staff Spot-Check");
   await expect(trackingRow(page, "report-perm")).toContainText("Monitoring setup pending");
   await expect(trackingRow(page, "report-cohort")).toContainText("Monitoring setup in progress");
   await expect(trackingRow(page, "report-cohort")).toContainText("Sampling plan: Draft · Baseline: Not Started · Visit: Not ready");
@@ -1145,7 +1145,7 @@ test("Staff Monitor Planted Trees offers verified reports under Setup Pending wi
   await select.selectOption("pending:report-spot");
   const pending = dialog.locator('section[data-setup-pending-report="report-spot"]');
   await expect(pending.getByRole("heading", { name: "Setup pending: RPT-2026-020" })).toBeVisible();
-  await expect(pending).toContainText("Staff spot-check");
+  await expect(pending).toContainText("Staff Spot-Check");
   await expect(pending).toContainText("Awaiting MENRO spot-check procedure");
   await expect(pending).toContainText(/Monitoring workflow pending MENRO policy/);
   await expect(shellValue(dialog, "Planting Report ID")).toHaveText("RPT-2026-020");
@@ -1239,7 +1239,8 @@ for (const role of ["staff", "admin"]) test(`${role} eye icon opens a centered r
   const info = label => dialog.locator(".sm-record-info-block", { hasText: label }).locator(".sm-record-info-value");
   await expect(info("Planting Report ID")).toHaveText("RPT-2026-102");
   await expect(info("Planting Site")).toHaveText("RPT-2026-102 Site, Barangay Bical");
-  await expect(info("Monitoring Method")).toHaveText("Permanent-sample monitoring");
+  await expect(info("Monitoring Method")).toHaveText("Permanent Sample Monitoring");
+  await expect(dialog.locator(".sm-setup-blocker")).toHaveText("Setup status: Monitoring setup in progress");
   await expect(info("Start Monitoring Date")).toHaveText("Awaiting Policy Decision");
   await expect(info("Next Monitoring Date")).toHaveText("Not Scheduled");
   await expect(info("Latest Condition")).toHaveText("Not yet monitored");
@@ -1256,7 +1257,7 @@ for (const role of ["staff", "admin"]) test(`${role} eye icon opens a centered r
   expect(await page.evaluate(() => document.body.style.overflow)).not.toBe("hidden");
   const spotEye = trackingRow(page, "report-spot").getByRole("button", { name: /View monitoring record details/ });
   await spotEye.click();
-  await expect(page.getByRole("dialog", { name: "Monitoring Record Details" }).locator(".sm-record-info-block", { hasText: "Monitoring Method" })).toContainText("Staff spot-check");
+  await expect(page.getByRole("dialog", { name: "Monitoring Record Details" }).locator(".sm-record-info-block", { hasText: "Monitoring Method" })).toContainText("Staff Spot-Check");
   await page.keyboard.press("Escape");
   await expect(page.getByRole("dialog", { name: "Monitoring Record Details" })).toHaveCount(0);
   await expect(spotEye).toBeFocused();
@@ -1299,4 +1300,47 @@ test("a monitoring lifecycle without a sequential number never shows a fabricate
   const row = page.locator(".sm-records-card table.sm-table tbody tr").first();
   await expect(row.locator(".sm-record-id")).toHaveText("Not yet assigned");
   await expect(page.locator(".sm-records-card")).not.toContainText(/MON-[A-Z0-9]{7}\b/);
+});
+
+// A lifecycle registered at verification (backend scheduleStatus AWAITING_MONITORING_POLICY) is a real record.
+const registeredLifecycle = { id: "MON-REG-0001", recordType: "monitoringLifecycle", monitoringNumber: "MON-2026-005", plantingReportId: "report-spot",
+  plantingReportNumber: "RPT-2026-020", siteName: "RPT-2026-020 Site", barangay: "Bical", monitoringMethod: "STAFF_SPOT_CHECK",
+  scheduleStatus: "AWAITING_MONITORING_POLICY", status: "Awaiting Monitoring Setup", condition: "Not Yet Monitored",
+  startMonitoringDate: null, nextMonitoringDate: null, monitoringEndDate: null, history: [] };
+
+test("a lifecycle registered at verification shows its real MON ID, method and setup blocker, and offers no submission", async ({ page }) => {
+  await isolate(page);
+  await mockLegacyMonitoringApi(page, { monitoring: [registeredLifecycle], plantingReports: trackingReports });
+  await page.goto("/staff/survival-monitoring?role=staff");
+  const row = page.locator(".sm-records-card table.sm-table tbody tr", { hasText: "MON-2026-005" });
+  await expect(row).toHaveCount(1);
+  await expect(row.locator(".sm-record-id")).toHaveText("MON-2026-005");
+  await expect(row).toContainText("Awaiting Monitoring Setup");
+  await expect(row).toContainText("Staff Spot-Check");
+  await expect(row).toContainText("Awaiting Policy Decision");
+  await expect(row).toContainText("Not Scheduled");
+  // No duplicate tracking row for a report that has a real lifecycle.
+  await expect(page.locator('tr[data-tracking-row="report-spot"]')).toHaveCount(0);
+  // Staff cannot start an aggregate observation for a method awaiting MENRO authorization.
+  await row.getByRole("button", { name: "More actions" }).click();
+  await expect(page.getByRole("button", { name: "Record Aggregate Observation" })).toHaveCount(0);
+  await page.keyboard.press("Escape");
+  await row.getByRole("button", { name: "View monitoring record" }).click();
+  const dialog = page.getByRole("dialog", { name: "Monitoring Record Details" });
+  await expect(dialog).toContainText("Monitoring ID: MON-2026-005");
+  await expect(dialog).toContainText("Staff Spot-Check");
+  await expect(dialog.getByRole("note")).toContainText("spot-check procedure and schedule");
+  await expect(dialog.getByRole("button", { name: /Record Aggregate Observation|Approve|Return|Submit|Save/ })).toHaveCount(0);
+});
+
+for (const kind of ["tracking", "record"]) test(`Monitoring Record Details (${kind}) keeps the page visible behind a semi-transparent dimmed overlay like View Planting Report`, async ({ page }) => {
+  await openTracking(page, "staff");
+  if (kind === "tracking") await trackingRow(page, "report-cohort").getByRole("button", { name: /View monitoring record details/ }).click();
+  else await page.locator(".sm-records-card table.sm-table tbody tr", { hasText: "MON-2026-004" }).getByRole("button", { name: "View monitoring record" }).click();
+  const dialog = page.getByRole("dialog", { name: "Monitoring Record Details" });
+  await expect(dialog).toBeVisible();
+  // The native dialog layer is transparent; only the Planting-style overlay dims and blurs the page.
+  expect(await dialog.evaluate(node => getComputedStyle(node).backgroundColor)).toBe("rgba(0, 0, 0, 0)");
+  const overlay = await dialog.locator(".sm-record-modal-backdrop").evaluate(node => { const s = getComputedStyle(node); return [s.backgroundColor, s.backdropFilter, s.position]; });
+  expect(overlay).toEqual(["rgba(16, 24, 20, 0.48)", "blur(2px)", "fixed"]);
 });

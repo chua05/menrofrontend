@@ -31,12 +31,12 @@ export function needsCohortLookup(report, cohortEnabled) {
 }
 
 const REQUIREMENT_LABEL = {
-  LEGACY: "Historical aggregate monitoring",
-  NONE: "No monitoring required",
-  STAFF_SPOT_CHECK: "Staff spot-check",
-  PERMANENT_SAMPLE: "Permanent-sample monitoring",
-  PENDING_MENRO_POLICY: "Monitoring policy pending MENRO decision",
-  UNKNOWN: "Unrecognized monitoring requirement",
+  LEGACY: "Historical Aggregate Monitoring",
+  NONE: "No Monitoring Required",
+  STAFF_SPOT_CHECK: "Staff Spot-Check",
+  PERMANENT_SAMPLE: "Permanent Sample Monitoring",
+  PENDING_MENRO_POLICY: "Pending MENRO Policy Decision",
+  UNKNOWN: "Unrecognized Monitoring Method",
 };
 
 function cohortRows(cohort, readinessEntry, readinessState) {
@@ -63,6 +63,8 @@ function cohortRows(cohort, readinessEntry, readinessState) {
  * @param {"idle"|"loading"|"error"|"ready"} input.readinessState
  * @param {object} [input.readiness]          GET /verified-sample-monitoring/readiness data
  */
+export const monitoringMethodLabel = (policy) => REQUIREMENT_LABEL[policy] || REQUIREMENT_LABEL.UNKNOWN;
+
 export function describeMonitoringStatus({ report, cohortEnabled, cohortState = "idle", cohorts = [], readinessState = "idle", readiness = null }) {
   const policy = monitoringPolicyOf(report);
   const result = { policy, requirement: REQUIREMENT_LABEL[policy], notes: [], rows: [], reasons: [] };

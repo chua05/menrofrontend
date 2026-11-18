@@ -1015,7 +1015,7 @@ for (const role of ["staff", "admin"]) test(role + " sees a read-only pending-ME
   await page.goto("/" + role + "/planting-reports?role=" + role + "&report=report-1");
   const status = monitoringStatusOf(page.getByRole("dialog", { name: /Planting report/ }));
   await expect(status.getByText("Monitoring Status", { exact: true })).toBeVisible();
-  await expect(status).toContainText("Staff spot-check");
+  await expect(status).toContainText("Staff Spot-Check");
   await expect(status).toContainText("Monitoring workflow pending MENRO policy");
   await expect(status).not.toContainText("VPC-");
   await expect(status.getByRole("button")).toHaveCount(0);
@@ -1029,7 +1029,7 @@ for (const role of ["staff", "admin"]) test(role + " sees the existing permanent
   const fixture = await setup(page, cohortRoutes([permanent]));
   await page.goto("/" + role + "/planting-reports?role=" + role + "&report=report-1");
   const status = monitoringStatusOf(page.getByRole("dialog", { name: /Planting report/ }));
-  await expect(status).toContainText("Permanent-sample monitoring");
+  await expect(status).toContainText("Permanent Sample Monitoring");
   await expect(status).toContainText("VPC-fixture");
   await expect(status).not.toContainText("VPC-other");
   await expect(status).toContainText("Sampling planDraft");

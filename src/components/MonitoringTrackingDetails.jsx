@@ -21,7 +21,7 @@ export default function MonitoringTrackingDetails({ row, onClose }) {
   if (!row) return null;
   const site = row.siteName ? `${row.siteName}${row.barangay ? `, Barangay ${row.barangay}` : ""}` : "Site not recorded";
   return (
-    <ModalDialog label="Monitoring Record Details" onClose={onClose} returnFocusSelector=".sm-records-card">
+    <ModalDialog label="Monitoring Record Details" className="sm-record-dialog" onClose={onClose} returnFocusSelector=".sm-records-card">
       <div className="sm-record-modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
         <section className="sm-record-modal" data-tracking-details={row.plantingReportId}>
           <div className="sm-record-modal-header">
@@ -51,6 +51,8 @@ export default function MonitoringTrackingDetails({ row, onClose }) {
               <Info label="Next Monitoring Date" value={row.nextLabel} />
               <Info label="Latest Condition" value="Not yet monitored" />
             </div>
+            {/* The specific setup blocker (stored policy/readiness), shown once and briefly. */}
+            <p className="sm-setup-blocker" role="note">Setup status: {row.status}</p>
 
             <section className="sm-record-history" aria-labelledby="sm-record-history-title">
               <h3 id="sm-record-history-title">Monitoring History</h3>
