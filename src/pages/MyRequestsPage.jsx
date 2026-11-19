@@ -1173,6 +1173,8 @@ export default function MyRequestsPage() {
                       <span className="myr-purpose-text">
                         {getPurpose(request)}
                       </span>
+                      {/* Staff-encoded walk-in: the citizen remains the requester. */}
+                      {request.walkIn && <small className="myr-walkin-note">Walk-in for {request.requesterName || "citizen requester"}</small>}
                     </td>
                     <td>{getBarangay(request)}</td>
                     <td>
@@ -1659,7 +1661,16 @@ export default function MyRequestsPage() {
                 <EventAttendancePanel eventId={selectedRequest.eventId} />
               )}
 
-              {selectedRequest.preApprovalSchedule?.status === "AwaitingRequesterConfirmation" && (
+              {/* Walk-in schedule changes need the citizen's signed acknowledgement, recorded from Seedling Requests. */}
+              {selectedRequest.walkIn && (selectedRequest.preApprovalSchedule?.status === "AwaitingRequesterConfirmation" || ["AwaitingRequester", "ReturnedForRevision"].includes(selectedRequest.lateReleaseRescheduling?.status)) && (
+                <section className="myr-details-section" data-walkin-schedule-action>
+                  <h3>Citizen Schedule Confirmation Required</h3>
+                  <p>This walk-in request needs the citizen&apos;s signed schedule acknowledgement. Record it from the request in Seedling Requests.</p>
+                  <button type="button" className="myr-primary-btn" onClick={() => navigate(`/staff/requests?request=${encodeURIComponent(selectedRequest.id)}`)}>Open in Seedling Requests</button>
+                </section>
+              )}
+
+              {!selectedRequest.walkIn && selectedRequest.preApprovalSchedule?.status === "AwaitingRequesterConfirmation" && (
                 <section className="myr-details-section">
                   <h3>Confirm Coordinated Planting Schedule</h3>
                   <p>MENRO Staff proposed a schedule adjustment. Review or change the planting schedule before confirming it.</p>
@@ -1673,7 +1684,7 @@ export default function MyRequestsPage() {
                 </section>
               )}
 
-              {["AwaitingRequester", "ReturnedForRevision"].includes(selectedRequest.lateReleaseRescheduling?.status) && (
+              {!selectedRequest.walkIn && ["AwaitingRequester", "ReturnedForRevision"].includes(selectedRequest.lateReleaseRescheduling?.status) && (
                 <section className="myr-details-section">
                   <h3>Replacement Planting Schedule Required</h3>
                   <p>{selectedRequest.lateReleaseRescheduling.conflictReason}</p>
@@ -1727,7 +1738,9 @@ export default function MyRequestsPage() {
                   className="myr-edit-button"
                   onClick={() =>
                     navigate(
-                      `${requesterPrefix}/request-seedlings?edit=${encodeURIComponent(selectedRequest.id)}`
+                      selectedRequest.walkIn
+                        ? `/staff/walk-in-requests/new?edit=${encodeURIComponent(selectedRequest.id)}`
+                        : `${requesterPrefix}/request-seedlings?edit=${encodeURIComponent(selectedRequest.id)}`
                     )
                   }
                 >

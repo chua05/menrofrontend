@@ -887,14 +887,16 @@ export default function ParticipantSaplingRequestWizard({ currentUser, requester
         },
       );
       const requestReference = savedRequest?.requestNumber || savedRequest?.id;
+      // Status comes from the server: Staff submissions go directly to Admin approval (stored "Reviewed").
+      const savedStatusLabel = savedRequest?.status === "Reviewed" ? "Awaiting Approval" : "Pending Review";
       if (group && requestLetterCapability) setLetterUploadState("stored");
       navigate(walkIn ? "/staff/requests" : requesterRole === "staff" ? "/staff/my-requests" : "/participant/my-requests", {
         replace: true,
         state: {
           submittedRequestReference: requestReference,
           submissionMessage: editing
-            ? `Your seedling request ${requestReference} was resubmitted successfully. Status: Pending Review.`
-            : `Your seedling request has been submitted successfully. Request Reference: ${requestReference}. Status: Pending Review.`,
+            ? `Your seedling request ${requestReference} was resubmitted successfully. Status: ${savedStatusLabel}.`
+            : `Your seedling request has been submitted successfully. Request Reference: ${requestReference}. Status: ${savedStatusLabel}.`,
         },
       });
     } catch (e) {

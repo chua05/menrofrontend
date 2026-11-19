@@ -870,20 +870,23 @@ test("Staff assisted identity is the only new request mode and starts blank", as
   await expect(page.getByLabel("Contact Number *", { exact: true })).not.toHaveAttribute("readonly"); fixture.check();
 });
 
-test("My Requests ownership filter combines with Replacement without including assisted citizens", async ({ page }) => {
+test("My Requests ownership filter combines with Replacement and includes walk-ins this Staff encoded, never another Staff member's", async ({ page }) => {
   const records = [
     { ...ownRequest(), id: "mine-new", requestNumber: "REQ-2099-101", requestType: "New Planting" },
     { ...ownRequest(), id: "mine-replacement", requestNumber: "REQ-2099-102", requestType: "Replacement" },
     { ...ownRequest("Pending", "citizen"), id: "assisted", requestNumber: "REQ-2099-103", requestType: "Replacement", walkIn: { encodedBy: "test-staff" } },
+    { ...ownRequest("Pending", "other-citizen"), id: "assisted-by-other", requestNumber: "REQ-2099-104", requestType: "Replacement", walkIn: { encodedBy: "another-staff" } },
   ];
   const fixture = await setup(page, { "GET /api/seedling-requests": route => route.fulfill({ json: { success: true, data: records } }) });
   await page.goto("/staff/requests?role=staff");
   await expect(page.getByRole("button", { name: "Encode Walk-in Request", exact: true })).toHaveCount(0);
   await expect(page.locator(".sr-header-actions").getByRole("button", { name: "My Requests", exact: true })).toHaveCount(0);
   await page.getByRole("checkbox", { name: "My Requests", exact: true }).check();
-  await expect(page.getByRole("button", { name: "View details for REQ-2099-103", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "View details for REQ-2099-103", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "View details for REQ-2099-104", exact: true })).toHaveCount(0);
   await page.locator("select").filter({ has: page.locator('option[value="Replacement"]') }).selectOption("Replacement");
   await expect(page.getByRole("button", { name: "View details for REQ-2099-102", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "View details for REQ-2099-103", exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "View details for REQ-2099-101", exact: true })).toHaveCount(0);
   await page.getByRole("checkbox", { name: "My Requests", exact: true }).uncheck();
   await page.getByRole("button", { name: "View details for REQ-2099-103", exact: true }).click();
@@ -1985,4 +1988,119 @@ test("Staff-submitted report: Staff never see Review; Admin sees Staff Submitted
   await expect(tableStatus).toHaveText("Status: Verified");
   await expect(decisionFooter(page)).toHaveCount(0);
   fixture.check();
+});
+
+// Staff-submitted requests (own or encoded walk-in) are stored "Reviewed" with submissionPath STAFF_DIRECT_TO_ADMIN:
+// Awaiting Approval, no Staff review, Admin decides directly. Participant requests keep Staff review first.
+const staffDirect = (extra = {}) => ({ ...ownRequest("Reviewed", "walkin-citizen"), participantName: "Walk-in Citizen", requesterRole: "walk-in", createdByRole: "staff",
+  submissionPath: "STAFF_DIRECT_TO_ADMIN", staffReviewRequired: false, reviewStatus: "Not Required", submittedByUid: "test-staff", submittedByName: "Encoding Staff",
+  walkIn: { encodedBy: "test-staff", encodedByName: "Encoding Staff", citizenHasAccount: false }, ...extra });
+const submissionSection = page => page.locator("[data-submission-path=\"STAFF_DIRECT_TO_ADMIN\"]");
+
+test("Admin sees Approve and Reject for a Staff-submitted walk-in awaiting approval, with no invented Staff review", async ({ page }) => {
+  let request = staffDirect(); const bodies = [];
+  const fixture = await setup(page, { "GET /api/seedling-requests": route => route.fulfill({ json: { success: true, data: [request] } }),
+    "PATCH /api/seedling-requests/staff-own-request/approve": (route, req) => { bodies.push(req.postDataJSON()); request = { ...request, status: "Approved", requestVersion: 4, approvedBy: "test-admin" }; return route.fulfill({ json: { success: true, data: request } }); } });
+  await page.goto("/admin/requests?role=admin");
+  await page.getByRole("button", { name: "View details for REQ-2099-001", exact: true }).click();
+  const submission = submissionSection(page);
+  await expect(submission).toContainText("Staff Submission"); await expect(submission).toContainText("Encoding Staff");
+  await expect(submission).toContainText("Staff-encoded walk-in request"); await expect(submission).toContainText("Not Required"); await expect(submission).toContainText("Directly to Admin approval");
+  await expect(submission).toContainText("Awaiting Approval");
+  await expect(page.getByText("MENRO Staff Review", { exact: true })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Reject", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Approve", exact: true }).click();
+  const modal = page.locator(".sr-decision-modal");
+  await expect(modal).toContainText("Staff-submitted · Staff review not required");
+  await expect(modal.locator(".sr-site-verification")).toHaveCount(0);
+  await modal.getByRole("button", { name: "Confirm Approval", exact: true }).click(); await expect(modal).toHaveCount(0);
+  expect(bodies).toEqual([{ expectedVersion: 3 }]); expect(request.status).toBe("Approved");
+  // After the decision the submission section no longer claims Awaiting Approval.
+  await expect(submissionSection(page)).toBeVisible(); await expect(submissionSection(page)).not.toContainText("Awaiting Approval");
+  fixture.check();
+});
+
+test("Admin rejects a Staff-submitted request with a required reason through the existing confirmation", async ({ page }) => {
+  let request = staffDirect({ walkIn: undefined, participantId: "test-staff", participantName: "Staff Requester", requesterRole: "staff" }); const bodies = [];
+  const fixture = await setup(page, { "GET /api/seedling-requests": route => route.fulfill({ json: { success: true, data: [request] } }),
+    "PATCH /api/seedling-requests/staff-own-request/reject": (route, req) => { bodies.push(req.postDataJSON()); request = { ...request, status: "Rejected", requestVersion: 4, decisionReason: req.postDataJSON().reason }; return route.fulfill({ json: { success: true, data: request } }); } });
+  await page.goto("/admin/requests?role=admin");
+  await page.getByRole("button", { name: "View details for REQ-2099-001", exact: true }).click();
+  await expect(submissionSection(page)).toContainText("Staff request");
+  await page.getByRole("button", { name: "Reject", exact: true }).click();
+  const modal = page.locator(".sr-decision-modal");
+  await expect(modal.getByRole("button", { name: "Confirm Rejection", exact: true })).toBeDisabled();
+  await modal.locator("textarea").fill("Species not available this season");
+  await modal.getByRole("button", { name: "Confirm Rejection", exact: true }).click(); await expect(modal).toHaveCount(0);
+  expect(bodies).toEqual([{ reason: "Species not available this season", expectedVersion: 3 }]); fixture.check();
+});
+
+test("Admin verifies a Staff-submitted proposed site's area and capacity in the approval modal before approving", async ({ page }) => {
+  const request = staffDirect({ workflow: { ...ownRequest().workflow, siteMode: "proposed", existingSiteId: "", areaChoice: "", siteReviewRequired: true, siteName: "Proposed fixture site", latitude: 12.6598, longitude: 123.918 },
+    eventProposal: { ...ownRequest().eventProposal, plantingSiteId: "PROPOSED" } });
+  const bodies = [];
+  const fixture = await setup(page, { "GET /api/seedling-requests": route => route.fulfill({ json: { success: true, data: [request] } }),
+    "PATCH /api/seedling-requests/staff-own-request/approve": (route, req) => { bodies.push(req.postDataJSON());
+      if (bodies.length === 1) return route.fulfill({ status: 400, json: { success: false, message: "Enter the Staff-verified proposed site area and capacity.", fieldErrors: { verifiedMaximumCapacity: "Enter the verified capacity as a positive whole number." } } });
+      return route.fulfill({ json: { success: true, data: { ...request, status: "Approved", requestVersion: 4 } } }); } });
+  await page.goto("/admin/requests?role=admin");
+  await page.getByRole("button", { name: "View details for REQ-2099-001", exact: true }).click();
+  await page.getByRole("button", { name: "Approve", exact: true }).click();
+  const modal = page.locator(".sr-decision-modal");
+  await expect(modal.getByText("Site Verification", { exact: true })).toBeVisible();
+  await modal.getByRole("button", { name: "Confirm Approval", exact: true }).click();
+  await expect(modal.getByLabel("Verified Planting Area (Hectares) *")).toHaveAttribute("aria-invalid", "true"); expect(bodies).toHaveLength(0);
+  await modal.getByLabel("Verified Planting Area (Hectares) *").fill("0.8");
+  await modal.getByLabel("Verified Site Capacity (Seedlings) *").fill("600");
+  await modal.getByRole("button", { name: "Confirm Approval", exact: true }).click();
+  await expect(modal.getByLabel("Verified Site Capacity (Seedlings) *")).toHaveAttribute("aria-invalid", "true");
+  await modal.getByRole("button", { name: "Confirm Approval", exact: true }).click(); await expect(modal).toHaveCount(0);
+  expect(bodies.at(-1)).toEqual({ expectedVersion: 3, siteVerification: { areaHectares: "0.8", maximumCapacity: "600" } }); fixture.check();
+});
+
+test("Participant requests still need Staff review: Admin has no decision buttons while Pending Review; Staff cannot review a Staff-submitted request", async ({ page }) => {
+  const participant = { ...ownRequest("Pending", "test-participant"), requestNumber: "REQ-2099-002", id: "participant-request", participantName: "Participant Requester", requesterRole: "participant", submissionPath: "PARTICIPANT_STAFF_REVIEW" };
+  const direct = staffDirect({ id: "direct-request", requestNumber: "REQ-2099-003", walkIn: { encodedBy: "another-staff", citizenHasAccount: false }, submittedByUid: "another-staff" });
+  const fixture = await setup(page, { "GET /api/seedling-requests": route => route.fulfill({ json: { success: true, data: [participant, direct] } }) });
+  await page.goto("/admin/requests?role=admin");
+  await page.getByRole("button", { name: "View details for REQ-2099-002", exact: true }).click();
+  for (const action of ["Approve", "Reject"]) await expect(page.getByRole("button", { name: action, exact: true })).toHaveCount(0);
+  await page.goto("/staff/requests?role=staff");
+  await page.getByRole("button", { name: "View details for REQ-2099-003", exact: true }).click();
+  await expect(submissionSection(page)).toBeVisible();
+  for (const action of ["Review", "Return Request", "Approve", "Reject"]) await expect(page.getByRole("button", { name: action, exact: true })).toHaveCount(0);
+  expect(fixture.calls.filter(call => call.key.startsWith("PATCH"))).toHaveLength(0); fixture.check();
+});
+
+test("Staff My Requests filter includes their own requests and walk-ins they encoded, never another Staff member's", async ({ page }) => {
+  const own = { ...ownRequest("Reviewed", "test-staff"), id: "own", requestNumber: "REQ-2099-010", submissionPath: "STAFF_DIRECT_TO_ADMIN", submittedByUid: "test-staff" };
+  const encoded = staffDirect({ id: "encoded", requestNumber: "REQ-2099-011" });
+  const historicalEncoded = { ...ownRequest("Pending", "walkin-old"), id: "historical", requestNumber: "REQ-2099-012", participantName: "Historical Citizen", walkIn: { encodedBy: "test-staff", citizenHasAccount: false } };
+  const others = staffDirect({ id: "others", requestNumber: "REQ-2099-013", walkIn: { encodedBy: "another-staff", citizenHasAccount: false }, submittedByUid: "another-staff" });
+  const fixture = await setup(page, { "GET /api/seedling-requests": route => route.fulfill({ json: { success: true, data: [own, encoded, historicalEncoded, others] } }) });
+  await page.goto("/staff/requests?role=staff");
+  for (const number of ["REQ-2099-010", "REQ-2099-011", "REQ-2099-012", "REQ-2099-013"]) await expect(page.getByRole("button", { name: `View details for ${number}`, exact: true })).toBeVisible();
+  await page.getByLabel("My Requests", { exact: true }).check();
+  for (const number of ["REQ-2099-010", "REQ-2099-011", "REQ-2099-012"]) await expect(page.getByRole("button", { name: `View details for ${number}`, exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "View details for REQ-2099-013", exact: true })).toHaveCount(0);
+  fixture.check();
+});
+
+test("Staff My Requests page lists an encoded walk-in for the citizen and routes walk-in actions to the walk-in tools", async ({ page }) => {
+  const returned = staffDirect({ id: "walkin-returned", requestNumber: "REQ-2099-020", status: "Returned", returnReason: "Clarify the site", submissionPath: undefined });
+  const awaitingSchedule = staffDirect({ id: "walkin-schedule", requestNumber: "REQ-2099-021", status: "Pending", submissionPath: undefined, preApprovalSchedule: { status: "AwaitingRequesterConfirmation", plantingDate: "2099-01-03", startTime: "09:00", proposalVersion: 1 } });
+  const fixture = await setup(page, { "GET /api/seedling-requests/my": route => route.fulfill({ json: { success: true, data: [returned, awaitingSchedule] } }),
+    "GET /api/seedling-requests": route => route.fulfill({ json: { success: true, data: [returned, awaitingSchedule] } }) });
+  await page.goto("/staff/my-requests?role=staff");
+  await expect(page.locator(".myr-walkin-note").first()).toHaveText("Walk-in for Walk-in Citizen");
+  await page.getByRole("button", { name: "View details of REQ-2099-021", exact: true }).click();
+  await expect(page.locator("[data-walkin-schedule-action]")).toContainText("signed schedule acknowledgement");
+  await expect(page.getByRole("heading", { name: "Confirm Coordinated Planting Schedule" })).toHaveCount(0);
+  await page.locator("[data-walkin-schedule-action]").getByRole("button", { name: "Open in Seedling Requests" }).click();
+  await expect(page).toHaveURL(/\/staff\/requests\?request=walkin-schedule/);
+  await page.goto("/staff/my-requests?role=staff");
+  await page.getByRole("button", { name: "View details of REQ-2099-020", exact: true }).click();
+  await page.getByRole("button", { name: "Edit Request", exact: true }).click();
+  await expect(page).toHaveURL(/\/staff\/walk-in-requests\/new\?edit=walkin-returned/);
+  expect(fixture.calls.filter(call => call.key.startsWith("PATCH"))).toHaveLength(0); fixture.check();
 });

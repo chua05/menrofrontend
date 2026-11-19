@@ -51,7 +51,7 @@ import { downloadPrivateRequestLetter, downloadPrivateWalkInAcknowledgement, has
 import "../styles/seedling-requests.css";
 import ParticipantSaplingRequestWizard from "./ParticipantSaplingRequestWizard";
 import { getRequesterDetailField } from "../utils/requesterDetails";
-import { ownsSeedlingRequest, canProcessSeedlingRequest } from "../utils/requestOwnership";
+import { ownsSeedlingRequest, canProcessSeedlingRequest, createdSeedlingRequest, isStaffDirectRequest, needsAdminSiteVerification } from "../utils/requestOwnership";
 import { approvedPolicyLabel } from "../utils/purposePolicyStatus";
 
 
@@ -364,6 +364,11 @@ function getPlantingSiteOptionLabel(site) {
 function hasStaffReviewData(request) {
   if (!request) return false;
 
+  // A Staff-submitted request goes directly to the Admin: only an actually recorded review is shown.
+  if (isStaffDirectRequest(request)) {
+    return Boolean(request.reviewId || request.reviewedByUid || request.reviewedDate);
+  }
+
   return Boolean(
     request.reviewedByName ||
       request.reviewId ||
@@ -571,6 +576,9 @@ export default function SeedlingRequestsPage() {
   const [decisionModal, setDecisionModal] = useState(null);
   const [rejectionChoice, setRejectionChoice] = useState("");
   const [decisionError, setDecisionError] = useState("");
+  // Admin-verified proposed site (Staff-submitted requests only; Participant sites are verified in Staff review).
+  const [decisionSiteVerification, setDecisionSiteVerification] = useState({ areaHectares: "", maximumCapacity: "" });
+  const [decisionSiteErrors, setDecisionSiteErrors] = useState({});
   const [reviewModal, setReviewModal] = useState(null);
   const [reviewError, setReviewError] = useState("");
   const [returnModal, setReturnModal] = useState(null);
@@ -871,7 +879,8 @@ useEffect(() => {
     );
 
     return requests.filter((request) => {
-      if (myRequestsOnly && !ownsSeedlingRequest(request, currentUser)) return false;
+      // Staff "My Requests": own requests plus walk-ins and requests this Staff account created.
+      if (myRequestsOnly && !createdSeedlingRequest(request, currentUser)) return false;
       if (
         activeConfig?.status &&
         request.status !== activeConfig.status
@@ -1506,6 +1515,8 @@ useEffect(() => {
     setDecisionModal({ request, action });
     setRejectionChoice("");
     setDecisionError("");
+    setDecisionSiteVerification({ areaHectares: "", maximumCapacity: "" });
+    setDecisionSiteErrors({});
   };
 
   const closeDecisionModal = () => {
@@ -1538,6 +1549,19 @@ useEffect(() => {
     } else {
       // The backend approval transaction resolves the effective purpose policy.
       payload = { expectedVersion: Number(request.requestVersion || 0) };
+      if (needsAdminSiteVerification(request)) {
+        const siteErrors = {};
+        const areaError = getPlantingAreaError("Other / Exact Area", decisionSiteVerification.areaHectares);
+        if (areaError) siteErrors.areaHectares = areaError;
+        const capacity = String(decisionSiteVerification.maximumCapacity || "");
+        if (!/^\d+$/.test(capacity) || !Number.isSafeInteger(Number(capacity)) || Number(capacity) <= 0) siteErrors.maximumCapacity = "Enter the verified capacity as a positive whole number.";
+        setDecisionSiteErrors(siteErrors);
+        if (Object.keys(siteErrors).length) {
+          setDecisionError("Enter the verified proposed site area and capacity to approve this Staff-submitted request.");
+          return;
+        }
+        payload.siteVerification = { areaHectares: decisionSiteVerification.areaHectares, maximumCapacity: capacity };
+      }
     }
 
     setActionLoading(true);
@@ -1577,7 +1601,10 @@ useEffect(() => {
       if (action === "approve") {
         // If backend indicates a guest-invitation/server-secret configuration
         // issue, surface a safe administrative message instead of raw text.
-        if ((error.status === 400 || error.status === 409) && error.fieldErrors?.policyReason) {
+        if (error.fieldErrors?.verifiedAreaHectares || error.fieldErrors?.verifiedMaximumCapacity) {
+          setDecisionSiteErrors({ areaHectares: error.fieldErrors.verifiedAreaHectares, maximumCapacity: error.fieldErrors.verifiedMaximumCapacity });
+          setDecisionError(rawMessage || "Enter the verified proposed site area and capacity.");
+        } else if ((error.status === 400 || error.status === 409) && error.fieldErrors?.policyReason) {
           setDecisionError("Approval requirements could not be validated. Refresh the request and try again. No approval was saved.");
         } else if (/GUEST_INVITATION_SECRET|invitation secret|guest invitation|secret/i.test(rawMessage)) {
           setDecisionError(
@@ -1891,7 +1918,7 @@ useEffect(() => {
         <KpiCard
           label="Awaiting Approval"
           value={counts.reviewed}
-          note="Reviewed by staff; awaiting final decision"
+          note="Staff-reviewed or Staff-submitted; awaiting final decision"
           icon={UserRoundCheck}
           variant="orange"
         />
@@ -2637,6 +2664,10 @@ useEffect(() => {
         loading={actionLoading}
         onClose={closeDecisionModal}
         onSubmit={submitDecision}
+        siteVerification={decisionSiteVerification}
+        setSiteVerification={setDecisionSiteVerification}
+        siteErrors={decisionSiteErrors}
+        setSiteErrors={setDecisionSiteErrors}
       />
 
       {showNewRequest && (
@@ -3137,6 +3168,10 @@ useEffect(() => {
                 <StaffReviewSection request={selectedRequest} />
               )}
 
+              {isStaffDirectRequest(selectedRequest) && (
+                <StaffSubmissionSection request={selectedRequest} />
+              )}
+
               {(selectedRequest.status === "Approved" ||
                 selectedRequest.status === "Rejected") && (
                 <MenroDecisionSection request={selectedRequest} />
@@ -3169,7 +3204,9 @@ useEffect(() => {
                 {userRole === "staff" && selectedRequest.walkIn?.encodedBy === currentUser?.uid && (selectedRequest.preApprovalSchedule?.status === "AwaitingRequesterConfirmation" || ["AwaitingRequester", "ReturnedForRevision"].includes(selectedRequest.lateReleaseRescheduling?.status)) && <WalkInScheduleAcknowledgement key={`${selectedRequest.id}:${selectedRequest.requestVersion}`} request={selectedRequest} onSaved={async updated => { refreshSelectedRequest(updated); await loadRequests({ background: true }); }} />}
                 {userRole === "staff" && selectedRequest.walkIn?.encodedBy === currentUser?.uid && selectedRequest.status === "Request Returned" && <button type="button" className="sr-secondary-btn" onClick={() => navigate(`/staff/walk-in-requests/new?edit=${encodeURIComponent(selectedRequest.id)}`)}>Correct Walk-in Request</button>}
                 {userRole === "staff" && ownsSeedlingRequest(selectedRequest, currentUser) && <div>
-                  <p>Another authorized MENRO officer must review and process your request.</p>
+                  <p>{isStaffDirectRequest(selectedRequest)
+                    ? "Your request was submitted directly for Admin approval; another authorized MENRO officer will process it."
+                    : "Another authorized MENRO officer must review and process your request."}</p>
                   <button type="button" className="sr-secondary-btn" onClick={() => navigate(`/staff/my-requests?request=${encodeURIComponent(selectedRequest.id)}`)}>Manage My Request</button>
                 </div>}
                 {userRole === "staff" && canProcessSeedlingRequest(selectedRequest, currentUser) &&
@@ -4088,6 +4125,39 @@ function StaffReviewSection({ request }) {
   );
 }
 
+// Staff-submitted requests (own or encoded walk-in) skip Staff review and go directly to the Admin.
+function StaffSubmissionSection({ request }) {
+  if (!request) return null;
+  const walkIn = Boolean(request.walkIn);
+  return (
+    <div className="sr-menro-decision sr-staff-review" data-submission-path={request.submissionPath}>
+      <div className="sr-menro-decision-head">
+        <strong>Staff Submission</strong>
+        {/* Only while it is actually awaiting the Admin; decided requests show their status elsewhere. */}
+        {request.status === "Reviewed" && <StatusBadge status="Reviewed" />}
+      </div>
+      <div className="sr-menro-decision-grid">
+        <div>
+          <span>Submitted By</span>
+          <strong>{request.submittedByName || request.walkIn?.encodedByName || "MENRO Staff"}</strong>
+        </div>
+        <div>
+          <span>Submission Type</span>
+          <strong>{walkIn ? "Staff-encoded walk-in request" : "Staff request"}</strong>
+        </div>
+        <div>
+          <span>Staff Review</span>
+          <strong>{request.reviewStatus || "Not Required"}</strong>
+        </div>
+        <div>
+          <span>Approval Route</span>
+          <strong>Directly to Admin approval</strong>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function MenroDecisionSection({ request }) {
   if (!request) return null;
 
@@ -4425,10 +4495,15 @@ function AdminDecisionModal({
   loading,
   onClose,
   onSubmit,
+  siteVerification = { areaHectares: "", maximumCapacity: "" },
+  setSiteVerification = () => {},
+  siteErrors = {},
+  setSiteErrors = () => {},
 }) {
   if (!modal) return null;
 
   const isApprove = modal.action === "approve";
+  const adminSiteVerification = isApprove && needsAdminSiteVerification(modal.request);
   return createPortal(
     <div className="sr-modal-backdrop sr-review-backdrop" onMouseDown={onClose}>
       <div
@@ -4474,7 +4549,25 @@ function AdminDecisionModal({
                 <DetailItem label="Confirmed Planting Date" value={formatDate(modal.request.preApprovalSchedule?.plantingDate || modal.request.proposedDate)} />
                 <DetailItem label="Requester Confirmation" value={modal.request.preApprovalSchedule?.status === "Confirmed" ? "Confirmed" : "Original schedule unchanged"} />
                 <DetailItem label="Schedule Status" value={(modal.request.preApprovalSchedule?.plantingDate || modal.request.proposedDate) >= new Date().toLocaleDateString("en-CA") ? "Valid" : "Needs coordination"} />
+                {isStaffDirectRequest(modal.request) && <DetailItem label="Approval Route" value="Staff-submitted · Staff review not required" />}
               </div>
+              {/* Staff-submitted proposed sites have no Staff review stage, so the Admin verifies them here
+                  (same fields and rules as the Staff review modal). */}
+              {adminSiteVerification && <section className="sr-site-verification" aria-labelledby="sr-admin-site-verification-title">
+                <div className="sr-site-verification-toggle">
+                  <span className="sr-site-verification-title" id="sr-admin-site-verification-title">Site Verification</span>
+                  <span className="sr-site-verification-status">Required for this proposed site</span>
+                </div>
+                <div className="sr-form-grid">
+                  {[["areaHectares", "Verified Planting Area (Hectares)"], ["maximumCapacity", "Verified Site Capacity (Seedlings)"]].map(([key, label]) => <div className="sr-form-field" key={key}>
+                    <label htmlFor={`admin-site-${key}`}>{label} *</label>
+                    <input id={`admin-site-${key}`} type="number" step={key === "areaHectares" ? "any" : "1"} min="0" value={siteVerification[key]}
+                      aria-invalid={siteErrors[key] ? "true" : undefined} aria-describedby={siteErrors[key] ? `admin-site-error-${key}` : undefined}
+                      onChange={event => { setSiteVerification(value => ({ ...value, [key]: event.target.value })); setSiteErrors(value => ({ ...value, [key]: "" })); }} />
+                    {siteErrors[key] && <small className="sr-field-error" id={`admin-site-error-${key}`} role="alert">{siteErrors[key]}</small>}
+                  </div>)}
+                </div>
+              </section>}
             </>
           ) : (
             <label className="sr-form-field">
