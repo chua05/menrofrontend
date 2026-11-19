@@ -287,6 +287,14 @@
   line-height: 1.55;
 }
 
+/* Staff-encoded walk-in request: the citizen remains the requester. */
+.myr-walkin-note {
+  display: block;
+  margin-top: 3px;
+  color: #68766e;
+  font-size: 12.5px;
+}
+
 .myr-seedling-count {
   font-weight: 600;
 }
