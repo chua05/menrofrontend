@@ -37,6 +37,7 @@ import {
 
 import { auth } from "../firebase/config";
 import { downloadPrivateRequestLetter, hasPrivateRequestLetter } from "../utils/requestLetterDownload";
+import { groupItemsForDisplay } from "../utils/seedlingInventoryOptions";
 import "../styles/my-requests.css";
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
@@ -1380,7 +1381,7 @@ export default function MyRequestsPage() {
 
                 <div className="myr-seedling-list">
                   {getRequestSeedlings(selectedRequest).length > 0 ? (
-                    getRequestSeedlings(selectedRequest).map(
+                    groupItemsForDisplay(getRequestSeedlings(selectedRequest)).map(
                       (seedling, index) => (
                         <div
                           className="myr-seedling-item"
@@ -1624,7 +1625,11 @@ export default function MyRequestsPage() {
                   <div className="myr-section-title"><Trees size={18} /><div><h3>Seedling Release</h3><p>Actual release details appear when MENRO records them.</p></div></div>
                   {Array.isArray(selectedRequest.releasedItems) && selectedRequest.releasedItems.length > 0 ? (
                     <div className="myr-seedling-list">
-                      {selectedRequest.releasedItems.map((item, index) => (
+                      {groupItemsForDisplay(
+                        selectedRequest.releasedItems,
+                        ["requestedQuantity", "releasedQuantity"],
+                        ["shortReleaseReason"],
+                      ).map((item, index) => (
                         <div className="myr-seedling-item" key={`${item.inventoryId || index}-release`}>
                           <div><span>Seedling</span><strong>{item.species || item.treeName || "—"}</strong></div>
                           <div><span>Released / Requested</span><strong>{item.releasedQuantity} / {item.requestedQuantity}</strong></div>

@@ -55,6 +55,12 @@ import {
   validatePlantingSchedule,
   validateRequestLetterFile,
 } from "../utils/saplingRequestWorkflow";
+import {
+  allocateSeedlingQuantity,
+  formatSeedlingTypeLabel,
+  groupAvailableInventory,
+  groupRequestItemsBySeedlingType,
+} from "../utils/seedlingInventoryOptions";
 
 const API = API_BASE_URL;
 const BARANGAY_GEOJSON_URL = `${API}/sites/barangay-boundaries`;
@@ -156,7 +162,7 @@ const fresh = (p) => ({
   street: "",
   purpose: "",
   purposeOther: "",
-  trees: [{ id: crypto.randomUUID(), inventoryId: "", quantity: "" }],
+  trees: [{ id: crypto.randomUUID(), seedlingKey: "", quantity: "" }],
   preferredReleaseDate: "",
   siteMode: "existing",
   siteBarangay: "",
@@ -392,6 +398,11 @@ export default function ParticipantSaplingRequestWizard({ currentUser, requester
   const legacyPurpose = editing?.workflow?.purpose || editing?.purpose;
   const purposeOptions = legacyPurpose && !sharedPurposes.includes(legacyPurpose) ? [...sharedPurposes, legacyPurpose] : sharedPurposes;
   const chosenSite = sites.find((x) => x.id === form.existingSiteId);
+  const seedlingGroups = useMemo(() => groupAvailableInventory(inventory), [inventory]);
+  const groupByKey = useMemo(
+    () => new Map(seedlingGroups.map((item) => [item.key, item])),
+    [seedlingGroups],
+  );
   const addressMunicipalities = useMemo(
     () => getMunicipalitiesForProvince(form.addressProvince),
     [form.addressProvince],
@@ -589,10 +600,10 @@ export default function ParticipantSaplingRequestWizard({ currentUser, requester
               ? { stored: true, name: request.requestLetter.originalName || "Stored request letter",
                   type: request.requestLetter.contentType || "", size: request.requestLetter.sizeBytes || 0 }
               : request.workflow?.requestLetter || null,
-            trees: (request.items || []).map((x) => ({
+            trees: groupRequestItemsBySeedlingType(request.items || [], stock || []).map((x) => ({
               id: crypto.randomUUID(),
-              inventoryId: x.inventoryId,
-              quantity: x.quantity,
+              seedlingKey: x.key,
+              quantity: String(x.quantity),
             })),
             idNumber: "",
             confirmed: false,
@@ -637,20 +648,29 @@ export default function ParticipantSaplingRequestWizard({ currentUser, requester
         e.purpose = "Select a purpose for the selected request type.";
       }
       if (isOtherPurpose(form.purpose)) need("purposeOther", "Please specify the purpose.");
-      const ids = form.trees.map((x) => x.inventoryId).filter(Boolean);
+      const ids = form.trees.map((x) => x.seedlingKey).filter(Boolean);
+      const overCap = form.trees.find(
+        (x) => groupByKey.get(x.seedlingKey) && Number(x.quantity) > groupByKey.get(x.seedlingKey).totalAvailable,
+      );
       if (
         form.trees.some(
           (x) =>
-            !x.inventoryId ||
+            !x.seedlingKey ||
             !Number.isInteger(Number(x.quantity)) ||
             Number(x.quantity) < 1,
         )
       )
         e.trees = "Select each tree and enter a positive whole quantity.";
+      else if (form.trees.some((x) => !groupByKey.get(x.seedlingKey)))
+        e.trees = "This seedling type is no longer available. Please select another.";
       else if (form.trees.length > MAX_SEEDLING_TYPES)
         e.trees = "A maximum of 10 seedling types may be requested.";
       else if (new Set(ids).size !== ids.length)
         e.trees = "The same seedling cannot be selected more than once.";
+      else if (overCap) {
+        const selectedGroup = groupByKey.get(overCap.seedlingKey);
+        e.trees = `Only ${selectedGroup.totalAvailable.toLocaleString("en-US")} available for ${selectedGroup.species}.`;
+      }
       need("preferredReleaseDate", "Select a preferred release date.");
       if (
         form.preferredReleaseDate &&
@@ -773,6 +793,16 @@ export default function ParticipantSaplingRequestWizard({ currentUser, requester
       focusFirstInvalidField(keys[0]);
       return;
     }
+    let items;
+    try {
+      items = form.trees.flatMap((x) =>
+        allocateSeedlingQuantity(groupByKey.get(x.seedlingKey), Number(x.quantity)));
+    } catch (error) {
+      setErrors((current) => ({ ...current, trees: error.message }));
+      setStep(2);
+      showError(error.message);
+      return;
+    }
     setSubmitting(true);
     onSubmittingChange?.(true);
     const location =
@@ -824,10 +854,7 @@ export default function ParticipantSaplingRequestWizard({ currentUser, requester
     delete workflow.addressMunicipalityOther;
     const payload = {
       ...(walkIn ? { clientSubmissionId: submissionId.current, citizen: { fullName: form.fullName, contactNumber: form.contactNumber, assistedByName: assistedByName.trim() } } : {}),
-      items: form.trees.map((x) => ({
-        inventoryId: x.inventoryId,
-        quantity: Number(x.quantity),
-      })),
+      items,
       purpose: isOtherPurpose(form.purpose) ? form.purposeOther.trim() : form.purpose,
       plantingLocation: location,
       preferredReleaseDate: form.preferredReleaseDate,
@@ -1112,30 +1139,26 @@ export default function ParticipantSaplingRequestWizard({ currentUser, requester
                 {form.trees.map((tree) => (
                   <div className="sr-tree-row" key={tree.id}>
                     <select
-                      value={tree.inventoryId}
+                      value={tree.seedlingKey}
                       onChange={(e) => {
                         setForm((p) => ({
                           ...p,
                           trees: p.trees.map((x) =>
-                            x.id === tree.id ? { ...x, inventoryId: e.target.value } : x),
+                            x.id === tree.id ? { ...x, seedlingKey: e.target.value } : x),
                         }));
                         setErrors((current) => ({ ...current, trees: "" }));
                       }}
                     >
                       <option value="">Select tree</option>
-                      {inventory.map((x) => (
+                      {seedlingGroups.map((x) => (
                         <option
-                          key={x.id}
-                          value={x.id}
+                          key={x.key}
+                          value={x.key}
                           disabled={form.trees.some(
-                            (y) => y.id !== tree.id && y.inventoryId === x.id,
+                            (y) => y.id !== tree.id && y.seedlingKey === x.key,
                           )}
                         >
-                          {x.species} —{" "}
-                          {Number(
-                            x.currentQuantity ?? x.availableQuantity ?? 0,
-                          )}{" "}
-                          available
+                          {formatSeedlingTypeLabel(x)}
                         </option>
                       ))}
                     </select>
@@ -1184,7 +1207,7 @@ export default function ParticipantSaplingRequestWizard({ currentUser, requester
                         ...p.trees,
                         {
                           id: crypto.randomUUID(),
-                          inventoryId: "",
+                          seedlingKey: "",
                           quantity: "",
                         },
                       ],
@@ -1655,7 +1678,7 @@ export default function ParticipantSaplingRequestWizard({ currentUser, requester
                   {form.trees
                     .map(
                       (t) =>
-                        `${inventory.find((x) => x.id === t.inventoryId)?.species || "Seedling"} — ${t.quantity}`,
+                        `${groupByKey.get(t.seedlingKey)?.species || "Seedling"} — ${t.quantity}`,
                     )
                     .join(", ")}
                 </p>
