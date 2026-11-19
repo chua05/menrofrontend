@@ -24,6 +24,9 @@ export const BULAN_BARANGAYS = [
   "ZoneVIPoblacion", "ZoneVPoblacion",
 ];
 
+export const REGISTRATION_PROVINCE = "Sorsogon";
+export const REGISTRATION_MUNICIPALITY = "Bulan";
+
 export function userTypeField(userType) {
   if (["Barangay Official", "Volunteer"].includes(userType)) {
     return { kind: "barangay", label: "Barangay *", error: "Please select your barangay." };

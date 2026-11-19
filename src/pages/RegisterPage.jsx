@@ -3,7 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { FiUser, FiMail, FiLock, FiEye, FiEyeOff } from "react-icons/fi";
 import { FcGoogle } from "react-icons/fc";
 import { useAuth } from "../context/AuthContext";
-import { BULAN_BARANGAYS, USER_TYPES, userTypeField } from "../utils/userTypes";
+import { BULAN_BARANGAYS, REGISTRATION_MUNICIPALITY, REGISTRATION_PROVINCE, USER_TYPES, userTypeField } from "../utils/userTypes";
 import { dashboardPathForRole } from "../utils/roleRoutes";
 import { publicApiFetch, verifyMenroSession } from "../services/authenticatedApi";
 import { startGooglePopup } from "../services/googleRedirectAuth";
@@ -35,6 +35,8 @@ export default function RegisterPage() {
     userType: "",
     userTypeDetail: "",
     barangay: "",
+    province: REGISTRATION_PROVINCE,
+    municipality: REGISTRATION_MUNICIPALITY,
     password: "",
     confirmPassword: "",
   });
@@ -134,6 +136,8 @@ export default function RegisterPage() {
           userType: form.userType,
           userTypeDetail: form.userTypeDetail.trim(),
           barangay: form.barangay,
+          province: form.province,
+          municipality: form.municipality,
         }),
       });
       const payload = await response.json().catch(() => null);
@@ -362,6 +366,14 @@ export default function RegisterPage() {
                   </select>
                 </Field>
               </div>
+
+              <Field label="Province" htmlFor="register-province">
+                <input id="register-province" name="province" type="text" value={form.province} readOnly aria-readonly="true" className="register-input register-input-no-icon" />
+              </Field>
+
+              <Field label="Municipality" htmlFor="register-municipality">
+                <input id="register-municipality" name="municipality" type="text" value={form.municipality} readOnly aria-readonly="true" className="register-input register-input-no-icon" />
+              </Field>
 
               {conditionalField?.kind === "barangay" && (
                 <div className="register-full-width"><Field label={conditionalField.label} htmlFor="register-barangay" error={errors.barangay}><select id="register-barangay" name="barangay" value={form.barangay} onChange={update("barangay")} className="register-input register-input-no-icon"><option value="">Select barangay</option>{BULAN_BARANGAYS.map((barangay) => <option key={barangay}>{barangay}</option>)}</select></Field></div>
