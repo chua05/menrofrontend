@@ -1,10 +1,7 @@
 
-import EventAttendancePanel from "../components/EventAttendancePanel";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
-import { useAuth } from "../context/AuthContext";
 import { useToast } from "../context/ToastContext";
-import PageLoadingState from "../components/PageLoadingState";
 import L from "leaflet";
 import { boundaryLayerOptions } from "../utils/barangayMap";
 import "leaflet/dist/leaflet.css";
@@ -37,7 +34,6 @@ import {
 
 import { auth } from "../firebase/config";
 import { downloadPrivateRequestLetter, hasPrivateRequestLetter } from "../utils/requestLetterDownload";
-import { groupItemsForDisplay } from "../utils/seedlingInventoryOptions";
 import "../styles/my-requests.css";
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
@@ -787,8 +783,6 @@ function MyRequestLocationPreview({ request }) {
 }
 
 export default function MyRequestsPage() {
-  const { userRole } = useAuth();
-  const requesterPrefix = userRole === "staff" ? "/staff" : "/participant";
   const navigate = useNavigate();
   const location = useLocation();
   const { success: showSuccess, error: showError } = useToast();
@@ -953,7 +947,7 @@ export default function MyRequestsPage() {
   );
 
   const handleRequestSeedlings = () => {
-    navigate(`${requesterPrefix}/request-seedlings`);
+    navigate("/participant/request-seedlings");
   };
 
   const handleViewRequest = (request) => {
@@ -1060,7 +1054,7 @@ export default function MyRequestsPage() {
   };
 
   if (loading) {
-    return <div className="myr-page"><PageLoadingState message="Loading your requests..." /></div>;
+    return <div className="myr-page"><div style={{ minHeight: "420px", display: "grid", placeItems: "center", color: "#526159", fontSize: "13px", fontWeight: 600 }}>Loading your requests...</div></div>;
   }
 
   if (loadError) {
@@ -1174,8 +1168,6 @@ export default function MyRequestsPage() {
                       <span className="myr-purpose-text">
                         {getPurpose(request)}
                       </span>
-                      {/* Staff-encoded walk-in: the citizen remains the requester. */}
-                      {request.walkIn && <small className="myr-walkin-note">Walk-in for {request.requesterName || "citizen requester"}</small>}
                     </td>
                     <td>{getBarangay(request)}</td>
                     <td>
@@ -1284,7 +1276,6 @@ export default function MyRequestsPage() {
               <div>
                 <span className="myr-modal-label">Seedling Request</span>
                 <h2 id="myr-details-title">Request Details</h2>
-                  {selectedRequest.reportingPolicy && <p>{selectedRequest.reportingPolicy.reportingStatus}. Requesters provide planting documentation only; permanent-sample monitoring is performed by MENRO Staff.</p>}
                 <p>{getRequestDisplayId(selectedRequest)}</p>
               </div>
 
@@ -1381,7 +1372,7 @@ export default function MyRequestsPage() {
 
                 <div className="myr-seedling-list">
                   {getRequestSeedlings(selectedRequest).length > 0 ? (
-                    groupItemsForDisplay(getRequestSeedlings(selectedRequest)).map(
+                    getRequestSeedlings(selectedRequest).map(
                       (seedling, index) => (
                         <div
                           className="myr-seedling-item"
@@ -1625,11 +1616,7 @@ export default function MyRequestsPage() {
                   <div className="myr-section-title"><Trees size={18} /><div><h3>Seedling Release</h3><p>Actual release details appear when MENRO records them.</p></div></div>
                   {Array.isArray(selectedRequest.releasedItems) && selectedRequest.releasedItems.length > 0 ? (
                     <div className="myr-seedling-list">
-                      {groupItemsForDisplay(
-                        selectedRequest.releasedItems,
-                        ["requestedQuantity", "releasedQuantity"],
-                        ["shortReleaseReason"],
-                      ).map((item, index) => (
+                      {selectedRequest.releasedItems.map((item, index) => (
                         <div className="myr-seedling-item" key={`${item.inventoryId || index}-release`}>
                           <div><span>Seedling</span><strong>{item.species || item.treeName || "—"}</strong></div>
                           <div><span>Released / Requested</span><strong>{item.releasedQuantity} / {item.requestedQuantity}</strong></div>
@@ -1662,20 +1649,8 @@ export default function MyRequestsPage() {
               {invitationError && Number(selectedRequest.expectedParticipants) > 0 && (
                 <p role="status">{invitationError}</p>
               )}
-              {selectedRequest.eventId && ["Approved", "Saplings Released"].includes(selectedRequest.status) && Number(selectedRequest.expectedParticipants) > 0 && (
-                <EventAttendancePanel eventId={selectedRequest.eventId} />
-              )}
 
-              {/* Walk-in schedule changes need the citizen's signed acknowledgement, recorded from Seedling Requests. */}
-              {selectedRequest.walkIn && (selectedRequest.preApprovalSchedule?.status === "AwaitingRequesterConfirmation" || ["AwaitingRequester", "ReturnedForRevision"].includes(selectedRequest.lateReleaseRescheduling?.status)) && (
-                <section className="myr-details-section" data-walkin-schedule-action>
-                  <h3>Citizen Schedule Confirmation Required</h3>
-                  <p>This walk-in request needs the citizen&apos;s signed schedule acknowledgement. Record it from the request in Seedling Requests.</p>
-                  <button type="button" className="myr-primary-btn" onClick={() => navigate(`/staff/requests?request=${encodeURIComponent(selectedRequest.id)}`)}>Open in Seedling Requests</button>
-                </section>
-              )}
-
-              {!selectedRequest.walkIn && selectedRequest.preApprovalSchedule?.status === "AwaitingRequesterConfirmation" && (
+              {selectedRequest.preApprovalSchedule?.status === "AwaitingRequesterConfirmation" && (
                 <section className="myr-details-section">
                   <h3>Confirm Coordinated Planting Schedule</h3>
                   <p>MENRO Staff proposed a schedule adjustment. Review or change the planting schedule before confirming it.</p>
@@ -1689,7 +1664,7 @@ export default function MyRequestsPage() {
                 </section>
               )}
 
-              {!selectedRequest.walkIn && ["AwaitingRequester", "ReturnedForRevision"].includes(selectedRequest.lateReleaseRescheduling?.status) && (
+              {["AwaitingRequester", "ReturnedForRevision"].includes(selectedRequest.lateReleaseRescheduling?.status) && (
                 <section className="myr-details-section">
                   <h3>Replacement Planting Schedule Required</h3>
                   <p>{selectedRequest.lateReleaseRescheduling.conflictReason}</p>
@@ -1743,9 +1718,7 @@ export default function MyRequestsPage() {
                   className="myr-edit-button"
                   onClick={() =>
                     navigate(
-                      selectedRequest.walkIn
-                        ? `/staff/walk-in-requests/new?edit=${encodeURIComponent(selectedRequest.id)}`
-                        : `${requesterPrefix}/request-seedlings?edit=${encodeURIComponent(selectedRequest.id)}`
+                      `/participant/request-seedlings?edit=${encodeURIComponent(selectedRequest.id)}`
                     )
                   }
                 >

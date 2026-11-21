@@ -1,3 +1,4 @@
+// UNCONFIRMED BUSINESS RULE (pending MENRO client approval): when a requester asks for a combined seedling type, the quantity is split across that type's eligible inventory records oldest-first (by inventoryNumber/batchReference). This ordering was introduced as an interim measure so request submission keeps working with the existing per-inventory-record request lines; it is not an approved allocation policy. Do not extend or rely on it until confirmed.
 // Groups inventory batches into one entry per seedling type (species) and
 // splits a requested quantity across the underlying batches, oldest first.
 
@@ -61,6 +62,7 @@ export function formatSeedlingTypeLabel(group) {
   return `${group.species} — ${group.totalAvailable.toLocaleString("en-US")} available`;
 }
 
+// UNCONFIRMED BUSINESS RULE (pending MENRO client approval): when a requester asks for a combined seedling type, the quantity is split across that type's eligible inventory records oldest-first (by inventoryNumber/batchReference). This ordering was introduced as an interim measure so request submission keeps working with the existing per-inventory-record request lines; it is not an approved allocation policy. Do not extend or rely on it until confirmed.
 export function allocateSeedlingQuantity(group, quantity) {
   const requested = Number(quantity);
   if (!group) throw new Error("Seedling type is required.");
@@ -94,46 +96,4 @@ export function groupRequestItemsBySeedlingType(items, inventory) {
     rows.set(key, (rows.get(key) ?? 0) + quantity);
   }
   return [...rows].map(([key, quantity]) => ({ key, quantity }));
-}
-
-// Display-only: merges a request's per-batch items into one row per seedling type
-// (species) so a requester sees "Pili 1510" rather than one line per batch. Each
-// listed quantity field is summed; each listed text field keeps its distinct
-// non-empty values joined by "; ". Items without a species name stay separate.
-// The input items are never mutated.
-export function groupItemsForDisplay(items, quantityFields = ["quantity"], textFields = []) {
-  if (!Array.isArray(items)) return [];
-
-  const rows = [];
-  const rowsByKey = new Map();
-  for (const item of items) {
-    const key = getSeedlingTypeKey(item?.species || item?.treeName || item?.name);
-    const existing = key ? rowsByKey.get(key) : undefined;
-
-    if (!existing) {
-      const row = { ...item };
-      for (const field of quantityFields) {
-        if (row[field] !== undefined && row[field] !== null && row[field] !== "") {
-          row[field] = Number(row[field]) || 0;
-        }
-      }
-      rows.push(row);
-      if (key) rowsByKey.set(key, row);
-      continue;
-    }
-
-    for (const field of quantityFields) {
-      const value = item?.[field];
-      if (value === undefined || value === null || value === "") continue;
-      existing[field] = (Number(existing[field]) || 0) + (Number(value) || 0);
-    }
-    for (const field of textFields) {
-      const value = String(item?.[field] ?? "").trim();
-      if (!value) continue;
-      const current = String(existing[field] ?? "").trim();
-      const parts = current ? current.split("; ") : [];
-      if (!parts.includes(value)) existing[field] = [...parts, value].join("; ");
-    }
-  }
-  return rows;
 }

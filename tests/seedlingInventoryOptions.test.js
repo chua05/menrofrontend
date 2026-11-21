@@ -5,7 +5,6 @@ import {
   formatSeedlingTypeLabel,
   getSeedlingTypeKey,
   groupAvailableInventory,
-  groupItemsForDisplay,
   groupRequestItemsBySeedlingType,
 } from "../src/utils/seedlingInventoryOptions.js";
 
@@ -177,44 +176,4 @@ test("fractional batch stock is floored so allocation only emits whole items", (
   assert.deepEqual(groups[0].batches.map((b) => [b.id, b.availableQuantity]), [["b1", 10]]);
   assert.deepEqual(allocateSeedlingQuantity(groups[0], 10), [{ inventoryId: "b1", quantity: 10 }]);
   assert.throws(() => allocateSeedlingQuantity(groups[0], 11), /exceeds the 10 available/);
-});
-
-test("display grouping shows one line per species with summed quantities", () => {
-  const items = [
-    { inventoryId: "b1", species: "Pili", quantity: 10 },
-    { inventoryId: "n1", species: "Narra", quantity: 2 },
-    { inventoryId: "b2", species: " pili ", quantity: 1500 },
-  ];
-  const snapshot = structuredClone(items);
-  const rows = groupItemsForDisplay(items);
-  assert.deepEqual(rows.map((row) => [row.species, row.quantity]), [["Pili", 1510], ["Narra", 2]]);
-  assert.deepEqual(items, snapshot);
-  assert.notEqual(rows[0], items[0]);
-});
-
-test("display grouping sums every listed quantity field and joins distinct reasons", () => {
-  const rows = groupItemsForDisplay(
-    [
-      { inventoryId: "b1", species: "Pili", requestedQuantity: 10, releasedQuantity: 8, shortReleaseReason: "Damaged" },
-      { inventoryId: "b2", species: "PILI", requestedQuantity: 1500, releasedQuantity: 1500 },
-      { inventoryId: "b3", species: "Pili", requestedQuantity: 5, releasedQuantity: 4, shortReleaseReason: "Damaged" },
-    ],
-    ["requestedQuantity", "releasedQuantity"],
-    ["shortReleaseReason"],
-  );
-  assert.equal(rows.length, 1);
-  assert.equal(rows[0].requestedQuantity, 1515);
-  assert.equal(rows[0].releasedQuantity, 1512);
-  assert.equal(rows[0].shortReleaseReason, "Damaged");
-});
-
-test("display grouping falls back to tree names, keeps unnamed items separate and tolerates non-arrays", () => {
-  const rows = groupItemsForDisplay([
-    { treeName: "Narra", quantity: 1 },
-    { name: "narra", quantity: "2" },
-    { quantity: 3 },
-    { quantity: 4 },
-  ]);
-  assert.deepEqual(rows.map((row) => row.quantity), [3, 3, 4]);
-  assert.deepEqual(groupItemsForDisplay(null), []);
 });
