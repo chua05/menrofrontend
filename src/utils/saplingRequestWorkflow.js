@@ -47,13 +47,13 @@ export const EXACT_AREA_CHOICES = new Set([
 
 export const REQUEST_LETTER_MAX_BYTES = 10 * 1024 * 1024;
 export const MAX_SEEDLING_TYPES = 10;
-const REQUEST_LETTER_EXTENSIONS = new Set(["pdf", "jpg", "jpeg", "png", "docx"]);
-const REQUEST_LETTER_TYPES = new Set([
-  "application/pdf",
-  "image/jpeg",
-  "image/png",
-  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-]);
+const REQUEST_LETTER_MIME_BY_EXTENSION = {
+  pdf: "application/pdf",
+  jpg: "image/jpeg",
+  jpeg: "image/jpeg",
+  png: "image/png",
+  docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+};
 
 export function getEffectiveRequestType(sector, requestingAs) {
   return (
@@ -159,10 +159,10 @@ export function invalidateCompletedSteps(
 
 export function validateRequestLetterFile(file) {
   const extension = String(file?.name || "").split(".").pop().toLowerCase();
-  if (
-    !REQUEST_LETTER_EXTENSIONS.has(extension) ||
-    (file?.type && !REQUEST_LETTER_TYPES.has(file.type))
-  ) {
+  const expectedType = Object.hasOwn(REQUEST_LETTER_MIME_BY_EXTENSION, extension)
+    ? REQUEST_LETTER_MIME_BY_EXTENSION[extension]
+    : undefined;
+  if (!expectedType || (file?.type && file.type !== expectedType)) {
     return "Please upload a PDF, JPG, JPEG, PNG, or DOCX file.";
   }
   if (Number(file?.size) > REQUEST_LETTER_MAX_BYTES)

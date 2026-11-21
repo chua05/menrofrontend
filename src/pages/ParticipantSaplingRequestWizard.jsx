@@ -52,6 +52,7 @@ import {
   dateOnlyInManila,
   MAX_SEEDLING_TYPES,
   normalizeBarangayName,
+  requestLetterUploadFile,
   validatePlantingSchedule,
   validateRequestLetterFile,
 } from "../utils/saplingRequestWorkflow";
@@ -897,7 +898,7 @@ export default function ParticipantSaplingRequestWizard({ currentUser, requester
             const data = new FormData();
             data.append("request", JSON.stringify(payload));
             if (form.requestLetter instanceof File) {
-              data.append("requestLetter", form.requestLetter, form.requestLetter.name);
+              data.append("requestLetter", requestLetterUploadFile(form.requestLetter), form.requestLetter.name);
             }
             return data;
           })()

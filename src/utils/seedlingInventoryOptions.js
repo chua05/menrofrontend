@@ -1,6 +1,5 @@
-// UNCONFIRMED BUSINESS RULE (pending MENRO client approval): when a requester asks for a combined seedling type, the quantity is split across that type's eligible inventory records oldest-first (by inventoryNumber/batchReference). This ordering was introduced as an interim measure so request submission keeps working with the existing per-inventory-record request lines; it is not an approved allocation policy. Do not extend or rely on it until confirmed.
-// Groups inventory batches into one entry per seedling type (species) and
-// splits a requested quantity across the underlying batches, oldest first.
+// Groups inventory records into one entry per seedling type (species) and
+// allocates a requested quantity across them (rule confirmed by MENRO; see below).
 
 export function getSeedlingTypeKey(species) {
   return String(species ?? "").trim().replace(/\s+/g, " ").toLowerCase();
@@ -62,7 +61,12 @@ export function formatSeedlingTypeLabel(group) {
   return `${group.species} — ${group.totalAvailable.toLocaleString("en-US")} available`;
 }
 
-// UNCONFIRMED BUSINESS RULE (pending MENRO client approval): when a requester asks for a combined seedling type, the quantity is split across that type's eligible inventory records oldest-first (by inventoryNumber/batchReference). This ordering was introduced as an interim measure so request submission keeps working with the existing per-inventory-record request lines; it is not an approved allocation policy. Do not extend or rely on it until confirmed.
+// Allocation rule (confirmed by MENRO): the requested quantity for a seedling type is
+// allocated automatically across that type's eligible inventory records, regardless of
+// Source Type, in a deterministic order: ascending inventoryNumber (or batchReference when
+// missing), compared numerically, then by record id. Each record is used at most once and
+// never beyond its available quantity. Stock is deducted only later, at release, per
+// inventory record. Admin does not select the source.
 export function allocateSeedlingQuantity(group, quantity) {
   const requested = Number(quantity);
   if (!group) throw new Error("Seedling type is required.");
