@@ -170,6 +170,15 @@ export function validateRequestLetterFile(file) {
   return "";
 }
 
+// Browsers may leave file.type empty. FormData would send octet-stream, so
+// normalize it to the MIME type implied by the already validated extension.
+export function requestLetterUploadFile(file) {
+  if (!file || file.type) return file;
+  const extension = String(file.name || "").split(".").pop().toLowerCase();
+  if (!Object.hasOwn(REQUEST_LETTER_MIME_BY_EXTENSION, extension)) return file;
+  return new File([file], file.name, { type: REQUEST_LETTER_MIME_BY_EXTENSION[extension] });
+}
+
 export function dateOnlyInManila(date = new Date()) {
   const parts = Object.fromEntries(new Intl.DateTimeFormat("en-US", {
     timeZone: "Asia/Manila", year: "numeric", month: "2-digit", day: "2-digit",
