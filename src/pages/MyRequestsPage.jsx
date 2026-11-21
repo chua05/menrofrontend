@@ -1,7 +1,10 @@
 
+import EventAttendancePanel from "../components/EventAttendancePanel";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
+import { useAuth } from "../context/AuthContext";
 import { useToast } from "../context/ToastContext";
+import PageLoadingState from "../components/PageLoadingState";
 import L from "leaflet";
 import { boundaryLayerOptions } from "../utils/barangayMap";
 import "leaflet/dist/leaflet.css";
@@ -783,6 +786,8 @@ function MyRequestLocationPreview({ request }) {
 }
 
 export default function MyRequestsPage() {
+  const { userRole } = useAuth();
+  const requesterPrefix = userRole === "staff" ? "/staff" : "/participant";
   const navigate = useNavigate();
   const location = useLocation();
   const { success: showSuccess, error: showError } = useToast();
@@ -947,7 +952,7 @@ export default function MyRequestsPage() {
   );
 
   const handleRequestSeedlings = () => {
-    navigate("/participant/request-seedlings");
+    navigate(`${requesterPrefix}/request-seedlings`);
   };
 
   const handleViewRequest = (request) => {
@@ -1054,7 +1059,7 @@ export default function MyRequestsPage() {
   };
 
   if (loading) {
-    return <div className="myr-page"><div style={{ minHeight: "420px", display: "grid", placeItems: "center", color: "#526159", fontSize: "13px", fontWeight: 600 }}>Loading your requests...</div></div>;
+    return <div className="myr-page"><PageLoadingState message="Loading your requests..." /></div>;
   }
 
   if (loadError) {
@@ -1168,6 +1173,8 @@ export default function MyRequestsPage() {
                       <span className="myr-purpose-text">
                         {getPurpose(request)}
                       </span>
+                      {/* Staff-encoded walk-in: the citizen remains the requester. */}
+                      {request.walkIn && <small className="myr-walkin-note">Walk-in for {request.requesterName || "citizen requester"}</small>}
                     </td>
                     <td>{getBarangay(request)}</td>
                     <td>
@@ -1276,6 +1283,7 @@ export default function MyRequestsPage() {
               <div>
                 <span className="myr-modal-label">Seedling Request</span>
                 <h2 id="myr-details-title">Request Details</h2>
+                  {selectedRequest.reportingPolicy && <p>{selectedRequest.reportingPolicy.reportingStatus}. Requesters provide planting documentation only; permanent-sample monitoring is performed by MENRO Staff.</p>}
                 <p>{getRequestDisplayId(selectedRequest)}</p>
               </div>
 
@@ -1649,8 +1657,20 @@ export default function MyRequestsPage() {
               {invitationError && Number(selectedRequest.expectedParticipants) > 0 && (
                 <p role="status">{invitationError}</p>
               )}
+              {selectedRequest.eventId && ["Approved", "Saplings Released"].includes(selectedRequest.status) && Number(selectedRequest.expectedParticipants) > 0 && (
+                <EventAttendancePanel eventId={selectedRequest.eventId} />
+              )}
 
-              {selectedRequest.preApprovalSchedule?.status === "AwaitingRequesterConfirmation" && (
+              {/* Walk-in schedule changes need the citizen's signed acknowledgement, recorded from Seedling Requests. */}
+              {selectedRequest.walkIn && (selectedRequest.preApprovalSchedule?.status === "AwaitingRequesterConfirmation" || ["AwaitingRequester", "ReturnedForRevision"].includes(selectedRequest.lateReleaseRescheduling?.status)) && (
+                <section className="myr-details-section" data-walkin-schedule-action>
+                  <h3>Citizen Schedule Confirmation Required</h3>
+                  <p>This walk-in request needs the citizen&apos;s signed schedule acknowledgement. Record it from the request in Seedling Requests.</p>
+                  <button type="button" className="myr-primary-btn" onClick={() => navigate(`/staff/requests?request=${encodeURIComponent(selectedRequest.id)}`)}>Open in Seedling Requests</button>
+                </section>
+              )}
+
+              {!selectedRequest.walkIn && selectedRequest.preApprovalSchedule?.status === "AwaitingRequesterConfirmation" && (
                 <section className="myr-details-section">
                   <h3>Confirm Coordinated Planting Schedule</h3>
                   <p>MENRO Staff proposed a schedule adjustment. Review or change the planting schedule before confirming it.</p>
@@ -1664,7 +1684,7 @@ export default function MyRequestsPage() {
                 </section>
               )}
 
-              {["AwaitingRequester", "ReturnedForRevision"].includes(selectedRequest.lateReleaseRescheduling?.status) && (
+              {!selectedRequest.walkIn && ["AwaitingRequester", "ReturnedForRevision"].includes(selectedRequest.lateReleaseRescheduling?.status) && (
                 <section className="myr-details-section">
                   <h3>Replacement Planting Schedule Required</h3>
                   <p>{selectedRequest.lateReleaseRescheduling.conflictReason}</p>
@@ -1718,7 +1738,9 @@ export default function MyRequestsPage() {
                   className="myr-edit-button"
                   onClick={() =>
                     navigate(
-                      `/participant/request-seedlings?edit=${encodeURIComponent(selectedRequest.id)}`
+                      selectedRequest.walkIn
+                        ? `/staff/walk-in-requests/new?edit=${encodeURIComponent(selectedRequest.id)}`
+                        : `${requesterPrefix}/request-seedlings?edit=${encodeURIComponent(selectedRequest.id)}`
                     )
                   }
                 >
