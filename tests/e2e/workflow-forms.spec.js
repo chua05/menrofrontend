@@ -3,6 +3,7 @@ import { Buffer } from "node:buffer";
 
 const site = { id: "site-1", siteName: "Fixture site", barangay: "Bical", status: "active", latitude: 12.6598, longitude: 123.918, areaHectares: 1.5,
   maximumCapacity: 1000, planted: 0, availableCapacity: 1000, utilizationPercentage: 0 };
+const availableSeedling = { id: "tree-1", species: "Narra", currentQuantity: 100 };
 const polygon = { type: "FeatureCollection", features: [{ type: "Feature", properties: { barangay: "Bical", brgy_name: "Bical", NAME_3: "Bical" },
   geometry: { type: "Polygon", coordinates: [[[123.8, 12.5], [124, 12.5], [124, 12.8], [123.8, 12.8], [123.8, 12.5]]] } }] };
 async function setup(page, overrides = {}) {
@@ -20,7 +21,7 @@ async function setup(page, overrides = {}) {
     if (url.pathname === "/api/auth/profile") data = { uid: "test-participant", fullName: "Workflow User", contactNumber: "09123456789", province: "Sorsogon", municipality: "Bulan", barangay: "Bical" };
     else if (url.pathname === "/api/sites/barangay-boundaries") return route.fulfill({ json: polygon });
     else if (url.pathname === "/api/sites") data = [site];
-    else if (url.pathname === "/api/inventory/available") data = [{ id: "tree-1", species: "Narra", currentQuantity: 100 }];
+    else if (url.pathname === "/api/inventory/available") data = [availableSeedling];
     else if (url.pathname === "/api/notifications/unread-count") data = { unreadCount: 0 };
     else if (lists.includes(url.pathname)) data = [];
     else if (key.startsWith("GET ") && /^\/api\/planting-reports\/[^/]+\/verification-logs$/.test(url.pathname)) data = [];
@@ -31,7 +32,7 @@ async function setup(page, overrides = {}) {
   });
   return { calls, check() { expect(unexpected).toEqual([]); expect(external.filter(origin => !/cartocdn|openstreetmap/.test(origin))).toEqual([]); } };
 }
-async function requester(page, { role = "participant", navigate = true, heading = "Request Seedlings", sector = "Resident / Individual", detail } = {}) {
+async function requester(page, { role = "participant", navigate = true, heading = "Request Seedlings", sector = "Resident / Individual", detail, purpose = "Household / Backyard" } = {}) {
   if (navigate) await page.goto(`/${role}/request-seedlings?role=${role}`);
   await expect(page.getByRole("heading", { name: role === "staff" ? "Submit Seedling Request" : heading, exact: true })).toBeVisible();
   await page.getByLabel("Requesting As *", { exact: true }).selectOption(sector);
@@ -41,8 +42,15 @@ async function requester(page, { role = "participant", navigate = true, heading 
   await page.getByLabel("Barangay *", { exact: true }).selectOption("Bical");
   await page.getByLabel("Street / Purok / Sitio *").fill("Fixture street");
   await page.getByRole("button", { name: "Next", exact: true }).click();
-  await page.getByLabel("Purpose of Request *").selectOption("Household / Backyard");
-  await page.locator(".sr-tree-row select").selectOption("tree-1");
+  await page.getByLabel("Purpose of Request *").selectOption(purpose);
+  const seedlingSelect = page.locator(".sr-tree-row select");
+  const seededOption = seedlingSelect.locator("option").filter({
+    hasText: new RegExp(`^${availableSeedling.species}.*${availableSeedling.currentQuantity.toLocaleString("en-US")} available$`),
+  });
+  await expect(seededOption).toHaveCount(1);
+  const groupedValue = await seededOption.getAttribute("value");
+  expect(groupedValue).toBeTruthy();
+  await seedlingSelect.selectOption(groupedValue);
   await page.getByPlaceholder("Quantity", { exact: true }).fill("2");
   await page.getByLabel("Preferred Release Date *").fill("2099-01-01");
   await page.getByRole("button", { name: "Next", exact: true }).click();
@@ -284,7 +292,7 @@ test("dashboard preserves successful request metrics while failed report metrics
   await expect(page.getByText(/dashboard data source/i)).toHaveCount(0); fixture.check();
 });
 
-async function plantingDetails(page, { proposed = false, blankArea = false } = {}) {
+async function plantingDetails(page, { proposed = false, blankArea = false, group = false, delivery = false } = {}) {
   if (proposed) await page.getByRole("radio", { name: "Propose New Planting Site", exact: true }).check();
   await page.getByLabel("Barangay *", { exact: true }).selectOption("Bical");
   if (proposed) {
@@ -303,10 +311,12 @@ async function plantingDetails(page, { proposed = false, blankArea = false } = {
     await page.getByLabel("Planting Area (Hectares) (Optional)", { exact: true }).selectOption("Other / Exact Area");
     await page.getByLabel("Specify Planting Area (Hectares)").fill("0.5");
   }
-  await page.getByRole("radio", { name: "Pick-up", exact: true }).check();
-  await page.getByLabel("Planned Planting Date *").fill("2099-01-02");
+  await page.getByRole("radio", { name: delivery ? "MENRO Delivery" : "Pick-up", exact: true }).check();
+  if (group) await page.getByLabel("Event Name *", { exact: true }).fill("Fixture school greening");
+  await page.getByLabel(group ? "Proposed Event Date *" : "Planned Planting Date *", { exact: true }).fill("2099-01-02");
   await page.getByLabel(/Start Time/).fill("08:00");
-  await page.getByLabel("Planned Number of Planters *").fill("1");
+  if (group) await page.getByLabel("End Time *", { exact: true }).fill("10:00");
+  await page.getByLabel(group ? "Expected Participants *" : "Planned Number of Planters *", { exact: true }).fill(group ? "10" : "1");
   await expect(page.getByText("Planting Care Information", { exact: true })).toHaveCount(0);
   await expect(page.getByLabel(/Who will be responsible|How often do you plan|How will you care/)).toHaveCount(0);
   await page.getByRole("button", { name: "Next", exact: true }).click();
@@ -701,6 +711,102 @@ test("Staff walk-in wizard records an actual citizen and signed receipt, not the
   await expect(page.getByLabel("Signed Acknowledgement *")).toHaveCount(0);
   await page.getByRole("button", { name: "Submit Request", exact: true }).click();
   await expect(page).toHaveURL(/staff\/requests/, { timeout: 10000 }); expect(encoded.participantName).toBe("Citizen Requester"); fixture.check();
+});
+
+const completedWalkIn = () => ({
+  ...ownRequest("Reviewed", "walkin-school-citizen"),
+  id: "walkin-school-1",
+  requestNumber: "REQ-SCHOOL-1",
+  participantName: "Test Organization Representative",
+  requesterRole: "walk-in",
+  createdByRole: "staff",
+  submissionPath: "STAFF_DIRECT_TO_ADMIN",
+  staffReviewRequired: false,
+  reviewStatus: "Not Required",
+  submittedByUid: "test-staff",
+  submittedByName: "Test User",
+  walkIn: { encodedBy: "test-staff", encodedByName: "Test User", citizenHasAccount: false },
+});
+
+async function completeStaffOrganizationWalkIn(page) {
+  await page.goto("/staff/requests?role=staff"); await page.getByRole("button", { name: "Submit Seedling Request", exact: true }).click();
+  await page.getByLabel("Assisted By Staff *", { exact: true }).fill("Test Staff Encoder");
+  await page.getByLabel("Full Name *", { exact: true }).fill("Test Organization Representative");
+  await page.getByLabel("Contact Number *", { exact: true }).fill("0917 000 0000");
+  await requester(page, { role: "staff", navigate: false, sector: "School Organization Representative", detail: { label: "School / Organization Name *", value: "Test School Organization" }, purpose: "School / Community / Roadside Greening" });
+  await plantingDetails(page, { group: true, delivery: true });
+  await page.locator('input[type="file"].sr-request-letter-input').setInputFiles({ name: "school-request.docx", mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document", buffer: Buffer.from("test-only document fixture") });
+  return page.getByRole("button", { name: "Submit Request", exact: true });
+}
+
+function expectLegacyLetterOnly(request) {
+  const multipart = request.postDataBuffer().toString();
+  expect(multipart).not.toContain('name="requestLetter"');
+  expect(multipart).toContain('"requestLetter":{"name":"school-request.docx"');
+  const clientSubmissionId = multipart.match(/"clientSubmissionId":"([^"]+)"/)?.[1];
+  expect(clientSubmissionId).toBeTruthy();
+  return clientSubmissionId;
+}
+
+test("Staff organization walk-in submits once, reaches Awaiting Approval, My Requests and Admin eligibility", async ({ page }) => {
+  let attempts = 0, encoded = null;
+  const fixture = await setup(page, {
+    "POST /api/seedling-requests/walk-in": async (route, request) => {
+      attempts += 1; encoded = { ...completedWalkIn(), clientSubmissionId: expectLegacyLetterOnly(request) };
+      await new Promise(resolve => setTimeout(resolve, 100));
+      return route.fulfill({ status: 201, json: { success: true, data: encoded } });
+    },
+    "GET /api/seedling-requests/my": route => route.fulfill({ json: { success: true, data: encoded ? [encoded] : [] } }),
+    "GET /api/seedling-requests": route => route.fulfill({ json: { success: true, data: encoded ? [encoded] : [] } }),
+  });
+  const submit = await completeStaffOrganizationWalkIn(page);
+  await submit.evaluate(button => { button.click(); button.click(); });
+  await expect(page).toHaveURL(/staff\/requests/);
+  await expect(page.getByRole("cell", { name: "Awaiting Approval", exact: true })).toBeVisible();
+  expect(attempts).toBe(1);
+
+  await page.goto("/staff/my-requests?role=staff");
+  await expect(page.getByRole("cell", { name: "Awaiting Approval", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: /View details of/ })).toBeVisible();
+  await page.goto("/admin/requests?role=admin");
+  await page.getByRole("button", { name: /View details for/ }).click();
+  await expect(page.getByRole("button", { name: "Approve", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Reject", exact: true })).toBeVisible();
+  fixture.check();
+});
+
+test("Staff organization walk-in keeps every entry after 503 and succeeds on retry without letter bytes", async ({ page }) => {
+  let attempts = 0;
+  const fixture = await setup(page, {
+    "POST /api/seedling-requests/walk-in": (route, request) => {
+      attempts += 1; const clientSubmissionId = expectLegacyLetterOnly(request);
+      if (attempts === 1) return route.fulfill({ status: 503, json: { success: false, message: "Secure request-letter storage is not enabled." } });
+      return route.fulfill({ status: 201, json: { success: true, data: { ...completedWalkIn(), clientSubmissionId } } });
+    },
+  });
+  const submit = await completeStaffOrganizationWalkIn(page);
+  await submit.click();
+  await expect(page.getByText(/Secure request-letter storage is not enabled/)).toBeVisible();
+  await expect(page.getByText("school-request.docx", { exact: true })).toBeVisible();
+  await expect(submit).toBeEnabled();
+  await submit.click();
+  await expect(page).toHaveURL(/staff\/requests/);
+  expect(attempts).toBe(2); fixture.check();
+});
+
+test("ambiguous Staff walk-in response reconciles the persisted request without a duplicate POST", async ({ page }) => {
+  let attempts = 0, encoded = null;
+  const fixture = await setup(page, {
+    "POST /api/seedling-requests/walk-in": (route, request) => {
+      attempts += 1; encoded = { ...completedWalkIn(), clientSubmissionId: expectLegacyLetterOnly(request) };
+      return route.abort("connectionfailed");
+    },
+    "GET /api/seedling-requests/my": route => route.fulfill({ json: { success: true, data: encoded ? [encoded] : [] } }),
+  });
+  const submit = await completeStaffOrganizationWalkIn(page);
+  await submit.click();
+  await expect(page).toHaveURL(/staff\/requests/);
+  expect(attempts).toBe(1); fixture.check();
 });
 
 test("Admin purpose settings publish a version and keep unapproved thresholds and sampling minimum pending", async ({ page }) => {

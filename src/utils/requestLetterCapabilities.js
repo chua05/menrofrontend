@@ -15,3 +15,7 @@ export function legacyRequestLetterMetadata(file) {
     size: Number(file.size || 0),
   };
 }
+
+export function shouldAttachSecureRequestLetter(capability, file) {
+  return capability === true && Boolean(file);
+}

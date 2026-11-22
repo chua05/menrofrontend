@@ -4,6 +4,7 @@ import {
   legacyRequestLetterMetadata,
   requestLetterClientGateEnabled,
   resolveSecureRequestLetterCapability,
+  shouldAttachSecureRequestLetter,
 } from "../src/utils/requestLetterCapabilities.js";
 
 test("request-letter upload activates only when client and backend gates are enabled", () => {
@@ -28,4 +29,11 @@ test("legacy mode sends metadata without inventing a private document", () => {
     name: "letter.pdf", type: "application/pdf", size: 12,
   });
   assert.equal(legacyRequestLetterMetadata(null), null);
+});
+
+test("request-letter bytes are attached only after secure storage capability is confirmed", () => {
+  const file = { name: "request-letter.docx", size: 128 };
+  assert.equal(shouldAttachSecureRequestLetter(false, file), false);
+  assert.equal(shouldAttachSecureRequestLetter(true, null), false);
+  assert.equal(shouldAttachSecureRequestLetter(true, file), true);
 });
