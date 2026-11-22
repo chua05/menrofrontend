@@ -19,7 +19,13 @@ import {
   legacyRequestLetterMetadata,
   requestLetterClientGateEnabled,
   resolveSecureRequestLetterCapability,
+  shouldAttachSecureRequestLetter,
 } from "../utils/requestLetterCapabilities";
+import {
+  findPersistedSubmission,
+  isAmbiguousSubmissionFailure,
+  submissionFailureMessage,
+} from "../utils/walkInSubmission";
 import { useToast } from "../context/ToastContext";
 import PageLoadingState from "../components/PageLoadingState";
 import { backendFieldErrors, focusFirstInvalid } from "../utils/formValidation";
@@ -205,18 +211,6 @@ async function api(path, options = {}) {
 
 const requestLetterClientEnabled = requestLetterClientGateEnabled();
 
-function submissionErrorMessage(error) {
-  if (error?.name === "AbortError") {
-    return "The request is taking longer than expected. Its status is uncertain; check My Requests before trying again.";
-  }
-  if (error?.status === 401) return "Your session has expired. Please sign in again and retry.";
-  if (error?.status === 403) return "Your account is not authorized to submit this request.";
-  if (error?.status === 503) return "Request submission is temporarily unavailable. Please contact MENRO.";
-  if (!navigator.onLine || error instanceof TypeError) {
-    return "Unable to reach MENRO. Check your connection, then check My Requests before retrying.";
-  }
-  return error?.message || "An unexpected error prevented the request from being submitted.";
-}
 function Field({ label, error, children, wide, fieldKey }) {
   const errorId = useId();
   const grouped = children?.type === Radios;
@@ -389,6 +383,8 @@ export default function ParticipantSaplingRequestWizard({ currentUser, requester
   const formElement = useRef(null);
   const showErrorRef = useRef(showError);
   const submissionId = useRef(crypto.randomUUID());
+  const submissionInFlight = useRef(false);
+  const unconfirmedSubmission = useRef(false);
   useEffect(() => {
     showErrorRef.current = showError;
   }, [showError]);
@@ -782,7 +778,7 @@ export default function ParticipantSaplingRequestWizard({ currentUser, requester
     put("requestLetter", file);
   };
   const submit = async () => {
-    if (submitting) return;
+    if (submissionInFlight.current || submitting) return;
     const allErrors = [1, 2, 3, 4].map((number) => ({
       step: number, errors: validateStep(number),
     }));
@@ -804,6 +800,7 @@ export default function ParticipantSaplingRequestWizard({ currentUser, requester
       showError(error.message);
       return;
     }
+    submissionInFlight.current = true;
     setSubmitting(true);
     onSubmittingChange?.(true);
     const location =
@@ -890,14 +887,49 @@ export default function ParticipantSaplingRequestWizard({ currentUser, requester
         : {}),
       ...(editing ? { expectedVersion: editing.requestVersion } : {}),
     };
+    const completeSubmission = (savedRequest, reconciled = false) => {
+      const requestReference = savedRequest?.requestNumber || savedRequest?.id;
+      const savedStatusLabel = savedRequest?.status === "Reviewed" ? "Awaiting Approval" : "Pending Review";
+      unconfirmedSubmission.current = false;
+      navigate(walkIn ? "/staff/requests" : requesterRole === "staff" ? "/staff/my-requests" : "/participant/my-requests", {
+        replace: true,
+        state: {
+          submittedRequestReference: requestReference,
+          submissionMessage: reconciled
+            ? `Your saved seedling request was confirmed. Request Reference: ${requestReference}. Status: ${savedStatusLabel}.`
+            : editing
+              ? `Your seedling request ${requestReference} was resubmitted successfully. Status: ${savedStatusLabel}.`
+              : `Your seedling request has been submitted successfully. Request Reference: ${requestReference}. Status: ${savedStatusLabel}.`,
+        },
+      });
+    };
+    const reconcileSubmission = async () => {
+      if (!walkIn || editing) return null;
+      const reconcileController = new AbortController();
+      const reconcileTimeout = window.setTimeout(() => reconcileController.abort(), 10000);
+      try {
+        const requests = await api("/seedling-requests/my", { signal: reconcileController.signal });
+        return findPersistedSubmission(requests, submissionId.current);
+      } finally {
+        window.clearTimeout(reconcileTimeout);
+      }
+    };
     const controller = new AbortController();
     const timeoutId = window.setTimeout(() => controller.abort(), 30000);
     try {
+      if (unconfirmedSubmission.current) {
+        const existing = await reconcileSubmission();
+        if (existing) {
+          completeSubmission(existing, true);
+          return;
+        }
+        unconfirmedSubmission.current = false;
+      }
       const submissionBody = walkIn || group && requestLetterCapability
         ? (() => {
             const data = new FormData();
             data.append("request", JSON.stringify(payload));
-            if (form.requestLetter instanceof File) {
+            if (form.requestLetter instanceof File && shouldAttachSecureRequestLetter(requestLetterCapability, form.requestLetter)) {
               data.append("requestLetter", requestLetterUploadFile(form.requestLetter), form.requestLetter.name);
             }
             return data;
@@ -914,19 +946,8 @@ export default function ParticipantSaplingRequestWizard({ currentUser, requester
           signal: controller.signal,
         },
       );
-      const requestReference = savedRequest?.requestNumber || savedRequest?.id;
-      // Status comes from the server: Staff submissions go directly to Admin approval (stored "Reviewed").
-      const savedStatusLabel = savedRequest?.status === "Reviewed" ? "Awaiting Approval" : "Pending Review";
       if (group && requestLetterCapability) setLetterUploadState("stored");
-      navigate(walkIn ? "/staff/requests" : requesterRole === "staff" ? "/staff/my-requests" : "/participant/my-requests", {
-        replace: true,
-        state: {
-          submittedRequestReference: requestReference,
-          submissionMessage: editing
-            ? `Your seedling request ${requestReference} was resubmitted successfully. Status: ${savedStatusLabel}.`
-            : `Your seedling request has been submitted successfully. Request Reference: ${requestReference}. Status: ${savedStatusLabel}.`,
-        },
-      });
+      completeSubmission(savedRequest);
     } catch (e) {
       if (group && requestLetterCapability) setLetterUploadState("error");
       if (e.fieldErrors && Object.keys(e.fieldErrors).length) {
@@ -943,9 +964,23 @@ export default function ParticipantSaplingRequestWizard({ currentUser, requester
         setErrors((current) => ({ ...current, ...fields }));
         setStep(targetStep);
         focusFirstInvalidField();
-      } else showError(submissionErrorMessage(e));
+      } else if (isAmbiguousSubmissionFailure(e)) {
+        let existing = null;
+        try {
+          existing = await reconcileSubmission();
+        } catch {
+          // The write and the verification are both uncertain. Preserve the same
+          // idempotency key and verify again before a later retry.
+        }
+        if (existing) completeSubmission(existing, true);
+        else {
+          unconfirmedSubmission.current = true;
+          showError(submissionFailureMessage(e));
+        }
+      } else showError(submissionFailureMessage(e));
     } finally {
       window.clearTimeout(timeoutId);
+      submissionInFlight.current = false;
       setSubmitting(false);
       onSubmittingChange?.(false);
     }
