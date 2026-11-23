@@ -503,6 +503,80 @@ test("independent Staff retains normal review controls for another request", asy
   await expect(page.getByRole("button", { name: "Return Request", exact: true })).toBeVisible(); fixture.check();
 });
 
+test("Admin returns a Staff-direct seedling request to its creator without closing the details view", async ({ page }) => {
+  let request = {
+    ...ownRequest("Reviewed", "test-staff"),
+    submissionPath: "STAFF_DIRECT_TO_ADMIN",
+    staffReviewRequired: false,
+    reviewStatus: "Not Required",
+    submittedByUid: "test-staff",
+  };
+  const returns = [];
+  const fixture = await setup(page, {
+    "GET /api/seedling-requests": route => route.fulfill({ json: { success: true, data: [request] } }),
+    "GET /api/seedling-requests/my": route => route.fulfill({ json: { success: true, data: [request] } }),
+    "PATCH /api/seedling-requests/staff-own-request/return": (route, apiRequest) => {
+      returns.push(apiRequest.postDataJSON());
+      request = { ...request, status: "Returned", requestVersion: 4, returnReason: returns[0].reason, returnedByRole: "admin", returnedAt: "2026-11-23T03:00:00.000Z" };
+      return route.fulfill({ json: { success: true, data: request } });
+    },
+  });
+
+  await page.goto("/admin/requests?role=admin");
+  await page.getByRole("button", { name: "View details for REQ-2099-001", exact: true }).click();
+  const footer = page.locator(".sr-details-footer");
+  for (const action of ["Archive", "Return", "Reject", "Approve"]) {
+    await expect(footer.getByRole("button", { name: action, exact: true })).toBeVisible();
+  }
+  await expect(footer.getByRole("button", { name: "Close", exact: true })).toHaveCount(0);
+  await footer.getByRole("button", { name: "Return", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "Return Seedling Request", exact: true });
+  await expect(dialog.getByText("Decision Date", { exact: true })).toBeVisible();
+  const confirm = dialog.getByRole("button", { name: "Confirm Return", exact: true });
+  await expect(confirm).toBeDisabled();
+  await dialog.getByLabel(/^Reason for Return/).fill("Please clarify the long-term care plan.");
+  await confirm.click();
+  await expect(dialog).toHaveCount(0);
+  expect(returns).toEqual([{ reason: "Please clarify the long-term care plan.", expectedVersion: 3 }]);
+  await expect(page.getByText("Returned, Please Resubmit", { exact: true }).first()).toBeVisible();
+
+  await page.goto("/staff/my-requests?role=staff");
+  await page.getByLabel("View details of REQ-2099-001").click();
+  await expect(page.getByRole("heading", { name: "Returned, Please Resubmit", exact: true })).toBeVisible();
+  await expect(page.getByText("Please clarify the long-term care plan.", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Edit Request", exact: true })).toBeVisible();
+  fixture.check();
+});
+
+test("Admin rejection uses the predefined reasons and never reuses stale Other text", async ({ page }) => {
+  const request = { ...ownRequest("Reviewed", "test-staff"), submissionPath: "STAFF_DIRECT_TO_ADMIN", staffReviewRequired: false };
+  const fixture = await setup(page, {
+    "GET /api/seedling-requests": route => route.fulfill({ json: { success: true, data: [request] } }),
+  });
+  await page.goto("/admin/requests?role=admin");
+  await page.getByRole("button", { name: "View details for REQ-2099-001", exact: true }).click();
+  await page.getByRole("button", { name: "Reject", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "Reject Seedling Request", exact: true });
+  const select = dialog.getByLabel(/^Reason for Rejection/);
+  await expect(select).toHaveValue("");
+  await expect(select.locator("option")).toHaveText([
+    "Select a reason",
+    "Insufficient seedling stock",
+    "Supporting documents or letter is invalid",
+    "Proposed planting site is unsuitable or not approved",
+    "Planting purpose does not meet program guidelines",
+    "Duplicate or previously fulfilled request",
+    "Other (Specify Reason)",
+  ]);
+  await select.selectOption("Other (Specify Reason)");
+  await dialog.getByLabel(/^Specify Reason/).fill("A custom explanation");
+  await select.selectOption("Insufficient seedling stock");
+  await select.selectOption("Other (Specify Reason)");
+  await expect(dialog.getByLabel(/^Specify Reason/)).toHaveValue("");
+  await expect(dialog.getByRole("button", { name: "Confirm Rejection", exact: true })).toBeDisabled();
+  fixture.check();
+});
+
 const siteInstruction = "Verify the proposed site's area and capacity before forwarding this request for Admin approval.";
 const proposedSiteRequest = (extra = {}) => {
   const request = ownRequest("Pending", "other-requester");
@@ -2136,9 +2210,9 @@ test("Admin rejects a Staff-submitted request with a required reason through the
   await page.getByRole("button", { name: "Reject", exact: true }).click();
   const modal = page.locator(".sr-decision-modal");
   await expect(modal.getByRole("button", { name: "Confirm Rejection", exact: true })).toBeDisabled();
-  await modal.locator("textarea").fill("Species not available this season");
+  await modal.getByLabel(/^Reason for Rejection/).selectOption("Insufficient seedling stock");
   await modal.getByRole("button", { name: "Confirm Rejection", exact: true }).click(); await expect(modal).toHaveCount(0);
-  expect(bodies).toEqual([{ reason: "Species not available this season", expectedVersion: 3 }]); fixture.check();
+  expect(bodies).toEqual([{ reason: "Insufficient seedling stock", expectedVersion: 3 }]); fixture.check();
 });
 
 test("Admin verifies a Staff-submitted proposed site's area and capacity in the approval modal before approving", async ({ page }) => {

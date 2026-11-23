@@ -43,6 +43,7 @@ const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api"
 const BARANGAY_GEOJSON_URL = `${API_BASE_URL}/sites/barangay-boundaries`;
 const PAGE_SIZE = 10;
 const READABLE_REQUEST_ID_PATTERN = /^REQ-\d{4}-\d{3,}$/i;
+const RETURNED_REQUEST_LABEL = "Returned, Please Resubmit";
 
 function requestTimestamp(value) {
   if (!value) return "";
@@ -58,7 +59,7 @@ function normalizeMyRequest(request) {
     status: request.status === "Pending"
       ? "Pending Review"
       : request.status === "Returned"
-        ? "Request Returned"
+        ? RETURNED_REQUEST_LABEL
         : request.status === "Released"
           ? "Saplings Released"
           : request.status,
@@ -278,7 +279,7 @@ function StatusBadge({ status }) {
     Approved: "myr-status myr-status-approved",
     "Saplings Released": "myr-status myr-status-approved",
     Rejected: "myr-status myr-status-rejected",
-    "Request Returned": "myr-status myr-status-returned",
+    [RETURNED_REQUEST_LABEL]: "myr-status myr-status-returned",
   };
 
   return (
@@ -1701,13 +1702,13 @@ export default function MyRequestsPage() {
                 </section>
               )}
 
-              {selectedRequest.status === "Request Returned" && (
+              {selectedRequest.status === RETURNED_REQUEST_LABEL && (
                 <section className="myr-detail-section myr-return-information">
                   <div className="myr-section-title">
                     <CircleX size={18} />
                     <div>
-                      <h3>Request Returned</h3>
-                      <p>This request was returned by MENRO Staff for correction.</p>
+                      <h3>{RETURNED_REQUEST_LABEL}</h3>
+                      <p>This request was returned by {selectedRequest.returnedByRole === "admin" ? "the Admin" : "MENRO Staff"} for correction.</p>
                     </div>
                   </div>
                   <div className="myr-return-details">
@@ -1732,7 +1733,7 @@ export default function MyRequestsPage() {
               >
                 Close
               </button>
-              {selectedRequest.status === "Request Returned" && (
+              {selectedRequest.status === RETURNED_REQUEST_LABEL && (
                 <button
                   type="button"
                   className="myr-edit-button"

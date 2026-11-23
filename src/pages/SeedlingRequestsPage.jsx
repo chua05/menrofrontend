@@ -53,6 +53,20 @@ import ParticipantSaplingRequestWizard from "./ParticipantSaplingRequestWizard";
 import { getRequesterDetailField } from "../utils/requesterDetails";
 import { ownsSeedlingRequest, canProcessSeedlingRequest, createdSeedlingRequest, isStaffDirectRequest, needsAdminSiteVerification } from "../utils/requestOwnership";
 import { approvedPolicyLabel } from "../utils/purposePolicyStatus";
+import {
+  OTHER_REJECTION_REASON,
+  SEEDLING_REJECTION_REASONS,
+  resolveSeedlingRejectionReason,
+} from "../utils/seedlingAdminDecision";
+
+const RETURNED_REQUEST_LABEL = "Returned, Please Resubmit";
+
+const isAdminReturnEligible = (request) => Boolean(
+  request?.status === "Reviewed"
+  && isStaffDirectRequest(request)
+  && request?.staffReviewRequired === false
+  && request?.archived !== true
+);
 
 
 const TABS = [
@@ -74,8 +88,8 @@ const TABS = [
   },
   {
     id: "returned",
-    label: "Request Returned",
-    status: "Request Returned",
+    label: RETURNED_REQUEST_LABEL,
+    status: RETURNED_REQUEST_LABEL,
   },
   {
     id: "approved",
@@ -192,7 +206,7 @@ function normalizeRequestForUi(request = {}) {
   const uiStatus = request.status === "Pending"
     ? "Pending Review"
     : request.status === "Returned"
-      ? "Request Returned"
+      ? RETURNED_REQUEST_LABEL
       : request.status === "Released"
         ? "Saplings Released"
         : request.status || "Pending Review";
@@ -535,9 +549,9 @@ function getInitialForm() {
 }
 
 function StatusBadge({ status }) {
-  const className = String(status || "")
-    .toLowerCase()
-    .replaceAll(" ", "-");
+  const className = status === RETURNED_REQUEST_LABEL
+    ? "request-returned"
+    : String(status || "").toLowerCase().replaceAll(" ", "-");
 
   return (
     <span
@@ -575,6 +589,7 @@ export default function SeedlingRequestsPage() {
   const [actionLoading, setActionLoading] = useState(false);
   const [decisionModal, setDecisionModal] = useState(null);
   const [rejectionChoice, setRejectionChoice] = useState("");
+  const [rejectionOtherReason, setRejectionOtherReason] = useState("");
   const [decisionError, setDecisionError] = useState("");
   // Admin-verified proposed site (Staff-submitted requests only; Participant sites are verified in Staff review).
   const [decisionSiteVerification, setDecisionSiteVerification] = useState({ areaHectares: "", maximumCapacity: "" });
@@ -839,7 +854,7 @@ useEffect(() => {
       ).length,
 
       returned: requests.filter(
-        (request) => request.status === "Request Returned"
+        (request) => request.status === RETURNED_REQUEST_LABEL
       ).length,
 
       approved: requests.filter(
@@ -1328,7 +1343,7 @@ useEffect(() => {
   };
 
   const openReturnModal = (request) => {
-    setReturnModal({ request });
+    setReturnModal({ request, actorRole: userRole });
     setReturnReason("");
     setReturnError("");
   };
@@ -1514,6 +1529,7 @@ useEffect(() => {
   const openDecisionModal = (request, action) => {
     setDecisionModal({ request, action });
     setRejectionChoice("");
+    setRejectionOtherReason("");
     setDecisionError("");
     setDecisionSiteVerification({ areaHectares: "", maximumCapacity: "" });
     setDecisionSiteErrors({});
@@ -1523,6 +1539,7 @@ useEffect(() => {
     if (actionLoading) return;
     setDecisionModal(null);
     setRejectionChoice("");
+    setRejectionOtherReason("");
     setDecisionError("");
   };
 
@@ -1533,10 +1550,12 @@ useEffect(() => {
     let payload;
 
     if (action === "reject") {
-      const reason = rejectionChoice.trim();
+      const reason = resolveSeedlingRejectionReason(rejectionChoice, rejectionOtherReason);
 
       if (!reason) {
-        setDecisionError("Please provide a reason for rejecting this request.");
+        setDecisionError(rejectionChoice === OTHER_REJECTION_REASON
+          ? "Please specify the reason for rejecting this request."
+          : "Please select a reason for rejecting this request.");
         return;
       }
 
@@ -1580,6 +1599,7 @@ useEffect(() => {
       refreshSelectedRequest(updated);
       setDecisionModal(null);
       setRejectionChoice("");
+      setRejectionOtherReason("");
       const refreshed = await loadRequests({ background: true });
       await waitForUiPaint();
       if (refreshed) {
@@ -2660,6 +2680,8 @@ useEffect(() => {
         modal={decisionModal}
         rejectionChoice={rejectionChoice}
         setRejectionChoice={setRejectionChoice}
+        rejectionOtherReason={rejectionOtherReason}
+        setRejectionOtherReason={setRejectionOtherReason}
         error={decisionError}
         loading={actionLoading}
         onClose={closeDecisionModal}
@@ -3153,7 +3175,7 @@ useEffect(() => {
                 </div>
               )}
 
-              {selectedRequest.status === "Request Returned" && (
+              {selectedRequest.status === RETURNED_REQUEST_LABEL && (
                 <div className="sr-detail-remarks sr-return-information">
                   <span>Return Information</span>
                   <p className="sr-return-reason">{selectedRequest.returnReason}</p>
@@ -3193,16 +3215,18 @@ useEffect(() => {
               </button>
 
               <div className="sr-detail-footer-actions">
-                <button
-                  type="button"
-                  className="sr-secondary-btn"
-                  onClick={closeRequestDetails}
-                >
-                  Close
-                </button>
+                {!(userRole === "admin" && isAdminReturnEligible(selectedRequest)) && (
+                  <button
+                    type="button"
+                    className="sr-secondary-btn"
+                    onClick={closeRequestDetails}
+                  >
+                    Close
+                  </button>
+                )}
 
                 {userRole === "staff" && selectedRequest.walkIn?.encodedBy === currentUser?.uid && (selectedRequest.preApprovalSchedule?.status === "AwaitingRequesterConfirmation" || ["AwaitingRequester", "ReturnedForRevision"].includes(selectedRequest.lateReleaseRescheduling?.status)) && <WalkInScheduleAcknowledgement key={`${selectedRequest.id}:${selectedRequest.requestVersion}`} request={selectedRequest} onSaved={async updated => { refreshSelectedRequest(updated); await loadRequests({ background: true }); }} />}
-                {userRole === "staff" && selectedRequest.walkIn?.encodedBy === currentUser?.uid && selectedRequest.status === "Request Returned" && <button type="button" className="sr-secondary-btn" onClick={() => navigate(`/staff/walk-in-requests/new?edit=${encodeURIComponent(selectedRequest.id)}`)}>Correct Walk-in Request</button>}
+                {userRole === "staff" && selectedRequest.walkIn?.encodedBy === currentUser?.uid && selectedRequest.status === RETURNED_REQUEST_LABEL && <button type="button" className="sr-secondary-btn" onClick={() => navigate(`/staff/walk-in-requests/new?edit=${encodeURIComponent(selectedRequest.id)}`)}>Correct Walk-in Request</button>}
                 {userRole === "staff" && ownsSeedlingRequest(selectedRequest, currentUser) && <div>
                   <p>{isStaffDirectRequest(selectedRequest)
                     ? "Your request was submitted directly for Admin approval; another authorized MENRO officer will process it."
@@ -3235,6 +3259,16 @@ useEffect(() => {
                   selectedRequest.status ===
                     "Reviewed" && (
                     <>
+                      {isAdminReturnEligible(selectedRequest) && (
+                        <button
+                          type="button"
+                          className="sr-secondary-btn sr-large-action"
+                          onClick={() => openReturnModal(selectedRequest)}
+                          disabled={actionLoading}
+                        >
+                          Return
+                        </button>
+                      )}
                       <button
                         type="button"
                         className="sr-reject-btn sr-large-action"
@@ -4209,6 +4243,7 @@ function ReturnRequestModal({
   onSubmit,
 }) {
   if (!modal) return null;
+  const isAdminReturn = modal.actorRole === "admin";
 
   return createPortal(
     <div className="sr-modal-backdrop sr-review-backdrop" onMouseDown={onClose}>
@@ -4221,8 +4256,10 @@ function ReturnRequestModal({
       >
         <div className="sr-modal-header">
           <div>
-            <h2 id="sr-return-title">Return Request</h2>
-            <p>Please explain what the participant needs to correct.</p>
+            <h2 id="sr-return-title">{isAdminReturn ? "Return Seedling Request" : "Return Request"}</h2>
+            <p>{isAdminReturn
+              ? "Explain what the Staff creator needs to correct before resubmitting."
+              : "Please explain what the participant needs to correct."}</p>
           </div>
           <button
             type="button"
@@ -4255,6 +4292,11 @@ function ReturnRequestModal({
             </small>
           </label>
 
+          <div className="sr-form-field">
+            <span>Decision Date</span>
+            <input type="text" value={formatLocalDateLabel()} readOnly />
+          </div>
+
           {error && <small className="sr-field-error">{error}</small>}
         </div>
 
@@ -4271,9 +4313,9 @@ function ReturnRequestModal({
             type="button"
             className="sr-reject-btn sr-large-action"
             onClick={onSubmit}
-            disabled={loading}
+            disabled={loading || !reason.trim()}
           >
-            {loading ? "Returning..." : "Return Request"}
+            {loading ? "Returning..." : isAdminReturn ? "Confirm Return" : "Return Request"}
           </button>
         </div>
       </div>
@@ -4491,6 +4533,8 @@ function AdminDecisionModal({
   modal,
   rejectionChoice,
   setRejectionChoice,
+  rejectionOtherReason,
+  setRejectionOtherReason,
   error,
   loading,
   onClose,
@@ -4509,6 +4553,9 @@ function AdminDecisionModal({
       <div
         className="sr-modal sr-decision-modal"
         onMouseDown={(event) => event.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="sr-admin-decision-title"
       >
         <div className="sr-modal-header">
           <div>
@@ -4570,19 +4617,38 @@ function AdminDecisionModal({
               </section>}
             </>
           ) : (
-            <label className="sr-form-field">
-              <span>Reason for Rejection *</span>
-              <textarea
-                value={rejectionChoice}
-                onChange={(event) => setRejectionChoice(event.target.value)}
-                maxLength={500}
-                placeholder="Enter the reason for rejecting this request..."
-                autoFocus
-              />
-              <small className="sr-decision-counter">
-                {rejectionChoice.trim().length}/500 characters
-              </small>
-            </label>
+            <>
+              <label className="sr-form-field">
+                <span>Reason for Rejection *</span>
+                <select
+                  value={rejectionChoice}
+                  onChange={(event) => {
+                    setRejectionChoice(event.target.value);
+                    setRejectionOtherReason("");
+                  }}
+                  autoFocus
+                >
+                  <option value="" disabled>Select a reason</option>
+                  {SEEDLING_REJECTION_REASONS.map((reason) => (
+                    <option key={reason} value={reason}>{reason}</option>
+                  ))}
+                </select>
+              </label>
+              {rejectionChoice === OTHER_REJECTION_REASON && (
+                <label className="sr-form-field">
+                  <span>Specify Reason *</span>
+                  <textarea
+                    value={rejectionOtherReason}
+                    onChange={(event) => setRejectionOtherReason(event.target.value)}
+                    maxLength={500}
+                    placeholder="Enter the reason for rejecting this request..."
+                  />
+                  <small className="sr-decision-counter">
+                    {rejectionOtherReason.trim().length}/500 characters
+                  </small>
+                </label>
+              )}
+            </>
           )}
 
           <div className="sr-form-field">
@@ -4612,7 +4678,9 @@ function AdminDecisionModal({
             onClick={onSubmit}
             disabled={
               loading ||
-              (!isApprove && !rejectionChoice.trim())
+              (!isApprove && (!rejectionChoice || (
+                rejectionChoice === OTHER_REJECTION_REASON && !rejectionOtherReason.trim()
+              )))
             }
           >
             {loading
