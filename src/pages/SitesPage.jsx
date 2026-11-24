@@ -29,6 +29,7 @@ import { auth } from "../firebase/config";
 import { formatDisplayId } from "../utils/displayId";
 import { BULAN_BARANGAYS } from "../utils/userTypes";
 import { boundaryLayerOptions, siteBoundaryDiagnostic } from "../utils/barangayMap";
+import { textTooltip } from "../utils/leafletTooltip";
 import "../styles/planting-sites.css";
 
 const API_BASE_URL =
@@ -982,10 +983,12 @@ export default function SitesPage() {
     ).addTo(map);
 
     marker.bindTooltip(
-      site.siteName ||
-        site.id ||
-        site.siteId ||
-        "Planting Site",
+      textTooltip(
+        site.siteName ||
+          site.id ||
+          site.siteId ||
+          "Planting Site"
+      ),
       {
         direction: "top",
         offset: [0, -6],

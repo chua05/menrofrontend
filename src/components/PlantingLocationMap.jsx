@@ -6,6 +6,15 @@ import { boundaryLayerOptions } from "../utils/barangayMap";
 import { coordinateValue, getFeatureBarangayName } from "../utils/plantingLocationPreview";
 
 const BULAN_CENTER = [12.6598, 123.918];
+// Stable defaults: a fresh [] per render would re-run the layer effect and reset the user's zoom/pan.
+const EMPTY_TREES = Object.freeze([]);
+// Leaflet renders string tooltip content as HTML; site names, Tree IDs and species are user data,
+// so tooltips receive a DOM element whose textContent holds the literal text.
+function textTooltip(text) {
+  const label = document.createElement("span");
+  label.textContent = text;
+  return label;
+}
 
 function barangayStyle(feature, barangay) {
   const selected = barangay &&
@@ -19,7 +28,30 @@ function barangayStyle(feature, barangay) {
   };
 }
 
-export default function PlantingLocationMap({ site, evidence, registeredTree, status, onBoundaries, onBoundaryError }) {
+const treeIcon = (kind, selected) => L.divIcon({
+  className: `psm-tree-marker psm-tree-marker-${String(kind || "APPROVED").toLowerCase()}${selected ? " is-selected" : ""}`,
+  html: '<svg viewBox="0 0 24 30" aria-hidden="true"><path d="M12 1 4 11h5l-6 8h7v8h4v-8h7l-6-8h5z"/></svg>',
+  iconSize: selected ? [30, 38] : [24, 32], iconAnchor: selected ? [15, 36] : [12, 30], popupAnchor: [0, -30],
+});
+
+function markerPopup(tree, onSelectTree) {
+  const root = document.createElement("div"); root.className = "psm-tree-popup";
+  const heading = document.createElement("strong"); heading.textContent = tree.sampleId || "Permanent sample"; root.append(heading);
+  const rows = [
+    ["Species", tree.species], ["Marker", tree.kind === "DRAFT" ? "Draft — not official" : "Approved permanent sample"],
+    ["Latest approved condition", tree.latestApprovedCondition], ["Visit", tree.visitNumber], ["Assessment date", tree.assessedOn],
+    ["Height", tree.heightCentimeters == null ? null : `${tree.heightCentimeters} cm`],
+    ["Stem diameter", tree.stemDiameterMillimeters == null ? null : `${tree.stemDiameterMillimeters} mm`],
+    ["GPS verification", tree.gpsVerification],
+  ];
+  const list = document.createElement("dl");
+  rows.forEach(([label, value]) => { if (value === null || value === undefined || value === "") return; const dt=document.createElement("dt"),dd=document.createElement("dd");dt.textContent=label;dd.textContent=String(value);list.append(dt,dd); });
+  root.append(list);
+  if (tree.sampleId && onSelectTree) { const button=document.createElement("button");button.type="button";button.textContent="Open assessment";button.addEventListener("click",()=>onSelectTree(tree.sampleId));root.append(button); }
+  return root;
+}
+
+export default function PlantingLocationMap({ site, evidence, registeredTree, trees = EMPTY_TREES, treeMarkers = EMPTY_TREES, selectedTreeId = "", status, highlightSitePolygon = false, onSelectTree, onBoundaries, onBoundaryError }) {
   const root = useRef(null), mapRef = useRef(null), layers = useRef(null), callbacks = useRef({});
   const [barangayLayer, setBarangayLayer] = useState(null);
   const barangay = site?.barangay || "";
@@ -104,27 +136,38 @@ export default function PlantingLocationMap({ site, evidence, registeredTree, st
 
     if (hasSitePoint && Number.isFinite(radius) && radius > 0) {
       const coverage = L.circle([siteLatitude, siteLongitude], { ...coverageStyle, radius })
-        .bindTooltip(`${siteName} • ${radius} m coverage`).addTo(group.site);
+        .bindTooltip(textTooltip(`${siteName} • ${radius} m coverage`)).addTo(group.site);
       // A circle needs a rendered map for getBounds, which the map has by this effect.
       const bounds = coverage.getBounds();
       fitPoints.push([bounds.getSouth(), bounds.getWest()], [bounds.getNorth(), bounds.getEast()]);
-    } else if (polygon.length >= 3) {
-      L.polygon(polygon, coverageStyle).bindTooltip(siteName).addTo(group.site);
+    }
+    if (polygon.length >= 3 && (highlightSitePolygon || !(hasSitePoint && Number.isFinite(radius) && radius > 0))) {
+      L.polygon(polygon, coverageStyle).bindTooltip(textTooltip(siteName)).addTo(group.site);
       fitPoints.push(...polygon);
     }
 
     if (hasSitePoint) {
       L.circleMarker([siteLatitude, siteLongitude], { radius: 8, color: "#ffffff", weight: 2, fillColor: "#17643a", fillOpacity: 1 })
-        .bindTooltip(`${siteName} • Site GPS`, { direction: "top", offset: [0, -8] }).addTo(group.site);
+        .bindTooltip(textTooltip(`${siteName} • Site GPS`), { direction: "top", offset: [0, -8] }).addTo(group.site);
       fitPoints.push([siteLatitude, siteLongitude]);
     }
 
-    const treeLatitude = coordinateValue(registeredTree?.latitude), treeLongitude = coordinateValue(registeredTree?.longitude);
-    if (Number.isFinite(treeLatitude) && Number.isFinite(treeLongitude)) {
-      L.circleMarker([treeLatitude, treeLongitude], { radius: 7, color: "#684b11", weight: 2, fillColor: "#e6b64c", fillOpacity: 1 })
-        .bindTooltip(`${registeredTree.sampleId || "Permanent sample"} - Registered Tree`).addTo(group.tree);
+    const treeRows = treeMarkers.length ? treeMarkers : trees.length ? trees : registeredTree ? [registeredTree] : [];
+    treeRows.forEach(tree => {
+      const treeLatitude = coordinateValue(tree?.latitude), treeLongitude = coordinateValue(tree?.longitude);
+      if (!Number.isFinite(treeLatitude) || !Number.isFinite(treeLongitude)) return;
+      const selected = String(tree.sampleId || "") === String(selectedTreeId || registeredTree?.sampleId || "");
+      const title = `${tree.sampleId || "Permanent sample"}${tree.species ? ` · ${tree.species}` : ""}`;
+      const markerLabel = `Open ${tree.sampleId || "permanent sample"} assessment`;
+      const marker = L.marker([treeLatitude, treeLongitude], { icon: treeIcon(tree.kind, selected), keyboard: true, title: markerLabel, alt: markerLabel, zIndexOffset: selected ? 1000 : tree.kind === "DRAFT" ? 500 : 0 })
+        .bindTooltip(textTooltip(`${title} - ${selected ? "Selected Tree" : "Registered Tree"}`))
+        .bindPopup(markerPopup(tree, onSelectTree))
+        .addTo(group.tree);
+      const selectTree = () => onSelectTree?.(tree.sampleId);
+      marker.on("click", selectTree);
+      marker.on("mousedown", selectTree);
       fitPoints.push([treeLatitude, treeLongitude]);
-    }
+    });
     if (Number.isFinite(latitude) && Number.isFinite(longitude)) {
       L.circleMarker([latitude, longitude], { radius: 8, color: "#ffffff", weight: 2, fillColor: "#2563eb", fillOpacity: 1 })
         .bindTooltip("Detected Evidence Location", { permanent: false, direction: "top", offset: [0, -8] }).addTo(group.captured);
@@ -140,7 +183,7 @@ export default function PlantingLocationMap({ site, evidence, registeredTree, st
     }
     const resize = window.setTimeout(() => map.invalidateSize(), 0);
     return () => window.clearTimeout(resize);
-  }, [site, registeredTree, latitude, longitude, accuracy]);
+  }, [site, registeredTree, trees, treeMarkers, selectedTreeId, latitude, longitude, accuracy, highlightSitePolygon, onSelectTree]);
 
   return <div className="pr-location-map-section">
     <div className="pr-location-map-heading">
@@ -152,9 +195,10 @@ export default function PlantingLocationMap({ site, evidence, registeredTree, st
     </div>
     <div className="pr-location-map-legend">
       <span><i className="pr-map-legend-line" /> Barangay Boundary</span>
+      {highlightSitePolygon && <span><i className="pr-map-legend-line" /> Highlighted Planting Site</span>}
       <span><i className="pr-map-legend-site" /> Registered Site</span>
-      {registeredTree && <span><i style={{ display: "inline-block", width: 9, height: 9, borderRadius: "50%", background: "#e6b64c" }} /> Registered Tree</span>}
-      <span><i className="pr-map-legend-captured" /> Evidence GPS</span>
+      {(registeredTree || trees.length > 0 || treeMarkers.length > 0) && <span><i className="psm-tree-legend" /> Permanent Sample Trees</span>}
+      <span><i className="pr-map-legend-captured" /> Current Evidence GPS</span>
     </div>
   </div>;
 }

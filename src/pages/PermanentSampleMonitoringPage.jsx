@@ -3,7 +3,7 @@ import { authenticatedFetch } from "../services/authenticatedApi";
 import SecureCameraCapture from "../components/SecureCameraCapture";
 import ModalDialog from "../components/ModalDialog";
 import PermanentSampleVisitForm, { PermanentSampleVisitShell } from "../components/PermanentSampleVisitForm";
-import { assessmentErrors } from "../utils/sampleMonitoringForm";
+import { assessmentErrors, keepUnsavedEdits } from "../utils/sampleMonitoringForm";
 import { withDeadline, RequestTimeoutError, READ_TIMEOUT_MS, WRITE_TIMEOUT_MS, UPLOAD_TIMEOUT_MS } from "../utils/requestTimeout";
 import "../styles/permanent-sample-monitoring-form.css";
 import MonitoringInformationPanel from "../components/MonitoringInformationPanel";
@@ -15,8 +15,8 @@ import {
 import { useAuth } from "../context/AuthContext";
 import { Trees, X } from "lucide-react";
 import { Link, useSearchParams } from "react-router-dom";
-import { readinessMessages, readinessTitle } from "../utils/sampleVisitReadiness";
-import { monitoringApiErrorMessage } from "../utils/monitoringApiError";
+import { readinessMessages, readinessTitle, scheduleStatusLabel, withoutEligibleDuplicates } from "../utils/sampleVisitReadiness";
+import { monitoringApiErrorMessage, monitoringErrorSampleId, monitoringEvidenceErrorMessage, monitoringWriteErrorMessage } from "../utils/monitoringApiError";
 
 const STATUS_LABELS = { DRAFT: "Draft", RETURNED: "Returned for Correction", PENDING_ADMIN_APPROVAL: "Pending Admin Review", APPROVED: "Approved" };
 const statusLabel = value => STATUS_LABELS[value] || value;
@@ -28,7 +28,7 @@ async function api(path, options = {}) {
     const response = await authenticatedFetch(path, options);
     const body = await response.json().catch(() => ({}));
     // Gate-disabled and missing-index responses get plain text; raw Firebase errors and links are never shown.
-    if (!response.ok || !body.success) throw Object.assign(new Error(monitoringApiErrorMessage(body)), { status: response.status, code: body.code });
+    if (!response.ok || !body.success) throw Object.assign(new Error(monitoringApiErrorMessage(body)), { status: response.status, code: body.code, missingSampleIds: body.missingSampleIds, sampleId: body.sampleId });
     return body.data;
   })(), write ? WRITE_TIMEOUT_MS : READ_TIMEOUT_MS, () => new RequestTimeoutError(write ? "MENRO has not confirmed this save. Check the saved outcome before trying again." : "Monitoring data could not be loaded in time. Please retry.", { ambiguous: Boolean(write) }));
 }
@@ -39,17 +39,27 @@ function formAssessment(value) {
     condition: value.condition || "",
     remarks: value.remarks || "",
     heightCentimeters: value.heightCentimeters ?? "",
-    diameterCentimeters: value.diameterCentimeters ?? "",
+    stemDiameterMillimeters: value.stemDiameterMillimeters ?? (value.diameterCentimeters == null ? "" : Number(value.diameterCentimeters) * 10),
     baselineReference: value.baselineReference || null,
     previousAssessmentReference: value.previousAssessmentReference || null,
     investigationOutcome: value.investigationOutcome || "",
     searchFindings: value.searchFindings || "",
+    recheckReason: value.recheckReason || "",
+    mortalityCause: value.mortalityCause || "",
+    growthDelta: value.growthDelta || null,
+    heightDifferenceCm: value.heightDifferenceCm ?? null,
+    stemDiameterDifferenceMm: value.stemDiameterDifferenceMm ?? null,
+    measurementDecreased: value.measurementDecreased === true,
+    growthPerformance: value.growthPerformance || null,
+    growthStage: value.growthStage || null,
+    baselineOnly: value.baselineOnly === true,
+    inheritedConfirmedDead: value.inheritedConfirmedDead || null,
   };
 }
 
 
 const draftSnapshot = (rows, remarks, date) => JSON.stringify([rows.map(row =>
-  ["sampleId", "condition", "heightCentimeters", "diameterCentimeters", "remarks", "investigationOutcome", "searchFindings"]
+  ["sampleId", "condition", "heightCentimeters", "stemDiameterMillimeters", "remarks", "mortalityCause", "recheckReason", "investigationOutcome", "searchFindings"]
     .map(field => String(row[field] ?? ""))), remarks, date]);
 
 // `embedded`: rendered inside Survival Monitoring — the Staff "Monitor Planted Trees" modal, or (with
@@ -60,9 +70,8 @@ const draftSnapshot = (rows, remarks, date) => JSON.stringify([rows.map(row =>
 export default function PermanentSampleMonitoringPage({ embedded = false, open: embeddedOpen = false, onClose, reviewVisitId = "", onReviewed, setupPendingReports = [] } = {}) {
   const enabled = resolveVerifiedPlantingCohortEnabled();
   const { userRole } = useAuth();
-  const pendingReports = userRole === "staff" && !reviewVisitId && Array.isArray(setupPendingReports) ? setupPendingReports : [];
+  const offeredPendingReports = userRole === "staff" && !reviewVisitId && Array.isArray(setupPendingReports) ? setupPendingReports : [];
   const [pendingReportId, setPendingReportId] = useState("");
-  const pendingReport = pendingReports.find(row => row.plantingReportId === pendingReportId) || null;
   const [status, setStatus] = useState("");
   const [page, setPage] = useState(null);
   const [detail, setDetail] = useState(null);
@@ -82,6 +91,9 @@ export default function PermanentSampleMonitoringPage({ embedded = false, open: 
   const [originalReviews, setOriginalReviews] = useState({});
   const [reviewReasons, setReviewReasons] = useState("");
   const [reviewing, setReviewing] = useState(false);
+  const [creatingCohortId, setCreatingCohortId] = useState("");
+  const [readinessCohortId, setReadinessCohortId] = useState("");
+  const [savedNotice, setSavedNotice] = useState("");
   const [cameraOpen, setCameraOpen] = useState(false);
   const [cameraSampleId, setCameraSampleId] = useState("");
   const [pendingEvidence, setPendingEvidence] = useState({});
@@ -91,6 +103,9 @@ export default function PermanentSampleMonitoringPage({ embedded = false, open: 
   const startRequested = useRef(!reviewVisitId && (embedded || searchParams.get("start") === "1"));
   const [selectPrompt, setSelectPrompt] = useState(false);
   const [readiness, setReadiness] = useState(null);
+  // A report whose cohort is already eligible is listed once, as the eligible row (not again under Setup Pending).
+  const pendingReports = withoutEligibleDuplicates(offeredPendingReports, readiness?.data?.eligible || []);
+  const pendingReport = pendingReports.find(row => row.plantingReportId === pendingReportId) || null;
   const unsaved = userRole === "staff" && ["DRAFT", "RETURNED"].includes(detail?.status) &&
     (Object.keys(pendingEvidence).length > 0 || Object.values(questions).some(value => value.trim()) ||
       savedDraft !== draftSnapshot(assessments, visitRemarks, dateMonitored));
@@ -133,6 +148,7 @@ export default function PermanentSampleMonitoringPage({ embedded = false, open: 
       const date = data.dateMonitored || new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Manila", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
       setSavedDraft(draftSnapshot((data.sampleAssessments || []).map(formAssessment), data.visitRemarks || "", date));
       setQuestions({}); setVisitRemarks(data.visitRemarks || ""); setDateMonitored(date); setFieldErrors({}); setDialogOpen(true);
+      setSavedNotice("");
     } catch (requestError) {
       if (epoch !== evidenceEpoch.current) return;
       setError(
@@ -235,7 +251,8 @@ export default function PermanentSampleMonitoringPage({ embedded = false, open: 
     const row = assessments.find(item => item.sampleId === sampleId);
     const remarksError = resolved && row ? assessmentErrors([{ ...row, condition: value, investigationOutcome: "", searchFindings: "" }])[`${sampleId}.remarks`] : "";
     setFieldErrors(current => ({ ...current, [`${sampleId}.${field}`]: "", ...(resolved ? {
-      [`${sampleId}.remarks`]: remarksError || "", [`${sampleId}.searchFindings`]: "",
+      [`${sampleId}.remarks`]: remarksError || "", [`${sampleId}.recheckReason`]: "", [`${sampleId}.searchFindings`]: "",
+      [`${sampleId}.mortalityCause`]: "",
     } : {}) }));
     setAssessments((current) =>
       current.map((assessment) => {
@@ -244,18 +261,25 @@ export default function PermanentSampleMonitoringPage({ embedded = false, open: 
         if (field === "condition" && value !== "Needs Rechecking") {
           next.investigationOutcome = "";
           next.searchFindings = "";
+          next.recheckReason = "";
+        }
+        if (field === "condition" && value !== "Dead") next.mortalityCause = "";
+        if (field === "condition" && ["Dead", "Needs Rechecking"].includes(value)) {
+          next.heightCentimeters = "";
+          next.stemDiameterMillimeters = "";
         }
         return next;
       })
     );
   };
 
-  const save = async (submit = false) => {
+  const save = async (submit = false, savedSampleId = "") => {
     if (!detail || operationBusy.current || unconfirmed) return;
-    const invalid = assessmentErrors(assessments, submit);
+    const rowsToValidate = savedSampleId ? assessments.filter(row => row.sampleId === savedSampleId) : assessments;
+    const invalid = assessmentErrors(rowsToValidate, submit || Boolean(savedSampleId));
     if (Object.keys(invalid).length) {
       setFieldErrors(invalid); const first = Object.keys(invalid)[0]; setActiveTreeId(first.split(".")[0]); setError("Please correct the highlighted assessment fields.");
-      window.setTimeout(() => { const field = document.querySelector(`[data-validation-field="${CSS.escape(first)}"]`); field?.scrollIntoView({ behavior: "smooth", block: "center" }); field?.querySelector("input,select,textarea")?.focus({ preventScroll: true }); }, 0); return;
+      window.setTimeout(() => { const field = document.querySelector(`[data-validation-field="${CSS.escape(first)}"]`); field?.scrollIntoView({ behavior: "smooth", block: "center" }); field?.querySelector("input:not(:disabled),select:not(:disabled),textarea:not(:disabled)")?.focus({ preventScroll: true }); }, 0); return;
     }
     if (Object.keys(pendingEvidence).length) { setError("Upload or remove pending photos before saving. A save changes the version used for capture verification."); return; }
     const unsentQuestion = submit && Object.keys(questions).find(sampleId => questions[sampleId].trim());
@@ -269,17 +293,51 @@ export default function PermanentSampleMonitoringPage({ embedded = false, open: 
       return;
     }
     if (!dateMonitored || dateMonitored > new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Manila", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date())) { setError("Date Monitored is required and cannot be in the future."); setFieldErrors(current => ({ ...current, dateMonitored: "Enter the actual assessment date, up to today." })); window.setTimeout(() => { const field = document.getElementById("sample-date-monitored"); field?.scrollIntoView({ behavior: "smooth", block: "center" }); field?.focus({ preventScroll: true }); }, 0); return; }
-    const payload = { expectedVersion: detail.version, assessments, submit, visitRemarks, dateMonitored };
+    // Save Tree Assessment sends only the active tree as edited; every other tree keeps its last server-saved values.
+    const sent = savedSampleId ? assessments.map(row => {
+      if (row.sampleId === savedSampleId) return row;
+      const saved = detail.sampleAssessments?.find(item => item.sampleId === row.sampleId);
+      return saved ? formAssessment(saved) : row;
+    }) : assessments;
+    const payload = { expectedVersion: detail.version, assessments: sent, submit, visitRemarks, dateMonitored };
     operationBusy.current = true; setSaving(true); setError("");
     try {
       const data = await api(`/verified-sample-monitoring/visits/${detail.id}`, { method: "PUT", body: JSON.stringify(payload) });
       setSavedDraft(draftSnapshot(data.sampleAssessments.map(formAssessment), data.visitRemarks || "", data.dateMonitored || dateMonitored));
-      resetEvidence(); setDetail(data); setAssessments((data.sampleAssessments || []).map(formAssessment)); setVisitRemarks(data.visitRemarks || "");
+      resetEvidence(); setDetail(data); setVisitRemarks(data.visitRemarks || "");
+      // Unsaved edits of the other trees stay in the form (and stay marked Unsaved).
+      setAssessments(current => keepUnsavedEdits((data.sampleAssessments || []).map(formAssessment), current, savedSampleId));
       setPage(current => current ? { ...current, visits: current.visits.map(row => row.id === data.id ? { ...row, status: data.status, version: data.version } : row) } : current);
+      setSavedNotice(submit ? "Monitoring visit submitted for Admin review."
+        : savedSampleId ? `${savedSampleId} assessment saved and confirmed by MENRO.` : "Monitoring visit draft saved and confirmed by MENRO.");
     } catch (requestError) {
-      if (requestError.ambiguous) setUnconfirmed({ visitId: detail.id, ...payload });
-      setError(requestError.status === 409 && !requestError.code?.startsWith("ORIGINAL_") ? "This monitoring visit changed. Reload the current authorized visit before trying again." : requestError.message);
+      if (requestError.ambiguous) setUnconfirmed({ visitId: detail.id, savedSampleId, ...payload });
+      setError(monitoringWriteErrorMessage(requestError, "This monitoring visit changed. Reload the current authorized visit before trying again."));
+      const target = monitoringErrorSampleId(requestError);
+      if (target && assessments.some(row => row.sampleId === target)) {
+        setActiveTreeId(target);
+        window.setTimeout(() => { const button = [...document.querySelectorAll(".psm-tree-list button")].find(item => item.querySelector("strong")?.textContent === target); button?.scrollIntoView({ behavior: "smooth", block: "center" }); button?.focus({ preventScroll: true }); }, 0);
+      }
     } finally { operationBusy.current = false; setSaving(false); }
+  };
+
+  const createVisit = async (cohort) => {
+    if (!cohort?.cohortId || cohort.canCreateVisit !== true || !cohort.nextScheduledDueDate || operationBusy.current) return;
+    operationBusy.current = true; setCreatingCohortId(cohort.cohortId); setError(""); setSavedNotice("");
+    try {
+      const created = await api(`/verified-sample-monitoring/cohorts/${encodeURIComponent(cohort.cohortId)}/visits`, {
+        method: "POST",
+        body: JSON.stringify({ visitDate: cohort.nextScheduledDueDate }),
+      });
+      setPage(current => current ? { ...current, visits: [{ ...created, progress: { completed: 0, total: created.sampleAssessments?.length || 0, rechecking: 0 } }, ...(current.visits || [])] } : current);
+      await showVisit(created.id);
+      setSavedNotice(created.visitNumber ? `Visit ${created.visitNumber} opened from the authorized MENRO schedule.` : "Monitoring visit opened from the authorized MENRO schedule.");
+    } catch (requestError) {
+      setError(requestError.message || "The authorized monitoring visit could not be opened.");
+      try { setReadiness({ data: await api("/verified-sample-monitoring/readiness") }); } catch { /* retain the actionable error */ }
+    } finally {
+      operationBusy.current = false; setCreatingCohortId("");
+    }
   };
   const reconcile = async () => {
     if (!unconfirmed || operationBusy.current) return;
@@ -293,11 +351,13 @@ export default function PermanentSampleMonitoringPage({ embedded = false, open: 
       // A confirmed (previously timed-out) decision refreshes the Admin Monitoring Records table too.
       onReviewed?.(data); return;
       }
-      const equivalent = (left, right) => ["sampleId", "condition", "remarks", "investigationOutcome", "searchFindings"].every(key => String(left[key] || "").trim() === String(right[key] || "").trim()) && ["heightCentimeters", "diameterCentimeters"].every(key => (left[key] === "" || left[key] == null ? null : Number(left[key])) === (right[key] === "" || right[key] == null ? null : Number(right[key])));
+      const equivalent = (left, right) => ["sampleId", "condition", "remarks", "mortalityCause", "recheckReason", "investigationOutcome", "searchFindings"].every(key => String(left[key] || "").trim() === String(right[key] || "").trim()) && ["heightCentimeters", "stemDiameterMillimeters"].every(key => (left[key] === "" || left[key] == null ? null : Number(left[key])) === (right[key] === "" || right[key] == null ? null : Number(right[key])));
       const matches = data.version > unconfirmed.expectedVersion && data.status === (unconfirmed.submit ? "PENDING_ADMIN_APPROVAL" : "DRAFT") && data.sampleAssessments.length === unconfirmed.assessments.length && unconfirmed.assessments.every(row => data.sampleAssessments.some(saved => equivalent(row, saved))) && String(data.visitRemarks || "") === unconfirmed.visitRemarks.trim() && data.dateMonitored === unconfirmed.dateMonitored;
       if (!matches) { setError("The saved outcome is not confirmed. Keep these entries and check again before retrying."); return; }
       setSavedDraft(draftSnapshot(data.sampleAssessments.map(formAssessment), data.visitRemarks || "", data.dateMonitored || dateMonitored));
-      resetEvidence(); setDetail(data); setAssessments(data.sampleAssessments.map(formAssessment)); setVisitRemarks(data.visitRemarks || ""); setDateMonitored(data.dateMonitored || dateMonitored); setUnconfirmed(null); setError("");
+      // M3: a reconciled Save Tree Assessment confirms only the active tree (and the version); other trees keep
+      // their local unsaved edits, exactly as after a directly confirmed save.
+      resetEvidence(); setDetail(data); setAssessments(current => keepUnsavedEdits(data.sampleAssessments.map(formAssessment), current, unconfirmed.savedSampleId)); setVisitRemarks(data.visitRemarks || ""); setDateMonitored(data.dateMonitored || dateMonitored); setUnconfirmed(null); setError("");
     } catch (failure) { setError(failure.message); }
     finally { operationBusy.current = false; setSaving(false); }
   };
@@ -340,6 +400,12 @@ export default function PermanentSampleMonitoringPage({ embedded = false, open: 
     import.meta.env.VITE_MONITORING_ORIGINAL_PHOTO_PROPOSAL === "true" && detail?.originalPhotoProposal?.linkingEnabled === true;
   const chooseOriginal = (sampleId, file) => {
     if (!file || !originalsEnabled || operationBusy.current) return;
+    if (file.size > 10 * 1024 * 1024) {
+      setFieldErrors(current => ({ ...current, [sampleId + ".evidence"]: "Choose a photo no larger than 10 MB." })); return;
+    }
+    if (!new Set(["image/jpeg", "image/png", "image/webp"]).has(file.type)) {
+      setFieldErrors(current => ({ ...current, [sampleId + ".evidence"]: "Use a JPG/JPEG, PNG or WEBP photo." })); return;
+    }
     if (savedDraft !== draftSnapshot(assessments, visitRemarks, dateMonitored) || !detail.dateMonitored) {
       setFieldErrors(current => ({...current,[sampleId+".evidence"]:"Save the actual monitoring date and assessment draft before selecting an original photo."})); return;
     }
@@ -382,7 +448,7 @@ export default function PermanentSampleMonitoringPage({ embedded = false, open: 
       })(), UPLOAD_TIMEOUT_MS, () => new RequestTimeoutError("Photo upload was not confirmed. Retry this same photo to check its saved outcome.", { ambiguous: true }));
       if (epoch !== evidenceEpoch.current) return;
       if (!response.ok || !payload.success) {
-        throw Object.assign(new Error(payload.message || "Evidence upload could not be completed."), {
+        throw Object.assign(new Error(monitoringEvidenceErrorMessage(payload)), {
           status: response.status, code:payload.code,
         });
       }
@@ -397,11 +463,7 @@ export default function PermanentSampleMonitoringPage({ embedded = false, open: 
       try { const fresh = await api(`/verified-sample-monitoring/visits/${encodeURIComponent(detail.id)}`); if (epoch === evidenceEpoch.current) setDetail(fresh); }
       catch { setError("Photo saved. Visit refresh failed; reload the visit to view its current evidence."); }
     } catch (requestError) {
-      setError(
-        requestError.status === 409 && !requestError.code?.startsWith("ORIGINAL_")
-          ? "Evidence changed while uploading. Refresh the visit and retake the photo if required."
-          : requestError.message
-      );
+      setError(monitoringWriteErrorMessage(requestError, "Evidence changed while uploading. Refresh the visit and retake the photo if required."));
       setFieldErrors(current => ({ ...current, [sampleId + ".evidence"]: requestError.message }));
     } finally { operationBusy.current = false; setSaving(false); }
   };
@@ -495,6 +557,16 @@ export default function PermanentSampleMonitoringPage({ embedded = false, open: 
   const editable =
     userRole === "staff" && !detail?.writesPaused && ["DRAFT", "RETURNED"].includes(detail?.status);
   const completed = assessments.filter((assessment) => assessment.condition).length;
+  // Only backend-authorized eligible cohorts are selectable. Blocked cohorts stay visible
+  // in the readiness cards with their reasons, but cannot be mistaken for a valid choice.
+  const readinessRows = readiness?.data?.eligible || [];
+  const selectedReadiness = readinessRows.find(row => row.cohortId === readinessCohortId) || null;
+  const readinessOption = row => `${row.reportNumber || "Verified planting report"} · ${row.siteName || "Planting site"} · ${row.canCreateVisit ? `Visit ${row.nextVisitNumber || ""} ready` : row.scheduleStatus ? scheduleStatusLabel(row.scheduleStatus) : "Setup pending"}`;
+  // Spec §6: under the first-visit workflow, Visit 1 itself registers the baseline and the 10% sample.
+  // Legacy cohorts keep the sampling-plan and baseline wording.
+  const readinessCohorts = readiness?.data?.cohorts || [];
+  const firstVisitReadiness = readinessCohorts.some(row => row.registersBaseline === true);
+  const legacyReadiness = !readinessCohorts.length || readinessCohorts.some(row => row.registersBaseline !== true);
 
   const visitList = (
     <>
@@ -521,7 +593,8 @@ export default function PermanentSampleMonitoringPage({ embedded = false, open: 
           ) : (
             <>
               <p role="status">No authorized monitoring visits are available.</p>
-              <p>A visit appears here after MENRO creates it from an approved sampling plan and baseline.</p>
+              {firstVisitReadiness && <p>Start Visit 1 for an eligible verified planting report. Visit 1 registers the baseline and the automatic 10% permanent sample; its Tree IDs remain provisional until Admin approval.</p>}
+              {legacyReadiness && <p>A visit appears here after MENRO creates it from an approved sampling plan and baseline.</p>}
               {!embedded && <Link to={`/${userRole}/survival-monitoring`}>Back to Survival Monitoring</Link>}
               {readiness && <section className="psm-readiness" aria-labelledby="psm-readiness-title">
                 <h2 id="psm-readiness-title">Why no monitoring visit is available</h2>
@@ -530,7 +603,11 @@ export default function PermanentSampleMonitoringPage({ embedded = false, open: 
                 {readiness.data && !readiness.data.cohorts?.length && <p>No verified planting reports are ready for permanent-sample monitoring yet.</p>}
                 {(readiness.data?.cohorts || []).map(cohort => <article key={cohort.cohortId} className="psm-readiness-site">
                   <h3>{readinessTitle(cohort)}</h3>
+                  {cohort.nextVisitNumber && <p>Next visit: {cohort.nextVisitNumber}. Scheduled date: {cohort.nextScheduledDueDate || "Pending approved schedule"}. Status: {scheduleStatusLabel(cohort.scheduleStatus)}.</p>}
                   <ul>{readinessMessages(cohort.reasons).map(message => <li key={message}>{message}</li>)}</ul>
+                  {userRole === "staff" && cohort.canCreateVisit === true && <button type="button" disabled={Boolean(creatingCohortId)} onClick={() => createVisit(cohort)}>
+                    {creatingCohortId === cohort.cohortId ? "Opening visit…" : `Start Visit ${cohort.nextVisitNumber || ""}`}
+                  </button>}
                 </article>)}
                 {readiness.data?.truncated && <p>Only the first 25 planting reports are shown.</p>}
               </section>}
@@ -552,10 +629,13 @@ export default function PermanentSampleMonitoringPage({ embedded = false, open: 
         {/* Embedded selection/blocker state: visit choice, backend blocker or readiness reasons above a read-only
             seven-section form shell. Nothing is editable or submittable until a real authorized visit is opened. */}
         <div className="psm-body psm-picker">
-          <label className="psm-field">Verified Planting Report<select value={pendingReport ? `pending:${pendingReport.plantingReportId}` : ""}
-            disabled={!pendingReports.length} aria-describedby="psm-shell-reason"
-            onChange={event => { const value = event.target.value; if (value.startsWith("pending:")) choosePendingReport(value.slice(8)); else setPendingReportId(""); }}>
-            <option value="">No authorized visit selected</option>{pendingOptions}</select></label>
+          <label className="psm-field">Verified Planting Report *<select value={selectedReadiness ? `ready:${selectedReadiness.cohortId}` : pendingReport ? `pending:${pendingReport.plantingReportId}` : ""}
+            disabled={!pendingReports.length && !readinessRows.length} aria-describedby="psm-shell-reason"
+            onChange={event => { const value = event.target.value; if (value.startsWith("ready:")) { setPendingReportId(""); setReadinessCohortId(value.slice(6)); }
+              else if (value.startsWith("pending:")) { setReadinessCohortId(""); choosePendingReport(value.slice(8)); } else { setPendingReportId(""); setReadinessCohortId(""); } }}>
+            <option value="">No authorized visit selected</option>
+            {readinessRows.length > 0 && <optgroup label="Eligible Verified Planting Reports">{readinessRows.map(row => <option key={row.cohortId} value={`ready:${row.cohortId}`}>{readinessOption(row)}</option>)}</optgroup>}
+            {pendingOptions}</select></label>
           {visitList}
           {pendingReport && <section className="psm-readiness psm-setup-pending" aria-labelledby="psm-setup-pending-title" data-setup-pending-report={pendingReport.plantingReportId}>
             <h2 id="psm-setup-pending-title">Setup pending: {pendingReport.reportNumber || "Verified planting report"}</h2>
@@ -568,6 +648,16 @@ export default function PermanentSampleMonitoringPage({ embedded = false, open: 
             {pendingReport.notes.map(note => <p key={note}>{note}</p>)}
             {pendingReport.reasons.length > 0 && <ul aria-label="Why this report has no monitoring visit">{pendingReport.reasons.map(reason => <li key={reason}>{reason}</li>)}</ul>}
           </section>}
+          {selectedReadiness && <section className="psm-readiness psm-setup-pending" aria-labelledby="psm-readiness-selection-title">
+            <h2 id="psm-readiness-selection-title">{readinessTitle(selectedReadiness)}</h2>
+            <dl className="psm-info"><div><dt>Next visit</dt><dd>{selectedReadiness.nextVisitNumber || "Pending"}</dd></div>
+              <div><dt>Scheduled date</dt><dd>{selectedReadiness.nextScheduledDueDate || "Pending approved schedule"}</dd></div>
+              <div><dt>Schedule status</dt><dd>{scheduleStatusLabel(selectedReadiness.scheduleStatus)}</dd></div></dl>
+            {selectedReadiness.reasons?.length > 0 && <ul>{readinessMessages(selectedReadiness.reasons).map(message => <li key={message}>{message}</li>)}</ul>}
+            {selectedReadiness.canCreateVisit === true ? <button type="button" className="psm-primary" disabled={Boolean(creatingCohortId)} onClick={() => createVisit(selectedReadiness)}>
+              {creatingCohortId ? "Opening visit…" : `Start Visit ${selectedReadiness.nextVisitNumber || ""}`}</button>
+              : <p role="status">This visit remains unavailable until every authoritative readiness requirement is satisfied.</p>}
+          </section>}
           {/* Review mode (one visit from Monitoring Records) keeps the description the select points to. */}
           {reviewVisitId ? <p className="psm-note" id="psm-shell-reason">{error && !loading
             ? "The selected monitoring visit could not be opened. Close this form and try again from Monitoring Records."
@@ -577,15 +667,16 @@ export default function PermanentSampleMonitoringPage({ embedded = false, open: 
             : userRole === "admin" ? "No monitoring visit is available for review. MENRO Staff record and submit visits; Admin reviews, approves or returns them."
             : "Assessment editing, evidence submission, Save Draft and Submit are unavailable until MENRO creates an authorized monitoring visit."}</p>}
           {/* The disabled Staff form shell (Take Photo, Upload, Save Draft, Submit) is never shown to Admin. */}
-          {userRole !== "admin" && <PermanentSampleVisitShell describedBy="psm-shell-reason" report={pendingReport} />}
+          {userRole !== "admin" && <PermanentSampleVisitShell describedBy="psm-shell-reason" report={pendingReport || selectedReadiness} firstVisit={firstVisitReadiness && !legacyReadiness} />}
         </div>
-        <footer className="psm-footer">{userRole !== "admin" && <><button type="button" disabled aria-describedby="psm-shell-reason">Save Draft</button><button type="button" className="psm-primary" aria-label="Submit Visit" disabled aria-describedby="psm-shell-reason">Submit Monitoring Visit</button></>}</footer>
+        <footer className="psm-footer">{userRole !== "admin" && <><button type="button" disabled aria-describedby="psm-shell-reason">Save Draft</button><button type="button" className="psm-primary" disabled aria-describedby="psm-shell-reason">Submit Monitoring Visit</button></>}</footer>
         </> : <>
         <div className="psm-body">
-        <label className="psm-field">Verified Planting Report<select value={detail.id} disabled={saving || Boolean(unconfirmed)} onChange={event => { const value = event.target.value; if (value.startsWith("pending:")) choosePendingReport(value.slice(8)); else open(value); }}>{(page?.visits || [detail]).map(row => <option key={row.id} value={row.id}>{row.id === detail.id && detail.visitContext?.reportNumber
+        <label className="psm-field">Verified Planting Report *<select value={detail.id} disabled={saving || Boolean(unconfirmed)} onChange={event => { const value = event.target.value; if (value.startsWith("pending:")) choosePendingReport(value.slice(8)); else open(value); }}>{(page?.visits || [detail]).map(row => <option key={row.id} value={row.id}>{row.id === detail.id && detail.visitContext?.reportNumber
           ? `${detail.visitContext.reportNumber} · ${detail.visitContext.siteName || "Planting site"} · Visit ${row.visitDate || ""}`
           : `Visit ${row.visitDate || row.id} · ${statusLabel(row.status)}`}</option>)}{pendingOptions}</select></label>
         {error && <p role="alert" className="psm-error">{error}</p>}
+        {savedNotice && <p role="status" className="psm-success">{savedNotice}</p>}
         {unconfirmed ? <button type="button" disabled={saving} onClick={reconcile}>Check saved outcome</button> : <button type="button" disabled={saving || reviewing} onClick={() => open(detail.id, true)}>Reload visit</button>}
         <section className="psm-content">
           <p className="psm-note">{`${statusLabel(detail.status)} · Revision ${detail.version}`}</p>
@@ -642,8 +733,8 @@ export default function PermanentSampleMonitoringPage({ embedded = false, open: 
                     {assessment.heightCentimeters !== null && assessment.heightCentimeters !== undefined
                       ? ` · height ${assessment.heightCentimeters} cm`
                       : ""}
-                    {assessment.diameterCentimeters !== null && assessment.diameterCentimeters !== undefined
-                      ? ` · diameter ${assessment.diameterCentimeters} cm`
+                    {assessment.stemDiameterMillimeters !== null && assessment.stemDiameterMillimeters !== undefined
+                      ? ` · stem diameter ${assessment.stemDiameterMillimeters} mm`
                       : ""}
                     {assessment.remarks ? ` · ${assessment.remarks}` : ""}
                     {assessment.evidenceHistory?.some(e=>e.source === "uploaded-original") && <p>Uploaded original: GPS accuracy Unknown. EXIF does not prove authenticity.</p>}
@@ -697,7 +788,7 @@ export default function PermanentSampleMonitoringPage({ embedded = false, open: 
         <footer className="psm-footer">{userRole === "admin" && !detail.writesPaused && detail.status === "PENDING_ADMIN_APPROVAL" && <div role="group" aria-label="Admin visit decision" className="psm-admin-decision">
           <button type="button" disabled={reviewing || Boolean(unconfirmed)} onClick={() => review(false)}>Return for Correction</button>
           <button type="button" className="psm-primary" disabled={reviewing || Boolean(unconfirmed)} onClick={() => review(true)}>Approve Visit</button>
-        </div>}{editable && <><button type="button" disabled={saving || Boolean(unconfirmed)} onClick={() => save(false)}>{saving ? "Saving..." : "Save Draft"}</button><button type="button" className="psm-primary" aria-label="Submit Visit" disabled={saving || Boolean(unconfirmed)} onClick={() => save(true)}>{saving ? "Submitting..." : "Submit Monitoring Visit"}</button></>}</footer>
+        </div>}{editable && <><button type="button" disabled={saving || Boolean(unconfirmed)} onClick={() => save(false)}>{saving ? "Saving..." : "Save Draft"}</button><button type="button" className="psm-primary" aria-label="Submit Monitoring Visit" disabled={saving || Boolean(unconfirmed)} onClick={() => save(true)}>{saving ? "Submitting..." : "Submit Monitoring Visit"}</button></>}</footer>
         </>}
       </ModalDialog>;
 

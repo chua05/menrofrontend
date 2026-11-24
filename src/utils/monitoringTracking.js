@@ -5,6 +5,7 @@
 // in monitoring analytics. Stored monitoring policies are shown as-is and never converted.
 import { MONITORING_POLICY, describeMonitoringStatus, monitoringPolicyOf } from "./monitoringStatus.js";
 import { readinessStatusLabel } from "./sampleVisitReadiness.js";
+import { formatDisplayId } from "./displayId.js";
 
 // Headline monitoring stage of a tracking row (user-facing), mapped only from stored policy, cohort and readiness.
 export const TRACKING_STAGE = Object.freeze({
@@ -43,6 +44,9 @@ export const TRACKING_STATUS = Object.freeze({
 });
 
 export const reportIdOf = (report) => String(report?.id || report?.reportId || "");
+// The stored planting report number is authoritative (it also names the report in the visit picker, the row's
+// action label and the permanent Tree IDs). A display ID is derived only when no report number is stored.
+export const trackingReportNumber = (row) => String(row?.reportNumber || "").trim() || formatDisplayId("RPT", row?.plantingReportId);
 
 // Same eligibility the Survival Monitoring page already applies to verified planting reports.
 export function isVerifiedPlantingReport(report) {

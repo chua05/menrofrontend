@@ -15,6 +15,7 @@ import {
 } from "react-icons/fi";
 
 import "leaflet/dist/leaflet.css";
+import { textTooltip } from "../utils/leafletTooltip";
 import "../styles/map-visualization.css";
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
@@ -884,9 +885,11 @@ export default function MapVisualizationPage() {
           );
 
         marker.bindTooltip(
-          site.siteName ||
-            site.siteId ||
-            "Planting Site"
+          textTooltip(
+            site.siteName ||
+              site.siteId ||
+              "Planting Site"
+          )
         );
 
         marker.on("click", () => {

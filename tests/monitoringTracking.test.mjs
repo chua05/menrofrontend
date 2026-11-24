@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { TRACKING_STATUS, deriveTrackingRows, isVerifiedPlantingReport, trackingMatchesRecordFilters, trackingNeedsCohortLookup } from "../src/utils/monitoringTracking.js";
+import { readFileSync } from "node:fs";
+import { TRACKING_STATUS, deriveTrackingRows, isVerifiedPlantingReport, trackingMatchesRecordFilters, trackingNeedsCohortLookup, trackingReportNumber } from "../src/utils/monitoringTracking.js";
 
 const verified = (id, monitoring, extra = {}) => ({ id, reportNumber: `RPT-${id}`, siteName: `Site ${id}`, barangay: "Bical", reportingProgress: "Completed",
   verificationStatus: "Completed", acceptedQuantity: 20, ...(monitoring ? { reportingPolicy: { monitoring } } : {}), ...extra });
@@ -152,4 +153,18 @@ test("site and barangay labels fall back to the registered planting site, never 
   assert.deepEqual([row.siteName, row.barangay], ["Bical Reforestation Site", "Bical"]);
   const [unknown] = deriveTrackingRows({ ...ready, reports: [verified("u", "STAFF_SPOT_CHECK", { siteName: "", barangay: "", siteId: "missing" })], sites: [] });
   assert.deepEqual([unknown.siteName, unknown.barangay], ["", ""]);
+});
+
+test("a tracking row shows one authoritative report number in its cell, action label and details", () => {
+  // A stored non-canonical number (e.g. PR-FV-…) used to be hashed into RPT-xxxxxxx in the cell while the
+  // action label used the stored number. The stored number is shown everywhere now.
+  assert.equal(trackingReportNumber({ reportNumber: "PR-FV-e37a511f", plantingReportId: "report-1" }), "PR-FV-e37a511f");
+  assert.equal(trackingReportNumber({ reportNumber: "RPT-2026-101", plantingReportId: "report-1" }), "RPT-2026-101");
+  assert.match(trackingReportNumber({ reportNumber: "", plantingReportId: "report-1" }), /^RPT-[A-Z0-9]{7}$/);
+  const page = readFileSync(new URL("../src/pages/MonitoringPage.jsx", import.meta.url), "utf8");
+  assert.match(page, /<td>\{trackingReportNumber\(row\)\}<\/td>/);
+  assert.match(page, /View monitoring record details for \$\{trackingReportNumber\(row\)\}/);
+  assert.doesNotMatch(page, /formatDisplayId\("RPT", row\.reportNumber, row\.plantingReportId\)/);
+  const details = readFileSync(new URL("../src/components/MonitoringTrackingDetails.jsx", import.meta.url), "utf8");
+  assert.match(details, /value=\{trackingReportNumber\(row\)\}/);
 });
