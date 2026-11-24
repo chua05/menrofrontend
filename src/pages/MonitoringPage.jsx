@@ -7,7 +7,7 @@ import { resolveVerifiedPlantingCohortEnabled } from "../utils/verifiedPlantingC
 import { canDecideVisit, createLatestRequestGate, loadSubmittedVisitPages, visitMatchesRecordFilters, visitStatusLabel } from "../utils/adminMonitoringVisitReview";
 import { createEvidenceAttempt, assertEvidenceComplete } from "../utils/evidenceAttempt";
 import { useSearchParams } from "react-router-dom";
-import { TRACKING_STATUS, deriveTrackingRows, isVerifiedPlantingReport, trackingMatchesRecordFilters, trackingNeedsCohortLookup } from "../utils/monitoringTracking";
+import { TRACKING_STATUS, deriveTrackingRows, isVerifiedPlantingReport, trackingMatchesRecordFilters, trackingNeedsCohortLookup, trackingReportNumber } from "../utils/monitoringTracking";
 import { isAwaitingMonitoringSetup, lifecycleMethodLabel, monitoringDisplayId, monitoringSetupBlocker, monitoringStatusLabel, monitoringStatusTone } from "../utils/monitoringRecordView";
 import MonitoringTrackingDetails from "../components/MonitoringTrackingDetails";
 import ModalDialog from "../components/ModalDialog";
@@ -2150,7 +2150,7 @@ export default function MonitoringPage() {
                       <span className="sm-tracking-badge">Tracking only</span>
                       <span className="sm-site-sub">Verified planting report · no monitoring record yet</span>
                     </td>
-                    <td>{formatDisplayId("RPT", row.reportNumber, row.plantingReportId)}</td>
+                    <td>{trackingReportNumber(row)}</td>
                     <td>
                       <strong className="sm-site-name">{row.siteName || "Site not recorded"}</strong>
                       {row.barangay && <span className="sm-site-sub">Barangay {row.barangay}</span>}
@@ -2175,7 +2175,7 @@ export default function MonitoringPage() {
                           type="button"
                           className="sm-row-icon-button"
                           title="View monitoring record details"
-                          aria-label={`View monitoring record details for ${row.reportNumber || row.plantingReportId}`}
+                          aria-label={`View monitoring record details for ${trackingReportNumber(row)}`}
                           onClick={() => setTrackingDetailsId(row.plantingReportId)}
                         >
                           <FiEye size={14} />

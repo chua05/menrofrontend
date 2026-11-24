@@ -25,10 +25,20 @@
 .psm-header-main { display:flex;gap:12px;align-items:flex-start;min-width:0; }.psm-header-icon { flex:none;width:42px;height:42px;border-radius:10px;background:#edf6ef;color:#145b3a;display:grid;place-items:center; }
 .psm-header-actions { flex:none;display:flex;gap:10px;align-items:center; }.psm-status-badge { padding:5px 10px;border-radius:999px;background:#edf6ef;color:#145b3a;font-size:12px;font-weight:700;white-space:nowrap; }
 .psm-dialog button.psm-close { width:40px;height:40px;padding:0; }
-.psm-progress { display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px; }.psm-progress-card { padding:12px;border:1px solid #d6e3da;border-radius:10px;background:#f6faf7;display:flex;flex-direction:column;gap:4px;min-width:0; }
+.psm-progress { display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px; }.psm-progress-card { padding:12px;border:1px solid #d6e3da;border-radius:10px;background:#f6faf7;display:flex;flex-direction:column;gap:4px;min-width:0; }
 .psm-progress-card span { font-size:13px;color:#4f6357;font-weight:600; }.psm-progress-card strong { font-size:24px;line-height:1.1; }.psm-progress-card small { color:#667a6e;font-size:12px; }
 .psm-progress-bar { display:flex;align-items:center;gap:12px;margin-top:14px; }.psm-section .psm-progress-bar progress { flex:1;margin:0;min-width:0; }.psm-progress-bar span { flex:none;font-weight:600;font-size:13px; }
 .psm-tree-state { display:inline-flex;align-items:center;gap:6px;flex-wrap:wrap;color:#4f6357; }.psm-tree-done { color:#145b3a;flex:none; }
+.psm-tree-dead { color:#b42318; }.psm-tree-recheck { color:#9a6200; }.psm-tree-empty { color:#7b8981; }
+.psm-baseline-banner,.psm-locked,.psm-warning { padding:12px;border-radius:9px;background:#fff8e7;border:1px solid #e5c875;color:#704b00; }
+.psm-locked { display:flex;gap:8px;align-items:center;background:#f5f7f6;border-color:#cfd8d2;color:#425249; }
+.psm-tree-marker { background:transparent;border:0;filter:drop-shadow(0 1px 2px rgb(0 0 0 / .35)); }
+.psm-tree-marker svg { width:100%;height:100%;fill:#17643a;stroke:#fff;stroke-width:1.5; }
+.psm-tree-marker-draft svg { fill:#d28a00;stroke-dasharray:2 1; }.psm-tree-marker.is-selected svg { fill:#7c3aed;stroke-width:2.5; }
+.psm-tree-legend { display:inline-block;width:12px;height:15px;background:#17643a;clip-path:polygon(50% 0,100% 45%,75% 45%,100% 75%,62% 75%,62% 100%,38% 100%,38% 75%,0 75%,25% 45%,0 45%); }
+.psm-tree-popup dl { display:grid;grid-template-columns:auto 1fr;gap:3px 8px;margin:8px 0; }.psm-tree-popup dd { margin:0;font-weight:600; }
+.psm-history-table-wrap { overflow-x:auto; }.psm-history-table { width:100%;border-collapse:collapse;font-size:13px; }.psm-history-table caption { text-align:left;font-weight:700;margin-bottom:8px; }.psm-history-table th,.psm-history-table td { padding:8px;border:1px solid #dce5df;text-align:left;white-space:nowrap; }
+.psm-success { padding:12px;background:#edf8f1;border:1px solid #a9d2b8;color:#145b3a;border-radius:8px; }
 .psm-label { font-weight:600; }.psm-conditions { display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px; }
 .psm-condition { border:1px solid #cbd8cf;border-radius:10px;padding:10px 12px;min-width:0; }.psm-condition:has(input:checked) { border-color:#145b3a;background:#f0f8f2; }
 .psm-condition label { display:flex;gap:8px;align-items:center;font-weight:600;cursor:pointer; }.psm-condition input { width:18px;height:18px;accent-color:#145b3a;flex:none; }.psm-condition small { display:block;margin:4px 0 0 26px;color:#617268;font-size:12px; }

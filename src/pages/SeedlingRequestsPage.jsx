@@ -53,6 +53,7 @@ import ParticipantSaplingRequestWizard from "./ParticipantSaplingRequestWizard";
 import { getRequesterDetailField } from "../utils/requesterDetails";
 import { ownsSeedlingRequest, canProcessSeedlingRequest, createdSeedlingRequest, isStaffDirectRequest, needsAdminSiteVerification } from "../utils/requestOwnership";
 import { approvedPolicyLabel } from "../utils/purposePolicyStatus";
+import { textTooltip } from "../utils/leafletTooltip";
 
 
 const TABS = [
@@ -3801,7 +3802,7 @@ function ParticipantLocationPreview({ barangay, site }) {
           }
         )
           .bindTooltip(
-            getPlantingSiteDisplayName(site),
+            textTooltip(getPlantingSiteDisplayName(site)),
             {
               permanent: false,
               direction: "top",

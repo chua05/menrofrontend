@@ -165,7 +165,7 @@ export default function VerifiedPlantingCohortsPage({ embedded = false, view = "
     </dl>{sampleAnalyticsEnabled() && <p><Link to={`/${userRole}/permanent-sample-analytics`}>View approved sample coverage and survival estimates</Link></p>}{view === "records" && (userRole === "admin"
       ? <p>Review permanent sample plans and baseline records from the verified report's details on <Link to={`/${userRole}/planting-reports`}>Planting Reports</Link>.</p>
       : <p>Sampling plans and baselines are managed from the verified report's details on <Link to={`/${userRole}/planting-reports`}>Planting Reports</Link>.</p>)}</section>}
-    {selected && view !== "records" && <>
+    {selected && view !== "records" && (selected.samplingPlan?.origin === "FIRST_VISIT" ? <section className="cohort-card"><h2>First-Visit Baseline Registration</h2><p>This cohort's permanent Tree IDs, sampling plan and baseline are managed together through Monitoring Visit 1. The legacy separate Sampling Plan and Staff Baseline editors are unavailable.</p><p>Status: {selected.samplingPlan?.status || "NOT STARTED"}</p></section> : <>
       <SamplingPolicyReadiness key={selected.id} cohort={selected} role={userRole} onSaved={reload} />
       <section className="cohort-card"><h2>Sampling Plan</h2><p>Provisional target: <strong>{samplingBlocked ? "Pending MENRO approval" : target}</strong> samples ({selected.samplingPlan?.provisionalPolicy || "test-only ceil(verified quantity × 10%)"}).</p>
       <label>Selection method<select value={selectionMethod} disabled={samplingBlocked || userRole !== "staff" || selected.samplingPlan?.status === "APPROVED"} onChange={(event) => setSelectionMethod(event.target.value)}><option value="documented-manual">Documented manual selection</option><option value="systematic">Systematic selection</option><option value="stratified">Stratified selection</option></select></label>
@@ -178,7 +178,7 @@ export default function VerifiedPlantingCohortsPage({ embedded = false, view = "
       {userRole === "staff" && selected.baseline?.approvalStatus !== "APPROVED" && <button disabled={busy} onClick={saveBaseline}>Submit baseline for approval</button>}
       {userRole === "admin" && selected.baseline?.approvalStatus === "PENDING_ADMIN_APPROVAL" && <button disabled={busy} onClick={approveBaseline}>Approve baseline</button>}
       <p>Status: {selected.baseline?.approvalStatus || selected.baselineStatus || "NOT STARTED"}</p></>}</section>
-    </>}
+    </>)}
     <SecureCameraCapture open={cameraOpen} request={cameraRequest} binding={cameraBinding} onVerified={attachBaselinePhoto} onCancel={() => { setCameraOpen(false); setCameraSampleId(""); }} onDiagnostic={({ message: diagnostic }) => setError(diagnostic)} />
   </Container>;
 }

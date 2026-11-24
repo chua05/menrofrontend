@@ -160,7 +160,7 @@ test("Staff page shows one submission button, no baselines panel and no separate
   await expect(page.getByRole("link", { name: "Survival Monitoring", exact: true, includeHidden: true })).toHaveCount(1);
 });
 
-test("the single Staff button opens the seven-section permanent-sample form in Monitor Planted Trees, not the legacy aggregate form", async ({ page }) => {
+test("the single Staff button opens the eight-section permanent-sample form in Monitor Planted Trees, not the legacy aggregate form", async ({ page }) => {
   await isolate(page);
   await mockLegacyMonitoringApi(page);
   const dialog = await openStaffMonitoring(page);
@@ -170,13 +170,13 @@ test("the single Staff button opens the seven-section permanent-sample form in M
   await expect(dialog.getByText("Monitor registered sample trees and document their current survival conditions.", { exact: true })).toBeVisible();
   for (const heading of blueprintSections) await expect(dialog.getByRole("heading", { name: heading })).toBeVisible();
   for (const legacy of ["Total Trees Checked", "Maturity Status", "Healthy *", "Damaged *", "Dead *"]) await expect(dialog.getByLabel(legacy, { exact: true })).toHaveCount(0);
-  await expect(dialog.locator(".psm-progress-card")).toHaveCount(3);
+  await expect(dialog.locator(".psm-progress-card")).toHaveCount(4);
   await expect(dialog.locator(".psm-tree-list button")).toHaveCount(2);
   await expect(dialog.locator(".psm-location .leaflet-container")).toBeVisible();
   await dialog.getByRole("radio", { name: "Needs Rechecking", exact: true }).check();
   await expect(dialog.getByRole("heading", { name: "6. Rechecking & Requester Clarification" })).toBeVisible();
   await expect(dialog.getByRole("button", { name: "Save Draft", exact: true })).toBeVisible();
-  await expect(dialog.getByRole("button", { name: "Submit Visit", exact: true })).toHaveText("Submit Monitoring Visit");
+  await expect(dialog.getByRole("button", { name: "Submit Monitoring Visit", exact: true })).toHaveText("Submit Monitoring Visit");
   // Closing keeps the unsaved per-tree edit; reopening shows the same visit.
   await dialog.getByRole("button", { name: "Close monitoring visit" }).click();
   await expect(dialog).toHaveCount(0);
@@ -189,7 +189,7 @@ test("one authorized editable visit opens directly inside the Staff modal", asyn
   await isolate(page);
   await mockLegacyMonitoringApi(page);
   const dialog = await openStaffMonitoring(page, "returned");
-  await expect(dialog.getByRole("combobox", { name: "Verified Planting Report", exact: true })).toHaveValue("VPMV-RETURNED-001");
+  await expect(dialog.getByRole("combobox", { name: "Verified Planting Report *", exact: true })).toHaveValue("VPMV-RETURNED-001");
   await expect(dialog.locator(".psm-status-badge")).toHaveText("Returned for Correction");
   await expect(dialog.getByRole("radiogroup", { name: "Tree Condition *" })).toBeVisible();
 });
@@ -205,7 +205,7 @@ test("zero authorized visits show the backend blockers inside the Staff modal an
   await expect(dialog.getByLabel("Total Trees Checked", { exact: true })).toHaveCount(0);
 });
 
-test("zero authorized visits still render the seven-section form shell read-only with truthful empty values", async ({ page }) => {
+test("zero authorized visits still render the eight-section form shell read-only with truthful empty values", async ({ page }) => {
   await isolate(page);
   // No verified planting report either, so nothing is selectable (Setup Pending is covered separately).
   await mockLegacyMonitoringApi(page, { plantingReports: [] });
@@ -219,14 +219,14 @@ test("zero authorized visits still render the seven-section form shell read-only
   await expect(dialog.getByText("Pending Official Schedule", { exact: true }).first()).toBeVisible();
   await expect(dialog.getByText(/No registered Tree IDs are available/)).toBeVisible();
   await expect(dialog.locator(".psm-shell").getByText(/^Approved$/)).toHaveCount(0);
-  await expect(dialog.getByRole("combobox", { name: "Verified Planting Report", exact: true })).toBeDisabled();
+  await expect(dialog.getByRole("combobox", { name: "Verified Planting Report *", exact: true })).toBeDisabled();
   await expect(dialog.getByLabel("Date Monitored *", { exact: true })).toBeDisabled();
-  for (const name of ["Take Photo", "Upload Existing Photo", "Verify Photo Location", "Save Draft", "Submit Visit"])
+  for (const name of ["Take Photo", "Upload Existing Photo", "Verify Photo Location", "Save Draft", "Submit Monitoring Visit"])
     await expect(dialog.getByRole("button", { name, exact: true })).toBeDisabled();
   await expect(dialog.getByLabel("Height (cm)", { exact: true })).toBeDisabled();
   await expect(dialog.getByRole("radio", { name: "Healthy" })).toBeDisabled();
   await expect(dialog.getByRole("checkbox", { name: /Request additional information/ })).toBeDisabled();
-  await expect(dialog.getByRole("button", { name: "Submit Visit", exact: true })).toHaveText("Submit Monitoring Visit");
+  await expect(dialog.getByRole("button", { name: "Submit Monitoring Visit", exact: true })).toHaveText("Submit Monitoring Visit");
   await expect(dialog.getByText(/unavailable until MENRO creates an authorized monitoring visit/)).toBeVisible();
   expect(writes).toEqual([]);
 });
@@ -255,7 +255,7 @@ test("Staff arrival opens the only editable authorized visit directly and keeps 
   await page.goto("/staff/permanent-sample-monitoring?role=staff&fixture=returned&start=1");
   const dialog = page.getByRole("dialog", { name: "Monitor Planted Trees" });
   await expect(dialog).toBeVisible();
-  await expect(dialog.getByRole("combobox", { name: "Verified Planting Report", exact: true })).toHaveValue("VPMV-RETURNED-001");
+  await expect(dialog.getByRole("combobox", { name: "Verified Planting Report *", exact: true })).toHaveValue("VPMV-RETURNED-001");
   await expect(dialog.locator(".psm-status-badge")).toHaveText("Returned for Correction");
   // The dialog must stay open (no second list load closing it) and the first tree stays editable.
   await page.waitForTimeout(500);
@@ -306,11 +306,11 @@ test("Admin Survival Monitoring never mounts the Staff monitoring modal and send
   expect(writes).toEqual([]);
 });
 
-test("Staff keep the seven-section Monitor Planted Trees form", async ({ page }) => {
+test("Staff keep the eight-section Monitor Planted Trees form", async ({ page }) => {
   await isolate(page);
   await mockLegacyMonitoringApi(page);
   const dialog = await openStaffMonitoring(page, "empty", "staff");
-  expect(await dialog.locator(".psm-shell .psm-section > h3").allTextContents()).toHaveLength(7);
+  expect(await dialog.locator(".psm-shell .psm-section > h3").allTextContents()).toHaveLength(8);
 });
 
 test("Admin review route opens the one visit awaiting review in the read-only seven-section form with review actions only", async ({ page }) => {
@@ -501,7 +501,7 @@ test("existing visit selection loads authoritative sample details", async ({ pag
   await isolate(page);
   await page.goto("/staff/permanent-sample-monitoring?role=staff");
   await page.getByRole("button", { name: "VPMV-STAFF-001" }).click();
-  await expect(page.getByRole("combobox", { name: "Verified Planting Report", exact: true })).toHaveValue("VPMV-STAFF-001");
+  await expect(page.getByRole("combobox", { name: "Verified Planting Report *", exact: true })).toHaveValue("VPMV-STAFF-001");
   await expect(page.getByRole("group", { name: "TREE-001" }).getByRole("radio",{name:"Healthy",exact:true})).toBeChecked();
   await page.locator(".psm-tree-list button").filter({hasText:"TREE-002"}).click();
   await expect(page.getByRole("group", { name: "TREE-002" }).getByRole("radio",{name:"Needs Rechecking",exact:true})).toBeChecked();
@@ -558,7 +558,7 @@ test("staff renders every authoritative sample in one editable visit form", asyn
   await page.getByRole("button",{name:"Previous Tree"}).click();
   await expect(page.getByText(/Previous assessment: Healthy/)).toBeVisible();
   await expect(page.getByRole("status").filter({ hasText: "2/2 assessments recorded" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Submit Visit" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Submit Monitoring Visit", exact: true })).toBeVisible();
 });
 
 test("staff validates required rechecking data and saves the full versioned assessment payload", async ({ page }) => {
@@ -567,13 +567,15 @@ test("staff validates required rechecking data and saves the full versioned asse
   await page.getByRole("button", { name: "VPMV-STAFF-001" }).click();
   await page.locator(".psm-tree-list button").filter({hasText:"TREE-002"}).click();
   await page.getByRole("group", { name: "TREE-002" }).getByLabel(/Remarks/).fill("");
-  await page.getByRole("button", { name: "Save TREE-002 Draft" }).click();
-  await expect(page.locator("[data-validation-field=\"TREE-002.remarks\"] [role=alert]")).toContainText("Explain why this tree needs rechecking.");
+  await page.getByRole("button", { name: "Save Tree Assessment", exact: true }).click();
+  await expect(page.locator("[data-validation-field=\"TREE-002.remarks\"] [role=alert]")).toContainText("Describe the rechecking observation in Individual Remarks.");
+  expect(await page.evaluate(() => window.__PHASE3C_MUTATIONS__ || [])).toHaveLength(0);
 
   await page.getByRole("group", { name: "TREE-002" }).getByLabel(/Remarks/).fill("Tag needs verification.");
   await page.getByRole("button",{name:"Previous Tree"}).click();
   await page.getByRole("group", { name: "TREE-001" }).getByLabel("Height (cm)").fill("123");
-  await page.getByRole("button", { name: "Save TREE-001 Draft" }).click();
+  await page.getByRole("group", { name: "TREE-001" }).getByLabel("Stem Diameter (mm)").fill("60");
+  await page.getByRole("button", { name: "Save Tree Assessment", exact: true }).click();
   await expect(page.getByText("Draft · Revision 5")).toBeVisible();
   const mutation = await page.evaluate(() => window.__PHASE3C_MUTATIONS__.at(-1));
   await expect(mutation.path).toBe("VPMV-STAFF-001");
@@ -587,14 +589,20 @@ test("staff submits one complete visit and handles stale version conflicts safel
   await isolate(page);
   await page.goto("/staff/permanent-sample-monitoring?role=staff");
   await page.getByRole("button", { name: "VPMV-STAFF-001" }).click();
-  await page.getByRole("button", { name: "Submit Visit" }).click();
+  await page.getByRole("group", { name: "TREE-001" }).getByLabel("Height (cm)").fill("120");
+  await page.getByRole("group", { name: "TREE-001" }).getByLabel("Stem Diameter (mm)").fill("60");
+  await page.getByRole("button", { name: "Next Tree" }).click();
+  await page.getByLabel("Reason for Rechecking *").fill("Tag needs verification.");
+  await page.getByRole("button", { name: "Submit Monitoring Visit", exact: true }).click();
   await expect(page.getByText("Pending Admin Review · Revision 5")).toBeVisible();
   const submit = await page.evaluate(() => window.__PHASE3C_MUTATIONS__.at(-1));
   await expect(submit.payload.submit).toBe(true);
 
   await page.goto("/staff/permanent-sample-monitoring?role=staff&fixture=stale-save");
   await page.getByRole("button", { name: "VPMV-STAFF-001" }).click();
-  await page.getByRole("button", { name: "Save TREE-001 Draft" }).click();
+  await page.getByRole("group", { name: "TREE-001" }).getByLabel("Height (cm)").fill("120");
+  await page.getByRole("group", { name: "TREE-001" }).getByLabel("Stem Diameter (mm)").fill("60");
+  await page.getByRole("button", { name: "Save Tree Assessment", exact: true }).click();
   await expect(page.getByRole("dialog",{name:"Monitor Planted Trees"}).getByRole("alert")).toContainText("This monitoring visit changed.");
 });
 
@@ -603,7 +611,9 @@ test("returned visits support staff correction while approved visits and admin v
   await page.goto("/staff/permanent-sample-monitoring?role=staff&fixture=returned");
   await page.getByRole("button", { name: "VPMV-RETURNED-001" }).click();
   await page.getByRole("group", { name: "TREE-001" }).getByLabel("Remarks").fill("Corrected after return.");
-  await page.getByRole("button", { name: "Save TREE-001 Draft" }).click();
+  await page.getByRole("group", { name: "TREE-001" }).getByLabel("Height (cm)").fill("120");
+  await page.getByRole("group", { name: "TREE-001" }).getByLabel("Stem Diameter (mm)").fill("60");
+  await page.getByRole("button", { name: "Save Tree Assessment", exact: true }).click();
   await expect(page.getByText("Draft · Revision 8")).toBeVisible();
   const correction = await page.evaluate(() => window.__PHASE3C_MUTATIONS__.at(-1));
   await expect(correction.payload.expectedVersion).toBe(7);
@@ -611,11 +621,11 @@ test("returned visits support staff correction while approved visits and admin v
   await page.goto("/staff/permanent-sample-monitoring?role=staff&fixture=approved");
   await page.getByRole("button", { name: "VPMV-APPROVED-001" }).click();
   await expect(page.getByRole("status").filter({ hasText: "Approved visits are read-only" })).toBeVisible();
-  await expect(page.getByRole("button", { name: /Save .* Draft|Submit Visit/ })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /^(Save Tree Assessment|Save Draft|Submit Monitoring Visit)$/ })).toHaveCount(0);
 
   await page.goto("/admin/permanent-sample-monitoring?role=admin&fixture=returned");
   await page.getByRole("button", { name: "VPMV-RETURNED-001" }).click();
-  await expect(page.getByRole("button", { name: /Save .* Draft|Submit Visit/ })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /^(Save Tree Assessment|Save Draft|Submit Monitoring Visit)$/ })).toHaveCount(0);
 });
 
 test("staff capture creates a bound session and uploads one private evidence record", async ({ page }) => {
@@ -683,7 +693,9 @@ test("returned correction keeps historical evidence while approved visits disabl
   await page.goto("/staff/permanent-sample-monitoring?role=staff&fixture=returned");
   await page.getByRole("button", { name: "VPMV-RETURNED-001" }).click();
   await page.getByRole("group", { name: "TREE-001" }).getByLabel("Remarks").fill("Corrected after return.");
-  await page.getByRole("button", { name: "Save TREE-001 Draft" }).click();
+  await page.getByRole("group", { name: "TREE-001" }).getByLabel("Height (cm)").fill("120");
+  await page.getByRole("group", { name: "TREE-001" }).getByLabel("Stem Diameter (mm)").fill("60");
+  await page.getByRole("button", { name: "Save Tree Assessment", exact: true }).click();
   await expect(page.getByRole("button", { name: "View private evidence revision 0" })).toBeVisible();
   await page.getByRole("button", { name: "Capture verified photo for TREE-001" }).click();
   await page.getByRole("button", { name: "Verify fixture camera photo" }).click();
@@ -700,9 +712,10 @@ test("admin reviews one consolidated pending visit with assessments, history, an
   await isolate(page);
   await page.goto("/admin/permanent-sample-monitoring?role=admin&fixture=review-pending");
   await page.getByRole("button", { name: "VPMV-PENDING-REVIEW-001" }).click();
-  await expect(page.getByRole("combobox", { name: "Verified Planting Report", exact: true })).toHaveValue("VPMV-PENDING-REVIEW-001");
+  await expect(page.getByRole("combobox", { name: "Verified Planting Report *", exact: true })).toHaveValue("VPMV-PENDING-REVIEW-001");
   await expect(page.getByText(/Cohort cohort-fixture.*Site site-fixture.*2\/2 assessments complete/)).toBeVisible();
-  await expect(page.getByText(/TREE-001: Healthy.*height 120 cm.*diameter 6 cm.*Stable growth/)).toBeVisible();
+  await expect(page.getByText(/TREE-001: Healthy.*height 120 cm.*Stable growth/)).toBeVisible();
+  await expect(page.getByRole("group", { name: "TREE-001" }).getByLabel("Stem Diameter (mm)")).toHaveValue("60");
   await expect(page.getByText(/TREE-002: Needs Rechecking.*Not Located After Rechecking/)).toBeVisible();
   await expect(page.getByText("Version 11: PENDING_ADMIN_APPROVAL")).toBeVisible();
   await expect(page.getByRole("button", { name: "View private evidence revision 0" })).toBeVisible();
@@ -933,7 +946,19 @@ test("View opens the Admin read-only seven-section form titled Review Monitoring
   await expect(dialog.locator(".psm-status-badge")).toHaveText("Pending Admin Review");
   for (const heading of blueprintSections) await expect(dialog.getByRole("heading", { name: heading, exact: true })).toBeVisible();
   await expect(dialog.getByRole("radio", { name: "Healthy" })).toBeDisabled();
-  await expect(dialog.getByRole("button", { name: /Save .*Draft|Save Draft|Submit|Take Photo|Capture verified photo|Upload|Create/ })).toHaveCount(0);
+  for (const name of ["Save Tree Assessment", "Save Draft", "Submit Monitoring Visit", "Take Photo", "Capture verified photo", "Upload Existing Photo", "Upload", "Create"]) {
+    await expect(dialog.getByRole("button", { name, exact: true })).toHaveCount(0);
+  }
+  await expect(dialog.locator('input[type="file"]')).toHaveCount(0);
+  await expect(dialog.getByLabel("Height (cm)", { exact: true })).toBeDisabled();
+  await expect(dialog.getByLabel("Stem Diameter (mm)", { exact: true })).toBeDisabled();
+  const treeRows = dialog.locator(".psm-tree-list button");
+  await expect(treeRows.first()).toBeVisible();
+  await treeRows.nth(1).click();
+  await expect(dialog.getByRole("radio", { name: "Healthy" })).toBeDisabled();
+  await expect(dialog.getByLabel("Height (cm)", { exact: true })).toHaveCount(0);
+  await expect(dialog.getByLabel("Stem Diameter (mm)", { exact: true })).toHaveCount(0);
+  await expect(dialog.getByLabel("Date Monitored *", { exact: true })).toBeDisabled();
   await expect(dialog.locator(".psm-shell")).toHaveCount(0);
   const decision = dialog.locator("footer.psm-footer").getByRole("group", { name: "Admin visit decision" });
   await expect(decision.getByRole("button", { name: "Approve Visit", exact: true })).toBeEnabled();
@@ -970,7 +995,11 @@ test("approved visits open read-only with no Approve or Return", async ({ page }
   await visitRow(page, "VPMV-APPROVED-001").getByRole("button", { name: /View monitoring visit/ }).click();
   const dialog = page.getByRole("dialog", { name: "Review Monitoring Visit" });
   await expect(dialog.locator(".psm-status-badge")).toHaveText("Approved");
-  await expect(dialog.getByRole("button", { name: /Approve Visit|Return for Correction|Save|Submit|Take Photo|Upload/ })).toHaveCount(0);
+  for (const name of ["Approve Visit", "Return for Correction", "Save Tree Assessment", "Save Draft", "Submit Monitoring Visit", "Take Photo", "Capture verified photo", "Upload Existing Photo", "Upload", "Create"]) {
+    await expect(dialog.getByRole("button", { name, exact: true })).toHaveCount(0);
+  }
+  await expect(dialog.locator('input[type="file"]')).toHaveCount(0);
+  await expect(dialog.getByRole("radio", { name: "Healthy" })).toBeDisabled();
 });
 
 test("write-paused visits stay viewable but never offer Approve or Return", async ({ page }) => {
@@ -1159,7 +1188,7 @@ test("Staff Monitor Planted Trees offers verified reports under Setup Pending wi
   await page.locator(".sm-header-actions").getByRole("button", { name: "Monitor Planted Trees", exact: true }).click();
   const dialog = page.getByRole("dialog", { name: "Monitor Planted Trees" });
   await expect(dialog).toBeVisible();
-  const select = dialog.getByRole("combobox", { name: "Verified Planting Report", exact: true });
+  const select = dialog.getByRole("combobox", { name: "Verified Planting Report *", exact: true });
   await expect(select).toBeEnabled();
   await expect(select.locator('optgroup[label="Setup Pending"] option')).toHaveCount(4);
   await expect(select.locator('option[value="pending:report-tracked"], option[value="pending:report-pending"]')).toHaveCount(0);
@@ -1170,17 +1199,17 @@ test("Staff Monitor Planted Trees offers verified reports under Setup Pending wi
   await expect(pending).toContainText("Awaiting MENRO spot-check procedure");
   await expect(pending).toContainText(/Monitoring workflow pending MENRO policy/);
   await expect(shellValue(dialog, "Planting Report ID")).toHaveText("RPT-2026-020");
-  await expect(shellValue(dialog, "Planting Report Status")).toHaveText("Verified");
-  await expect(shellValue(dialog, "Sampling Plan Status")).toHaveText("Not applicable (Staff spot-check)");
+  await expect(shellValue(dialog, "Verification Status")).toHaveText("Verified");
+  await expect(shellValue(dialog, "Sample Registration Status")).toHaveText("Not applicable (Staff spot-check)");
   await expect(select).toHaveAccessibleDescription(/no authorized monitoring visit yet/);
-  for (const name of ["Take Photo", "Upload Existing Photo", "Verify Photo Location", "Save Draft", "Submit Visit"])
+  for (const name of ["Take Photo", "Upload Existing Photo", "Verify Photo Location", "Save Draft", "Submit Monitoring Visit"])
     await expect(dialog.getByRole("button", { name, exact: true })).toBeDisabled();
   await expect(dialog.getByLabel("Date Monitored *", { exact: true })).toBeDisabled();
   await select.selectOption("pending:report-cohort");
   const cohort = dialog.locator('section[data-setup-pending-report="report-cohort"]');
   await expect(cohort).toContainText("Sampling plan: Draft · Baseline: Not Started · Visit: Not ready");
   await expect(cohort.getByRole("list", { name: "Why this report has no monitoring visit" })).toContainText("New monitoring visits can start only after MENRO approves the visit scheduling policy.");
-  await expect(shellValue(dialog, "Sampling Plan Status")).toHaveText("Draft");
+  await expect(shellValue(dialog, "Sample Registration Status")).toHaveText("Draft");
   await expect(shellValue(dialog, "Verified Planted Quantity")).toHaveText("18");
   await expect(dialog.getByRole("button", { name: "Save Draft", exact: true })).toBeDisabled();
   expect(writes).toEqual([]);
@@ -1190,7 +1219,7 @@ test("real visit selection still works beside Setup Pending reports", async ({ p
   await openTracking(page, "staff", { fixture: "returned" });
   await page.locator(".sm-header-actions").getByRole("button", { name: "Monitor Planted Trees", exact: true }).click();
   const dialog = page.getByRole("dialog", { name: "Monitor Planted Trees" });
-  const select = dialog.getByRole("combobox", { name: "Verified Planting Report", exact: true });
+  const select = dialog.getByRole("combobox", { name: "Verified Planting Report *", exact: true });
   await expect(select).toHaveValue("VPMV-RETURNED-001");
   await expect(select.locator('optgroup[label="Setup Pending"] option')).toHaveCount(4);
   await select.selectOption("pending:report-perm");

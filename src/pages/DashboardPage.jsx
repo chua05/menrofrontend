@@ -44,6 +44,7 @@ import { API_BASE_URL } from "../services/authenticatedApi";
 import { formatDisplayId } from "../utils/displayId";
 import { monthlySurvivalRates, officialMonitoringHistoryEntries, weightedOfficialSurvivalRate } from "../utils/monitoringForm";
 import { BULAN_BARANGAYS } from "../utils/userTypes";
+import { textTooltip } from "../utils/leafletTooltip";
 import "../styles/dashboard-page.css";
 
 const BARANGAY_GEOJSON_URL = `${API_BASE_URL}/sites/barangay-boundaries`;
@@ -1428,9 +1429,11 @@ function DashboardSitesMap({
         ).addTo(map);
 
         polygon.bindTooltip(
-          site?.siteName ||
-            site?.id ||
-            "Planting Site",
+          textTooltip(
+            site?.siteName ||
+              site?.id ||
+              "Planting Site"
+          ),
           {
             direction: "top",
           }
@@ -1478,9 +1481,11 @@ function DashboardSitesMap({
         ).addTo(map);
 
       marker.bindTooltip(
-        site?.siteName ||
-          site?.id ||
-          "Planting Site",
+        textTooltip(
+          site?.siteName ||
+            site?.id ||
+            "Planting Site"
+        ),
         {
           direction: "top",
           offset: [0, -6],

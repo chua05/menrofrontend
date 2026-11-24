@@ -100,6 +100,7 @@ import ProtectedEvidenceImage from "../components/ProtectedEvidenceImage";
 import { auth } from "../firebase/config";
 import { formatDisplayId } from "../utils/displayId";
 import { BULAN_BARANGAYS, USER_TYPES } from "../utils/userTypes";
+import { textTooltip } from "../utils/leafletTooltip";
 import {
   formatTimestampDate,
   normalizeTimestamp,
@@ -1041,7 +1042,7 @@ export default function PlantingPage() {
           fillOpacity: 0.18,
         })
           .bindTooltip(
-            `${getSiteName(selectedSite) || "Registered Planting Site"} • ${coverageRadiusMeters} m coverage`
+            textTooltip(`${getSiteName(selectedSite) || "Registered Planting Site"} • ${coverageRadiusMeters} m coverage`)
           )
           .addTo(siteLayer);
         const coverageBounds = coverageCircle.getBounds();
@@ -1057,7 +1058,7 @@ export default function PlantingPage() {
           fillColor: "#6fb98a",
           fillOpacity: 0.18,
         })
-          .bindTooltip(getSiteName(selectedSite) || "Registered Planting Site")
+          .bindTooltip(textTooltip(getSiteName(selectedSite) || "Registered Planting Site"))
           .addTo(siteLayer);
         fitPoints.push(...polygonPath);
       }
@@ -1071,7 +1072,7 @@ export default function PlantingPage() {
           fillOpacity: 1,
         })
           .bindTooltip(
-            `${getSiteName(selectedSite) || "Registered Planting Site"} • Site GPS`,
+            textTooltip(`${getSiteName(selectedSite) || "Registered Planting Site"} • Site GPS`),
             { direction: "top", offset: [0, -8] }
           )
           .addTo(siteLayer);

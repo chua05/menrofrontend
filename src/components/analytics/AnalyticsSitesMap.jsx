@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import L from "leaflet";
 import { boundaryLayerOptions } from "../../utils/barangayMap";
+import { textTooltip } from "../../utils/leafletTooltip";
 import "leaflet/dist/leaflet.css";
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
@@ -113,7 +114,7 @@ export default function AnalyticsSitesMap({ sites = [], onViewFullMap }) {
         if (points.length >= 3) L.polygon(points, { color: meta.stroke, weight: 1.5, fillColor: meta.fill, fillOpacity: 0.24 }).on("click", () => setSelected(site)).addTo(layer);
       }
       L.circleMarker([latitude, longitude], { radius: 7, color: "#fff", weight: 2, fillColor: conditionColor(site.treeCondition), fillOpacity: 1 })
-        .bindTooltip(site.siteName || site.siteId || "Planting Site", { direction: "top", offset: [0, -6] })
+        .bindTooltip(textTooltip(site.siteName || site.siteId || "Planting Site"), { direction: "top", offset: [0, -6] })
         .on("click", () => setSelected(site)).addTo(layer);
     }
   }, [sites]);

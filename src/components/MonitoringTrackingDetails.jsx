@@ -1,8 +1,7 @@
 import { FiClipboard, FiX } from "react-icons/fi";
 import ModalDialog from "./ModalDialog";
-import { formatDisplayId } from "../utils/displayId";
 import { MONITORING_ID_NOT_ASSIGNED, monitoringStatusTone } from "../utils/monitoringRecordView";
-import { TRACKING_STATUS } from "../utils/monitoringTracking";
+import { TRACKING_STATUS, trackingReportNumber } from "../utils/monitoringTracking";
 
 // Same presentation as the Survival Monitoring page's dates.
 const formatDate = (value) => {
@@ -45,7 +44,7 @@ export default function MonitoringTrackingDetails({ row, onClose }) {
             </div>
 
             <div className="sm-record-info-grid">
-              <Info label="Planting Report ID" value={formatDisplayId("RPT", row.reportNumber, row.plantingReportId)} />
+              <Info label="Planting Report ID" value={trackingReportNumber(row)} />
               <Info label="Planting Site" value={site} />
               <Info label="Monitoring Method" value={row.requirement} />
               <Info label="Start Monitoring Date" value={row.startMonitoringDate ? formatDate(row.startMonitoringDate) : row.startLabel} />

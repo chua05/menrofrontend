@@ -9,9 +9,13 @@ export default function teardown(){
  const fixture=JSON.parse(readFileSync(filename,"utf8"));assert.equal(fixture.project,"demo-menro-legacy-monitoring-20261106");assert.match(fixture.prefix,/^phase3c-browser-[0-9a-f-]{36}$/);
  const backend=JSON.parse(readFileSync(path.join(root,"before.json"),"utf8")).backend.root;const results=[];
  const audit=spawnSync(process.execPath,[path.join(backend,"tests/integration/sampleMonitoringBrowserAudit.js")],{cwd:root,env:process.env,encoding:"utf8",windowsHide:true,timeout:45000});
- writeFileSync(path.join(root,"private-evidence-audit.log"),audit.stdout+audit.stderr);assert.equal(audit.status,0,"Read-only evidence persistence audit failed");
- for(let pass=0;pass<2;pass++){
-  const result=spawnSync(process.execPath,[path.join(backend,"tests/integration/phase3cBrowserCleanup.js"),fixture.prefix],{cwd:root,env:process.env,encoding:"utf8",windowsHide:true,timeout:45000});
-  results.push({pass,exit:result.status,output:result.stdout});writeFileSync(path.join(root,"explicit-cleanup.json"),JSON.stringify(results,null,2));assert.equal(result.status,0,result.stderr||"Fixture cleanup failed");
+ writeFileSync(path.join(root,"private-evidence-audit.log"),audit.stdout+audit.stderr);
+ // The audit stays a strict assertion, but cleanup always runs, even when the audit fails.
+ try{assert.equal(audit.status,0,"Read-only evidence persistence audit failed");}
+ finally{
+  for(let pass=0;pass<2;pass++){
+   const result=spawnSync(process.execPath,[path.join(backend,"tests/integration/phase3cBrowserCleanup.js"),fixture.prefix],{cwd:root,env:process.env,encoding:"utf8",windowsHide:true,timeout:45000});
+   results.push({pass,exit:result.status,output:result.stdout});writeFileSync(path.join(root,"explicit-cleanup.json"),JSON.stringify(results,null,2));assert.equal(result.status,0,result.stderr||"Fixture cleanup failed");
+  }
  }
 }
