@@ -36,3 +36,36 @@ test("growth is previewed from the previous approved measurement for living tree
   assert.equal(hasCurrentEvidence({ assessmentRevision: 1, evidenceHistory: [{ revision: 0 }, { revision: 1 }] }), true);
   assert.equal(hasCurrentEvidence({ inheritedConfirmedDead: { visitId: "V1" } }), true);
 });
+
+test("field errors use the form's own wording and the first invalid field follows the form, not the tree list", async () => {
+  const { firstInvalidField, hasTreeErrors } = await import("../src/utils/sampleMonitoringForm.js");
+  const living = assessmentErrors([row("R-T001", "Healthy")], true);
+  assert.deepEqual([living["R-T001.heightCentimeters"], living["R-T001.stemDiameterMillimeters"]], ["Enter the tree height.", "Enter the stem diameter."]);
+  const zero = assessmentErrors([{ ...row("R-T001", "Healthy"), heightCentimeters: "0", stemDiameterMillimeters: "-1" }]);
+  assert.deepEqual([zero["R-T001.heightCentimeters"], zero["R-T001.stemDiameterMillimeters"]], ["Height must be greater than 0.", "Stem diameter must be greater than 0."]);
+  const errors = { "R-T001.condition": "x", "R-T002.condition": "x", "R-T002.evidence": "x", "R-T003.evidence": "" };
+  assert.equal(firstInvalidField(errors, ["R-T001", "R-T002"], "R-T002"), "R-T002.evidence", "the tree being worked on stays open");
+  assert.equal(firstInvalidField(errors, ["R-T001", "R-T002"], "R-T003"), "R-T001.condition");
+  assert.equal(firstInvalidField({ ...errors, dateMonitored: "x" }, ["R-T001"], "R-T001"), "dateMonitored");
+  assert.deepEqual(["R-T001", "R-T002", "R-T003", "R-T00"].map(id => hasTreeErrors(errors, id)), [true, true, false, false]);
+});
+
+test("an error clears when its own field becomes valid and never touches another tree", async () => {
+  const { errorsAfterChange } = await import("../src/utils/sampleMonitoringForm.js");
+  const before = { "a.heightCentimeters": "Enter the tree height.", "a.stemDiameterMillimeters": "Enter the stem diameter.", "b.heightCentimeters": "Enter the tree height." };
+  const after = errorsAfterChange(before, { ...row("a", "Healthy"), heightCentimeters: "12" }, "heightCentimeters");
+  assert.deepEqual([after["a.heightCentimeters"], after["a.stemDiameterMillimeters"], after["b.heightCentimeters"]], ["", "Enter the stem diameter.", "Enter the tree height."]);
+  assert.equal(errorsAfterChange({}, { ...row("a", "Healthy"), heightCentimeters: "0" }, "heightCentimeters")["a.heightCentimeters"], "Height must be greater than 0.", "an invalid edit is reported at once");
+  assert.equal(errorsAfterChange({}, row("a", "Healthy"), "condition")["a.heightCentimeters"], "", "nothing is reported before a save");
+  assert.equal(errorsAfterChange(before, row("a", "Dead"), "condition")["a.heightCentimeters"], "", "fields the condition does not use lose their error");
+});
+
+test("backend refusals map to their Tree ID and field; form-wide refusals do not", async () => {
+  const { serverFieldErrors } = await import("../src/utils/sampleMonitoringForm.js");
+  const rows = [row("a", "Healthy"), row("b", "Healthy")];
+  assert.deepEqual(serverFieldErrors({ code: "CURRENT_SAMPLE_EVIDENCE_REQUIRED", missingSampleIds: ["a", "b", "other"] }, rows), { "a.evidence": "Monitoring photo is required.", "b.evidence": "Monitoring photo is required." });
+  assert.deepEqual(serverFieldErrors({ code: "MEASUREMENTS_REQUIRED", sampleId: "b", field: "heightCentimeters" }, rows), { "b.heightCentimeters": "Enter the tree height." });
+  assert.deepEqual(serverFieldErrors({ code: "INVALID_DATE_MONITORED", field: "dateMonitored" }, rows), { dateMonitored: "Select a valid monitoring date." });
+  assert.deepEqual(serverFieldErrors({ code: "VISIT_NOT_OPEN", message: "Opens later." }, rows), { dateMonitored: "Opens later." });
+  for (const error of [{ status: 409 }, { status: 403, code: "X" }, { code: "CONFIRMED_DEAD_LOCKED", sampleId: "a" }]) assert.deepEqual(serverFieldErrors(error, rows), {});
+});
