@@ -818,6 +818,15 @@ export default function PlantingPage() {
     return () => window.clearTimeout(openTimer);
   }, [loading, pageSearchParams, records]);
 
+  // Staff opened "Submit Planting Report" from a released walk-in request: open the form for that release once.
+  const openedOfficialRequestRef = useRef("");
+  useEffect(() => {
+    const requestId = pageSearchParams.get("officialRequest") || "";
+    if (userRole !== "staff" || !requestId || openedOfficialRequestRef.current === requestId) return undefined;
+    const openTimer = window.setTimeout(() => { openedOfficialRequestRef.current = requestId; setOfficialForm({ requestId }); }, 0);
+    return () => window.clearTimeout(openTimer);
+  }, [pageSearchParams, userRole]);
+
   // showPopup reads this to keep submit-form messages in the form's alert slot.
   useEffect(() => {
     submitModalOpenRef.current = showSubmitModal;
@@ -2958,7 +2967,7 @@ export default function PlantingPage() {
         )}
       </div>
 
-      {officialForm && userRole === "staff" && <StaffPlantingReportForm currentUser={currentUser} correction={officialForm.correction} resumeEvidence={officialForm.resumeEvidence}
+      {officialForm && userRole === "staff" && <StaffPlantingReportForm currentUser={currentUser} correction={officialForm.correction} resumeEvidence={officialForm.resumeEvidence} requestId={officialForm.requestId}
         pending={pendingOfficialSubmission === undefined ? loadPendingSubmission("staff", auth.currentUser?.uid || currentUser?.uid) : pendingOfficialSubmission} onPendingChange={updatePendingOfficialSubmission} onClose={() => setOfficialForm(null)}
         onSaved={(_report, info) => { void refreshAfterSave(`${(info ? info.correction : officialForm.correction) ? "Corrected official planting report resubmitted to the MENRO Admin for approval." : "Official planting report submitted to the MENRO Admin for approval."}${info?.evidencePending ? " Its planting photos were not uploaded: add them with Add Verified Planting Evidence on the report." : ""}${info?.attendancePending ? " The optional attendance file was not uploaded." : ""}`); }} />}
       {showSubmitModal && isParticipant && (

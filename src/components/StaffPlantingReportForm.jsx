@@ -30,8 +30,10 @@ const BASIS_HELP = {
 // survives closing this form or reloading). It is replayed with its original
 // body and submission key, which MENRO answers with the saved report if the
 // first attempt reached it, so the report is never created twice.
-export default function StaffPlantingReportForm({ currentUser, onClose, onSaved, correction, resumeEvidence, pending = null, onPendingChange = () => {} }) {
+// requestId: opened from a released walk-in request, with that release already selected.
+export default function StaffPlantingReportForm({ currentUser, onClose, onSaved, correction, resumeEvidence, requestId = "", pending = null, onPendingChange = () => {} }) {
   const reference = correction || resumeEvidence;
+  const directRequestId = reference?.requestId || requestId;
   // Field-specific correction: only the fields MENRO Admin returned are editable
   // (the backend enforces the same rule). Older returns leave every field editable.
   const correctionRequest = correction?.correctionRequest || null;
@@ -63,6 +65,8 @@ export default function StaffPlantingReportForm({ currentUser, onClose, onSaved,
     if (isNewMessage && error && !errors.photos) errorRef.current?.scrollIntoView?.({ block: "nearest" });
   }, [error, errors.photos]);
   const selected = options.find(row => row.requestId === selectedId);
+  // Walk-in release whose policy waives the report (backend-enforced); corrections of earlier reports stay possible.
+  const reportNotRequired = !reference && selected?.reportSubmissionAllowed === false;
   const missingRequired = selected ? ["requesterName", "requestId", "eventId", "siteId", "plantingDate"].filter(key => !String(selected[key] || "").trim()) : [];
   if (selected && basis === "menro-field-report" && (!Number.isFinite(selected.latitude) || !Number.isFinite(selected.longitude))) missingRequired.push("site coordinates");
   // A resumed report already reserved its quantity, so the balance no longer includes it.
@@ -76,9 +80,14 @@ export default function StaffPlantingReportForm({ currentUser, onClose, onSaved,
   }
   useEffect(() => {
     let active = true;
-    optionsPage(`/planting-reports/official/options${reference ? `?requestId=${encodeURIComponent(reference.requestId)}` : ""}`).then(page => {
+    optionsPage(`/planting-reports/official/options${directRequestId ? `?requestId=${encodeURIComponent(directRequestId)}` : ""}`).then(page => {
       if (!active) return;
       const rows = page.options; setOptions(rows); setNextCursor(page.nextCursor);
+      if (!reference && requestId) {
+        const source = rows.find(row => row.requestId === requestId);
+        if (source) { setSelectedId(requestId); setItems((source.items || []).map(row => ({ ...row, leftoverQuantity: "0" }))); }
+        else setError("This release is not available for reporting. Refresh Releases to see the available records.");
+      }
       if (reference) {
         const source = rows.find(row => row.requestId === reference.requestId);
         // Evidence covers every seedling type saved together, so a resumed report lists all of them.
@@ -88,7 +97,7 @@ export default function StaffPlantingReportForm({ currentUser, onClose, onSaved,
       }
     }).catch(failure => { if (active) setError(failure.message); }).finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
-  }, [reference, resumeEvidence, correction]);
+  }, [reference, resumeEvidence, correction, requestId, directRequestId]);
   async function more() {
     if (!nextCursor || loadingMore) return;
     setLoadingMore(true); setError("");
@@ -109,6 +118,7 @@ export default function StaffPlantingReportForm({ currentUser, onClose, onSaved,
     event.preventDefault(); if (saving) return;
     const validation = {};
     if (!selected) validation.requestId = "Select an authorized released request.";
+    else if (reportNotRequired) validation.requestId = "No Planting Report Required for this released request.";
     else if (missingRequired.length) validation.requestId = "Required release information is missing. Ask MENRO to correct the linked record before submitting.";
     if (!saved) items.forEach((row, index) => {
       const message = leftoverQuantityError(row.leftoverQuantity, row.availableQuantity);
@@ -241,7 +251,8 @@ export default function StaffPlantingReportForm({ currentUser, onClose, onSaved,
         </div>
         {selected && missingRequired.length > 0 && <p role="alert">Required information not recorded: {missingRequired.join(", ")}. An authorized MENRO officer must correct the linked records before submission.</p>}
         {selected && !missingRequired.length && (!selected.participantSector || !selected.siteName || !selected.barangay) && <p role="status">Some requester or site information is not recorded. Ask an authorized MENRO officer to correct the linked records; the form does not infer missing values.</p>}
-        {selected?.reportingPolicy?.reporting === "NOT_REQUIRED" && <p role="status">Released ? No Report Required. This official report is voluntary supporting documentation.</p>}
+        {reportNotRequired && <p role="status">No Planting Report Required. Nothing needs to be submitted for this released request.</p>}
+        {!reportNotRequired && selected?.reportingPolicy?.reporting === "NOT_REQUIRED" && <p role="status">Released ? No Report Required. This official report is voluntary supporting documentation.</p>}
         <label className="pr-field">Confirmation Basis<select value={basis} disabled={!canEdit("confirmationBasis")} {...aria("confirmationBasis")} aria-describedby={["official-basis-help", errors.confirmationBasis && "official-error-confirmationBasis"].filter(Boolean).join(" ")} onChange={event => { setBasis(event.target.value); setErrors({}); submissionKey.current = crypto.randomUUID(); }}><option value="menro-field-report">MENRO Field Report</option>{selected?.requestType === "individual" && <option value="release-based">Individual Release-Based Confirmation</option>}</select><small id="official-basis-help" className="pr-helper-text">{BASIS_HELP[basis]}</small>{commentFor("confirmationBasis") && <small className="pr-correction-comment-note">Admin: {commentFor("confirmationBasis")}</small>}{feedback("confirmationBasis")}</label>
         {items.length > 0 && <div className="pr-official-quantities-intro">
           <h3>Seedlings Planted{items.length > 1 ? ` (${items.length} seedling types)` : ""}</h3>

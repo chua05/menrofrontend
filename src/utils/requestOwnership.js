@@ -4,10 +4,30 @@ export function ownsSeedlingRequest(request, user) {
   return Boolean(uid && request?.participantId === uid);
 }
 
-// Neither the requester nor the Staff encoder of a walk-in may process the request.
+// Review, return, approval and rejection: never the requester or the Staff encoder of a walk-in.
 export function canProcessSeedlingRequest(request, user) {
   const uid = user?.uid || user?.id;
   return Boolean(uid && !ownsSeedlingRequest(request, user) && request?.walkIn?.encodedBy !== uid);
+}
+
+// Releasing an Admin-approved request is fulfilment, not approval: the Staff encoder of a walk-in may do it, never the
+// requester and never an officer who both encoded and approved it. The backend enforces the same rule.
+export function canReleaseSeedlingRequest(request, user) {
+  const uid = user?.uid || user?.id;
+  return Boolean(uid && request && !ownsSeedlingRequest(request, user) && !(request.walkIn?.encodedBy === uid && request.approvedBy === uid));
+}
+
+// Stated only after release, from the policy stored at release. Staff submit only for walk-in citizens (no account).
+const REPORT_REQUIREMENT = {
+  REQUIRED: { label: "Planting Report Required", staffAction: "Submit Planting Report" },
+  OPTIONAL: { label: "Planting Report Optional", staffAction: "Submit Planting Report (Optional)" },
+  NOT_REQUIRED: { label: "No Planting Report Required", staffAction: null },
+  PENDING_POLICY: { label: "Reporting Policy Pending", staffAction: null },
+};
+export function plantingReportRequirement(request) {
+  if (!["Released", "Saplings Released"].includes(request?.status)) return null;
+  const rule = REPORT_REQUIREMENT[request.reportingPolicy?.reporting];
+  return rule ? { label: rule.label, staffAction: request.walkIn ? rule.staffAction : null } : null;
 }
 
 // "My Requests": requests the user is the requester of, or created/submitted as Staff (including a Staff-encoded
