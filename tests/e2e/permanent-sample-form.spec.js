@@ -14,8 +14,9 @@ function fixture() {
    treeMarkers:["TREE-A","TREE-B"].map((sampleId,index)=>({sampleId,species:"Narra",latitude:12.66231+index/1000,longitude:123.93299+index/1000,kind:index?"DRAFT":"APPROVED",latestApprovedCondition:index?null:"Healthy",visitNumber:index?2:1,assessedOn:"2026-11-01",heightCentimeters:index?null:100,stemDiameterMillimeters:index?null:50,gpsVerification:"VERIFIED"})),
    history:[{visitId,visitNumber:1,scheduledDueDate:"2026-11-01",dateMonitored:"2026-11-01",status:"APPROVED",healthy:1,damaged:0,confirmedDead:0,needsRechecking:0,survivalRate:100},{visitId:null,visitNumber:2,scheduledDueDate:"2026-12-01",status:"SCHEDULED",availability:"NOT_YET_AVAILABLE",healthy:null,damaged:null,confirmedDead:null,needsRechecking:null,survivalRate:null}],treeTimeline:{"TREE-A":[{visitId:"V1",visitNumber:1,assessedOn:"2026-11-01",condition:"Healthy",heightCentimeters:100,stemDiameterMillimeters:50}]}}}
 }
-async function setup(page,{error=0,errorBody=null,uploadError=null,timeout=false,returned=false,multiple=false,noSchedule=false,role="staff",inherited=false}={}) {
+async function setup(page,{error=0,errorBody=null,uploadError=null,timeout=false,returned=false,multiple=false,noSchedule=false,role="staff",inherited=false,firstVisit=false}={}) {
  const state={visit:fixture(),puts:[],uploads:[],questions:[],external:[],unregistered:[],reads:[]}; if(noSchedule)state.visit.visitContext.schedule={startMonitoringDate:null,nextMonitoringDate:null,visitNumber:null,status:null}; if(returned){state.visit.status="RETURNED";state.visit.sampleAssessments[0].evidenceHistory=[{revision:0}];}
+ if(firstVisit){state.visit.registersBaseline=true;state.visit.sampleAssessments[0]={...state.visit.sampleAssessments[0],condition:"",heightCentimeters:null,diameterCentimeters:null,stemDiameterMillimeters:null,remarks:""};}
  if(inherited)state.visit.sampleAssessments[1]={...state.visit.sampleAssessments[1],condition:"Dead",mortalityCause:inherited==="bare"?"":"Drought",remarks:inherited==="bare"?"":"Approved prior mortality",inheritedConfirmedDead:{visitId:"V1",assessmentRevision:0}};
  await page.addInitScript(()=>{window.__PHASE3C_GATE_ENABLED__="true";});
  await page.route("**/*",async r=>{
@@ -196,7 +197,7 @@ test("each tree explains why existing-photo uploads are unavailable without disa
     const upload = active(page).getByRole("button", { name: "Upload Existing Photo", exact: true });
     await expect(upload).toBeDisabled();
     await expect(upload).toHaveAttribute("aria-describedby", `sample-${id}-original-policy`);
-    await expect(active(page).locator(`[id="sample-${id}-original-policy"]`)).toContainText("MENRO approval");
+    await expect(active(page).locator(`[id="sample-${id}-original-policy"]`)).toContainText("not yet enabled by MENRO");
     await expect(active(page).locator(`[id="sample-${id}-original-policy"]`)).toContainText("Use Take Photo");
     await expect(active(page).getByRole("button", { name: `Capture verified photo for ${id}` })).toBeEnabled();
     await expect(active(page).locator('input[type="file"]')).toHaveCount(0);
@@ -319,13 +320,13 @@ test("D-2: a coded 409 shows its specific message and opens the named tree; only
  const message="Current verified evidence with GPS is required for every permanent sample in the first monitoring visit.";
  await setup(page,{errorBody:{status:409,code:"CURRENT_SAMPLE_EVIDENCE_REQUIRED",message,missingSampleIds:["TREE-A"]}});
  await tree(page,"TREE-B");await active(page).getByRole("radio",{name:"Damaged",exact:true}).check();await active(page).getByLabel("Height (cm)").fill("80");await active(page).getByLabel("Stem Diameter (mm)").fill("35");
- await page.getByRole("button",{name:"Submit Monitoring Visit",exact:true}).click();await expect(modal(page).locator(".psm-error")).toHaveText(message);await expect(modal(page).getByText("This monitoring visit changed.",{exact:false})).toHaveCount(0);
- const named=page.locator(".psm-tree-list button").filter({hasText:"TREE-A"});await expect(named).toHaveAttribute("aria-expanded","true");await expect(named).toBeFocused();
+ await page.getByRole("button",{name:"Submit Monitoring Visit",exact:true}).click();await expect(modal(page).locator('[data-validation-field="TREE-A.evidence"] [role=alert]')).toHaveText("Monitoring photo is required.");await expect(modal(page).locator(".psm-error")).toHaveCount(0);await expect(modal(page).getByText("This monitoring visit changed.",{exact:false})).toHaveCount(0);
+ const named=page.locator(".psm-tree-list button").filter({hasText:"TREE-A"});await expect(named).toHaveAttribute("aria-expanded","true");await expect(named).toContainText("Needs correction");await expect(active(page).getByRole("button",{name:"Capture verified photo for TREE-A"})).toBeFocused();
 });
 for(const [code,expected] of [["CAPTURE_SESSION_REPLAYED","This secure camera capture was already used. Take a new photo for this tree."],["EVIDENCE_RECONCILIATION_REQUIRED","The photo could not be saved. Retry, or take a new photo if the problem continues."]])
  test(`D-6: evidence upload ${code} is shown through the monitoring error mapper`,async({page})=>{
   await setup(page,{uploadError:{status:409,code,message:`raw backend ${code} intent VPME-internal`}});await page.getByRole("button",{name:"Capture verified photo for TREE-A"}).click();await page.getByRole("button",{name:"Verify fixture camera photo"}).click();
-  await page.getByRole("button",{name:"Upload verified photo for TREE-A"}).click();await expect(active(page).locator(".psm-location [role=alert]")).toHaveText(expected);await expect(modal(page).getByText(/raw backend|VPME-internal|Evidence changed while uploading/)).toHaveCount(0);
+  await page.getByRole("button",{name:"Upload verified photo for TREE-A"}).click();await expect(active(page).locator('[data-validation-field="TREE-A.evidence"] [role=alert]')).toHaveText(expected);await expect(modal(page).getByText(/raw backend|VPME-internal|Evidence changed while uploading/)).toHaveCount(0);
  });
 test("D-7: Save Tree Assessment sends only the active tree as edited and flips only that tree to Saved",async({page})=>{
  const s=await setup(page);await active(page).getByLabel("Height (cm)").fill("130");await tree(page,"TREE-B");await active(page).getByRole("radio",{name:"Damaged",exact:true}).check();await active(page).getByLabel("Height (cm)").fill("80");await active(page).getByLabel("Stem Diameter (mm)").fill("35");
@@ -346,4 +347,40 @@ test("M3: a reconciled timed-out Save Tree Assessment keeps the other trees' uns
  const rowA=page.locator(".psm-tree-list button").filter({hasText:"TREE-A"}),rowB=page.locator(".psm-tree-list button").filter({hasText:"TREE-B"});
  await expect(rowB).toContainText("· Saved");await expect(rowB).not.toContainText("Unsaved");await expect(rowA).toContainText("Unsaved");
  await expect(active(page).getByLabel("Height (cm)")).toHaveValue("80");await tree(page,"TREE-A");await expect(active(page).getByLabel("Height (cm)")).toHaveValue("130");
+});
+
+const fieldError=(page,key)=>modal(page).locator(`[data-validation-field="${key}"] [role=alert]`);
+test("Save Tree Assessment shows every error below its own field, keeps the entries and clears each when valid",async({page})=>{
+ const s=await setup(page,{firstVisit:true});await expect(modal(page).getByRole("alert")).toHaveCount(0);
+ await page.getByRole("button",{name:"Save Tree Assessment"}).click();
+ await expect(fieldError(page,"TREE-A.evidence")).toHaveText("Monitoring photo is required.");await expect(fieldError(page,"TREE-A.condition")).toHaveText("Select the tree condition.");
+ await expect(active(page).getByRole("button",{name:"Capture verified photo for TREE-A"})).toBeFocused();await expect(modal(page).locator(".psm-error")).toHaveCount(0);
+ await active(page).getByRole("radio",{name:"Healthy",exact:true}).check();await expect(fieldError(page,"TREE-A.condition")).toHaveCount(0);
+ await page.getByRole("button",{name:"Save Tree Assessment"}).click();
+ await expect(fieldError(page,"TREE-A.heightCentimeters")).toHaveText("Enter the tree height.");await expect(fieldError(page,"TREE-A.stemDiameterMillimeters")).toHaveText("Enter the stem diameter.");
+ const height=active(page).getByLabel("Height (cm)");await height.fill("0");await expect(fieldError(page,"TREE-A.heightCentimeters")).toHaveText("Height must be greater than 0.");
+ await height.fill("37");await expect(fieldError(page,"TREE-A.heightCentimeters")).toHaveCount(0);await expect(fieldError(page,"TREE-A.stemDiameterMillimeters")).toHaveCount(1);
+ // Another tree has no errors of its own; the first keeps its mark, its entries and its errors.
+ await tree(page,"TREE-B");await expect(active(page).getByRole("alert")).toHaveCount(0);await expect(page.locator(".psm-tree-list button").filter({hasText:"TREE-A"})).toContainText("Needs correction");
+ await page.getByRole("group",{name:"Trees that need correction"}).getByRole("button",{name:"TREE-A"}).click();await expect(active(page).getByLabel("Height (cm)")).toHaveValue("37");await expect(fieldError(page,"TREE-A.evidence")).toHaveCount(1);
+ const date=page.getByLabel("Date Monitored *");await date.fill("2999-01-01");await expect(fieldError(page,"dateMonitored")).toHaveText("Select a valid monitoring date.");await page.getByRole("button",{name:"Save Draft"}).click();await expect(date).toBeFocused();
+ await date.fill("2026-11-01");await expect(fieldError(page,"dateMonitored")).toHaveCount(0);expect(s.puts).toHaveLength(0);
+ // Save Draft still keeps an incomplete tree.
+ await page.getByRole("button",{name:"Save Draft"}).click();await expect(page.getByText(/Draft · Revision 5/)).toBeVisible();expect(s.puts).toHaveLength(1);await expect(modal(page).getByRole("alert")).toHaveCount(0);
+ await page.getByRole("button",{name:"Submit Monitoring Visit",exact:true}).click();for(const id of ["TREE-A","TREE-B"])await expect(page.locator(".psm-tree-list button").filter({hasText:id})).toContainText("Needs correction");expect(s.puts).toHaveLength(1);
+});
+test("a pending photo must be verified or removed before saving, and its tree is marked",async({page})=>{
+ const s=await setup(page,{firstVisit:true});await page.getByRole("button",{name:"Capture verified photo for TREE-A"}).click();await page.getByRole("button",{name:"Verify fixture camera photo"}).click();
+ await tree(page,"TREE-B");await page.getByRole("button",{name:"Save Draft"}).click();await expect(fieldError(page,"TREE-A.evidence")).toHaveText("Verify this photo's location, or remove it, before saving.");
+ await expect(page.getByAltText("Verified evidence preview for TREE-A")).toBeVisible();await page.getByRole("button",{name:"Remove pending photo"}).click();await expect(fieldError(page,"TREE-A.evidence")).toHaveCount(0);expect(s.puts).toHaveLength(0);
+});
+for(const [name,width,height] of [["desktop",1366,768],["tablet",820,1180],["mobile",390,844]])test(`form layout on ${name}: Tree ID inside its border, bold green headings, compact reload`,async({page},info)=>{
+ await page.setViewportSize({width,height});await setup(page,{firstVisit:true});await page.getByRole("button",{name:"Save Tree Assessment"}).click();
+ const box=await active(page).boundingBox(),title=await active(page).locator("legend").boundingBox();expect(title.y).toBeGreaterThanOrEqual(box.y+8);expect(title.x).toBeGreaterThan(box.x+8);expect(title.x+title.width).toBeLessThan(box.x+box.width);
+ const css=(locator,property)=>locator.evaluate((el,p)=>getComputedStyle(el)[p],property),green="rgb(20, 91, 58)";
+ for(const text of ["1. Verified Planting Site Information","4. Permanent Sample Tree Records"]){const h=page.getByRole("heading",{name:text,exact:true});expect(await css(h,"fontWeight")).toBe("700");expect(await css(h,"color")).toBe(green);}
+ expect(await css(modal(page).locator(".psm-label",{hasText:"Verified Planting Report *"}),"fontWeight")).toBe("700");expect(await css(active(page).getByRole("heading",{name:"Previous Assessment Reference"}),"color")).toBe(green);
+ const reload=page.getByRole("button",{name:"Reload visit",exact:true});expect((await reload.boundingBox()).height).toBeLessThan(38);await expect(reload.locator("svg")).toHaveCount(1);
+ expect(await modal(page).locator(".psm-body").evaluate(el=>el.scrollWidth-el.clientWidth)).toBeLessThanOrEqual(1);
+ await modal(page).locator(".psm-body").evaluate(el=>{el.scrollTop=0;});await page.screenshot({path:info.outputPath(`${name}-top.png`)});await active(page).scrollIntoViewIfNeeded();await active(page).evaluate(el=>el.scrollIntoView({block:"start"}));await page.screenshot({path:info.outputPath(`${name}-tree.png`)});
 });

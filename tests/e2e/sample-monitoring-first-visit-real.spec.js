@@ -168,7 +168,7 @@ test("real first visit: eligible report, 10% sample registration, evidence, draf
   expect((await(await returned).json()).data.status).toBe("RETURNED");
   await staff.getByRole("button",{name:"Reload visit",exact:true}).click();await expect(staff.getByText(/Returned for Correction · Revision/)).toBeVisible();
   await selectTree(staff,ids[1]);await active(staff).getByLabel("Height (cm)").fill("92");await active(staff).getByLabel("Stem Diameter (mm)").fill("41");
-  await saveTree(staff,f);await capture(staff,ids[1],2.4,12.662326);await verifyLocation(staff,ids[1],f);await submit(staff,f);
+  await saveTree(staff,f);await capture(staff,ids[1],3.2,12.662326);await verifyLocation(staff,ids[1],f);await submit(staff,f);
   await admin.getByRole("button",{name:"Reload visit",exact:true}).click();await expect(admin.getByText(/Pending Admin Review · Revision/)).toBeVisible();
   const approvedWait=admin.waitForResponse(r=>new URL(r.url()).pathname.endsWith(`/${f.visitId}/review`)&&r.request().method()==="POST");await admin.getByRole("button",{name:"Approve Visit",exact:true}).click();
   const approved=(await(await approvedWait).json()).data;expect(approved.status).toBe("APPROVED");expect(approved.visitDate).toBe(f.visitDate);expect(approved.sampleAssessments.map(row=>row.sampleId)).toEqual(ids);
@@ -220,7 +220,7 @@ test("real first visit: eligible report, 10% sample registration, evidence, draf
   // Previous approved values and live growth of the first tree.
   await selectTree(staff,ids[0]);const field=label=>active(staff).locator("dt").filter({hasText:exactText(label)}).locator("xpath=following-sibling::dd");
   await expect(field("Previous Condition")).toHaveText("Healthy");await expect(field("Previous Height (cm)")).toHaveText("120");await expect(field("Previous Stem Diameter (mm)")).toHaveText("60");await expect(field("Previous Assessment Date")).toHaveText(first);
-  await capture(staff,ids[0],3.1,12.662312);await verifyLocation(staff,ids[0],second);
+  await capture(staff,ids[0],4.4,12.662312);await verifyLocation(staff,ids[0],second);
   await active(staff).getByRole("radio",{name:"Healthy",exact:true}).check();await active(staff).getByLabel("Height (cm)").fill("136");await active(staff).getByLabel("Stem Diameter (mm)").fill("62");
   await expect(field("Height Difference")).toHaveText("+16 cm");await expect(field("Stem Diameter Difference")).toHaveText("+2 mm");await expect(active(staff).locator(".psm-tree-status")).toContainText("Unsaved Changes");
   const one=await saveTree(staff,second);expect(one.sampleAssessments[0]).toMatchObject({heightDifferenceCm:16,stemDiameterDifferenceMm:2});await expect(active(staff).locator(".psm-tree-status")).toContainText("Saved");
@@ -232,10 +232,10 @@ test("real first visit: eligible report, 10% sample registration, evidence, draf
   // Found again: a decreased measurement only warns, and the photo is required before the tree is saved.
   await active(staff).getByRole("radio",{name:"Damaged",exact:true}).check();await active(staff).getByLabel("Height (cm)").fill("90");await active(staff).getByLabel("Stem Diameter (mm)").fill("41");await active(staff).getByLabel("Individual Remarks").fill("Dieback at the tip");
   await expect(active(staff).getByText(/A measurement decreased/)).toBeVisible();
-  await staff.getByRole("button",{name:"Save Tree Assessment",exact:true}).click();await expect(staff.locator(".psm-error")).toContainText(`Take and verify the photo of ${ids[1]}`);
+  await staff.getByRole("button",{name:"Save Tree Assessment",exact:true}).click();await expect(staff.locator(`[data-validation-field="${ids[1]}.evidence"] [role=alert]`)).toHaveText("Monitoring photo is required.");
   const draft=waitPut(staff,v2.id);await staff.getByRole("button",{name:"Save Draft",exact:true}).click();expect((await draft).status()).toBe(200);
   await expect(staff.locator(".psm-tree-list button").filter({hasText:ids[1]})).toContainText("Photo required");
-  await capture(staff,ids[1],0.4,12.662327);await verifyLocation(staff,ids[1],second);await saveTree(staff,second);
+  await capture(staff,ids[1],6,12.662327);await verifyLocation(staff,ids[1],second);await saveTree(staff,second);
   // The approved death is carried forward, locked, and needs no new photo or measurement.
   await selectTree(staff,ids[2]);await expect(active(staff)).toContainText("Dead — Carried Forward");await expect(active(staff).getByRole("radio",{name:"Healthy",exact:true})).toBeDisabled();
   await shot(staff,"8-visit-2");const submitted=await submit(staff,second);expect(submitted.summary).toMatchObject({healthy:1,damaged:1,confirmedDead:1,needsRechecking:0,notAssessed:0,survivalRate:66.67});

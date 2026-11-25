@@ -29,7 +29,7 @@ test("M3: a timed-out Save Tree Assessment remembers its tree and reconcile keep
 });
 
 test("D-B: the report selector has one accessible name, Verified Planting Report *, with or without an open visit", () => {
-  assert.equal((page.match(/className="psm-field">Verified Planting Report \*<select/g) || []).length, 2);
+  assert.equal((page.match(/className="psm-field"><span className="psm-label">Verified Planting Report \*<\/span><select/g) || []).length, 2);
   assert.doesNotMatch(page, /Verified Planting Report<select/);
 });
 
