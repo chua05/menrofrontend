@@ -18,6 +18,7 @@ const REPORT_PROBLEMS = {
   REPORT_NOT_VERIFIED: "The planting report is not verified with an accepted planted quantity.",
   VERIFIED_QUANTITY_CHANGED: "The verified planted quantity changed after the monitoring setup was created.",
   NOT_PERMANENT_SAMPLE_MONITORING: "This planting report uses a different monitoring method, not permanent-sample monitoring.",
+  REPORT_ARCHIVED: "This planting report is archived.",
   SITE_UNAVAILABLE: "The planting site is missing or inactive.",
   SITE_MISMATCH: "The planting report and its monitoring setup name different planting sites.",
   POLICY_CONFLICT: "This planting report has conflicting monitoring methods on record. MENRO must resolve them before monitoring can start.",
@@ -73,6 +74,47 @@ export function readinessMessages(reasons = []) {
   return [...new Set(messages)];
 }
 
+// The Staff form follows the simplified first visit: stored policies, sampling plans, baseline approval and feature
+// settings are not Staff tasks, so those reasons become one plain sentence. Everything Staff can act on is kept.
+const STAFF_NOT_OPEN = "Monitoring for this report is not open yet. Contact the MENRO Admin if it should be monitored now.";
+const STAFF_SETUP_IN_PROGRESS = "The earlier setup of this report is still in progress. Continue it from the report in Planting Reports.";
+// A report already in the earlier workflow (a plan or baseline past Not Started) still has Staff work to finish there.
+const earlierSetupStarted = reasons => {
+  const plan = reasons.find(reason => reason?.code === "SAMPLING_PLAN_NOT_APPROVED"), baseline = reasons.find(reason => reason?.code === "BASELINE_NOT_APPROVED");
+  return Boolean(plan && (plan.planStatus || "NOT_STARTED") !== "NOT_STARTED") || Boolean(baseline && (!plan || (baseline.baselineStatus || "NOT_STARTED") !== "NOT_STARTED"));
+};
+const STAFF_HIDDEN_CODES = new Set([...LEGACY_SETUP_CODES, "SAMPLING_POLICY_SNAPSHOT_MISSING", "SAMPLING_POLICY_PENDING", "SAMPLING_PLAN_NOT_APPROVED",
+  "TEST_ONLY_SAMPLING_POLICY", "BASELINE_NOT_APPROVED", "FIRST_VISIT_POLICY_DISABLED", "VISIT_SCHEDULING_POLICY_PENDING"]);
+const STAFF_HIDDEN_PROBLEMS = new Set(["NOT_PERMANENT_SAMPLE_MONITORING", "POLICY_CONFLICT"]);
+export function staffReadinessMessages(reasons = []) {
+  const list = Array.isArray(reasons) ? reasons : [], notOpen = earlierSetupStarted(list) ? STAFF_SETUP_IN_PROGRESS : STAFF_NOT_OPEN;
+  const messages = list.flatMap(reason => {
+    if (STAFF_HIDDEN_CODES.has(reason?.code)) return notOpen;
+    if (reason?.code === "WRITES_PAUSED") return "Monitoring is paused by MENRO.";
+    if (reason?.code === "SPECIES_ALLOCATION_PENDING") return "This report has more than one species. MENRO has not decided how to select its sample trees yet.";
+    if (reason?.code === "REPORT_NOT_ELIGIBLE") {
+      const problems = Array.isArray(reason.problems) ? reason.problems : [], kept = problems.filter(code => !STAFF_HIDDEN_PROBLEMS.has(code));
+      return [...(kept.length || !problems.length ? reportProblems(kept) : []), ...(kept.length < problems.length ? [STAFF_NOT_OPEN] : [])];
+    }
+    return readinessMessages([reason]);
+  });
+  return [...new Set(messages)];
+}
+
+// A refused start, in the same words as the list.
+export function staffStartError(error) {
+  const code = error?.code === "PERMANENT_SAMPLE_WRITES_PAUSED" ? "WRITES_PAUSED" : error?.code === "VERIFIED_REPORT_FIRST_VISIT_DISABLED" ? "FIRST_VISIT_POLICY_DISABLED" : error?.code;
+  return STAFF_HIDDEN_CODES.has(code) || ["WRITES_PAUSED", "SPECIES_ALLOCATION_PENDING", "REPORT_NOT_ELIGIBLE", "FIRST_VISIT_PLAN_UNAVAILABLE"].includes(code)
+    ? staffReadinessMessages([{ code }])[0] : error?.message || "The monitoring visit could not be opened.";
+}
+
+// The backend's own answer for a report that cannot be started now.
+export function blockedReportRow(data, report) {
+  if (!report) return null;
+  return (Array.isArray(data?.cohorts) ? data.cohorts : []).find(row =>
+    (row?.context?.plantingReportId && row.context.plantingReportId === report.plantingReportId) || (row?.cohortId && row.cohortId === report.cohort?.id)) || null;
+}
+
 export function readinessTitle(cohort = {}) {
   return `${cohort.reportNumber || "Planting report"} · ${cohort.siteName || "Planting site"}`;
 }
@@ -84,6 +126,13 @@ export function readinessGateNotices(gates) {
     gates?.firstVisitBaselineEnabled === false && "First-visit baseline registration is turned off. Reports without an approved baseline cannot start Visit 1.",
     gates?.scheduleEnabled === false && "The monitoring visit schedule is turned off. No new monitoring visit can be started.",
   ].filter(Boolean);
+}
+
+// Staff form: at most one plain notice, and never "not open" while a visit can be started.
+export function staffGateNotices(gates, { startable = false } = {}) {
+  if (gates?.writesPaused === true) return ["Monitoring is paused by MENRO. Nothing can be started, saved or submitted until it resumes."];
+  return !startable && (gates?.firstVisitBaselineEnabled === false || gates?.scheduleEnabled === false)
+    ? ["New monitoring visits are not open yet. Verified planting reports stay listed here."] : [];
 }
 
 // The backend's next visit number is one more than the approved visits.

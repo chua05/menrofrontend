@@ -5,7 +5,6 @@ import { Camera, Image, MapPin, Trees, ChevronLeft, ChevronRight, CircleCheck, A
 import PlantingLocationMap from "./PlantingLocationMap";
 import { MORTALITY_CAUSES, SAMPLE_CONDITIONS, sampleProgress } from "../utils/sampleMonitoringForm";
 import { scheduleStatusLabel } from "../utils/sampleVisitReadiness";
-import { TRACKING_STATUS } from "../utils/monitoringTracking";
 const shown = value => value === null || value === undefined || value === "" ? "Not available" : String(value);
 const definitions = { Healthy: "Living tree in good condition.", Damaged: "Living tree with observed damage.", Dead: "Confirmed dead by field assessment.", "Needs Rechecking": "Condition is not yet confirmed." };
 const PENDING_SCHEDULE = "Pending Official Schedule";
@@ -46,12 +45,8 @@ export function PermanentSampleVisitShell({ describedBy, report = null, firstVis
   const disabledProps = { disabled: true, "aria-describedby": describedBy };
   const context = report?.context || null;
   const cohort = report?.cohort || null;
-  const noCohort = report ? (report.policy === "STAFF_SPOT_CHECK" ? "Not applicable (Staff spot-check)"
-    : report.policy === "PENDING_MENRO_POLICY" ? "Pending MENRO monitoring policy"
-    : report.policy === "NONE" ? "Not applicable (no monitoring required)"
-    : report.policy === "LEGACY" ? "Not applicable (historical aggregate monitoring)"
-    : report.policy === "UNKNOWN" ? "Not available (unrecognized monitoring method)"
-    : [TRACKING_STATUS.CHECKING, TRACKING_STATUS.UNAVAILABLE].includes(report.status) ? "Not available" : "No permanent-sample cohort") : none;
+  // Without the backend's own answer for this report nothing is claimed about its registration or status.
+  const noCohort = report ? "Not available yet" : none;
   const statusText = value => PLAN_STATUS[value] || value;
   const values = context ? {
     "Planting Report ID": context.plantingReportNumber || report.reportNumber || context.plantingReportId,
@@ -77,13 +72,14 @@ export function PermanentSampleVisitShell({ describedBy, report = null, firstVis
     "Registered Sample Tree Count": cohort ? cohort.registeredSampleTrees ?? "None registered" : noCohort,
     "Species and Quantities": report.species || "Shown after an authorized visit is created",
     "Monitoring Visit Number": "Not assigned",
-    "Current Monitoring Status": report.stage || report.status,
+    "Current Monitoring Status": "Not available yet",
   } : { "Monitoring Visit Number": "Not assigned" };
   const species = context?.species?.map(row => ({ species: row.species, verifiedPlantedQuantity: row.quantity ?? null }));
   // M4: Section 2 reads the same readiness row as Section 1, so both show the same visit number.
   // Visit 1 has no fixed due date (spec §7); later visits show the backend-computed opening date.
   const visitNumber = context ? context.nextVisitNumber ?? report.nextVisitNumber ?? null : null;
-  const baselineVisit = Boolean(report?.registersBaseline) || (report ? false : firstVisit);
+  // Visit 1 registers the baseline unless the report already has an approved plan from the earlier workflow.
+  const baselineVisit = report ? Boolean(report.registersBaseline) || !context && !cohort : firstVisit;
   const firstOfSchedule = context && (report.registersBaseline === true || visitNumber === 1);
   const schedule = context ? {
     start: firstOfSchedule ? "Set by the Visit 1 monitoring date" : PENDING_SCHEDULE,
@@ -114,7 +110,7 @@ export function PermanentSampleVisitShell({ describedBy, report = null, firstVis
     <section className="psm-section"><h3>4. Permanent Sample Tree Records</h3>
       <p>{baselineVisit
         ? "No registered Tree IDs are available yet. Visit 1 registers the baseline: Tree IDs for the automatic 10% sample are generated when Staff start Visit 1 and remain provisional until Admin approval."
-        : "No registered Tree IDs are available. Tree IDs come from an Admin-approved sampling plan and baseline."}</p></section>
+        : "No registered Tree IDs are available for this report yet."}</p></section>
     <section className="psm-section"><h3>5. Individual Tree Assessment</h3>
       <p>Select a registered Tree ID from an authorized visit to record its assessment.</p>
       <h4 className="psm-heading"><Camera size={18} /> Monitoring Photo</h4><div className="psm-photo-box"><Camera size={28} /><strong>Monitoring Photo Evidence</strong>

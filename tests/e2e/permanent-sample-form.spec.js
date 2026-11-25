@@ -29,6 +29,7 @@ async function setup(page,{error=0,errorBody=null,uploadError=null,timeout=false
    if(method==="POST"){const body=r.request().postDataJSON();state.questions.push(body);return json(r,{id:"question-fixture",...body,status:"OPEN",history:[]});}
    return json(r,{requests:[],nextCursor:null});
   }
+  if(path==="/verified-sample-monitoring/verified-reports"&&r.request().method()==="GET")return json(r,{cohorts:[],eligible:[],notEligible:[],truncated:false,nextCursor:null,gates:{writesPaused:false,firstVisitBaselineEnabled:true,scheduleEnabled:true,pilotRestricted:false,verifiedReportRuleEnabled:true}});
   if(path==="/verified-sample-monitoring/readiness")return json(r,{cohorts:[],eligible:[],notEligible:[],truncated:false,nextCursor:null,gates:{writesPaused:false,firstVisitBaselineEnabled:true,scheduleEnabled:true,pilotRestricted:false}});
   if(path==="/verified-sample-monitoring/visits")return json(r,{visits:[{...state.visit,progress:{completed:1,total:2,rechecking:0}},...(multiple?[{...state.visit,id:visitId+"-SECOND",progress:{completed:1,total:2,rechecking:0}}]:[])],nextCursor:null});
   if(path===`/verified-sample-monitoring/visits/${visitId}`){

@@ -115,14 +115,14 @@ test("M4: without a readiness row Section 2 keeps the honest pending values", ()
   assert.equal(summary.get("Schedule Status"), "Pending Official Schedule");
 });
 
-test("first-visit empty Tree ID text describes Visit 1 baseline registration; legacy keeps the sampling-plan text", () => {
+test("first-visit empty Tree ID text describes Visit 1 baseline registration and never asks for a sampling plan", () => {
   const firstVisit = textOf(section(expand(PermanentSampleVisitShell({ describedBy: "reason", report: { ...readinessRow(), registersBaseline: true } }), keep), "4."));
   assert.match(firstVisit, /Visit 1 registers the baseline/);
   assert.doesNotMatch(firstVisit, /sampling plan/);
   const noSelection = textOf(section(expand(PermanentSampleVisitShell({ describedBy: "reason", report: null, firstVisit: true }), keep), "4."));
   assert.match(noSelection, /Visit 1 registers the baseline/);
   const legacy = textOf(section(expand(PermanentSampleVisitShell({ describedBy: "reason", report: null }), keep), "4."));
-  assert.match(legacy, /Tree IDs come from an Admin-approved sampling plan and baseline\./);
+  assert.match(legacy, /No registered Tree IDs are available for this report yet\./);
 });
 
 const reviewDetail = status => ({ ...detail, status, sampleAssessments: [{ sampleId: "TREE-A", condition: "Needs Rechecking", remarks: "Tag hidden", recheckReason: "Tag could not be confirmed", diameterCentimeters: 6, evidenceHistory: [] }] });
