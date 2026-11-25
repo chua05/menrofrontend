@@ -25,7 +25,7 @@ test("selecting an event renders a serialized distribution release date as text"
 test("event selection safely displays malformed participant-count metadata", () => {
   assert.match(plantingPage, /function formatParticipantCount\(value\)/);
   assert.match(plantingPage, /PlantingReportFormErrorBoundary/);
-  assert.match(plantingPage, /const selectedEventRequestId = String\(selectedEvent\?\.sourceRequestId \|\| ""\)\.trim\(\)/);
+  assert.match(plantingPage, /requestId = String\(event\?\.sourceRequestId \|\| ""\)\.trim\(\)/);
   assert.match(plantingPage, /resetKey=\{formRenderRecovery\}/);
   assert.match(plantingPage, /retry without losing this report draft/i);
   assert.match(plantingPage, /formatParticipantCount\(\s*responsibleEvent\?\.actualParticipants/s);
