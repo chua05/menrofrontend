@@ -3,7 +3,7 @@
 // not send `nextCursor` gets exactly one request, as before. Nothing here decides eligibility: the backend rows
 // are kept in the group the backend put them in.
 const READINESS_PATH = "/verified-sample-monitoring/readiness";
-const CURSOR = /^[A-Za-z0-9_-]{1,200}$/;
+const CURSOR = /^[^/\s]{1,400}$/;
 const MAX_PAGES = 8;
 
 export const readinessPath = (cursor = "") => (cursor ? `${READINESS_PATH}?cursor=${encodeURIComponent(cursor)}` : READINESS_PATH);
@@ -47,6 +47,41 @@ export async function loadReadiness(fetchPage, { maxPages = MAX_PAGES, cursor = 
     next = nextCursor;
   }
   return result;
+}
+
+// Admin-verified reports that have no monitoring cohort yet, in the same row shape (`startsFromReport: true`).
+const REPORTS_PATH = "/verified-sample-monitoring/verified-reports";
+export const verifiedReportsPath = (cursor = "") => (cursor ? `${REPORTS_PATH}?cursor=${encodeURIComponent(cursor)}` : REPORTS_PATH);
+export const verifiedReportStartPath = reportId => `${REPORTS_PATH}/${encodeURIComponent(reportId)}/first-visit`;
+
+// Both lists as one answer. `nextCursor` continues readiness and `reportsCursor` continues the report list. Each list
+// keeps its own state, so continuing one never hides that the other is incomplete; `reportsFailed` restarts a report
+// list that never loaded. A backend without the report list (404) simply offers no such rows.
+const REPORT_PAGES = 4;
+const NO_REPORTS = Object.freeze({ cohorts: [], eligible: [], notEligible: [], nextCursor: null });
+const combine = (base, page, state) => ({ ...mergeReadiness(base, page), ...state, gates: { ...base.gates, ...page.gates },
+  partial: state.readinessPartial || state.reportsPartial || state.reportsFailed,
+  truncated: Boolean(state.nextCursor || state.reportsCursor) || state.readinessPartial || state.reportsPartial || state.reportsFailed || state.readinessTruncated });
+const readinessState = data => ({ nextCursor: data?.nextCursor || null, readinessPartial: data?.partial === true, readinessTruncated: data?.truncated === true && !data?.nextCursor });
+const reportsState = data => ({ reportsCursor: data?.nextCursor || null, reportsPartial: data?.partial === true, reportsFailed: false });
+const loadReports = async (fetchReports, options) => {
+  try { const data = await loadReadiness(fetchReports, { maxPages: REPORT_PAGES, ...options }); return { data, state: reportsState(data) }; }
+  catch (error) { return { data: NO_REPORTS, error, state: { reportsCursor: null, reportsPartial: false, reportsFailed: error?.status !== 404 } }; }
+};
+export async function loadMonitoringChoices(fetchReadiness, fetchReports, options = {}) {
+  const [readiness, reports] = await Promise.all([loadReadiness(fetchReadiness, options), loadReports(fetchReports, options)]);
+  return combine(readiness, reports.data, { ...readinessState(readiness), ...reports.state });
+}
+export const hasMoreChoices = data => Boolean(data?.nextCursor || data?.reportsCursor || data?.reportsFailed);
+export async function continueMonitoringChoices(current, fetchReadiness, fetchReports, options = {}) {
+  const { nextCursor, readinessPartial = false, readinessTruncated = false, reportsCursor = null, reportsPartial = false, reportsFailed = false } = current;
+  if (nextCursor) {
+    const next = await loadReadiness(fetchReadiness, { ...options, cursor: nextCursor });
+    return combine(current, next, { ...readinessState(next), reportsCursor, reportsPartial, reportsFailed });
+  }
+  const reports = await loadReports(fetchReports, { ...options, ...(reportsCursor ? { cursor: reportsCursor } : {}) });
+  if (reports.error && reports.state.reportsFailed) throw reports.error;
+  return combine(current, reports.data, { nextCursor: null, readinessPartial, readinessTruncated, ...reports.state });
 }
 
 // After a visit is started its cohort is no longer startable; the next readiness answer brings the real reasons.

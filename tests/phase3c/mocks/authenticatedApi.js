@@ -255,6 +255,17 @@ export async function authenticatedFetch(path, options = {}) {
   if (/^\/verified-sample-monitoring\/visits\/[^/]+\/review$/.test(url.pathname) && options.method === "POST") {
     return reviewResponse(decodeURIComponent(url.pathname.split("/")[3]), options, activeFixture);
   }
+  // Verified reports without a cohort: a test supplies the page; otherwise the mock is a backend without this list.
+  if (url.pathname === "/verified-sample-monitoring/verified-reports") {
+    window.__PHASE3C_REPORT_LIST_CALLS__ = (window.__PHASE3C_REPORT_LIST_CALLS__ || 0) + 1;
+    return window.__PHASE3C_VERIFIED_REPORTS__ ? response(200, { success: true, data: window.__PHASE3C_VERIFIED_REPORTS__ }) : failure(404, "Route not found");
+  }
+  const reportStart = url.pathname.match(/^\/verified-sample-monitoring\/verified-reports\/([^/]+)\/first-visit$/);
+  if (reportStart && options.method === "POST") {
+    window.__PHASE3C_CREATED__ = [...(window.__PHASE3C_CREATED__ || []), { reportId: decodeURIComponent(reportStart[1]), payload: JSON.parse(options.body || "{}") }];
+    if (window.__PHASE3C_START_FAILURE__) return failure(409, window.__PHASE3C_START_FAILURE__);
+    return response(201, { success: true, data: { ...detail, id: "VPMV-CREATED-001", cohortId: "VPC-started", visitNumber: 1 } });
+  }
   if (url.pathname === "/verified-sample-monitoring/readiness") {
     window.__PHASE3C_READINESS_CALLS__ = (window.__PHASE3C_READINESS_CALLS__ || 0) + 1;
     // Tests may answer readiness per page/call: (cursor, callNumber) => ({ data } | { status, code, message }).

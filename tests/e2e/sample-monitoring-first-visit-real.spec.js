@@ -81,24 +81,25 @@ test("real first visit: eligible report, 10% sample registration, evidence, draf
  const staffContext=await browser.newContext();const staff=await staffContext.newPage();await isolate(staff);
  let f,ids;
  await test.step("1. Staff sees the eligible report's Section 1 context and 10% target, then starts visit 1 on the fixture date",async()=>{
-  f=await login(staff,"staff");expect(f.mode).toBe("first-visit");expect(f.sampleIds).toEqual([]);expect(f.expectedSampleTarget).toBe(3);
+  f=await login(staff,"staff");expect(["first-visit","verified-report"]).toContain(f.mode);const fromReport=f.mode==="verified-report";expect(f.sampleIds).toEqual([]);expect(f.expectedSampleTarget).toBe(3);
   ids=[1,2,3].map(n=>`${f.reportNumber}-T00${n}`);
-  await survivalMonitoring(staff);const readinessResponse=backendGet(staff,"/verified-sample-monitoring/readiness");
+  await survivalMonitoring(staff);const readinessResponse=backendGet(staff,`/verified-sample-monitoring/${fromReport?"verified-reports":"readiness"}`);
   const listed=await monitorPlantedTrees(staff);expect((await listed.json()).data.visits).toEqual([]);
   const readiness=(await(await readinessResponse).json()).data;const row=readiness.eligible.find(entry=>entry.cohortId===f.cohortId);
   expect(row.canCreateVisit).toBe(true);expect(row.context.sampleTarget).toBe(3);expect(row.nextScheduledDueDate).toBe(f.visitDate);
   const dialog=staff.getByRole("dialog",{name:"Monitor Planted Trees"});
   await dialog.getByRole("combobox",{name:"Verified Planting Report *",exact:true}).selectOption(`ready:${f.cohortId}`);
   const expected={"Planting Report ID":f.reportNumber,"Planting Date":f.visitDate,"Verification Status":"Approved","Verified Planted Quantity":"25",
-   "Species and Quantities":"Narra: 25 planted","Automatic 10% Sample Target":"3","Sample Registration Status":"Not Started","Registered Sample Tree Count":"0",
+   "Species and Quantities":fromReport?/^Narra/:"Narra: 25 planted","Automatic 10% Sample Target":"3","Sample Registration Status":"Not Started","Registered Sample Tree Count":"0",
    "Monitoring Visit Number":"1","Current Monitoring Status":"First Visit Available"};
   for(const [label,value] of Object.entries(expected))await expect(shellValue(dialog,label)).toHaveText(value);
   for(const label of ["Planting Site Name","Barangay / Address"])await expect(shellValue(dialog,label)).toHaveCount(1);
   await expect(dialog.getByText("No permanent-sample cohort",{exact:false})).toHaveCount(0);
+  await expect(dialog).not.toContainText(/spot-check|sampling plan|not eligible|turned off/i);await expect(dialog.getByText("No authorized monitoring visits are available.")).toHaveCount(0);
   await expect(dialog.locator(".psm-shell .leaflet-container")).toBeVisible();await expect(dialog.locator(".psm-shell").getByLabel("Stem Diameter (mm)")).toBeDisabled();
   await expect(dialog.getByRole("button",{name:"Submit Monitoring Visit",exact:true})).toBeDisabled();
   await shot(staff,"1-eligible-shell");
-  const created=staff.waitForResponse(r=>r.request().method()==="POST"&&new URL(r.url()).pathname===`/api/verified-sample-monitoring/cohorts/${f.cohortId}/visits`);
+  const created=staff.waitForResponse(r=>r.request().method()==="POST"&&new URL(r.url()).pathname===(fromReport?`/api/verified-sample-monitoring/verified-reports/${f.plantingReportId}/first-visit`:`/api/verified-sample-monitoring/cohorts/${f.cohortId}/visits`));
   await dialog.locator('section[aria-labelledby="psm-readiness-selection-title"]').getByRole("button",{name:"Start Visit 1",exact:true}).click();
   const response=await created;expect(response.status()).toBe(201);expect(response.request().postDataJSON()).toEqual({visitDate:f.visitDate});
   const visit=(await response.json()).data;expect(visit.id).toBe(f.visitId);expect(visit.sampleAssessments.map(row=>row.sampleId)).toEqual(ids);

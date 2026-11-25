@@ -44,7 +44,9 @@ test("the picker de-duplicates Setup Pending rows against eligible readiness row
   assert.match(page, /const pendingReports = withoutEligibleDuplicates\(offeredPendingReports, readiness\?\.data\?\.eligible \|\| \[\]\)/);
 });
 
-test("the empty state describes Visit 1 baseline registration in first-visit mode and keeps legacy text for legacy cohorts", () => {
-  assert.match(page, /\{firstVisitReadiness && <p>Start Visit 1 for an eligible verified planting report\. Visit 1 registers the baseline/);
-  assert.match(page, /\{legacyReadiness && <p>A visit appears here after MENRO creates it from an approved sampling plan and baseline\.<\/p>\}/);
+test("the empty state describes Visit 1 and never asks for an approved sampling plan or baseline", () => {
+  assert.match(page, /\{firstVisitReadiness && <p>Select a verified planting report and start Visit 1\. Visit 1 registers the automatic 10% sample/);
+  assert.match(page, /\{nothingAvailable && <p role="status">No authorized monitoring visits are available\.<\/p>\}/);
+  assert.match(page, /const legacyReadiness = userRole === "admin" &&/);
+  assert.match(page, /\{legacyReadiness && <p>A visit appears here after MENRO creates it from an approved sampling plan and baseline/);
 });

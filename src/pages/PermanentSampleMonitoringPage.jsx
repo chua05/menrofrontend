@@ -15,9 +15,9 @@ import {
 import { useAuth } from "../context/AuthContext";
 import { Trees, X } from "lucide-react";
 import { Link, useSearchParams } from "react-router-dom";
-import { approvedVisitNote, readinessErrorMessage, readinessGateNotices, readinessMessages, readinessTitle, scheduleStatusLabel, withoutEligibleDuplicates } from "../utils/sampleVisitReadiness";
-import { PICKER_GROUP, withPickerReadiness } from "../utils/monitoringTracking";
-import { loadReadiness, mergeReadiness, readinessPath, withoutEligibleCohort } from "../utils/sampleReadinessLoader";
+import { approvedVisitNote, blockedReportRow, readinessErrorMessage, readinessGateNotices, readinessMessages, readinessTitle, staffGateNotices, staffReadinessMessages, staffStartError, scheduleStatusLabel, withoutEligibleDuplicates } from "../utils/sampleVisitReadiness";
+import { TRACKING_STATUS, withPickerReadiness } from "../utils/monitoringTracking";
+import { continueMonitoringChoices, hasMoreChoices, loadMonitoringChoices, loadReadiness, readinessPath, verifiedReportStartPath, verifiedReportsPath, withoutEligibleCohort } from "../utils/sampleReadinessLoader";
 import { monitoringApiErrorMessage, monitoringErrorSampleId, monitoringEvidenceErrorMessage, monitoringWriteErrorMessage } from "../utils/monitoringApiError";
 
 const STATUS_LABELS = { DRAFT: "Draft", RETURNED: "Returned for Correction", PENDING_ADMIN_APPROVAL: "Pending Admin Review", APPROVED: "Approved" };
@@ -45,6 +45,8 @@ const uniqueByReport = rows => {
   });
 };
 const fetchReadinessPage = cursor => api(readinessPath(cursor));
+const fetchVerifiedReportsPage = cursor => api(verifiedReportsPath(cursor));
+const noReportsPage = async () => ({ cohorts: [], eligible: [], notEligible: [], nextCursor: null });
 
 function formAssessment(value) {
   return {
@@ -120,7 +122,7 @@ export default function PermanentSampleMonitoringPage({ embedded = false, open: 
   const pendingReports = withoutEligibleDuplicates(offeredPendingReports, readiness?.data?.eligible || []);
   const pickerRows = pendingReports.map(row => withPickerReadiness(row, readiness));
   const pendingReport = pickerRows.find(row => row.plantingReportId === pendingReportId) || null;
-  const pendingNotEligible = pendingReport?.pickerGroup === PICKER_GROUP.NOT_ELIGIBLE;
+  const pendingBlocked = blockedReportRow(readiness?.data, pendingReport);
   const unsaved = userRole === "staff" && ["DRAFT", "RETURNED"].includes(detail?.status) &&
     (Object.keys(pendingEvidence).length > 0 || Object.values(questions).some(value => value.trim()) ||
       savedDraft !== draftSnapshot(assessments, visitRemarks, dateMonitored));
@@ -186,12 +188,13 @@ export default function PermanentSampleMonitoringPage({ embedded = false, open: 
     const epoch = readinessEpoch.current;
     if (!keep) setReadiness({ loading: true });
     try {
-      const data = await loadReadiness(fetchReadinessPage);
+      // Only Staff start visits, so only Staff ask for verified reports that have no monitoring setup yet.
+      const data = userRole === "staff" ? await loadMonitoringChoices(fetchReadinessPage, fetchVerifiedReportsPage) : await loadReadiness(fetchReadinessPage);
       if (epoch === readinessEpoch.current) setReadiness({ data });
     } catch (requestError) {
       if (epoch === readinessEpoch.current) setReadiness(current => keep && current?.data ? { data: current.data } : { error: readinessErrorMessage(requestError) });
     }
-  }, []);
+  }, [userRole]);
 
   const load = useCallback(
     async (next = "") => {
@@ -278,13 +281,10 @@ export default function PermanentSampleMonitoringPage({ embedded = false, open: 
   };
   const choosePendingReport = reportId => { if (leaveVisit()) { setReadinessCohortId(""); setPendingReportId(reportId); } };
   const chooseEligible = cohortId => { if (leaveVisit()) { setPendingReportId(""); setReadinessCohortId(cohortId); } };
-  const pendingOptions = rows => [PICKER_GROUP.SETUP_PENDING, PICKER_GROUP.NOT_ELIGIBLE].map(group => {
-    const listed = rows.filter(row => (row.pickerGroup || PICKER_GROUP.SETUP_PENDING) === group);
-    return listed.length > 0 && <optgroup key={group} label={group}>
-      {listed.map(row => <option key={row.plantingReportId} value={`pending:${row.plantingReportId}`}>
-        {`${row.reportNumber || "Verified planting report"} · ${row.siteName || "Planting site"} · ${group === PICKER_GROUP.NOT_ELIGIBLE ? row.requirement : row.stage || row.status}`}</option>)}
-    </optgroup>;
-  });
+  const pendingOptions = rows => rows.length > 0 && <optgroup label="Not Yet Available">
+    {rows.map(row => <option key={row.plantingReportId} value={`pending:${row.plantingReportId}`}>
+      {`${row.reportNumber || "Verified planting report"} · ${row.siteName || "Planting site"}`}</option>)}
+  </optgroup>;
   // With a visit open, a report whose visits are listed is represented by those visits, not again as a pending row.
   const listedVisitCohorts = new Set((page?.visits || []).map(visit => String(visit.cohortId || "")).filter(Boolean));
   const pendingBesideVisits = pickerRows.filter(row => !listedVisitCohorts.has(String(row.cohort?.id || "")));
@@ -366,14 +366,14 @@ export default function PermanentSampleMonitoringPage({ embedded = false, open: 
 
   // Continues after the last loaded readiness page. A failure keeps every loaded report and can be retried.
   const loadMoreReadiness = async () => {
-    const cursor = readiness?.data?.nextCursor;
-    if (!cursor || readiness.more === "loading") return;
+    const data = readiness?.data;
+    if (!hasMoreChoices(data) || readiness.more === "loading") return;
     readinessEpoch.current += 1;
     const epoch = readinessEpoch.current;
     setReadiness(current => ({ ...current, more: "loading" }));
     try {
-      const next = await loadReadiness(fetchReadinessPage, { cursor });
-      if (epoch === readinessEpoch.current) setReadiness(current => ({ data: mergeReadiness(current.data, next) }));
+      const next = await continueMonitoringChoices(data, fetchReadinessPage, userRole === "staff" ? fetchVerifiedReportsPage : noReportsPage);
+      if (epoch === readinessEpoch.current) setReadiness({ data: next });
     } catch { if (epoch === readinessEpoch.current) setReadiness(current => ({ ...current, more: "error" })); }
   };
 
@@ -381,7 +381,8 @@ export default function PermanentSampleMonitoringPage({ embedded = false, open: 
     if (!cohort?.cohortId || cohort.canCreateVisit !== true || !cohort.nextScheduledDueDate || operationBusy.current) return;
     operationBusy.current = true; setCreatingCohortId(cohort.cohortId); setError(""); setSavedNotice("");
     try {
-      const created = await api(`/verified-sample-monitoring/cohorts/${encodeURIComponent(cohort.cohortId)}/visits`, {
+      const created = await api(cohort.startsFromReport === true ? verifiedReportStartPath(cohort.plantingReportId)
+        : `/verified-sample-monitoring/cohorts/${encodeURIComponent(cohort.cohortId)}/visits`, {
         method: "POST",
         body: JSON.stringify({ visitDate: cohort.nextScheduledDueDate }),
       });
@@ -392,7 +393,7 @@ export default function PermanentSampleMonitoringPage({ embedded = false, open: 
       await showVisit(created.id);
       setSavedNotice(created.visitNumber ? `Visit ${created.visitNumber} opened from the authorized MENRO schedule.` : "Monitoring visit opened from the authorized MENRO schedule.");
     } catch (requestError) {
-      setError(requestError.message || "The authorized monitoring visit could not be opened.");
+      setError(cohort.startsFromReport === true ? staffStartError(requestError) : requestError.message || "The authorized monitoring visit could not be opened.");
       await refreshReadiness({ keep: true });
     } finally {
       operationBusy.current = false; setCreatingCohortId("");
@@ -621,14 +622,15 @@ export default function PermanentSampleMonitoringPage({ embedded = false, open: 
   const readinessRows = uniqueByReport(readiness?.data?.eligible);
   const selectedReadiness = readinessRows.find(row => row.cohortId === readinessCohortId) || null;
   const readinessOption = row => `${row.reportNumber || "Verified planting report"} · ${row.siteName || "Planting site"} · ${row.canCreateVisit ? `${approvedVisitNote(row) ? `${approvedVisitNote(row)}, ` : ""}Visit ${row.nextVisitNumber || ""} ready` : row.scheduleStatus ? scheduleStatusLabel(row.scheduleStatus) : "Setup pending"}`;
-  // Spec §6: under the first-visit workflow, Visit 1 itself registers the baseline and the 10% sample.
-  // Legacy cohorts keep the sampling-plan and baseline wording.
+  // Spec §6: Visit 1 itself registers the baseline and the 10% sample.
   const readinessCohorts = readiness?.data?.cohorts || [];
-  const firstVisitReadiness = readinessCohorts.some(row => row.registersBaseline === true);
-  const legacyReadiness = !readinessCohorts.length || readinessCohorts.some(row => row.registersBaseline !== true);
+  const firstVisitReadiness = readinessRows.some(row => row.registersBaseline === true);
+  const messagesFor = reasons => (userRole === "staff" ? staffReadinessMessages(reasons) : readinessMessages(reasons));
+  // Nothing can be opened or started, and the answer is complete.
+  const nothingAvailable = !readinessRows.length && Boolean(readiness?.data) && readiness.data.truncated !== true && readiness.data.partial !== true;
 
   const loadedCount = readinessCohorts.length;
-  const readinessMore = readiness?.data?.truncated && (readiness.data.nextCursor ? <div className="psm-readiness-more">
+  const readinessMore = readiness?.data?.truncated && (hasMoreChoices(readiness.data) ? <div className="psm-readiness-more">
     <p>{`${loadedCount} verified planting report${loadedCount === 1 ? " is" : "s are"} loaded. ${readiness.data.partial ? "Some could not be loaded." : "More are available."}`}</p>
     {readiness.more === "error" && <p role="alert">More verified planting reports could not be loaded. Try again.</p>}
     <button type="button" disabled={readiness.more === "loading"} onClick={loadMoreReadiness}>{readiness.more === "loading" ? "Loading…" : "Load more verified planting reports"}</button>
@@ -642,10 +644,15 @@ export default function PermanentSampleMonitoringPage({ embedded = false, open: 
   const readinessCard = cohort => <article key={cohort.cohortId} className="psm-readiness-site">
     <h3>{readinessTitle(cohort)}</h3>
     {cohort.nextVisitNumber && <p>{approvedVisitNote(cohort) && `${approvedVisitNote(cohort)}. `}Next visit: {cohort.nextVisitNumber}. Scheduled date: {cohort.nextScheduledDueDate || "Pending approved schedule"}. Status: {scheduleStatusLabel(cohort.scheduleStatus)}.</p>}
-    <ul>{readinessMessages(cohort.reasons).map(message => <li key={message}>{message}</li>)}</ul>
+    <ul>{messagesFor(cohort.reasons).map(message => <li key={message}>{message}</li>)}</ul>
     {startButton(cohort)}
   </article>;
-  const gateNotices = readinessGateNotices(readiness?.data?.gates);
+  // Inside the modal the report selector lists verified reports; cards are for existing setups and the standalone page.
+  const cardRows = readinessCohorts.filter(row => !embedded || row.startsFromReport !== true);
+  const eligibleCards = cardRows.filter(row => row.canCreateVisit === true), blockedCards = cardRows.filter(row => row.canCreateVisit !== true);
+  const showBlocked = Boolean(readiness && page?.firstPage && (blockedCards.length > 0 || !readinessRows.length));
+  const gateNotices = userRole === "staff" ? staffGateNotices(readiness?.data?.gates, { startable: readinessRows.length > 0 }) : readinessGateNotices(readiness?.data?.gates);
+  const legacyReadiness = userRole === "admin" && (!readinessCohorts.length || readinessCohorts.some(row => row.registersBaseline !== true));
   const readinessProgress = <>
     {readiness?.loading && <p aria-live="polite">Checking visit readiness…</p>}
     {readiness?.error && <p>{readiness.error}</p>}
@@ -660,6 +667,14 @@ export default function PermanentSampleMonitoringPage({ embedded = false, open: 
     {readinessMore}
   </>;
 
+  const pendingMessages = !pendingReport ? [] : readiness?.error ? [readiness.error] : !readiness?.data ? ["Checking whether a visit can be started for this report…"]
+    : pendingBlocked ? staffReadinessMessages(pendingBlocked.reasons?.filter(reason => reason?.informational !== true))
+    : pendingReport.status === TRACKING_STATUS.UNAVAILABLE ? ["The monitoring status for this report could not be loaded. Refresh to try again."]
+    : pendingReport.status === TRACKING_STATUS.CHECKING ? ["Checking whether a visit can be started for this report…"]
+    : hasMoreChoices(readiness.data) ? ["This report has not been checked yet. Use Load more verified planting reports."]
+    : readiness.data.truncated || readiness.data.partial ? ["This report could not be checked. Refresh to try again."]
+    : readiness.data.gates?.pilotRestricted === true ? ["Monitoring is currently limited to a MENRO pilot, which may not include this report. Contact the MENRO Admin."]
+    : staffReadinessMessages([{ code: "VISIT_SCHEDULING_POLICY_PENDING" }]);
   const visitList = (
     <>
       {error && <p role="alert" className="cohort-error">{error}</p>}
@@ -685,17 +700,22 @@ export default function PermanentSampleMonitoringPage({ embedded = false, open: 
             </ul>
           ) : (
             <>
-              <p role="status">No authorized monitoring visits are available.</p>
-              {firstVisitReadiness && <p>Start Visit 1 for an eligible verified planting report. Visit 1 registers the baseline and the automatic 10% permanent sample; its Tree IDs remain provisional until Admin approval.</p>}
+              {nothingAvailable && <p role="status">No authorized monitoring visits are available.</p>}
+              {firstVisitReadiness && <p>Select a verified planting report and start Visit 1. Visit 1 registers the automatic 10% sample; its Tree IDs remain provisional until Admin approval.</p>}
               {legacyReadiness && <p>A visit appears here after MENRO creates it from an approved sampling plan and baseline.</p>}
               {!embedded && <Link to={`/${userRole}/survival-monitoring`}>Back to Survival Monitoring</Link>}
-              {readiness && page.firstPage && <section className="psm-readiness" aria-labelledby="psm-readiness-title">
-                <h2 id="psm-readiness-title">Why no monitoring visit is available</h2>
+              {page.firstPage && eligibleCards.length > 0 && <section className="psm-readiness" aria-labelledby="psm-eligible-title">
+                <h2 id="psm-eligible-title">Eligible Verified Planting Reports</h2>
+                {eligibleCards.map(readinessCard)}
+              </section>}
+              {showBlocked && <section className="psm-readiness" aria-labelledby="psm-readiness-title">
+                <h2 id="psm-readiness-title">{readinessRows.length ? "Reports that cannot start a visit now" : "Why no monitoring visit is available"}</h2>
                 {readinessProgress}
-                {readiness.data && !readiness.data.cohorts?.length && <p>No verified planting reports are ready for permanent-sample monitoring yet.</p>}
-                {(readiness.data?.cohorts || []).map(readinessCard)}
+                {readiness.data && !readiness.data.cohorts?.length && <p>{userRole === "admin" ? "No verified planting reports are ready for permanent-sample monitoring yet." : "No verified planting reports are ready for monitoring yet."}</p>}
+                {blockedCards.map(readinessCard)}
                 {readinessMore}
               </section>}
+              {page.firstPage && !showBlocked && readinessMore}
             </>
           )}
           {page.nextCursor && (
@@ -719,22 +739,15 @@ export default function PermanentSampleMonitoringPage({ embedded = false, open: 
             disabled={!pendingReports.length && !readinessRows.length} aria-describedby="psm-shell-reason"
             onChange={event => { const value = event.target.value; if (value.startsWith("ready:")) chooseEligible(value.slice(6));
               else if (value.startsWith("pending:")) choosePendingReport(value.slice(8)); else { setPendingReportId(""); setReadinessCohortId(""); } }}>
-            <option value="">No authorized visit selected</option>
+            <option value="">{readinessRows.length || pickerRows.length ? "Select a verified planting report" : "No verified planting report available"}</option>
             {eligibleOptions}
             {pendingOptions(pickerRows)}</select></label>
           {visitList}
           {pendingReport && <section className="psm-readiness psm-setup-pending" aria-labelledby="psm-setup-pending-title" data-setup-pending-report={pendingReport.plantingReportId}>
-            <h2 id="psm-setup-pending-title">{pendingNotEligible ? "Not eligible for permanent-sample monitoring" : "Setup pending"}: {pendingReport.reportNumber || "Verified planting report"}</h2>
-            <dl className="psm-info">
-              <div><dt>Monitoring requirement</dt><dd>{pendingReport.requirement}</dd></div>
-              <div><dt>Monitoring status</dt><dd>{pendingReport.stage || pendingReport.status}</dd></div>
-              {pendingReport.stage && <div><dt>Readiness</dt><dd>{pendingReport.status}</dd></div>}
-              {pendingReport.setup && <div><dt>Setup progress</dt><dd>{pendingReport.setup}</dd></div>}
-            </dl>
-            {pendingReport.notes.map(note => <p key={note}>{note}</p>)}
-            {pendingReport.pickerGroup === PICKER_GROUP.SETUP_PENDING && !pendingReport.cohort && readiness?.data?.gates?.pilotRestricted === true && <p>Permanent-sample monitoring is currently limited to a MENRO pilot, so setup for reports outside the pilot is not shown here.</p>}
+            <h2 id="psm-setup-pending-title">Not yet available: {pendingReport.reportNumber || "Verified planting report"}</h2>
+            {approvedVisitNote(pendingBlocked) && <p>{`${approvedVisitNote(pendingBlocked)}.`}</p>}
+            <ul aria-label="Why this report has no monitoring visit">{pendingMessages.map(message => <li key={message}>{message}</li>)}</ul>
             {pendingReport.hasMonitoringRecord && <p>This report already has a monitoring record in Monitoring Records.</p>}
-            {pendingReport.reasons.length > 0 && <ul aria-label="Why this report has no monitoring visit">{pendingReport.reasons.map(reason => <li key={reason}>{reason}</li>)}</ul>}
           </section>}
           {selectedReadiness && <section className="psm-readiness psm-setup-pending" aria-labelledby="psm-readiness-selection-title">
             <h2 id="psm-readiness-selection-title">{readinessTitle(selectedReadiness)}</h2>
@@ -742,7 +755,7 @@ export default function PermanentSampleMonitoringPage({ embedded = false, open: 
             <dl className="psm-info"><div><dt>Next visit</dt><dd>{selectedReadiness.nextVisitNumber || "Pending"}</dd></div>
               <div><dt>Scheduled date</dt><dd>{selectedReadiness.nextScheduledDueDate || "Pending approved schedule"}</dd></div>
               <div><dt>Schedule status</dt><dd>{scheduleStatusLabel(selectedReadiness.scheduleStatus)}</dd></div></dl>
-            {selectedReadiness.reasons?.length > 0 && <ul>{readinessMessages(selectedReadiness.reasons).map(message => <li key={message}>{message}</li>)}</ul>}
+            {selectedReadiness.reasons?.length > 0 && <ul>{messagesFor(selectedReadiness.reasons).map(message => <li key={message}>{message}</li>)}</ul>}
             {selectedReadiness.canCreateVisit === true ? <button type="button" className="psm-primary" disabled={Boolean(creatingCohortId)} onClick={() => createVisit(selectedReadiness)}>
               {creatingCohortId ? "Opening visit…" : `Start Visit ${selectedReadiness.nextVisitNumber || ""}`}</button>
               : <p role="status">This visit remains unavailable until every authoritative readiness requirement is satisfied.</p>}
@@ -751,15 +764,14 @@ export default function PermanentSampleMonitoringPage({ embedded = false, open: 
           {reviewVisitId ? <p className="psm-note" id="psm-shell-reason">{error && !loading
             ? "The selected monitoring visit could not be opened. Close this form and try again from Monitoring Records."
             : "Loading the selected monitoring visit…"}</p>
-          : <p className="psm-note" id="psm-shell-reason">{pendingNotEligible ? "This verified planting report is not eligible for permanent-sample monitoring. Assessment editing, evidence, Save Draft and Submit are unavailable for it."
-            : pendingReport?.cohort ? "No new monitoring visit can be started for this verified planting report right now. Assessment editing, evidence, Save Draft and Submit stay unavailable until a visit is authorized."
-            : pendingReport ? "This verified planting report has no authorized monitoring visit yet. Assessment editing, evidence, Save Draft and Submit stay unavailable until MENRO creates one."
-            : selectedReadiness?.canCreateVisit === true ? "Nothing is editable until the authorized visit for this report is started with Start Visit above."
+          : <p className="psm-note" id="psm-shell-reason">{pendingReport ? "No monitoring visit can be started for this verified planting report right now. Save Draft and Submit become available after a visit is started."
+            : selectedReadiness?.canCreateVisit === true ? "Use Start Visit above to open this report's monitoring form. Save Draft and Submit become available after that."
             : page?.visits?.length ? "Select an authorized monitoring visit above to load its registered sample trees."
             : userRole === "admin" ? "No monitoring visit is available for review. MENRO Staff record and submit visits; Admin reviews, approves or returns them."
-            : "Assessment editing, evidence submission, Save Draft and Submit are unavailable until MENRO creates an authorized monitoring visit."}</p>}
+            : readinessRows.length ? "Select a verified planting report above, then start its visit. Save Draft and Submit become available after that."
+            : "Save Draft and Submit become available after a monitoring visit is started."}</p>}
           {/* The disabled Staff form shell (Take Photo, Upload, Save Draft, Submit) is never shown to Admin. */}
-          {userRole !== "admin" && <PermanentSampleVisitShell describedBy="psm-shell-reason" report={pendingReport || selectedReadiness} firstVisit={firstVisitReadiness && !legacyReadiness} />}
+          {userRole !== "admin" && <PermanentSampleVisitShell describedBy="psm-shell-reason" report={pendingBlocked?.context ? pendingBlocked : pendingReport || selectedReadiness} firstVisit />}
         </div>
         <footer className="psm-footer">{userRole !== "admin" && <><button type="button" disabled aria-describedby="psm-shell-reason">Save Draft</button><button type="button" className="psm-primary" disabled aria-describedby="psm-shell-reason">Submit Monitoring Visit</button></>}</footer>
         </> : <>
