@@ -1471,59 +1471,7 @@ export default function SitesPage() {
           {loadError && <button type="button" className="ps-secondary-btn" onClick={loadSiteData}>Retry</button>}
         </div>
       )}
-      <section className="ps-page-header">
-        <div className="ps-title-wrap">
-          <div className="ps-title-icon">
-            <MapPin
-              size={20}
-              strokeWidth={1.9}
-            />
-          </div>
-
-          <div>
-            <h1>
-              Planting Sites Map
-            </h1>
-          </div>
-        </div>
-
-        <div className="ps-header-actions">
-          <button
-            type="button"
-            className="ps-secondary-btn"
-            onClick={
-              handleRefreshMap
-            }
-          >
-            <RefreshCw size={15} />
-
-            Refresh Map
-          </button>
-
-          {canManage && (
-            <button
-              type="button"
-              className="ps-primary-btn"
-              onClick={() => {
-                setEditingSite(null);
-                setForm(
-                  getInitialSiteForm()
-                );
-
-                setFormErrors({});
-
-                setShowAddModal(
-                  true
-                );
-              }}
-            >
-              <Plus size={16} />
-
-              Add Planting Site
-            </button>
-          )}
-        </div>
-      </section>
+      <h1 className="page-title-hidden">Planting Sites Map</h1>
 
       {pageError && (
         <div className="ps-success-message" role="alert">
@@ -1616,6 +1564,43 @@ export default function SitesPage() {
               </select>
 
               <ChevronDown size={14} />
+            </div>
+
+            <div className="ps-header-actions">
+              <button
+                type="button"
+                className="ps-secondary-btn"
+                onClick={
+                  handleRefreshMap
+                }
+              >
+                <RefreshCw size={15} />
+
+                Refresh Map
+              </button>
+
+              {canManage && (
+                <button
+                  type="button"
+                  className="ps-primary-btn"
+                  onClick={() => {
+                    setEditingSite(null);
+                    setForm(
+                      getInitialSiteForm()
+                    );
+
+                    setFormErrors({});
+
+                    setShowAddModal(
+                      true
+                    );
+                  }}
+                >
+                  <Plus size={16} />
+
+                  Add Planting Site
+                </button>
+              )}
             </div>
           </div>
 

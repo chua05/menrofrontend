@@ -93,10 +93,10 @@ test.describe.serial("Early Survival Monitoring authenticated acceptance", () =>
 
     const admin = await browser.newPage();
     await login(admin, "admin");
-    const before = await admin.getByText("Approved Full Cohorts", { exact: true }).locator("..").locator(".sm-kpi-value").innerText();
+    const before = await admin.getByText("Approved Full Cohorts", { exact: true }).locator("..").locator(".kpi-card-value").innerText();
     await action(admin, "TEST-EARLY-A", "Approve");
     await admin.reload();
-    await expect(admin.getByText("Approved Full Cohorts", { exact: true }).locator("..").locator(".sm-kpi-value")).toHaveText(before);
+    await expect(admin.getByText("Approved Full Cohorts", { exact: true }).locator("..").locator(".kpi-card-value")).toHaveText(before);
     await admin.context().close();
   });
 

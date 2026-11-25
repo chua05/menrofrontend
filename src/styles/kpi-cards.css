@@ -1,0 +1,125 @@
+/* =====================================================
+   KPI CARDS (shared by every page)
+   Design from Planting Reports. --kpi-cols is the number of cards in a full row;
+   a shorter last row keeps the same card width and is centred.
+===================================================== */
+.kpi-grid {
+  --kpi-cols: 4;
+  --kpi-gap: 14px;
+
+  box-sizing: border-box;
+  grid-column: 1 / -1;
+  width: 100%;
+  min-width: 0;
+
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--kpi-gap);
+}
+
+.kpi-grid[data-count="5"] { --kpi-cols: 5; }
+.kpi-grid[data-count="6"] { --kpi-cols: 6; }
+.kpi-grid[data-count="7"] { --kpi-cols: 7; }
+
+/* Pages without their own vertical gap. */
+.pr-page > .kpi-grid,
+.sm-page > .kpi-grid,
+.myr-page > .kpi-grid,
+.mv-page > .kpi-grid,
+.ra-page > .kpi-grid,
+.ru-page > .kpi-grid { margin-bottom: 16px; }
+
+.kpi-card {
+  box-sizing: border-box;
+  flex: 0 0 calc((100% - (var(--kpi-cols) - 1) * var(--kpi-gap)) / var(--kpi-cols) - 0.02px);
+
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+
+  min-width: 0;
+  min-height: 112px;
+  margin: 0;
+  padding: 14px 16px;
+
+  background: #ffffff;
+  border: 1px solid #e4e9e6;
+  border-radius: 10px;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.03);
+
+  color: inherit;
+  font: inherit;
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+
+.kpi-card-title {
+  color: #5f6b64;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  line-height: 1.3;
+  text-transform: uppercase;
+}
+
+.kpi-card-value {
+  color: #1f5136;
+  font-size: 28px;
+  font-weight: 700;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+}
+
+.kpi-card-value.is-text { font-size: 20px; line-height: 1.25; }
+
+.kpi-card-description {
+  color: #7a857e;
+  font-size: 12.5px;
+  line-height: 1.35;
+}
+
+/* Value colors: the Planting Reports review-workflow palette. */
+.kpi-tone-awaiting .kpi-card-value,
+.kpi-tone-gray .kpi-card-value { color: #4b5563; }
+.kpi-tone-review .kpi-card-value,
+.kpi-tone-amber .kpi-card-value { color: #b45309; }
+.kpi-tone-approval .kpi-card-value,
+.kpi-tone-blue .kpi-card-value { color: #1d4ed8; }
+.kpi-tone-returned .kpi-card-value,
+.kpi-tone-orange .kpi-card-value { color: #c2410c; }
+.kpi-tone-completed .kpi-card-value,
+.kpi-tone-green .kpi-card-value { color: #15803d; }
+.kpi-tone-red .kpi-card-value { color: #b91c1c; }
+
+button.kpi-card { cursor: pointer; transition: border-color 160ms ease; }
+button.kpi-card:hover { border-color: #b9cdbf; }
+button.kpi-card:focus-visible { outline: 3px solid rgba(8, 116, 67, 0.35); outline-offset: 2px; }
+
+@media (max-width: 1350px) {
+  .kpi-grid[data-count="7"] { --kpi-cols: 4; }
+}
+
+@media (max-width: 1300px) {
+  .kpi-grid[data-count="5"],
+  .kpi-grid[data-count="6"] { --kpi-cols: 3; }
+}
+
+@media (max-width: 980px) {
+  .kpi-grid { --kpi-cols: 2; }
+  .kpi-grid[data-count="5"],
+  .kpi-grid[data-count="6"],
+  .kpi-grid[data-count="7"] { --kpi-cols: 3; }
+}
+
+@media (max-width: 640px) {
+  .kpi-grid,
+  .kpi-grid[data-count="5"],
+  .kpi-grid[data-count="6"],
+  .kpi-grid[data-count="7"] { --kpi-cols: 2; --kpi-gap: 10px; }
+  .kpi-card { min-height: 96px; padding: 12px; }
+  .kpi-card-value { font-size: 24px; }
+  .kpi-card-value.is-text { font-size: 17px; }
+}

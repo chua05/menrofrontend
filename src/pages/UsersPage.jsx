@@ -7,15 +7,11 @@ import {
   CircleUserRound,
   EllipsisVertical,
   Eye,
-  KeyRound,
   MapPin,
   MoreVertical,
   Pencil,
   RefreshCcw,
   Search,
-  ShieldCheck,
-  Sprout,
-  UserCog,
   Users,
   X,
 } from "lucide-react";
@@ -26,6 +22,7 @@ import { useToast } from "../context/ToastContext";
 import { auth } from "../firebase/config";
 import { formatDisplayId } from "../utils/displayId";
 import { BULAN_BARANGAYS } from "../utils/userTypes";
+import KpiCard, { KpiGrid } from "../components/KpiCard";
 import "../styles/registered-users.css";
 
 const API_BASE_URL =
@@ -540,71 +537,51 @@ export default function UsersPage() {
 
   return (
     <div className="ru-page">
-      <section className="ru-page-header">
-        <div className="ru-title-wrap">
-          <div className="ru-title-icon">
-            <Users size={21} strokeWidth={1.8} />
-          </div>
+      <h1 className="page-title-hidden">Registered Users</h1>
 
-          <div>
-            <h1>Registered Users</h1>
-            <p>
-              View registered accounts, roles, access status, and recent
-              account activity.
-            </p>
-          </div>
-        </div>
-      </section>
-
-      <section className="ru-kpi-grid">
+      <KpiGrid label="Registered users summary">
         <KpiCard
-          label="Total Users"
+          title="Total Users"
           value={counts.total}
-          note="Registered accounts"
-          icon={Users}
-          variant="green"
+          description="Registered accounts"
+          tone="total"
         />
 
         <KpiCard
-          label="Admins"
+          title="Admins"
           value={counts.admins}
-          note="System administrators"
-          icon={KeyRound}
-          variant="orange"
+          description="System administrators"
+          tone="orange"
         />
 
         <KpiCard
-          label="Staff"
+          title="Staff"
           value={counts.staff}
-          note="MENRO staff accounts"
-          icon={UserCog}
-          variant="blue"
+          description="MENRO staff accounts"
+          tone="blue"
         />
 
         <KpiCard
-          label="Participants"
+          title="Participants"
           value={counts.participants}
-          note="Community participants"
-          icon={Sprout}
-          variant="green"
+          description="Community participants"
+          tone="total"
         />
 
         <KpiCard
-          label="Active Accounts"
+          title="Active Accounts"
           value={counts.active}
-          note="Currently active"
-          icon={ShieldCheck}
-          variant="purple"
+          description="Currently active"
+          tone="green"
         />
 
         <KpiCard
-          label="Inactive Accounts"
+          title="Inactive Accounts"
           value={counts.inactive}
-          note="Deactivated users"
-          icon={Archive}
-          variant="red"
+          description="Deactivated users"
+          tone="red"
         />
-      </section>
+      </KpiGrid>
 
       <section className="ru-record-card">
         <div className="ru-tabs">
@@ -1129,22 +1106,6 @@ export default function UsersPage() {
           </div>
         </div>
       )}
-    </div>
-  );
-}
-
-function KpiCard({ label, value, note, icon: Icon, variant }) {
-  return (
-    <div className="ru-kpi-card">
-      <div className={`ru-kpi-icon ${variant}`}>
-        <Icon size={22} strokeWidth={1.8} />
-      </div>
-
-      <div>
-        <span className="ru-kpi-label">{label}</span>
-        <strong className="ru-kpi-value">{value}</strong>
-        <small className="ru-kpi-note">{note}</small>
-      </div>
     </div>
   );
 }

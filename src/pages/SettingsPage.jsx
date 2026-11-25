@@ -302,42 +302,7 @@ export default function SettingsPage() {
   return (
     <div className="settings-page">
       <form onSubmit={handleSave}>
-        <div className="settings-page-header">
-          <div className="settings-page-title">
-            <div className="settings-page-title-icon">
-              <FiSettings size={23} />
-            </div>
-
-            <div>
-              <h1>System Settings</h1>
-              <p>Configure system preferences and operational parameters.</p>
-            </div>
-          </div>
-
-          {canEdit && (
-            <div className="settings-header-actions">
-              {hasChanges && (
-                <button
-                  type="button"
-                  className="settings-btn settings-btn-secondary"
-                  onClick={handleResetUnsaved}
-                >
-                  <FiRefreshCw size={15} />
-                  Reset Changes
-                </button>
-              )}
-
-              <button
-                type="submit"
-                className="settings-btn settings-btn-primary"
-                disabled={!hasChanges}
-              >
-                <FiSave size={15} />
-                Save Settings
-              </button>
-            </div>
-          )}
-        </div>
+        <h1 className="page-title-hidden">System Settings</h1>
 
         {isStaff && (
           <div className="settings-readonly-note">
@@ -700,6 +665,30 @@ export default function SettingsPage() {
             </div>
           </SettingsSection>
         </div>
+
+        {canEdit && (
+          <div className="settings-header-actions">
+            {hasChanges && (
+              <button
+                type="button"
+                className="settings-btn settings-btn-secondary"
+                onClick={handleResetUnsaved}
+              >
+                <FiRefreshCw size={15} />
+                Reset Changes
+              </button>
+            )}
+
+            <button
+              type="submit"
+              className="settings-btn settings-btn-primary"
+              disabled={!hasChanges}
+            >
+              <FiSave size={15} />
+              Save Settings
+            </button>
+          </div>
+        )}
       </form>
       {isAdmin && <PurposePolicySettings />}
     </div>

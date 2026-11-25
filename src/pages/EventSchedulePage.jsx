@@ -4,7 +4,6 @@ import {
   CalendarDays,
   ChevronLeft,
   ChevronRight,
-  CircleCheckBig,
   Clock3,
   Edit3,
   EllipsisVertical,
@@ -15,7 +14,6 @@ import {
   Users,
   X,
   XCircle,
-  Activity,
   Leaf,
 } from "lucide-react";
 
@@ -27,6 +25,7 @@ import { formatDisplayId } from "../utils/displayId";
 import { getEventStatus, getEventStatusClass } from "../utils/eventStatus";
 import { BULAN_BARANGAYS } from "../utils/userTypes";
 
+import KpiCard, { KpiGrid } from "../components/KpiCard";
 import "../styles/event-calendar.css";
 import "../styles/dashboard-page.css";
 
@@ -1238,50 +1237,7 @@ export default function EventSchedulePage() {
 
   return (
     <div className="event-calendar-page">
-      <section className="ec-page-header">
-        <div className="ec-title-wrap">
-          <div className="ec-title-icon">
-            <CalendarDays
-              size={21}
-              strokeWidth={1.8}
-            />
-          </div>
-
-          <div>
-            <h1>Event Calendar</h1>
-
-            
-          </div>
-        </div>
-
-        {canAuthorEvents && (
-          <div className="ec-header-actions">
-            <button
-              type="button"
-              className="ec-primary-btn"
-              disabled={actionLoading}
-              onClick={() => {
-                resetForm();
-
-                setForm(
-                  (previous) => ({
-                    ...previous,
-                    date:
-                      selectedDate,
-                  })
-                );
-
-                setShowAddModal(
-                  true
-                );
-              }}
-            >
-              <Plus size={16} />
-              Add Event
-            </button>
-          </div>
-        )}
-      </section>
+      <h1 className="page-title-hidden">Event Calendar</h1>
 
       {pageError && (
         <div
@@ -1294,41 +1250,12 @@ export default function EventSchedulePage() {
       )}
 
       {canManage && (
-        <section className="ec-kpi-grid">
-          <KpiCard
-            label="Total Events"
-            value={counts.total}
-            icon={CalendarDays}
-            variant="green"
-          />
-
-          <KpiCard
-            label="Upcoming"
-            value={
-              counts.upcoming
-            }
-            icon={Clock3}
-            variant="blue"
-          />
-
-          <KpiCard
-            label="Ongoing"
-            value={
-              counts.ongoing
-            }
-            icon={Activity}
-            variant="red"
-          />
-
-          <KpiCard
-            label="Completed"
-            value={
-              counts.completed
-            }
-            icon={CircleCheckBig}
-            variant="green"
-          />
-        </section>
+        <KpiGrid label="Event summary">
+          <KpiCard title="Total Events" value={counts.total} tone="total" />
+          <KpiCard title="Upcoming" value={counts.upcoming} tone="blue" />
+          <KpiCard title="Ongoing" value={counts.ongoing} tone="amber" />
+          <KpiCard title="Completed" value={counts.completed} tone="green" />
+        </KpiGrid>
       )}
 
       <section className="ec-main-grid">
@@ -1400,6 +1327,34 @@ export default function EventSchedulePage() {
                   Completed
                 </span>
               </div>
+
+              {canAuthorEvents && (
+                <div className="ec-header-actions">
+                  <button
+                    type="button"
+                    className="ec-primary-btn"
+                    disabled={actionLoading}
+                    onClick={() => {
+                      resetForm();
+
+                      setForm(
+                        (previous) => ({
+                          ...previous,
+                          date:
+                            selectedDate,
+                        })
+                      );
+
+                      setShowAddModal(
+                        true
+                      );
+                    }}
+                  >
+                    <Plus size={16} />
+                    Add Event
+                  </button>
+                </div>
+              )}
             </div>
 
             <div className="ec-week-header">
@@ -2197,31 +2152,6 @@ export default function EventSchedulePage() {
           </div>
         )}
 
-    </div>
-  );
-}
-
-function KpiCard({
-  label,
-  value,
-  icon: Icon,
-  variant,
-}) {
-  return (
-    <div className="ec-kpi-card">
-      <div
-        className={`ec-kpi-icon ${variant}`}
-      >
-        <Icon
-          size={23}
-          strokeWidth={1.8}
-        />
-      </div>
-
-      <div>
-        <span>{label}</span>
-        <strong>{value}</strong>
-      </div>
     </div>
   );
 }

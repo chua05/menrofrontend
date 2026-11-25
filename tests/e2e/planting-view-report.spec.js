@@ -23,7 +23,7 @@ async function login(page, role, email) {
 async function readKpis(page) {
   const values = {};
   for (const key of KPI_KEYS) {
-    values[key] = Number(await page.locator(`[data-kpi="${key}"] .pr-kpi-value`).innerText());
+    values[key] = Number(await page.locator(`[data-kpi="${key}"] .kpi-card-value`).innerText());
   }
   return values;
 }
@@ -61,9 +61,9 @@ async function expectFiltersMatchKpis(page, kpis) {
 }
 
 async function expectCompactCards(page) {
-  const cards = page.locator(".pr-kpi-card");
+  const cards = page.locator(".kpi-card");
   await expect(cards).toHaveCount(6);
-  await expect(cards.locator(".pr-kpi-title")).toHaveText([
+  await expect(cards.locator(".kpi-card-title")).toHaveText([
     "Total Reports", "Awaiting Submission", "Pending Review", "Pending Verification", "Returned for Correction", "Verified"]);
   await expect(cards.locator("svg")).toHaveCount(0);
   const boxes = await cards.evaluateAll((nodes) => nodes.map((node) => node.getBoundingClientRect()));

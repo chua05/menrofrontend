@@ -107,6 +107,7 @@ import {
   normalizeTimestamp,
   timestampToDateInput,
 } from "../utils/timestampValues";
+import KpiCard, { KpiGrid } from "../components/KpiCard";
 import "../styles/planting-reports.css";
 
 const API_BASE_URL =
@@ -2779,50 +2780,13 @@ export default function PlantingPage() {
 
   return (
     <div className="pr-page">
-      <div className="pr-header">
-        <div className="pr-heading-wrap">
-          <div className="pr-heading-icon">
-            <FiGitBranch size={20} />
-          </div>
+      <h1 className="page-title-hidden">{isParticipant ? "My Planting Reports" : "Planting Reports"}</h1>
 
-          <div>
-            <h1 className="pr-title">
-              {isParticipant ? "My Planting Reports" : "Planting Reports"}
-            </h1>
-
-            <p className="pr-subtitle">
-              {isParticipant
-                ? "Submit planting evidence and track the verification status of your reports."
-                : canReview
-                ? "Review geo-tagged planting reports after automated verification."
-                : "View planting reports and staff decisions."}
-            </p>
-          </div>
-        </div>
-
-        {userRole === "staff" && <button type="button" className="pr-primary-button" onClick={() => setOfficialForm({})}><FiPlus size={15} />Submit Planting Report</button>}
-        {isParticipant && (
-          <button
-            type="button"
-            className="pr-primary-button"
-            onClick={openSubmitModal}
-            disabled={referenceLoading}
-          >
-            <FiPlus size={15} />
-            Submit Planting Report
-          </button>
-        )}
-      </div>
-
-      <div className="pr-cards" role="list" aria-label="Planting report summary">
+      <KpiGrid label="Planting report summary">
         {reportKpisFor(userRole).map((kpi) => (
-          <div key={kpi.key} className={`pr-kpi-card pr-kpi-${kpi.tone}`} role="listitem" data-kpi={kpi.key}>
-            <div className="pr-kpi-title">{kpi.title}</div>
-            <div className="pr-kpi-value">{summary[kpi.key]}</div>
-            <div className="pr-kpi-description">{kpi.description}</div>
-          </div>
+          <KpiCard key={kpi.key} title={kpi.title} value={summary[kpi.key]} description={kpi.description} tone={kpi.tone} data-kpi={kpi.key} />
         ))}
-      </div>
+      </KpiGrid>
 
       <div className="pr-panel">
         <div className="pr-toolbar">
@@ -2855,20 +2819,34 @@ export default function PlantingPage() {
             </div>
           </div>
 
-          <button
-            type="button"
-            className="pr-secondary-button"
-            onClick={async () => {
-              setSearchTerm("");
-              setStatusFilter("All");
-              await loadReports();
-              await refreshReferenceData();
-            }}
-            disabled={loading || referenceLoading}
-          >
-            <FiRefreshCw size={14} />
-            Reset
-          </button>
+          <div className="pr-toolbar-actions">
+            <button
+              type="button"
+              className="pr-secondary-button"
+              onClick={async () => {
+                setSearchTerm("");
+                setStatusFilter("All");
+                await loadReports();
+                await refreshReferenceData();
+              }}
+              disabled={loading || referenceLoading}
+            >
+              <FiRefreshCw size={14} />
+              Reset
+            </button>
+            {userRole === "staff" && <button type="button" className="pr-primary-button" onClick={() => setOfficialForm({})}><FiPlus size={15} />Submit Planting Report</button>}
+            {isParticipant && (
+              <button
+                type="button"
+                className="pr-primary-button"
+                onClick={openSubmitModal}
+                disabled={referenceLoading}
+              >
+                <FiPlus size={15} />
+                Submit Planting Report
+              </button>
+            )}
+          </div>
         </div>
 
         {filteredRecords.length === 0 ? (

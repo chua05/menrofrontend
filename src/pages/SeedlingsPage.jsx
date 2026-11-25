@@ -5,9 +5,6 @@ import {
   Plus,
   Search,
   PackageCheck,
-  PackageOpen,
-  Trees,
-  CalendarClock,
   Eye,
   Pencil,
   X,
@@ -23,6 +20,7 @@ import { useAuth } from "../context/AuthContext";
 import { useToast } from "../context/ToastContext";
 import { auth } from "../firebase/config";
 
+import KpiCard, { KpiGrid } from "../components/KpiCard";
 import "../styles/seedlings.css";
 
 const API_BASE_URL =
@@ -1073,100 +1071,64 @@ export default function SeedlingsPage() {
 
   return (
     <div className="seedlings-page">
-      {/* HEADER */}
-      <section className="sd-page-header">
-        <div className="sd-title-wrap">
-          <div className="sd-title-icon">
-            <Sprout
-              size={21}
-              strokeWidth={1.8}
-            />
-          </div>
-
-          <div>
-            <h1>Seedling Inventory</h1>
-          </div>
-        </div>
-
-        <div className="sd-header-actions">
-          {canManage && (
-            <button
-              type="button"
-              className="sd-primary-btn"
-              onClick={() =>
-                setShowAddModal(true)
-              }
-            >
-              <Plus size={16} />
-              Add Seedling
-            </button>
-          )}
-
-        </div>
-      </section>
+      <h1 className="page-title-hidden">Seedling Inventory</h1>
 
       {/* KPI */}
-      <section className="sd-kpi-grid">
+      <KpiGrid label="Seedling inventory summary">
         <KpiCard
-          label="Total Seedlings"
+          title="Total Seedlings"
           value={formatNumber(
             counts.totalSeedlings
           )}
-          note="All seedling records"
-          icon={Sprout}
-          variant="green"
+          description="All seedling records"
+          tone="total"
         />
 
         <KpiCard
-          label="Available"
+          title="Available"
           value={formatNumber(
             counts.available
           )}
-          note="Available stocks"
-          icon={PackageOpen}
-          variant="blue"
+          description="Available stocks"
+          tone="blue"
         />
 
         <KpiCard
-          label="Distributed"
+          title="Distributed"
           value={formatNumber(
             counts.distributed
           )}
-          note="Released seedlings"
-          icon={Boxes}
-          variant="orange"
+          description="Released seedlings"
+          tone="amber"
         />
 
         <KpiCard
-          label="Planted"
+          title="Planted"
           value={formatNumber(
             counts.planted
           )}
-          note="Recorded as planted"
-          icon={Trees}
-          variant="purple"
+          description="Recorded as planted"
+          tone="green"
         />
 
         <KpiCard
-          label="Tree Types"
+          title="Tree Types"
           value={counts.treeTypes}
-          note="Recorded tree types"
-          icon={PackageCheck}
-          variant="green"
+          description="Recorded tree types"
+          tone="total"
         />
 
         <KpiCard
-          label="Last Updated"
+          title="Last Updated"
           value={lastUpdated.date}
-          note={
+          description={
             lastUpdated.time ||
             "No records yet"
           }
-          icon={CalendarClock}
-          variant="cyan"
-          dateCard
+          tone="gray"
+          text
         />
-      </section>
+      </KpiGrid>
 
       {/* RECORD CARD */}
       <section className="sd-record-card">
@@ -1204,6 +1166,22 @@ export default function SeedlingsPage() {
           >
             Distribution Records
           </button>
+
+          <div className="sd-header-actions">
+            {canManage && (
+              <button
+                type="button"
+                className="sd-primary-btn"
+                onClick={() =>
+                  setShowAddModal(true)
+                }
+              >
+                <Plus size={16} />
+                Add Seedling
+              </button>
+            )}
+
+          </div>
         </div>
 
         {activeTab === "seedlings" ? (
@@ -2224,48 +2202,6 @@ export default function SeedlingsPage() {
           </div>
         )}
 
-    </div>
-  );
-}
-
-function KpiCard({
-  label,
-  value,
-  note,
-  icon: Icon,
-  variant,
-  dateCard = false,
-}) {
-  return (
-    <div className="sd-kpi-card">
-      <div
-        className={`sd-kpi-icon ${variant}`}
-      >
-        <Icon
-          size={24}
-          strokeWidth={1.8}
-        />
-      </div>
-
-      <div>
-        <span className="sd-kpi-label">
-          {label}
-        </span>
-
-        <strong
-          className={`sd-kpi-value ${
-            dateCard
-              ? "sd-kpi-date-value"
-              : ""
-          }`}
-        >
-          {value}
-        </strong>
-
-        <span className="sd-kpi-note">
-          {note}
-        </span>
-      </div>
     </div>
   );
 }

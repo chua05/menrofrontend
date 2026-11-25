@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { FiAlertCircle, FiBarChart2, FiCalendar, FiGrid, FiMapPin, FiPackage, FiShield, FiTrendingUp } from "react-icons/fi";
+import { FiAlertCircle, FiCalendar } from "react-icons/fi";
 import { Bar, BarChart, CartesianGrid, Cell, Line, LineChart, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { useAuth } from "../context/AuthContext";
 import { authenticatedFetch } from "../services/authenticatedApi";
 import { sampleAnalyticsEnabled } from "../utils/permanentSampleFeatures";
 import AnalyticsSitesMap from "../components/analytics/AnalyticsSitesMap";
+import KpiCard, { KpiGrid } from "../components/KpiCard";
 import "../styles/reforestation-analytics.css";
 
 const REFRESH_INTERVAL_MS = 60_000;
@@ -20,9 +21,8 @@ const displayRate = (value) => value == null ? "—" : `${formatNumber(value)}%`
 function EmptyRing({ label }) {
   return <div className="ra-donut-chart ra-zero-ring-wrap"><ResponsiveContainer width="100%" height="100%" initialDimension={DONUT_CHART_INITIAL_SIZE}><PieChart><Pie data={[{ value: 1 }]} dataKey="value" innerRadius={55} outerRadius={82} isAnimationActive={false}><Cell fill="#e5e9e7" /></Pie></PieChart></ResponsiveContainer><div className="ra-zero-ring-center"><strong>0</strong><span>{label}</span></div></div>;
 }
-function Kpi({ icon: Icon, iconClass, label, value, note, percent = false }) {
-  const displayed = value == null ? "—" : `${formatNumber(value)}${percent ? "%" : ""}`;
-  return <div className="ra-kpi-card"><div className={`ra-kpi-icon ${iconClass}`}><Icon size={20} /></div><div><span>{label}</span><strong>{displayed}</strong><small>{note}</small></div></div>;
+function Kpi({ label, value, note, tone, percent = false }) {
+  return <KpiCard title={label} value={value == null ? "—" : `${formatNumber(value)}${percent ? "%" : ""}`} description={note} tone={tone} />;
 }
 function StatusBadge({ status }) {
   if (!status) return <span className="ra-status neutral">Not Yet Monitored</span>;
@@ -95,7 +95,7 @@ export default function ReforestationAnalyticsPage() {
   if (loadError && !hasLoaded) return <div className="ra-page"><div className="ra-centered-state" role="alert"><span>{loadError}</span><button className="ra-secondary-button" onClick={() => loadAnalytics({ foreground: true })}>Retry</button></div></div>;
 
   return <div className="ra-page">
-    <div className="ra-header"><div className="ra-heading"><div className="ra-heading-icon"><FiTrendingUp size={21} /></div><div><h1>Reforestation Analytics</h1><p>Monitor reforestation activities, evaluate progress, and identify areas that need attention.</p></div></div></div>
+    <h1 className="page-title-hidden">Reforestation Analytics</h1>
     {sampleAnalyticsEnabled() && <Link className="inline-block rounded-lg border border-emerald-800 px-3 py-2 text-sm font-semibold text-emerald-900" to={`/${userRole}/permanent-sample-analytics`}>Permanent Sample Monitoring Analytics</Link>}
     {loadError && <div className="ra-error-banner" role="alert"><FiAlertCircle />{loadError}</div>}
     <div className="ra-filter-card">
@@ -104,9 +104,14 @@ export default function ReforestationAnalyticsPage() {
       <div className="ra-filter-field"><label>Seedling Tree</label><select value={filters.species} onChange={updateFilter("species")}><option value="All">All Species</option>{options.species.map((value) => <option key={value}>{value}</option>)}</select></div>
       <div className="ra-filter-field"><label>Planting Site</label><select value={filters.site} onChange={updateFilter("site")}><option value="All">All Sites</option>{options.sites.map((site) => <option key={site.value} value={site.value}>{site.label}</option>)}</select></div>
     </div>
-    <div className="ra-kpi-grid">
-      <Kpi icon={FiPackage} iconClass="ra-kpi-green" label="Total Seedlings Distributed" value={summary.totalSaplingsDistributed} note="Actual released quantity" /><Kpi icon={FiTrendingUp} iconClass="ra-kpi-green" label="Total Trees Planted" value={summary.totalTreesPlanted} note="From verified planting reports" /><Kpi icon={FiBarChart2} iconClass="ra-kpi-green" label="Overall Survival Rate" value={summary.overallSurvivalRate} note="Based on latest monitoring" percent /><Kpi icon={FiShield} iconClass="ra-kpi-blue" label="Verified Planting Reports" value={summary.verifiedPlantingReports} note="Approved by MENRO Staff" /><Kpi icon={FiGrid} iconClass="ra-kpi-purple" label="Barangays Covered" value={summary.barangaysCovered} note="With verified activity" /><Kpi icon={FiMapPin} iconClass="ra-kpi-orange" label="Active Planting Sites" value={summary.activePlantingSites} note="Registered active sites" />
-    </div>
+    <KpiGrid label="Analytics summary">
+      <Kpi tone="green" label="Total Seedlings Distributed" value={summary.totalSaplingsDistributed} note="Actual released quantity" />
+      <Kpi tone="green" label="Total Trees Planted" value={summary.totalTreesPlanted} note="From verified planting reports" />
+      <Kpi tone="green" label="Overall Survival Rate" value={summary.overallSurvivalRate} note="Based on latest monitoring" percent />
+      <Kpi tone="blue" label="Verified Planting Reports" value={summary.verifiedPlantingReports} note="Approved by MENRO Staff" />
+      <Kpi tone="total" label="Barangays Covered" value={summary.barangaysCovered} note="With verified activity" />
+      <Kpi tone="orange" label="Active Planting Sites" value={summary.activePlantingSites} note="Registered active sites" />
+    </KpiGrid>
     <div className="ra-chart-grid ra-chart-grid-top">
       <section className="ra-chart-card"><div className="ra-card-heading"><h2>Planting Trend Over Time</h2><p>Actual trees planted in each valid period (verified reports)</p></div><div className="ra-chart-area"><ResponsiveContainer width="100%" height="100%" initialDimension={TREND_CHART_INITIAL_SIZE}><BarChart data={analytics.plantingTrend}><CartesianGrid strokeDasharray="4 4" vertical={false} /><XAxis dataKey="period" /><YAxis allowDecimals={false} domain={[0, "auto"]} /><Tooltip formatter={(value) => [formatNumber(value), "Trees Planted"]} /><Bar dataKey="count" fill="#2f9e57" radius={[5, 5, 0, 0]} /></BarChart></ResponsiveContainer></div></section>
       <section className="ra-chart-card"><div className="ra-card-heading"><h2>Survival Rate Trend</h2><p>Weighted survival rate from actual monitoring entries</p></div><div className="ra-chart-area"><ResponsiveContainer width="100%" height="100%" initialDimension={TREND_CHART_INITIAL_SIZE}><LineChart data={analytics.survivalTrend}><CartesianGrid strokeDasharray="4 4" vertical={false} /><XAxis dataKey="period" /><YAxis domain={[0, 100]} tickFormatter={(value) => `${value}%`} /><Tooltip formatter={(value) => [`${value}%`, "Survival Rate"]} /><Line type="monotone" dataKey="rate" stroke="#238b45" strokeWidth={2.5} dot={{ r: 4 }} /></LineChart></ResponsiveContainer></div></section>
