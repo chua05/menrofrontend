@@ -15,8 +15,9 @@ import { AMBIGUOUS_WRITE_MESSAGE, AUTH_TIMEOUT_MESSAGE, AUTH_TIMEOUT_MS, READ_TI
 import { findOwnPendingSubmission, findReconciledSubmission, ownSubmissionIdsForEvent } from "../utils/plantingSubmissionReconcile";
 import { clearPendingSubmission, loadPendingSubmission, savePendingSubmission } from "../utils/pendingPlantingSubmission";
 import "leaflet/dist/leaflet.css";
-import * as exifr from "exifr";
-import { extractGpsCoordinates } from "../utils/exifGps";
+import { isSupportedPhotoFile, photoMetadataProblem, readPhoto, UNSUPPORTED_PHOTO_MESSAGE } from "../utils/photoFile";
+import { heicToPreviewBlob } from "../utils/heicPreview";
+import { manilaDayStart } from "../utils/photoMetadata";
 import PageLoadingState from "../components/PageLoadingState";
 import { focusFirstInvalid, backendFieldErrors, retainInvalidFieldMessages } from "../utils/formValidation";
 import {
@@ -126,11 +127,9 @@ const OUTSIDE_BULAN_MESSAGE =
 const MISSING_EXIF_MESSAGE =
   "This photo does not contain GPS location metadata. Please upload an original geotagged photo with location information.";
 const UNREADABLE_METADATA_MESSAGE =
-  "The photo's location metadata could not be read. Please use the original geotagged photo and try again.";
-const UNSUPPORTED_PHOTO_MESSAGE =
-  "This photo format is not supported. Please upload a JPG, PNG, or WEBP image.";
+  "This photo could not be read on this device. Remove it and add it again.";
 const UNREADABLE_PHOTO_MESSAGE =
-  "This photo could not be processed. Please upload a valid JPG, PNG, or WEBP image.";
+  "This photo could not be processed. Please upload the original JPEG, HEIC, PNG or WebP photo.";
 const NO_DISTRIBUTION_MESSAGE =
   "No released seedling distributions are available for this planting event.";
 const PHOTO_EXIF_LOCATION_SOURCE = "Photo Metadata";
@@ -142,6 +141,10 @@ const distributionMatchesEvent = (distribution, event) => {
     (String(distribution.eventId || "") === String(getEventId(event)) ||
       Boolean(requestId) && String(distribution.requestId || "") === requestId);
 };
+const DRAFT_MAX_AGE_MS = 2 * 60 * 60 * 1000;
+const DRAFT_FIELDS = ["submittedByName", "submittedBySector", "submittedByContactNumber", "participantType", "organizationAffiliation", "barangay",
+  "siteId", "siteName", "eventId", "eventName", "plantingDate", "distributionId", "distributionItemKey", "inventoryId", "species",
+  "requestedQuantity", "quantityReleased", "remainingQuantity", "quantity", "leftoverQuantity", "remarks"];
 const BARANGAY_GEOJSON_URL = `${API_BASE_URL}/sites/barangay-boundaries`;
 const BULAN_FALLBACK_CENTER = { lat: 12.6598, lng: 123.918 };
 
@@ -395,6 +398,8 @@ export default function PlantingPage() {
   // False until this user's own releases are known; selections are never cleared on an unknown list.
   const [distributionsReady, setDistributionsReady] = useState(false);
   const requesterUidRef = useRef("");
+  const keptFormRef = useRef(false);
+  const draftRestoredRef = useRef(false);
   const [events, setEvents] = useState([]);
   const [bulanGeoJson, setBulanGeoJson] = useState(null);
 
@@ -1532,7 +1537,13 @@ export default function PlantingPage() {
   }, [showSubmitModal, hasGps, municipalityScopeStatus, isInsideSelectedSite,
     selectedSite, form.latitude, form.longitude]);
 
+  function draftUid() {
+    return currentUser?.uid || auth.currentUser?.uid || "";
+  }
+
   function resetForm() {
+    keptFormRef.current = false;
+    clearPendingSubmission("participant-draft", draftUid());
     evidenceContext.current += 1;
     setAttendanceFile(null); setSavedParticipantReport(null);
     setSubmissionProgress(null);
@@ -1606,11 +1617,27 @@ export default function PlantingPage() {
       setShowSubmitModal(true);
       return;
     }
+    if (keptFormRef.current && options?.correction !== true) {
+      keptFormRef.current = false;
+      setPopup({ message: "", type: "success" });
+      setShowSubmitModal(true);
+      await refreshReferenceData();
+      return;
+    }
     if (options?.correction !== true) setCorrectionTarget(null);
     resetForm();
     setPopup({ message: "", type: "success" });
     setShowSubmitModal(true);
     await refreshReferenceData();
+  }
+
+  // Back, Escape or the phone closing the dialog is an interruption, not a decision to discard: entries and photos stay.
+  function interruptSubmitModal() {
+    if (submitting) return;
+    if (unconfirmedSubmission) { closeSubmitModal(); return; }
+    keptFormRef.current = true;
+    setShowSubmitModal(false);
+    toast.showToast("Your unfinished planting report was kept. Select Submit Planting Report to continue.", { type: "info" });
   }
 
   function closeSubmitModal() {
@@ -1736,11 +1763,45 @@ export default function PlantingPage() {
     return () => window.clearTimeout(timer);
   }, [staleSelection]);
 
+  // A phone may reload the page while its camera or gallery is open. Typed entries are kept for this tab and user only; photos and
+  // locations are not stored and must be added again.
+  useEffect(() => {
+    if (!isParticipant || !showSubmitModal || submitting || unconfirmedSubmission || savedParticipantReport) return undefined;
+    const entries = Object.fromEntries(DRAFT_FIELDS.map(field => [field, form[field]]));
+    if (!DRAFT_FIELDS.some(field => String(form[field] || "") && field !== "leftoverQuantity")) return undefined;
+    const timer = window.setTimeout(() => savePendingSubmission("participant-draft", draftUid(),
+      { entries, finalEntries, correction: correctionTarget, photoCount: photoFiles.length }), 250);
+    return () => window.clearTimeout(timer);
+  }, [isParticipant, showSubmitModal, submitting, unconfirmedSubmission, savedParticipantReport, form, finalEntries, correctionTarget, photoFiles.length]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    const uid = draftUid();
+    if (!isParticipant || !uid || draftRestoredRef.current) return undefined;
+    const draft = loadPendingSubmission("participant-draft", uid);
+    if (!draft?.entries) { draftRestoredRef.current = true; return undefined; }
+    if (!(Date.now() - Date.parse(draft.savedAt || "") < DRAFT_MAX_AGE_MS) || loadPendingSubmission("participant", uid)) {
+      draftRestoredRef.current = true;
+      clearPendingSubmission("participant-draft", uid);
+      return undefined;
+    }
+    const timer = window.setTimeout(() => {
+      draftRestoredRef.current = true;
+      setForm(current => ({ ...current, ...Object.fromEntries(DRAFT_FIELDS.filter(field => ["string", "number"].includes(typeof draft.entries[field])).map(field => [field, draft.entries[field]])) }));
+      if (draft.finalEntries?.entries) setFinalEntries(draft.finalEntries);
+      if (draft.correction?.id) setCorrectionTarget(draft.correction);
+      setShowSubmitModal(true);
+      setPopup({ type: "info", message: draft.photoCount ? "Your entries were restored after the page reloaded. Photos are not stored on this device, so please add them again."
+        : "Your entries were restored after the page reloaded." });
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [isParticipant, currentUser?.uid]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Another signed-in user never sees the previous user's releases or entries.
   useEffect(() => {
     const requesterUid = currentUser?.uid || "", previousUid = requesterUidRef.current;
     requesterUidRef.current = requesterUid;
     if (!previousUid || previousUid === requesterUid) return undefined;
+    clearPendingSubmission("participant-draft", previousUid);
     setDistributions([]); setDistributionsReady(false); setUnconfirmedSubmission(null);
     setShowSubmitModal(false); setCorrectionTarget(null); resetForm();
     return undefined;
@@ -1985,7 +2046,8 @@ export default function PlantingPage() {
           verificationStatus: "needs_review",
           verificationTone: "warning",
           verificationLabel: "Outside Planting Site",
-          verificationMessage: OUTSIDE_SITE_WARNING,
+          verificationMessage: hasLegacyPolygon && !hasCoverageRadius ? OUTSIDE_SITE_WARNING
+            : `${OUTSIDE_SITE_WARNING} It is ${Math.round(distanceMeters)} m from the site center marked on the map (limit ${hasCoverageRadius ? coverageRadius : SITE_GPS_TOLERANCE_METERS} m).`,
           submissionBlocked: false,
           distanceMeters,
           boundaryRule: hasCoverageRadius ? "configured-radius" : hasLegacyPolygon ? "site-polygon" : "50m-fallback",
@@ -2032,76 +2094,46 @@ export default function PlantingPage() {
       verificationMessage: "",
     });
 
-    const readable = await canRenderImage(preview.url);
-    if (!activePhotoPreviewIdsRef.current.has(preview.id)) return { cancelled: true };
-    if (!readable) {
-      updatePhotoPreview(preview.id, {
-        verificationStatus: "failed",
-        verificationTone: "error",
-        verificationLabel: "Verification Failed — Unreadable Image",
-        verificationMessage: UNREADABLE_PHOTO_MESSAGE,
-        submissionBlocked: true,
-      });
-      if (clearsFormLocation) clearPhotoLocation();
-      if (announce) showPopup(UNREADABLE_PHOTO_MESSAGE, "error", { reveal: false });
-      return { verified: false, message: UNREADABLE_PHOTO_MESSAGE, tone: "error" };
-    }
-
-    let metadata;
-    try {
-      metadata = await withDeadline(exifr.parse(file, { gps: true, tiff: true, exif: true }), PHOTO_CHECK_TIMEOUT_MS, () => new Error("Photo metadata could not be read in time."));
-    } catch {
-      if (!activePhotoPreviewIdsRef.current.has(preview.id)) return { cancelled: true };
-      updatePhotoPreview(preview.id, {
-        verificationStatus: "failed",
-        verificationTone: "error",
-        verificationLabel: "Verification Failed — Metadata Unreadable",
-        verificationMessage: UNREADABLE_METADATA_MESSAGE,
-        submissionBlocked: true,
-      });
-      if (clearsFormLocation) clearPhotoLocation();
-      if (announce) showPopup(UNREADABLE_METADATA_MESSAGE, "error", { reveal: false });
-      return { verified: false, message: UNREADABLE_METADATA_MESSAGE, tone: "error" };
-    }
-
-    if (!activePhotoPreviewIdsRef.current.has(preview.id)) return { cancelled: true };
-    const gps = extractGpsCoordinates(metadata || {});
-    const latitude = gps.latitude;
-    const longitude = gps.longitude;
-
-    if (gps.status !== "valid") {
-      const message = gps.status === "missing"
-        ? "Your photo does not contain GPS location metadata. Please upload an original geotagged photo."
-        : gps.status === "unparseable"
-          ? "Your photo contains GPS metadata, but the coordinates could not be read correctly."
-          : "Your photo contains invalid GPS coordinates. Please upload an original geotagged photo with valid location information.";
-      updatePhotoPreview(preview.id, {
-        verificationStatus: "failed",
-        verificationTone: "error",
-        verificationLabel: gps.status === "missing"
-          ? "Verification Failed — No GPS Metadata"
-          : gps.status === "unparseable"
-            ? "Verification Failed — GPS Metadata Unreadable"
-            : "Verification Failed — Invalid GPS Coordinates",
-        verificationMessage: message,
-        submissionBlocked: true,
-        gpsStatus: gps.status,
-        locationSource: PHOTO_EXIF_LOCATION_SOURCE,
-      });
+    const failPhoto = (label, message, changes = {}) => {
+      updatePhotoPreview(preview.id, { verificationStatus: "failed", verificationTone: "error", verificationLabel: label, verificationMessage: message, submissionBlocked: true, ...changes });
       if (clearsFormLocation) clearPhotoLocation();
       if (announce) showPopup(message, "error", { reveal: false });
       return { verified: false, message, tone: "error" };
-    }
+    };
 
-    const capturedAt = metadata?.DateTimeOriginal ?? metadata?.DateTimeDigitized ??
-      metadata?.CreateDate ?? metadata?.DateTime;
-    const capturedDate = capturedAt ? new Date(capturedAt) : null;
-    const capturedAtIso = capturedDate && !Number.isNaN(capturedDate.getTime())
-      ? capturedDate.toISOString()
-      : "";
+    let photo;
+    try {
+      photo = await withDeadline(readPhoto(file), PHOTO_CHECK_TIMEOUT_MS, () => new Error("Photo metadata could not be read in time."));
+    } catch {
+      if (!activePhotoPreviewIdsRef.current.has(preview.id)) return { cancelled: true };
+      return failPhoto("Verification Failed — Photo Unreadable", UNREADABLE_METADATA_MESSAGE);
+    }
+    if (!activePhotoPreviewIdsRef.current.has(preview.id)) return { cancelled: true };
+    if (photo.container === null) return failPhoto("Verification Failed — Unsupported Format", UNSUPPORTED_PHOTO_MESSAGE);
+
+    let readable = await canRenderImage(preview.url);
+    if (!readable && photo.container === "heic") {
+      // Only Safari shows HEIC itself. The picture below is for the screen; the original file is verified and uploaded.
+      try {
+        const url = URL.createObjectURL(await withDeadline(heicToPreviewBlob(file), PHOTO_CHECK_TIMEOUT_MS, () => new Error("timeout")));
+        if (!activePhotoPreviewIdsRef.current.has(preview.id)) { URL.revokeObjectURL(url); return { cancelled: true }; }
+        previewUrlsRef.current.push(url);
+        updatePhotoPreview(preview.id, { url });
+        readable = true;
+      } catch (error) { readable = error?.code === "HEIC_VIEWER_UNAVAILABLE"; }
+    }
+    if (!activePhotoPreviewIdsRef.current.has(preview.id)) return { cancelled: true };
+    if (!readable) return failPhoto("Verification Failed — Unreadable Image", UNREADABLE_PHOTO_MESSAGE);
+
+    const problem = photoMetadataProblem(photo);
+    if (problem) return failPhoto(problem.label, problem.message, { gpsStatus: problem.status, locationSource: PHOTO_EXIF_LOCATION_SOURCE });
+    const { latitude, longitude } = photo.gps;
+
+    const capturedDate = photo.captured.capturedAt;
+    const capturedAtIso = capturedDate ? capturedDate.toISOString() : "";
     let locationResult = evaluatePhotoCoordinates(latitude, longitude);
-    const declaredDate = form.plantingDate ? new Date(`${form.plantingDate}T00:00:00`) : null;
-    const captureTimeSuspicious = !capturedDate || !declaredDate ||
+    const declaredDate = manilaDayStart(form.plantingDate);
+    const captureTimeSuspicious = !capturedDate || photo.captured.contradictory ||
       Number.isNaN(declaredDate.getTime()) || capturedDate > new Date() ||
       Math.abs(capturedDate.getTime() - declaredDate.getTime()) > 24 * 60 * 60 * 1000;
     if (!locationResult.submissionBlocked && captureTimeSuspicious) {
@@ -2118,7 +2150,7 @@ export default function PlantingPage() {
     const location = {
       latitude,
       longitude,
-      accuracy: "",
+      accuracy: photo.gps.accuracyMeters ?? "",
       locationSource: PHOTO_EXIF_LOCATION_SOURCE,
       photoCapturedAt: capturedAtIso,
       locationCapturedAt: capturedAtIso,
@@ -2184,18 +2216,7 @@ export default function PlantingPage() {
   }
 
   function isAllowedImageFile(file) {
-    const allowedTypes = ["image/jpeg", "image/png", "image/webp"];
-    const allowedExtensions = [".jpg", ".jpeg", ".png", ".webp"];
-    const fileName = String(file?.name || "").toLowerCase();
-    const hasAllowedExtension = allowedExtensions.some((extension) =>
-      fileName.endsWith(extension)
-    );
-
-    return (
-      allowedTypes.includes(file?.type) ||
-      ((file?.type === "" || file?.type === "application/octet-stream") &&
-        hasAllowedExtension)
-    );
+    return isSupportedPhotoFile(file);
   }
 
   async function handlePhotoChange(event) {
@@ -3004,7 +3025,7 @@ export default function PlantingPage() {
         pending={pendingOfficialSubmission === undefined ? loadPendingSubmission("staff", auth.currentUser?.uid || currentUser?.uid) : pendingOfficialSubmission} onPendingChange={updatePendingOfficialSubmission} onClose={() => setOfficialForm(null)}
         onSaved={(_report, info) => { void refreshAfterSave(`${(info ? info.correction : officialForm.correction) ? "Corrected official planting report resubmitted to the MENRO Admin for approval." : "Official planting report submitted to the MENRO Admin for approval."}${info?.evidencePending ? " Its planting photos were not uploaded: add them with Add Verified Planting Evidence on the report." : ""}${info?.attendancePending ? " The optional attendance file was not uploaded." : ""}`); }} />}
       {showSubmitModal && isParticipant && (
-        <ModalDialog label="Submit Planting Report" onClose={closeSubmitModal} dismissible={!submitting} busy={submitting}>
+        <ModalDialog label="Submit Planting Report" onClose={interruptSubmitModal} dismissible={!submitting} busy={submitting}>
         <PlantingReportFormErrorBoundary
           resetKey={formRenderRecovery}
           onRecover={async () => {
@@ -3423,7 +3444,7 @@ export default function PlantingPage() {
                               )}
                               {optionalFiniteNumber(preview.accuracy) !== null && optionalFiniteNumber(preview.accuracy) >= 0 ? (
                                 <span>GPS Accuracy: {optionalFiniteNumber(preview.accuracy).toFixed(1)} meters</span>
-                              ) : <span>GPS Accuracy: Not provided by EXIF</span>}
+                              ) : <span>GPS Accuracy: Unknown</span>}
                               {preview.boundaryRule && (
                                 <span>Boundary Rule: {preview.boundaryRule === "configured-radius"
                                   ? `Configured radius (${preview.boundaryLimitMeters} m)`
@@ -3506,7 +3527,7 @@ export default function PlantingPage() {
                           <div className="pr-gps-value-label">GPS Accuracy</div>
                           <div className="pr-gps-value">
                             {Number.isFinite(evidenceMapAccuracy) && evidenceMapAccuracy >= 0
-                              ? `${evidenceMapAccuracy.toFixed(1)} m` : "Not provided by EXIF"}
+                              ? `${evidenceMapAccuracy.toFixed(1)} m` : "Unknown"}
                           </div>
                         </div>
                         <div>

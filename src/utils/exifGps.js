@@ -62,7 +62,7 @@ function coordinate(value, reference, maximum) {
   if (dms) {
     if (dms.length < 3) return { status: "unparseable", value: null };
     const [degrees, minutes, seconds] = dms.slice(0, 3).map(rationalToNumber);
-    if (![degrees, minutes, seconds].every(Number.isFinite) || minutes < 0 || minutes >= 60 || seconds < 0 || seconds >= 60) return { status: "unparseable", value: null };
+    if (![degrees, minutes, seconds].every(Number.isFinite) || minutes < 0 || minutes >= 60 || seconds < 0 || seconds > 60) return { status: "unparseable", value: null };
     result = Math.abs(degrees) + minutes / 60 + seconds / 3600;
     if (degrees < 0) result *= -1;
   } else result = rationalToNumber(value);

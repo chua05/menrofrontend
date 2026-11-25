@@ -2385,3 +2385,53 @@ test("Participant report options come only from their own releases and a lost re
   await expect(page.getByText("You have no released seedlings awaiting a planting report.")).toBeVisible();
   fixture.check();
 });
+
+const formValues = page => page.evaluate(() => Object.fromEntries(["submittedByName", "barangay", "siteId", "eventId", "distributionId"].map(id => [id, document.querySelector(`#planting-${id}`)?.value])));
+const keptValues = { submittedByName: "Fixture requester", barangay: "Bical", siteId: site.id, eventId: "event-1", distributionId: "release-1" };
+test("an interrupted report form keeps its entries and verified photo: Escape, a dialog closed by the phone, and a cancelled camera", async ({ page }) => {
+  const fixture = await participantEvidenceForm(page); await reportIdentity(page); await takeFixturePhoto(page); await expect(cameraEvidence(page)).toBeVisible();
+  await page.getByRole("button", { name: "Take Photo", exact: true }).click(); await page.keyboard.press("Escape");
+  expect(await formValues(page)).toMatchObject(keptValues); await expect(cameraEvidence(page)).toBeVisible();
+  for (const interrupt of [() => page.keyboard.press("Escape"), () => page.evaluate(() => document.querySelector('dialog[aria-label="Submit Planting Report"]').close())]) {
+    await interrupt();
+    await expect(page.getByRole("dialog", { name: "Submit Planting Report" })).toHaveCount(0);
+    await expect(page.getByText("Your unfinished planting report was kept.", { exact: false })).toBeVisible();
+    await page.getByRole("button", { name: "Submit Planting Report", exact: true }).click();
+    expect(await formValues(page)).toMatchObject(keptValues); await expect(cameraEvidence(page)).toBeVisible();
+  }
+  // Cancel is a decision to discard.
+  await page.getByRole("dialog", { name: "Submit Planting Report" }).getByRole("button", { name: "Cancel", exact: true }).click();
+  await page.getByRole("button", { name: "Submit Planting Report", exact: true }).click(); expect((await formValues(page)).submittedByName).toBe("");
+  fixture.check();
+});
+test("a reloaded page restores typed entries only, says photos must be added again, and stores no photo or location", async ({ page }) => {
+  const fixture = await participantEvidenceForm(page); await reportIdentity(page); await takeFixturePhoto(page); await expect(cameraEvidence(page)).toBeVisible();
+  await page.waitForTimeout(400);
+  const stored = await page.evaluate(() => JSON.stringify({ ...sessionStorage, ...localStorage }));
+  expect(stored).toContain("participant-draft"); expect(stored).not.toMatch(/latitude|longitude|data:image|blob:|captureSession|nonce/);
+  await page.reload();
+  await expect(page.getByRole("dialog", { name: "Submit Planting Report" })).toBeVisible();
+  await expect.poll(() => formValues(page)).toMatchObject(keptValues);
+  await expect(page.getByText("please add them again", { exact: false }).first()).toBeVisible(); await expect(page.getByText(/0 \/ 10 photos selected/)).toBeVisible();
+  await page.getByRole("dialog", { name: "Submit Planting Report" }).getByRole("button", { name: "Cancel", exact: true }).click();
+  expect(await page.evaluate(() => Object.keys(sessionStorage).some(key => key.includes("participant-draft")))).toBe(false);
+  await page.reload(); await expect(page.getByRole("button", { name: "Submit Planting Report", exact: true })).toBeVisible(); await expect(page.getByRole("dialog", { name: "Submit Planting Report" })).toHaveCount(0);
+  fixture.check();
+});
+test("unsupported and corrupted photos are named as such, never as missing GPS", async ({ page }) => {
+  const fixture = await participantEvidenceForm(page);
+  const input = page.getByLabel("Planting evidence photos"), label = page.locator(".pr-preview-verification strong");
+  await input.setInputFiles({ name: "renamed.jpg", mimeType: "image/jpeg", buffer: Buffer.from("this is not a photo") });
+  await expect(label.filter({ hasText: "Unsupported Format" })).toBeVisible(); await expect(uploadFailure(page)).toHaveCount(0);
+  await input.setInputFiles({ name: "clip.gif", mimeType: "image/gif", buffer: Buffer.from("GIF89a") });
+  await expect(page.getByText("The photo format could not be processed.", { exact: false }).last()).toBeVisible();
+  fixture.check();
+});
+test("an original HEIC photo is shown and read in a browser without HEIC support", async ({ page }) => {
+  const fixture = await participantEvidenceForm(page);
+  await page.getByLabel("Planting evidence photos").setInputFiles(new URL("../fixtures/real-photos/heic-single.heic", import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, "$1"));
+  await expect.poll(() => page.getByAltText("Planting evidence preview 1").evaluate(element => element.naturalWidth), { timeout: 30000 }).toBeGreaterThan(500);
+  // It has no GPS: it says so, and not that the file is unreadable.
+  await expect(uploadFailure(page)).toBeVisible(); await expect(page.locator(".pr-preview-verification strong").filter({ hasText: /Unreadable|Unsupported/ })).toHaveCount(0);
+  fixture.check();
+});

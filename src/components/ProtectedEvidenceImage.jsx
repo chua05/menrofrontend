@@ -1,3 +1,4 @@
+import { displayableBlob } from "../utils/heicPreview";
 import { useEffect, useState } from "react";
 import { auth } from "../firebase/config";
 import { privateImageRequest } from "../utils/privateImageRequests";
@@ -68,7 +69,9 @@ export default function ProtectedEvidenceImage({
           return;
         }
 
-        objectUrl = URL.createObjectURL(response.blob);
+        const shown = await displayableBlob(response.blob);
+        if (!active) return;
+        objectUrl = URL.createObjectURL(shown);
         setState({ status: "ready", url: objectUrl });
       } catch (error) {
         if (active && error.name !== "AbortError") {

@@ -3,12 +3,12 @@ import PlantingLocationMap from "./PlantingLocationMap";
 import PhotoRequirementsDialog from "./PhotoRequirementsDialog";
 import { useEffect, useRef, useState } from "react";
 import { FiCamera, FiInfo, FiNavigation } from "react-icons/fi";
-import * as exifr from "exifr";
 import SecureCameraCapture from "./SecureCameraCapture";
 import ModalDialog from "./ModalDialog";
 import { authenticatedFetch } from "../services/authenticatedApi";
 import { withDeadline } from "../utils/requestTimeout";
-import { extractGpsCoordinates } from "../utils/exifGps";
+import { isSupportedPhotoFile, photoMetadataProblem, readPhoto, PHOTO_FORMATS } from "../utils/photoFile";
+import { displayableBlob } from "../utils/heicPreview";
 import { buildEvidenceLocationView } from "../utils/evidenceLocationView";
 import { buildLocationPreviewStatus, compareEvidenceToSite, coordinateValue, isOutsideSite, isPointInBulanBoundary } from "../utils/plantingLocationPreview";
 const NO_RELEASE_MESSAGE = "Select a released request before adding planting photos.";
@@ -16,7 +16,11 @@ const CAMERA_DIAGNOSTIC = "camera-diagnostic";
 const sourceLabel = source => source === "browser-camera" ? "Browser Capture Session" : "Photo Metadata (EXIF)";
 function Preview({ file }) {
   const image = useRef(null);
-  useEffect(() => { const url = URL.createObjectURL(file); image.current.src = url; return () => URL.revokeObjectURL(url); }, [file]);
+  useEffect(() => {
+    let active = true, url = "";
+    displayableBlob(file).catch(() => file).then(blob => { if (!active) return; url = URL.createObjectURL(blob); image.current.src = url; });
+    return () => { active = false; if (url) URL.revokeObjectURL(url); };
+  }, [file]);
   return <img ref={image} alt={`Planting evidence: ${file.name}`}  />;
 }
 function photoEvidence(row) {
@@ -42,18 +46,17 @@ const METADATA_TIMEOUT_MS = 20_000;
 // Reads one original photo's EXIF. The same rules as before: original GPS
 // metadata and a valid, non-future capture timestamp are required.
 async function metadataFailure(file) {
-  let metadata;
+  let photo;
   try {
-    metadata = await withDeadline(exifr.parse(file, { gps: true, tiff: true, exif: true }), METADATA_TIMEOUT_MS, () => new Error("timeout"));
+    photo = await withDeadline(readPhoto(file), METADATA_TIMEOUT_MS, () => new Error("timeout"));
   } catch {
-    return { message: `${file.name}: the photo metadata could not be read. Upload the original geotagged file or use Take Photo with a secure capture session.` };
+    return { message: `${file.name}: the photo could not be read on this device. Add the original file again or use Take Photo with a secure capture session.` };
   }
-  const gps = extractGpsCoordinates(metadata || {});
-  const taken = new Date(metadata?.DateTimeOriginal || metadata?.CreateDate || metadata?.DateTime || "");
-  if (gps.status === "missing") return { message: `${file.name} has no GPS metadata. Upload the original geotagged file or use Take Photo with a secure capture session.` };
-  if (gps.status !== "valid") return { message: `${file.name}: the GPS metadata is incomplete or unreadable. Browser location permission does not add EXIF to an existing file.` };
-  if (!Number.isFinite(taken.getTime()) || taken > new Date()) return { message: `${file.name}: a valid original capture timestamp is required. Device coordinates cannot replace EXIF.` };
-  return { location: { latitude: gps.latitude, longitude: gps.longitude } };
+  const problem = photoMetadataProblem(photo);
+  if (problem?.status === "missing") return { message: `${file.name} has no GPS metadata. Upload the original geotagged file or use Take Photo with a secure capture session.` };
+  if (problem) return { message: `${file.name}: ${problem.message}` };
+  if (photo.captured.status !== "valid" || photo.captured.capturedAt > new Date()) return { message: `${file.name}: a valid original capture timestamp is required. Device coordinates cannot replace EXIF.` };
+  return { location: { latitude: photo.gps.latitude, longitude: photo.gps.longitude, accuracy: photo.gps.accuracyMeters } };
 }
 async function cameraRequest(path, options) {
   const response = await authenticatedFetch(path, options), body = await response.json();
@@ -85,7 +88,7 @@ export default function OfficialPlantingPhotos({ site, photos, onChange, error, 
   function add(files) {
     if (disabled) return;
     if (!site) return onError(NO_RELEASE_MESSAGE);
-    if (photos.length + files.length > 10 || files.some(file => file.size > 10 * 1024 * 1024 || !["image/jpeg", "image/png", "image/webp"].includes(file.type))) return onError("Choose at most 10 original JPEG, PNG or WebP planting photos, each up to 10 MB.");
+    if (photos.length + files.length > 10 || files.some(file => file.size > 10 * 1024 * 1024 || !isSupportedPhotoFile(file))) return onError(`Choose at most 10 original ${PHOTO_FORMATS} planting photos, each up to 10 MB.`);
     onError(""); onChange([...photos, ...files.map(file => ({ id: crypto.randomUUID(), file, descriptor: { source: "uploaded-original" }, status: "unverified" }))]);
   }
   function startCamera() {
@@ -140,7 +143,7 @@ export default function OfficialPlantingPhotos({ site, photos, onChange, error, 
         </div>}
         {hasGps && <div className="pr-gps-captured">
           {[["Latitude", latitude.toFixed(6)], ["Longitude", longitude.toFixed(6)], ["Source", evidence.sourceLabel],
-            ["GPS Accuracy", Number.isFinite(accuracy) && accuracy >= 0 ? `${accuracy.toFixed(1)} m` : "Not provided by EXIF"],
+            ["GPS Accuracy", Number.isFinite(accuracy) && accuracy >= 0 ? `${accuracy.toFixed(1)} m` : "Unknown"],
             ["Distance from Site", comparison.distanceMeters !== null ? `${comparison.distanceMeters.toFixed(1)} m` : "Unable to calculate"],
             ["Boundary Rule", boundaryRuleLabel(evidence, comparison)], ["Location Status", locationResult.label], ["Verification", evidence.verification]]
             .map(([label, value]) => <div key={label}><div className="pr-gps-value-label">{label}</div><div className="pr-gps-value">{value}</div></div>)}
