@@ -47,11 +47,11 @@ function markerPopup(tree, onSelectTree) {
   const list = document.createElement("dl");
   rows.forEach(([label, value]) => { if (value === null || value === undefined || value === "") return; const dt=document.createElement("dt"),dd=document.createElement("dd");dt.textContent=label;dd.textContent=String(value);list.append(dt,dd); });
   root.append(list);
-  if (tree.sampleId && onSelectTree) { const button=document.createElement("button");button.type="button";button.textContent="Open assessment";button.addEventListener("click",()=>onSelectTree(tree.sampleId));root.append(button); }
+  if (tree.sampleId && onSelectTree) { const button=document.createElement("button");button.type="button";button.textContent="Open assessment";button.addEventListener("click",()=>onSelectTree(tree.sampleId,true));root.append(button); }
   return root;
 }
 
-export default function PlantingLocationMap({ site, evidence, registeredTree, trees = EMPTY_TREES, treeMarkers = EMPTY_TREES, selectedTreeId = "", status, highlightSitePolygon = false, onSelectTree, onBoundaries, onBoundaryError }) {
+export default function PlantingLocationMap({ site, evidence, registeredTree, trees = EMPTY_TREES, treeMarkers = EMPTY_TREES, selectedTreeId = "", popupTreeId = "", status, highlightSitePolygon = false, onSelectTree, onBoundaries, onBoundaryError }) {
   const root = useRef(null), mapRef = useRef(null), layers = useRef(null), callbacks = useRef({});
   const [barangayLayer, setBarangayLayer] = useState(null);
   const barangay = site?.barangay || "";
@@ -153,6 +153,7 @@ export default function PlantingLocationMap({ site, evidence, registeredTree, tr
     }
 
     const treeRows = treeMarkers.length ? treeMarkers : trees.length ? trees : registeredTree ? [registeredTree] : [];
+    let openMarker = null;
     treeRows.forEach(tree => {
       const treeLatitude = coordinateValue(tree?.latitude), treeLongitude = coordinateValue(tree?.longitude);
       if (!Number.isFinite(treeLatitude) || !Number.isFinite(treeLongitude)) return;
@@ -166,6 +167,7 @@ export default function PlantingLocationMap({ site, evidence, registeredTree, tr
       const selectTree = () => onSelectTree?.(tree.sampleId);
       marker.on("click", selectTree);
       marker.on("mousedown", selectTree);
+      if (popupTreeId && String(tree.sampleId) === String(popupTreeId)) openMarker = marker;
       fitPoints.push([treeLatitude, treeLongitude]);
     });
     if (Number.isFinite(latitude) && Number.isFinite(longitude)) {
@@ -181,9 +183,10 @@ export default function PlantingLocationMap({ site, evidence, registeredTree, tr
       const bounds = L.latLngBounds(fitPoints);
       if (bounds.isValid()) map.fitBounds(bounds.pad(0.4), { padding: [34, 34], maxZoom: 17 });
     }
+    openMarker?.openPopup();
     const resize = window.setTimeout(() => map.invalidateSize(), 0);
     return () => window.clearTimeout(resize);
-  }, [site, registeredTree, trees, treeMarkers, selectedTreeId, latitude, longitude, accuracy, highlightSitePolygon, onSelectTree]);
+  }, [site, registeredTree, trees, treeMarkers, selectedTreeId, popupTreeId, latitude, longitude, accuracy, highlightSitePolygon, onSelectTree]);
 
   return <div className="pr-location-map-section">
     <div className="pr-location-map-heading">

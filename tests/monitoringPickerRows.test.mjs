@@ -62,7 +62,7 @@ test("a missing cohort is stated as setup MENRO must complete, without a guessed
   assert.match(text, /Monitoring setup has not been created for this report yet/);
   assert.match(text, /MENRO must complete it/);
   assert.doesNotMatch(text, /verification workflow|re-?approve|re-?create|resubmit|because/i);
-  assert.equal(row.stage, "", "the dropdown never repeats the table headline Awaiting Monitoring Submission");
+  assert.equal(row.stage, "", "the dropdown never repeats the table headline Awaiting First Monitoring Visit");
 });
 
 test("a legacy report keeps its historical aggregate meaning and never looks startable", () => {

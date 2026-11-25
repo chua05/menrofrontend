@@ -76,8 +76,27 @@ const exactText=label=>new RegExp(`^${label.replace(/[.*+?^${}()|[\]\\]/g,"\\$&"
 const shellValue=(dialog,label)=>dialog.locator(".psm-shell dt").filter({hasText:exactText(label)}).locator("xpath=following-sibling::dd");
 const plusOneMonth=value=>{const [y,m,d]=value.split("-").map(Number);const absolute=y*12+m;const year=Math.floor(absolute/12),month=absolute%12;const last=new Date(Date.UTC(year,month+1,0,12)).getUTCDate();return `${year}-${String(month+1).padStart(2,"0")}-${String(Math.min(d,last)).padStart(2,"0")}`;};
 
-test("real first visit: eligible report, 10% sample registration, evidence, draft, submit, return, approval, lock and visit 2 schedule",async({browser})=>{
- test.setTimeout(600000);
+// Visit 2 is due one calendar month after Visit 1, so the emulator-only fixture is moved two months back (dates only; the
+// conditions, measurements, evidence and Tree IDs approved in the browser are untouched).
+const documents="http://127.0.0.1:8381/v1/projects/demo-menro-legacy-monitoring-20261106/databases/(default)/documents";
+const monthsBack=(value,months)=>{const [y,m,d]=value.split("-").map(Number);const absolute=y*12+m-1-months;const year=Math.floor(absolute/12),month=absolute%12;const last=new Date(Date.UTC(year,month+1,0,12)).getUTCDate();return `${year}-${String(month+1).padStart(2,"0")}-${String(Math.min(d,last)).padStart(2,"0")}`;};
+async function emulatorPatch(pathname,change){
+ const headers={Authorization:"Bearer owner","Content-Type":"application/json"},url=`${documents}/${pathname}`;
+ const doc=await(await fetch(url,{headers})).json();const fields=change(doc.fields);
+ const response=await fetch(`${url}?${Object.keys(fields).map(name=>`updateMask.fieldPaths=${name}`).join("&")}`,{method:"PATCH",headers,body:JSON.stringify({fields})});expect(response.status).toBe(200);
+}
+async function moveVisitOneBack(f){
+ const first=monthsBack(f.visitDate,2),due=monthsBack(f.visitDate,1),text=value=>({stringValue:value});
+ await emulatorPatch(`plantingReports/${f.plantingReportId}`,()=>({plantingDate:text(first)}));
+ await emulatorPatch(`sampleMonitoringVisits/${f.visitId}`,fields=>({visitDate:text(first),dateMonitored:text(first),scheduledDueDate:text(first),openingDate:text(first),nextScheduledDueDate:text(due),
+  sampleAssessments:{arrayValue:{values:fields.sampleAssessments.arrayValue.values.map(row=>({mapValue:{fields:{...row.mapValue.fields,assessedOn:text(first)}}}))}}}));
+ await emulatorPatch(`verifiedPlantingCohorts/${f.cohortId}`,fields=>({source:{mapValue:{fields:{...fields.source.mapValue.fields,plantingDate:text(first)}}},
+  permanentSampleSchedule:{mapValue:{fields:{...fields.permanentSampleSchedule.mapValue.fields,lastActualVisitDate:text(first),nextScheduledDueDate:text(due)}}}}));
+ return {first,due,third:monthsBack(due,-3)};
+}
+
+test("real first visit: eligible report, 10% sample registration, evidence, draft, submit, return, approval, lock, then visit 2 to its approval and the visit 3 schedule",async({browser})=>{
+ test.setTimeout(1200000);
  const staffContext=await browser.newContext();const staff=await staffContext.newPage();await isolate(staff);
  let f,ids;
  await test.step("1. Staff sees the eligible report's Section 1 context and 10% target, then starts visit 1 on the fixture date",async()=>{
@@ -179,6 +198,57 @@ test("real first visit: eligible report, 10% sample registration, evidence, draf
   const otherContext=await browser.newContext();const other=await otherContext.newPage();await isolate(other);await login(other,"otherStaff");
   expect([403,404,409]).toContain((await api(other,`/verified-sample-monitoring/visits/${f.visitId}`,"PUT",{expectedVersion:1,assessments:[],submit:false})).status);
   expect([403,404]).toContain((await detail(other,f.visitId)).status);await otherContext.close();
+  const participantContext=await browser.newContext();const participant=await participantContext.newPage();await isolate(participant);
+  await participant.goto("/login",{waitUntil:"domcontentloaded"});await expect(participant.locator("#login-email")).toBeVisible({timeout:60000});
+  await participant.locator("#login-email").fill(f.emails.participant);await participant.locator("#login-password").fill(f.password);await participant.locator("button.login-primary-btn").click();
+  await expect(participant).toHaveURL(/\/participant\/dashboard$/,{timeout:30000});
+  for(const [endpoint,method,body] of [["/verified-sample-monitoring/visits","GET"],["/verified-sample-monitoring/verified-reports","GET"],[`/verified-sample-monitoring/visits/${f.visitId}`,"GET"],
+   [`/verified-sample-monitoring/visits/${f.visitId}`,"PUT",{expectedVersion:1,assessments:[],submit:false}],[`/verified-sample-monitoring/visits/${f.visitId}/review`,"POST",{expectedVersion:1,approve:true}],
+   [`/verified-sample-monitoring/verified-reports/${f.plantingReportId}/first-visit`,"POST",{visitDate:f.visitDate}]])expect((await api(participant,endpoint,method,body)).status).toBe(403);
+  await participantContext.close();
+ });
+ await test.step("8. Visit 2: same Tree IDs, previous values, growth, dead carried forward, incomplete draft, submit, approve, visit 3 schedule",async()=>{
+  const {first,due,third}=await moveVisitOneBack(f);
+  await staff.goto("/staff/survival-monitoring",{waitUntil:"domcontentloaded"});await expect(staff.getByRole("heading",{name:"Survival Monitoring",exact:true})).toBeVisible({timeout:60000});
+  const readinessWait=backendGet(staff,"/verified-sample-monitoring/readiness");await monitorPlantedTrees(staff);await readinessWait;
+  const dialog=staff.getByRole("dialog",{name:"Monitor Planted Trees"}),picker=dialog.getByRole("combobox",{name:"Verified Planting Report *",exact:true});
+  await expect(picker.locator(`option[value="ready:${f.cohortId}"]`)).toHaveCount(1,{timeout:30000});await picker.selectOption(`ready:${f.cohortId}`);
+  const created=staff.waitForResponse(r=>r.request().method()==="POST"&&new URL(r.url()).pathname===`/api/verified-sample-monitoring/cohorts/${f.cohortId}/visits`);
+  await dialog.locator('section[aria-labelledby="psm-readiness-selection-title"]').getByRole("button",{name:"Start Visit 2",exact:true}).click();
+  const response=await created;expect(response.status()).toBe(201);expect(response.request().postDataJSON()).toEqual({visitDate:due});
+  const v2=(await response.json()).data,second={...f,visitId:v2.id};expect(v2.visitNumber).toBe(2);expect(v2.sampleAssessments.map(row=>row.sampleId)).toEqual(ids);expect(v2.priorVisitId).toBe(f.visitId);
+  // Previous approved values and live growth of the first tree.
+  await selectTree(staff,ids[0]);const field=label=>active(staff).locator("dt").filter({hasText:exactText(label)}).locator("xpath=following-sibling::dd");
+  await expect(field("Previous Condition")).toHaveText("Healthy");await expect(field("Previous Height (cm)")).toHaveText("120");await expect(field("Previous Stem Diameter (mm)")).toHaveText("60");await expect(field("Previous Assessment Date")).toHaveText(first);
+  await capture(staff,ids[0],3.1,12.662312);await verifyLocation(staff,ids[0],second);
+  await active(staff).getByRole("radio",{name:"Healthy",exact:true}).check();await active(staff).getByLabel("Height (cm)").fill("136");await active(staff).getByLabel("Stem Diameter (mm)").fill("62");
+  await expect(field("Height Difference")).toHaveText("+16 cm");await expect(field("Stem Diameter Difference")).toHaveText("+2 mm");await expect(active(staff).locator(".psm-tree-status")).toContainText("Unsaved Changes");
+  const one=await saveTree(staff,second);expect(one.sampleAssessments[0]).toMatchObject({heightDifferenceCm:16,stemDiameterDifferenceMm:2});await expect(active(staff).locator(".psm-tree-status")).toContainText("Saved");
+  // An incomplete Needs Rechecking tree is kept by Save Draft (with its findings) and cannot be submitted.
+  await selectTree(staff,ids[1]);await active(staff).getByRole("radio",{name:"Needs Rechecking",exact:true}).check();await staff.getByLabel("Location / Search Findings").fill("Tag hidden by grass");
+  const put=waitPut(staff,v2.id);await staff.getByRole("button",{name:"Save Draft",exact:true}).click();expect((await put).status()).toBe(200);
+  await staff.getByRole("button",{name:"Reload visit",exact:true}).click();await selectTree(staff,ids[1]);await expect(staff.getByLabel("Location / Search Findings")).toHaveValue("Tag hidden by grass");
+  await staff.getByRole("button",{name:"Submit Monitoring Visit",exact:true}).click();await expect(staff.getByText("Enter the Reason for Rechecking.")).toBeVisible();
+  // Found again: a decreased measurement only warns, and the photo is required before the tree is saved.
+  await active(staff).getByRole("radio",{name:"Damaged",exact:true}).check();await active(staff).getByLabel("Height (cm)").fill("90");await active(staff).getByLabel("Stem Diameter (mm)").fill("41");await active(staff).getByLabel("Individual Remarks").fill("Dieback at the tip");
+  await expect(active(staff).getByText(/A measurement decreased/)).toBeVisible();
+  await staff.getByRole("button",{name:"Save Tree Assessment",exact:true}).click();await expect(staff.locator(".psm-error")).toContainText(`Take and verify the photo of ${ids[1]}`);
+  const draft=waitPut(staff,v2.id);await staff.getByRole("button",{name:"Save Draft",exact:true}).click();expect((await draft).status()).toBe(200);
+  await expect(staff.locator(".psm-tree-list button").filter({hasText:ids[1]})).toContainText("Photo required");
+  await capture(staff,ids[1],0.4,12.662327);await verifyLocation(staff,ids[1],second);await saveTree(staff,second);
+  // The approved death is carried forward, locked, and needs no new photo or measurement.
+  await selectTree(staff,ids[2]);await expect(active(staff)).toContainText("Dead — Carried Forward");await expect(active(staff).getByRole("radio",{name:"Healthy",exact:true})).toBeDisabled();
+  await shot(staff,"8-visit-2");const submitted=await submit(staff,second);expect(submitted.summary).toMatchObject({healthy:1,damaged:1,confirmedDead:1,needsRechecking:0,notAssessed:0,survivalRate:66.67});
+  await admin.goto("/admin/survival-monitoring",{waitUntil:"domcontentloaded"});await admin.locator(`tr[data-sample-visit-row="${v2.id}"]`).getByRole("button",{name:`View monitoring visit ${v2.id}`,exact:true}).click({timeout:60000});
+  await expect(admin.getByRole("dialog",{name:"Review Monitoring Visit"})).toContainText("66.67%");
+  const approvedWait=admin.waitForResponse(r=>new URL(r.url()).pathname.endsWith(`/${v2.id}/review`)&&r.request().method()==="POST");await admin.getByRole("button",{name:"Approve Visit",exact:true}).click();
+  const approved=(await(await approvedWait).json()).data;expect(approved.status).toBe("APPROVED");expect(approved.nextScheduledDueDate).toBe(third);
+  // Unlimited history: both approved visits and the scheduled third, with the earlier visit one click away.
+  await staff.getByRole("button",{name:"Reload visit",exact:true}).click();await expect(staff.getByText("Approved visits are read-only.")).toBeVisible();
+  const table=staff.getByRole("table",{name:"Monitoring Visit History"});await expect(table.locator("tbody tr")).toHaveCount(3);await expect(table.locator("tbody tr").filter({hasText:third})).toContainText("Not yet available");
+  await expect(table.locator("tbody tr").nth(1)).toContainText("66.67%");await table.getByRole("button",{name:"View visit 1",exact:true}).click();
+  await expect(staff.getByRole("combobox",{name:"Verified Planting Report *",exact:true})).toHaveValue(f.visitId);
+  expect((await detail(staff,v2.id)).body.data.sampleAssessments.map(row=>row.sampleId)).toEqual(ids);
  });
  await adminContext.close();await staffContext.close();
 });

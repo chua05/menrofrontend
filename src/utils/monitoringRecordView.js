@@ -19,7 +19,7 @@ export const isAwaitingMonitoringSetup = (record) => record?.scheduleStatus === 
 
 // Presentation only: the backend status value (used by analytics and eligibility checks) is unchanged.
 // Display wording never grants a submission; actions still follow isAwaitingMonitoringSetup and RBAC.
-export const AWAITING_SUBMISSION_LABEL = "Awaiting Monitoring Submission";
+export const AWAITING_SUBMISSION_LABEL = "Awaiting First Monitoring Visit";
 export function monitoringStatusLabel(status) {
   const value = String(status || "").trim();
   return value === AWAITING_SETUP_STATUS ? AWAITING_SUBMISSION_LABEL : value;
@@ -27,11 +27,37 @@ export function monitoringStatusLabel(status) {
 
 // Badge tone for a displayed lifecycle/tracking status, reusing the MENRO record badge palette.
 const STATUS_TONES = Object.freeze({
-  "Monitoring Completed": "complete",
+  "Monitoring Completed": "complete", "Monitoring Visit Approved": "complete",
+  "Monitoring Overdue": "pending",
   "Available for Monitoring": "active", "Ready for Monitoring Visit": "active", "Next Monitoring Scheduled": "active",
   [AWAITING_SUBMISSION_LABEL]: "pending", "Awaiting Submission": "pending", "Not Yet Available": "pending", "Checking Monitoring Setup": "pending",
 });
-export const monitoringStatusTone = (label) => STATUS_TONES[String(label || "").trim()] || "default";
+export const monitoringStatusTone = (label) => STATUS_TONES[String(label || "").trim()] || (/^Visit \d+: /.test(String(label || "")) ? "pending" : "default");
+
+// Dates, status and Staff action of one existing lifecycle. The MON record itself is never changed: permanent-sample values
+// come from the backend's read-only `permanentSample` link. Without a submitted visit there is no start date and no schedule.
+const VISIT_STATUS = Object.freeze({ DRAFT: "Draft", RETURNED: "Returned for Correction", PENDING_ADMIN_APPROVAL: "Pending Admin Review" });
+const NEXT_STATUS = Object.freeze({ SCHEDULED: "Next Monitoring Scheduled", DUE: "Available for Monitoring", OVERDUE: "Monitoring Overdue" });
+export function lifecycleMonitoringView(record) {
+  const sample = record?.permanentSample || null;
+  if (!sample || !sample.openVisit && !sample.approvedVisits) {
+    if (!isAwaitingMonitoringSetup(record)) return null;
+    return { start: "", startNote: "", next: "", nextNote: "", status: AWAITING_SUBMISSION_LABEL, latest: "", condition: "", action: "Start Visit 1", visitNumber: 1 };
+  }
+  const open = sample.openVisit, number = sample.nextVisitNumber || 1;
+  const latest = sample.latest;
+  // Latest approved sample condition, with the same order the aggregate records use; nothing unapproved is shown.
+  const condition = !latest ? "" : latest.needsRechecking > 0 ? "Needs Rechecking" : latest.total > 0 && latest.confirmedDead === latest.total ? "Dead"
+    : latest.damaged > 0 || latest.confirmedDead > 0 ? "Damaged" : "Healthy";
+  return {
+    condition, start: sample.startMonitoringDate || "", startNote: sample.startProvisional ? "Pending Admin Review" : "",
+    next: sample.nextMonitoringDate || "", nextNote: sample.nextMonitoringDate ? `Visit ${sample.approvedVisits + 1}` : "",
+    status: open ? `Visit ${open.visitNumber || number}: ${VISIT_STATUS[open.status] || open.status}` : NEXT_STATUS[sample.nextStatus] || "Monitoring Visit Approved",
+    latest: !latest ? "" : latest.survivalRate == null ? `Visit ${latest.visitNumber}: rechecking pending` : `Visit ${latest.visitNumber}: ${latest.survivalRate}% sample survival`,
+    action: open ? open.ownedByYou ? (open.status === "PENDING_ADMIN_APPROVAL" ? `View Visit ${number}` : `Continue Visit ${number}`) : "" : ["DUE", "OVERDUE"].includes(sample.nextStatus) ? `Start Visit ${number}` : "Monitor Planted Trees",
+    visitNumber: number,
+  };
+}
 
 // Monitoring method stored on a lifecycle (separate from its workflow status).
 const METHOD_LABELS = Object.freeze({ STAFF_SPOT_CHECK: "Staff Spot-Check", PERMANENT_SAMPLE: "Permanent Sample Monitoring",
@@ -46,7 +72,8 @@ export function lifecycleMethodLabel(record) {
 // Staff Spot-Check shows no policy explanation (requested UI simplification); submission stays blocked
 // by isAwaitingMonitoringSetup and the backend regardless of this text.
 export function monitoringSetupBlocker(record) {
-  if (!isAwaitingMonitoringSetup(record)) return "";
+  // A linked permanent-sample state means the first visit needs no separate setup.
+  if (!isAwaitingMonitoringSetup(record) || record.permanentSample) return "";
   const method = String(record?.monitoringMethod || "");
   if (method === "STAFF_SPOT_CHECK") return "";
   if (method === "PERMANENT_SAMPLE") return "Permanent-sample monitoring setup (sampling plan, baseline and visit scheduling) is not complete, so no monitoring visit can be submitted yet.";

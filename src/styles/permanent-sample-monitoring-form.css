@@ -55,3 +55,7 @@
 .psm-dialog .cohort-error,.psm-dialog .psm-error { overflow-wrap:anywhere;word-break:break-word;max-width:100%; }
 .psm-admin-decision { display:flex; gap:12px; justify-content:flex-end; flex-wrap:wrap; }
 @media(max-width:600px) { .psm-admin-decision { width:100%; } .psm-admin-decision button { flex:1; } }
+
+/* Saved state of the open tree */
+.psm-tree-status { display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;align-items:center;margin:16px 0 10px; }
+.psm-tree-status span { padding:4px 10px;border-radius:999px;background:#edf6ef;color:#145b3a;font-size:12px;font-weight:700; }.psm-tree-status .is-unsaved { background:#fff8e7;color:#704b00; }

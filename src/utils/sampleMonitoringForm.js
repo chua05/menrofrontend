@@ -22,10 +22,10 @@ export function assessmentErrors(rows, submit = false) {
       if (!String(row.remarks || "").trim()) errors[key("remarks")] = "Describe the confirmed mortality observation.";
     }
     // Spec §15 and the backend require Individual Remarks for Needs Rechecking as well as the separate reason.
-    if (row.condition === "Needs Rechecking" && !String(row.remarks || "").trim()) errors[key("remarks")] = "Describe the rechecking observation in Individual Remarks.";
-    if (row.condition === "Needs Rechecking" && !String(row.recheckReason || "").trim()) errors[key("recheckReason")] = "Enter the Reason for Rechecking.";
+    if (submit && row.condition === "Needs Rechecking" && !String(row.remarks || "").trim()) errors[key("remarks")] = "Describe the rechecking observation in Individual Remarks.";
+    if (submit && row.condition === "Needs Rechecking" && !String(row.recheckReason || "").trim()) errors[key("recheckReason")] = "Enter the Reason for Rechecking.";
     if (String(row.remarks || "").length > 1000) errors[key("remarks")] = "Use at most 1000 characters.";
-    if (row.investigationOutcome && !String(row.searchFindings || "").trim()) errors[key("searchFindings")] = "Document the search findings.";
+    if (submit && row.investigationOutcome && !String(row.searchFindings || "").trim()) errors[key("searchFindings")] = "Document the search findings.";
     if (String(row.searchFindings || "").length > 1000) errors[key("searchFindings")] = "Use at most 1000 characters.";
   }
   return errors;
@@ -40,6 +40,20 @@ export function keepUnsavedEdits(serverRows, localRows, savedSampleId = "") {
     const local = savedSampleId && row.sampleId !== savedSampleId && localRows.find(item => item.sampleId === row.sampleId);
     return local ? { ...row, ...Object.fromEntries(EDITABLE_ASSESSMENT_FIELDS.map(field => [field, local[field]])) } : row;
   });
+}
+// A tree has its photo when evidence of the current assessment revision is stored; an approved carried-forward death needs none.
+export const hasCurrentEvidence = row => Boolean(row?.inheritedConfirmedDead) ||
+  (row?.evidenceHistory || []).some(entry => Number(entry?.revision || 0) === Number(row?.assessmentRevision || 0));
+// Difference from the previous approved measurement while the form is being filled in. The server recalculates it on save.
+export function growthPreview(row, previous) {
+  const number = value => (value === "" || value === null || value === undefined || !Number.isFinite(Number(value)) ? null : Number(value));
+  const before = { height: number(previous?.heightCentimeters),
+    diameter: number(previous?.stemDiameterMillimeters ?? (previous?.diameterCentimeters == null ? null : Number(previous.diameterCentimeters) * 10)) };
+  const difference = (current, earlier) => (current === null || earlier === null ? null : Number((current - earlier).toFixed(4)));
+  const living = ["Healthy", "Damaged"].includes(row?.condition);
+  const height = living ? difference(number(row?.heightCentimeters), before.height) : null;
+  const diameter = living ? difference(number(row?.stemDiameterMillimeters), before.diameter) : null;
+  return { height, diameter, decreased: height < 0 || diameter < 0 };
 }
 export function sampleProgress(rows) {
   const count = condition => rows.filter(row => row.condition === condition).length;

@@ -3,7 +3,7 @@ import { authenticatedFetch } from "../services/authenticatedApi";
 import SecureCameraCapture from "../components/SecureCameraCapture";
 import ModalDialog from "../components/ModalDialog";
 import PermanentSampleVisitForm, { PermanentSampleVisitShell } from "../components/PermanentSampleVisitForm";
-import { assessmentErrors, keepUnsavedEdits } from "../utils/sampleMonitoringForm";
+import { assessmentErrors, hasCurrentEvidence, keepUnsavedEdits } from "../utils/sampleMonitoringForm";
 import { withDeadline, RequestTimeoutError, READ_TIMEOUT_MS, WRITE_TIMEOUT_MS, UPLOAD_TIMEOUT_MS } from "../utils/requestTimeout";
 import "../styles/permanent-sample-monitoring-form.css";
 import MonitoringInformationPanel from "../components/MonitoringInformationPanel";
@@ -15,7 +15,7 @@ import {
 import { useAuth } from "../context/AuthContext";
 import { Trees, X } from "lucide-react";
 import { Link, useSearchParams } from "react-router-dom";
-import { approvedVisitNote, blockedReportRow, readinessErrorMessage, readinessGateNotices, readinessMessages, readinessTitle, staffGateNotices, staffReadinessMessages, staffStartError, scheduleStatusLabel, withoutEligibleDuplicates } from "../utils/sampleVisitReadiness";
+import { approvedVisitNote, blockedReportRow, gateReasons, readinessErrorMessage, readinessGateNotices, readinessMessages, readinessTitle, staffGateNotices, staffReadinessMessages, staffStartError, scheduleStatusLabel, withoutEligibleDuplicates } from "../utils/sampleVisitReadiness";
 import { TRACKING_STATUS, withPickerReadiness } from "../utils/monitoringTracking";
 import { continueMonitoringChoices, hasMoreChoices, loadMonitoringChoices, loadReadiness, readinessPath, verifiedReportStartPath, verifiedReportsPath, withoutEligibleCohort } from "../utils/sampleReadinessLoader";
 import { monitoringApiErrorMessage, monitoringErrorSampleId, monitoringEvidenceErrorMessage, monitoringWriteErrorMessage } from "../utils/monitoringApiError";
@@ -82,7 +82,7 @@ const draftSnapshot = (rows, remarks, date) => JSON.stringify([rows.map(row =>
 // The same state, validation and API handlers serve both the embedded modal and the standalone route.
 // `setupPendingReports` (Staff, embedded): read-only rows for verified planting reports without a startable visit
 // (Setup Pending or Not Eligible). They can be selected to view truthful readiness; nothing becomes editable.
-export default function PermanentSampleMonitoringPage({ embedded = false, open: embeddedOpen = false, onClose, reviewVisitId = "", onReviewed, setupPendingReports = [] } = {}) {
+export default function PermanentSampleMonitoringPage({ embedded = false, open: embeddedOpen = false, onClose, reviewVisitId = "", onReviewed, setupPendingReports = [], requestedReport = null } = {}) {
   const enabled = resolveVerifiedPlantingCohortEnabled();
   const { userRole } = useAuth();
   const offeredPendingReports = userRole === "staff" && !reviewVisitId && Array.isArray(setupPendingReports) ? setupPendingReports : [];
@@ -114,6 +114,8 @@ export default function PermanentSampleMonitoringPage({ embedded = false, open: 
   const [pendingEvidence, setPendingEvidence] = useState({});
   const [evidenceUrls, setEvidenceUrls] = useState({});
   const [searchParams] = useSearchParams();
+  const requestedReportRef = useRef(requestedReport), handledRequest = useRef(null), refreshedRequest = useRef(null);
+  useEffect(() => { requestedReportRef.current = requestedReport; }, [requestedReport]);
   // One-time arrival request from the Staff "Submit Monitoring Record" action (?start=1).
   const startRequested = useRef(!reviewVisitId && (embedded || searchParams.get("start") === "1"));
   const [selectPrompt, setSelectPrompt] = useState(false);
@@ -220,6 +222,7 @@ export default function PermanentSampleMonitoringPage({ embedded = false, open: 
         // otherwise the user chooses from the list.
         if (startRequested.current && !next) {
           startRequested.current = false;
+          if (requestedReportRef.current) { setSelectPrompt(true); return; }
           const actionable = (data.visits || []).filter(visit => userRole === "admin"
             ? visit.status === "PENDING_ADMIN_APPROVAL"
             : ["DRAFT", "RETURNED"].includes(visit.status));
@@ -289,6 +292,28 @@ export default function PermanentSampleMonitoringPage({ embedded = false, open: 
   const listedVisitCohorts = new Set((page?.visits || []).map(visit => String(visit.cohortId || "")).filter(Boolean));
   const pendingBesideVisits = pickerRows.filter(row => !listedVisitCohorts.has(String(row.cohort?.id || "")));
 
+  // Opened from an existing lifecycle: its own open visit, else its startable row, else its exact reasons. Runs once per request.
+  useEffect(() => {
+    if (!requestedReport || handledRequest.current === requestedReport.key || !embeddedOpen || !page || loading || !readiness || readiness.loading) return;
+    // A form that stayed mounted first reads the current visits and readiness again (never over an open visit's entries).
+    if (refreshedRequest.current !== null && refreshedRequest.current !== requestedReport.key) {
+      refreshedRequest.current = requestedReport.key;
+      const refresh = window.setTimeout(() => { if (detail) void refreshReadiness(); else void load(); }, 0);
+      return () => window.clearTimeout(refresh);
+    }
+    refreshedRequest.current = requestedReport.key;
+    const current = (page.visits || []).find(visit => requestedReport.cohortId && visit.cohortId === requestedReport.cohortId && visit.status !== "APPROVED");
+    const row = (readiness.data?.eligible || []).find(item => item?.context?.plantingReportId === requestedReport.plantingReportId);
+    const timer = window.setTimeout(() => {
+      handledRequest.current = requestedReport.key;
+      if (current) void open(current.id);
+      else if (row) chooseEligible(row.cohortId);
+      else choosePendingReport(requestedReport.plantingReportId);
+    }, 0);
+    return () => window.clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- the handlers read current state; one run per request key
+  }, [requestedReport, embeddedOpen, page, loading, readiness]);
+
   const updateAssessment = (sampleId, field, value) => {
     const resolved = field === "condition" && value !== "Needs Rechecking";
     const row = assessments.find(item => item.sampleId === sampleId);
@@ -324,6 +349,14 @@ export default function PermanentSampleMonitoringPage({ embedded = false, open: 
       setFieldErrors(invalid); const first = Object.keys(invalid)[0]; setActiveTreeId(first.split(".")[0]); setError("Please correct the highlighted assessment fields.");
       window.setTimeout(() => { const field = document.querySelector(`[data-validation-field="${CSS.escape(first)}"]`); field?.scrollIntoView({ behavior: "smooth", block: "center" }); field?.querySelector("input:not(:disabled),select:not(:disabled),textarea:not(:disabled)")?.focus({ preventScroll: true }); }, 0); return;
     }
+    // Save Tree Assessment includes the tree's own verified photo; Save Draft keeps incomplete entries.
+    const savedRow = savedSampleId && detail.sampleAssessments?.find(row => row.sampleId === savedSampleId);
+    if (savedRow && (detail.schedulePolicyVersion || detail.registersBaseline) && !pendingEvidence[pendingKey(savedSampleId)] && !hasCurrentEvidence(savedRow)) {
+      const message = `Take and verify the photo of ${savedSampleId} before saving its assessment. Use Save Draft to keep incomplete entries.`;
+      setError(message); setFieldErrors(current => ({ ...current, [savedSampleId + ".evidence"]: message }));
+      window.setTimeout(() => { const button = document.querySelector("#sample-active-assessment .psm-photo-box .psm-primary"); button?.scrollIntoView({ behavior: "smooth", block: "center" }); button?.focus({ preventScroll: true }); }, 0);
+      return;
+    }
     if (Object.keys(pendingEvidence).length) { setError("Upload or remove pending photos before saving. A save changes the version used for capture verification."); return; }
     const unsentQuestion = submit && Object.keys(questions).find(sampleId => questions[sampleId].trim());
     if (unsentQuestion) {
@@ -342,7 +375,7 @@ export default function PermanentSampleMonitoringPage({ embedded = false, open: 
       const saved = detail.sampleAssessments?.find(item => item.sampleId === row.sampleId);
       return saved ? formAssessment(saved) : row;
     }) : assessments;
-    const payload = { expectedVersion: detail.version, assessments: sent, submit, visitRemarks, dateMonitored };
+    const payload = { expectedVersion: detail.version, assessments: sent, submit, visitRemarks, dateMonitored, ...(savedSampleId ? { assessedSampleId: savedSampleId } : {}) };
     operationBusy.current = true; setSaving(true); setError("");
     try {
       const data = await api(`/verified-sample-monitoring/visits/${detail.id}`, { method: "PUT", body: JSON.stringify(payload) });
@@ -356,6 +389,7 @@ export default function PermanentSampleMonitoringPage({ embedded = false, open: 
     } catch (requestError) {
       if (requestError.ambiguous) setUnconfirmed({ visitId: detail.id, savedSampleId, ...payload });
       setError(monitoringWriteErrorMessage(requestError, "This monitoring visit changed. Reload the current authorized visit before trying again."));
+      if (["VISIT_NOT_OPEN", "VISIT_BEFORE_ELIGIBILITY"].includes(requestError.code)) setFieldErrors(current => ({ ...current, dateMonitored: requestError.message }));
       const target = monitoringErrorSampleId(requestError);
       if (target && assessments.some(row => row.sampleId === target)) {
         setActiveTreeId(target);
@@ -412,7 +446,7 @@ export default function PermanentSampleMonitoringPage({ embedded = false, open: 
       onReviewed?.(data); return;
       }
       const equivalent = (left, right) => ["sampleId", "condition", "remarks", "mortalityCause", "recheckReason", "investigationOutcome", "searchFindings"].every(key => String(left[key] || "").trim() === String(right[key] || "").trim()) && ["heightCentimeters", "stemDiameterMillimeters"].every(key => (left[key] === "" || left[key] == null ? null : Number(left[key])) === (right[key] === "" || right[key] == null ? null : Number(right[key])));
-      const matches = data.version > unconfirmed.expectedVersion && data.status === (unconfirmed.submit ? "PENDING_ADMIN_APPROVAL" : "DRAFT") && data.sampleAssessments.length === unconfirmed.assessments.length && unconfirmed.assessments.every(row => data.sampleAssessments.some(saved => equivalent(row, saved))) && String(data.visitRemarks || "") === unconfirmed.visitRemarks.trim() && data.dateMonitored === unconfirmed.dateMonitored;
+      const matches = data.version > unconfirmed.expectedVersion && (unconfirmed.submit ? data.status === "PENDING_ADMIN_APPROVAL" : ["DRAFT", "RETURNED"].includes(data.status)) && data.sampleAssessments.length === unconfirmed.assessments.length && unconfirmed.assessments.every(row => data.sampleAssessments.some(saved => equivalent(row, saved))) && String(data.visitRemarks || "") === unconfirmed.visitRemarks.trim() && data.dateMonitored === unconfirmed.dateMonitored;
       if (!matches) { setError("The saved outcome is not confirmed. Keep these entries and check again before retrying."); return; }
       setSavedDraft(draftSnapshot(data.sampleAssessments.map(formAssessment), data.visitRemarks || "", data.dateMonitored || dateMonitored));
       // M3: a reconciled Save Tree Assessment confirms only the active tree (and the version); other trees keep
@@ -456,8 +490,8 @@ export default function PermanentSampleMonitoringPage({ embedded = false, open: 
     setCameraSampleId("");
   };
 
-  const originalsEnabled = import.meta.env.VITE_SAMPLE_MONITORING_FORM_ACCEPTANCE === "true" &&
-    import.meta.env.VITE_MONITORING_ORIGINAL_PHOTO_PROPOSAL === "true" && detail?.originalPhotoProposal?.linkingEnabled === true;
+  // The server alone decides whether original photos are accepted (off unless MENRO enables it).
+  const originalsEnabled = detail?.originalPhotoProposal?.linkingEnabled === true;
   const chooseOriginal = (sampleId, file) => {
     if (!file || !originalsEnabled || operationBusy.current) return;
     if (file.size > 10 * 1024 * 1024) {
@@ -674,7 +708,7 @@ export default function PermanentSampleMonitoringPage({ embedded = false, open: 
     : hasMoreChoices(readiness.data) ? ["This report has not been checked yet. Use Load more verified planting reports."]
     : readiness.data.truncated || readiness.data.partial ? ["This report could not be checked. Refresh to try again."]
     : readiness.data.gates?.pilotRestricted === true ? ["Monitoring is currently limited to a MENRO pilot, which may not include this report. Contact the MENRO Admin."]
-    : staffReadinessMessages([{ code: "VISIT_SCHEDULING_POLICY_PENDING" }]);
+    : gateReasons(readiness.data.gates).length ? gateReasons(readiness.data.gates) : staffReadinessMessages([{ code: "VISIT_SCHEDULING_POLICY_PENDING" }]);
   const visitList = (
     <>
       {error && <p role="alert" className="cohort-error">{error}</p>}
@@ -747,7 +781,7 @@ export default function PermanentSampleMonitoringPage({ embedded = false, open: 
             <h2 id="psm-setup-pending-title">Not yet available: {pendingReport.reportNumber || "Verified planting report"}</h2>
             {approvedVisitNote(pendingBlocked) && <p>{`${approvedVisitNote(pendingBlocked)}.`}</p>}
             <ul aria-label="Why this report has no monitoring visit">{pendingMessages.map(message => <li key={message}>{message}</li>)}</ul>
-            {pendingReport.hasMonitoringRecord && <p>This report already has a monitoring record in Monitoring Records.</p>}
+            {pendingReport.hasMonitoringRecord && <p>This report already has a monitoring record in Monitoring Records. It is kept separately and does not count as a sample-tree visit.</p>}
           </section>}
           {selectedReadiness && <section className="psm-readiness psm-setup-pending" aria-labelledby="psm-readiness-selection-title">
             <h2 id="psm-readiness-selection-title">{readinessTitle(selectedReadiness)}</h2>
@@ -791,7 +825,7 @@ export default function PermanentSampleMonitoringPage({ embedded = false, open: 
             <PermanentSampleVisitForm readOnly inlineEvidenceHistory={false} detail={detail} assessments={assessments} activeTreeId={activeTreeId} onTree={setActiveTreeId}
               errors={{}} onChange={() => {}} saving={false} onSave={() => {}} questions={{}} onQuestion={() => {}}
               originalEnabled={false} pendingFor={() => null} onUpload={() => {}} onDiscard={() => {}} onCapture={() => {}}
-              evidenceUrls={evidenceUrls} evidenceKey={evidenceKey} onView={viewEvidence} visitRemarks={detail.visitRemarks || ""} onVisitRemarks={() => {}}
+              onOpenVisit={reviewVisitId ? undefined : open} evidenceUrls={evidenceUrls} evidenceKey={evidenceKey} onView={viewEvidence} visitRemarks={detail.visitRemarks || ""} onVisitRemarks={() => {}}
               dateMonitored={detail.dateMonitored || ""} onDateMonitored={() => {}} />
           )}
           {editable ? (
@@ -801,7 +835,7 @@ export default function PermanentSampleMonitoringPage({ embedded = false, open: 
               pendingFor={sampleId => pendingEvidence[pendingKey(sampleId)]} onUpload={uploadEvidence}
               onDiscard={sampleId => { const key = pendingKey(sampleId), photo = pendingEvidence[key]; if (photo?.previewUrl) { URL.revokeObjectURL(photo.previewUrl); objectUrls.current.delete(photo.previewUrl); } setPendingEvidence(current => { const next = { ...current }; delete next[key]; return next; }); }}
               onCapture={sampleId => { setCameraSampleId(sampleId); setCameraOpen(true); captureEpoch.current = evidenceEpoch.current; }}
-              evidenceUrls={evidenceUrls} evidenceKey={evidenceKey} onView={viewEvidence} visitRemarks={visitRemarks} onVisitRemarks={setVisitRemarks} dateMonitored={dateMonitored} onDateMonitored={value => { setDateMonitored(value); setFieldErrors(current => ({ ...current, dateMonitored: "" })); }}/>
+              onOpenVisit={open} evidenceUrls={evidenceUrls} evidenceKey={evidenceKey} onView={viewEvidence} visitRemarks={visitRemarks} onVisitRemarks={setVisitRemarks} dateMonitored={dateMonitored} onDateMonitored={value => { setDateMonitored(value); setFieldErrors(current => ({ ...current, dateMonitored: "" })); }}/>
           ) : (
             <>
               <h3>{userRole === "admin" ? "Admin Review: Recorded Assessments and Evidence" : "Recorded Assessments and Evidence"}</h3>
@@ -813,7 +847,7 @@ export default function PermanentSampleMonitoringPage({ embedded = false, open: 
                   <h3>Admin Visit Review</h3>
                   {(detail.originalEvidenceReviewRequirements || []).map(item=><label key={item.evidenceId} className="psm-field">
                     <input type="checkbox" checked={Boolean(originalReviews[item.evidenceId])} onChange={event=>setOriginalReviews(current=>({...current,[item.evidenceId]:event.target.checked}))}/>
-                    I reviewed the uploaded original for {item.sampleId}, revision {item.assessmentRevision}. GPS accuracy is Unknown; EXIF does not prove authenticity. Local proposed policy only.
+                    I reviewed the uploaded original for {item.sampleId}, revision {item.assessmentRevision}. GPS accuracy is Unknown; EXIF does not prove authenticity.
                   </label>)}
                   <label>
                     Return reason

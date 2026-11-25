@@ -1141,9 +1141,9 @@ for (const role of ["staff", "admin"]) test(`${role} Monitoring Lifecycles list 
     await expect(row.getByRole("link")).toHaveCount(0);
   }
   // Headline stage, truthful schedule labels and the lifecycle's real sequential Monitoring ID.
-  await expect(trackingRow(page, "report-spot").locator(".sm-status-badge")).toHaveText("Awaiting Monitoring Submission");
+  await expect(trackingRow(page, "report-spot").locator(".sm-status-badge")).toHaveText("Awaiting First Monitoring Visit");
   await expect(trackingRow(page, "report-spot")).not.toContainText("Awaiting Monitoring Setup");
-  await expect(trackingRow(page, "report-spot")).toContainText("Awaiting Policy Decision");
+  await expect(trackingRow(page, "report-spot")).toContainText("—");
   await expect(trackingRow(page, "report-spot")).toContainText("Not Scheduled");
   await expect(trackingRow(page, "report-legacy")).toContainText("Awaiting Submission");
   await expect(trackingRow(page, "report-legacy")).toContainText("Opens for first observation");
@@ -1176,8 +1176,8 @@ for (const role of ["staff", "admin"]) test(`${role} reads nested Staff spot-che
   await page.goto(`/${role}/survival-monitoring?role=${role}&fixture=empty`);
   const row = trackingRow(page, report.id);
   await expect(row).not.toContainText("Staff Spot-Check");
-  await expect(row.locator(".sm-status-badge")).toHaveText("Awaiting Monitoring Submission");
-  await expect(row).toContainText("Awaiting Policy Decision");
+  await expect(row.locator(".sm-status-badge")).toHaveText("Awaiting First Monitoring Visit");
+  await expect(row).toContainText("—");
   await expect(row).toContainText("Not Scheduled");
   await expect(row.getByRole("button")).toHaveCount(1);
   await expect(row.getByRole("button", { name: /Submit|Record|Approve|Return|Create/ })).toHaveCount(0);
@@ -1235,7 +1235,7 @@ test("a failed monitoring-setup lookup keeps tracking rows truthful and can be r
   const header = page.locator(".sm-records-header");
   await expect(header.getByRole("alert")).toContainText("Monitoring setup status for verified planting reports could not be loaded");
   await expect(trackingRow(page, "report-cohort")).toContainText("Monitoring setup status unavailable");
-  await expect(trackingRow(page, "report-spot").locator(".sm-status-badge")).toHaveText("Awaiting Monitoring Submission");
+  await expect(trackingRow(page, "report-spot").locator(".sm-status-badge")).toHaveText("Awaiting First Monitoring Visit");
   await page.evaluate(() => { window.__PHASE3C_COHORTS_RECOVERED__ = true; });
   await header.getByRole("button", { name: "Retry setup status" }).click();
   await expect(trackingRow(page, "report-cohort")).toContainText("Monitoring setup in progress");
@@ -1245,7 +1245,7 @@ test("a failed monitoring-setup lookup keeps tracking rows truthful and can be r
 test("feature-disabled: tracking rows stay truthful and no cohort or readiness lookup is made", async ({ page }) => {
   await openTracking(page, "staff", { gate: false });
   await expect(trackingRow(page, "report-perm")).toContainText("Permanent-sample monitoring not available");
-  await expect(trackingRow(page, "report-spot").locator(".sm-status-badge")).toHaveText("Awaiting Monitoring Submission");
+  await expect(trackingRow(page, "report-spot").locator(".sm-status-badge")).toHaveText("Awaiting First Monitoring Visit");
   expect(await page.evaluate(() => [window.__PHASE3C_COHORT_CALLS__ || 0, window.__PHASE3C_READINESS_CALLS__ || 0])).toEqual([0, 0]);
 });
 
@@ -1285,13 +1285,13 @@ for (const role of ["staff", "admin"]) test(`${role} eye icon opens a centered r
   const summary = dialog.locator(".sm-record-summary");
   await expect(summary).toContainText("Monitoring ID");
   await expect(summary).toContainText("Not yet assigned");
-  await expect(summary.locator(".sm-record-status-badge")).toHaveText("Awaiting Monitoring Submission");
+  await expect(summary.locator(".sm-record-status-badge")).toHaveText("Awaiting First Monitoring Visit");
   const info = label => dialog.locator(".sm-record-info-block", { hasText: label }).locator(".sm-record-info-value");
   await expect(info("Planting Report ID")).toHaveText("RPT-2026-102");
   await expect(info("Planting Site")).toHaveText("RPT-2026-102 Site, Barangay Bical");
   await expect(info("Monitoring Method")).toHaveText("Permanent Sample Monitoring");
   await expect(dialog.locator(".sm-setup-blocker")).toHaveText("Setup status: Monitoring setup in progress");
-  await expect(info("Start Monitoring Date")).toHaveText("Awaiting Policy Decision");
+  await expect(info("Start Monitoring Date")).toHaveText("—");
   await expect(info("Next Monitoring Date")).toHaveText("Not Scheduled");
   await expect(info("Latest Condition")).toHaveText("Not yet monitored");
   await expect(dialog.locator(".sm-record-info-block")).toHaveCount(6);
@@ -1369,10 +1369,10 @@ test("a lifecycle registered at verification shows its real MON ID, method and s
   const row = page.locator(".sm-records-card table.sm-table tbody tr", { hasText: "MON-2026-005" });
   await expect(row).toHaveCount(1);
   await expect(row.locator(".sm-record-id")).toHaveText("MON-2026-005");
-  await expect(row.locator(".sm-status-badge")).toHaveText("Awaiting Monitoring Submission");
+  await expect(row.locator(".sm-status-badge")).toHaveText("Awaiting First Monitoring Visit");
   await expect(row).not.toContainText("Staff Spot-Check");
   await expect(row.locator(".sm-condition-badge")).toHaveText("Not Yet Monitored");
-  await expect(row).toContainText("Awaiting Policy Decision");
+  await expect(row).toContainText("—");
   await expect(row).toContainText("Not Scheduled");
   // No duplicate tracking row for a report that has a real lifecycle.
   await expect(page.locator('tr[data-tracking-row="report-spot"]')).toHaveCount(0);
@@ -1384,7 +1384,7 @@ test("a lifecycle registered at verification shows its real MON ID, method and s
   const dialog = page.getByRole("dialog", { name: "Monitoring Record Details" });
   await expect(dialog).toContainText("Monitoring ID: MON-2026-005");
   await expect(dialog).toContainText("Staff Spot-Check"); // Monitoring Method field
-  await expect(dialog.locator(".sm-detail-grid div", { hasText: "Lifecycle Status" }).locator("strong")).toHaveText("Awaiting Monitoring Submission");
+  await expect(dialog.locator(".sm-detail-grid div", { hasText: "Lifecycle Status" }).locator("strong")).toHaveText("Awaiting First Monitoring Visit");
   await expect(dialog.getByRole("note")).toHaveCount(0);
   await expect(dialog).not.toContainText("spot-check procedure and schedule");
   await expect(dialog.getByRole("button", { name: /Record Aggregate Observation|Approve|Return|Submit|Save/ })).toHaveCount(0);
@@ -1445,7 +1445,7 @@ for (const role of ["staff", "admin"]) test(`${role} Monitoring Records paginate
     .toEqual({ color: "rgb(68, 81, 73)", paddingTop: "15px", borderBottomColor: "rgb(237, 240, 238)" });
   expect(await style(rows.first().locator(".sm-record-id"), ["color", "fontSize", "fontWeight"])).toEqual({ color: "rgb(23, 100, 58)", fontSize: "14px", fontWeight: "700" });
   const badge = rows.first().locator(".sm-status-badge");
-  await expect(badge).toHaveText("Awaiting Monitoring Submission");
+  await expect(badge).toHaveText("Awaiting First Monitoring Visit");
   expect(await style(badge, ["color", "backgroundColor", "borderRadius", "fontSize", "fontWeight"]))
     .toEqual({ color: "rgb(146, 64, 14)", backgroundColor: "rgb(254, 243, 199)", borderRadius: "999px", fontSize: "13px", fontWeight: "700" });
   const eye = rows.first().getByRole("button", { name: "View monitoring record" });
@@ -1582,7 +1582,7 @@ test("a MON-tracked verified report without a cohort is visible in the Staff for
   await expect(pending.getByRole("heading", { name: "Not yet available: RPT-2026-201" })).toBeVisible();
   await expect(pending).toContainText("Monitoring for this report is not open yet. Contact the MENRO Admin if it should be monitored now.");
   await expect(pending).toContainText("This report already has a monitoring record");
-  await expect(pending).not.toContainText(/re-?approve|re-?create|resubmit|Awaiting Monitoring Submission/i);
+  await expect(pending).not.toContainText(/re-?approve|re-?create|resubmit|Awaiting First Monitoring Visit/i);
   for (const [label, value] of [["Planting Report ID", "RPT-2026-201"], ["Planting Site Name", "RPT-2026-201 Site"], ["Planting Date", "2026-10-01"], ["Verification Status", "Approved"],
     ["Verified Planted Quantity", "20"], ["Species and Quantities", "Narra"], ["Sample Registration Status", "Not available yet"]]) await expect(shellValue(dialog, label)).toHaveText(value);
   await expectNothingRecordable(dialog);

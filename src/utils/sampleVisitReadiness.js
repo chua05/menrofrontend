@@ -128,6 +128,14 @@ export function readinessGateNotices(gates) {
   ].filter(Boolean);
 }
 
+// The exact server switch that stops a verified report from starting. None of them is a problem with the report itself.
+export function gateReasons(gates) {
+  const off = [gates?.verifiedReportRuleEnabled === false && "starting Visit 1 from a verified planting report", gates?.firstVisitBaselineEnabled === false && "first-visit sample registration",
+    gates?.scheduleEnabled === false && "the monitoring visit schedule"].filter(Boolean);
+  return [...(gates?.writesPaused === true ? ["Monitoring is paused by MENRO."] : []),
+    ...(off.length ? [`Switched off on the MENRO server: ${off.join(", ")}. A MENRO administrator must turn this on; nothing is wrong with this report.`] : [])];
+}
+
 // Staff form: at most one plain notice, and never "not open" while a visit can be started.
 export function staffGateNotices(gates, { startable = false } = {}) {
   if (gates?.writesPaused === true) return ["Monitoring is paused by MENRO. Nothing can be started, saved or submitted until it resumes."];

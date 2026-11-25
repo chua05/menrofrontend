@@ -9,7 +9,7 @@ import { createEvidenceAttempt, assertEvidenceComplete } from "../utils/evidence
 import { useSearchParams } from "react-router-dom";
 import { TRACKING_STATUS, deriveTrackingRows, isVerifiedPlantingReport, trackingMatchesRecordFilters, trackingNeedsCohortLookup, trackingReportNumber } from "../utils/monitoringTracking";
 import { loadReadiness, readinessPath } from "../utils/sampleReadinessLoader";
-import { isAwaitingMonitoringSetup, lifecycleMethodLabel, monitoringDisplayId, monitoringSetupBlocker, monitoringStatusLabel, monitoringStatusTone } from "../utils/monitoringRecordView";
+import { isAwaitingMonitoringSetup, lifecycleMethodLabel, lifecycleMonitoringView, monitoringDisplayId, monitoringSetupBlocker, monitoringStatusLabel, monitoringStatusTone } from "../utils/monitoringRecordView";
 import MonitoringTrackingDetails from "../components/MonitoringTrackingDetails";
 import ModalDialog from "../components/ModalDialog";
 import L from "leaflet";
@@ -493,6 +493,13 @@ export default function MonitoringPage() {
   const [editingObservation, setEditingObservation] = useState(null);
   const [sampleFormMounted, setSampleFormMounted] = useState(false);
   const [sampleFormOpen, setSampleFormOpen] = useState(false);
+  // Report chosen from an existing lifecycle ({ plantingReportId, cohortId, key }); the form opens on it.
+  const [sampleRequest, setSampleRequest] = useState(null);
+  const monitorLifecycle = (record) => {
+    setOpenActionMenuId(null);
+    setSampleRequest({ plantingReportId: String(record.plantingReportId || ""), cohortId: record.permanentSample?.cohortId || "", key: Date.now() });
+    setSampleFormMounted(true); setSampleFormOpen(true);
+  };
   // Admin only: Staff-submitted permanent-sample visits shown as rows in Monitoring Records.
   const sampleVisitsEnabled = isAdmin && resolveVerifiedPlantingCohortEnabled();
   const [sampleVisits, setSampleVisits] = useState([]);
@@ -1638,6 +1645,7 @@ export default function MonitoringPage() {
     );
   }
 
+  const selectedView = selectedRecord ? lifecycleMonitoringView(selectedRecord) : null;
   if (loadError && !isParticipant) {
     return <div className="sm-page"><div role="alert" style={{ minHeight: "420px", display: "grid", placeContent: "center", justifyItems: "center", gap: "14px", color: "#526159", fontSize: "13px", fontWeight: 600 }}><span>{loadError}</span><button type="button" className="sm-secondary-button" onClick={() => setRetryKey((key) => key + 1)}>Retry</button></div></div>;
   }
@@ -1650,12 +1658,12 @@ export default function MonitoringPage() {
           visit; Approve/Return sit at its bottom and refresh the table after a decision. */}
       {sampleVisitsEnabled && reviewVisitId && (
         <PermanentSampleMonitoringPage key={reviewVisitId} embedded open reviewVisitId={reviewVisitId}
-          onClose={() => setReviewVisitId("")} onReviewed={() => loadSampleVisits()} />
+          onClose={() => setReviewVisitId("")} onReviewed={() => { loadSampleVisits(); setRetryKey((current) => current + 1); }} />
       )}
 
       {/* Mounted on first use and kept mounted, so unsaved per-tree edits survive closing and reopening. */}
       {isStaff && sampleFormMounted && (
-        <PermanentSampleMonitoringPage embedded open={sampleFormOpen} onClose={() => setSampleFormOpen(false)} setupPendingReports={formRows} />
+        <PermanentSampleMonitoringPage embedded open={sampleFormOpen} onClose={() => { setSampleFormOpen(false); setRetryKey((current) => current + 1); }} setupPendingReports={formRows} requestedReport={sampleRequest} />
       )}
 
       {isParticipant && loadError && (
@@ -1792,7 +1800,7 @@ export default function MonitoringPage() {
             <button
               type="button"
               className="sm-primary-button"
-              onClick={() => { setSampleFormMounted(true); setSampleFormOpen(true); }}
+              onClick={() => { setSampleRequest(null); setSampleFormMounted(true); setSampleFormOpen(true); }}
             >
               <FiPlus size={15} aria-hidden="true" data-testid="monitor-planted-trees-add-icon" />
               Monitor Planted Trees
@@ -2019,11 +2027,14 @@ export default function MonitoringPage() {
             {tableRows > 0 && (
               <tbody>
                 {pagedRecords.map((record) => {
+                  const view = lifecycleMonitoringView(record);
+                  const condition = view?.condition || record.condition;
                   const meta =
-                    CONDITION_META[record.condition] || CONDITION_META.Healthy;
+                    CONDITION_META[condition] || (condition === "Needs Rechecking" ? CONDITION_META.Damaged : CONDITION_META.Healthy);
+                  const canMonitor = isStaff && cohortFeatureEnabled && !record.archived && Boolean(view?.action) && Boolean(record.plantingReportId);
 
                   return (
-                    <tr key={record.id}>
+                    <tr key={record.id} data-lifecycle-row={monitoringDisplayId(record)}>
                       <td>
                         <span className="sm-record-id">{monitoringDisplayId(record)}</span>
                       </td>
@@ -2038,11 +2049,12 @@ export default function MonitoringPage() {
                           </span>
                         )}
                       </td>
-                      <td>{isAwaitingMonitoringSetup(record) ? "Awaiting Policy Decision" : formatDate(record.startMonitoringDate)}</td>
-                      <td>{isAwaitingMonitoringSetup(record) ? "Not Scheduled" : record.nextMonitoringDate ? formatDate(record.nextMonitoringDate) : monitoringScheduleLabel(record)}</td>
+                      <td>{view ? <>{view.start ? formatDate(view.start) : "—"}{view.startNote && <span className="sm-site-sub">{view.startNote}</span>}</> : formatDate(record.startMonitoringDate)}</td>
+                      <td>{view ? <>{view.next ? formatDate(view.next) : "Not Scheduled"}{view.nextNote && <span className="sm-site-sub">{view.nextNote}</span>}</> : record.nextMonitoringDate ? formatDate(record.nextMonitoringDate) : monitoringScheduleLabel(record)}</td>
                       <td>
-                        <MonitoringStatusBadge label={monitoringStatusLabel(record.status) || "—"} />
-                        <span className="sm-site-sub">{earlyMonitoringLabel(record)}</span>
+                        <MonitoringStatusBadge label={view?.status || monitoringStatusLabel(record.status) || "—"} />
+                        {!view && <span className="sm-site-sub">{earlyMonitoringLabel(record)}</span>}
+                        {canMonitor && <button type="button" className="sm-row-monitor-button" aria-label={`${view.action} for ${monitoringDisplayId(record)}`} onClick={() => monitorLifecycle(record)}>{view.action}</button>}
                       </td>
                       <td>
                         <span
@@ -2052,8 +2064,9 @@ export default function MonitoringPage() {
                             color: meta.color,
                           }}
                         >
-                          {record.condition}
+                          {condition}
                         </span>
+                        {view?.latest && <span className="sm-site-sub">{view.latest}</span>}
                       </td>
                       <td>
                         <div
@@ -2691,7 +2704,7 @@ export default function MonitoringPage() {
                       color: CONDITION_META[selectedRecord.condition]?.color,
                     }}
                   >
-                    {selectedRecord.condition}
+                    {selectedView?.condition || selectedRecord.condition}
                   </span>
                   <span>Monitoring ID: {monitoringDisplayId(selectedRecord)}</span>
                 </div>
@@ -2735,15 +2748,15 @@ export default function MonitoringPage() {
                   </div>
                   <div>
                     <span>Start Monitoring Date</span>
-                    <strong>{isAwaitingMonitoringSetup(selectedRecord) ? "Awaiting Policy Decision" : formatDate(selectedRecord.startMonitoringDate)}</strong>
+                    <strong>{selectedView ? `${selectedView.start ? formatDate(selectedView.start) : "—"}${selectedView.startNote ? ` (${selectedView.startNote})` : ""}` : formatDate(selectedRecord.startMonitoringDate)}</strong>
                   </div>
                   <div>
                     <span>Next Monitoring Date</span>
-                    <strong>{isAwaitingMonitoringSetup(selectedRecord) ? "Not Scheduled" : selectedRecord.nextMonitoringDate ? formatDate(selectedRecord.nextMonitoringDate) : monitoringScheduleLabel(selectedRecord)}</strong>
+                    <strong>{selectedView ? selectedView.next ? formatDate(selectedView.next) : "Not Scheduled" : selectedRecord.nextMonitoringDate ? formatDate(selectedRecord.nextMonitoringDate) : monitoringScheduleLabel(selectedRecord)}</strong>
                   </div>
                   <div>
                     <span>Lifecycle Status</span>
-                    <strong>{monitoringStatusLabel(selectedRecord.status) || "—"}</strong>
+                    <strong>{selectedView?.status || monitoringStatusLabel(selectedRecord.status) || "—"}</strong>
                   </div>
                   <div>
                     <span>Monitoring Entries</span>
@@ -2758,6 +2771,8 @@ export default function MonitoringPage() {
                     <strong>{isAwaitingMonitoringSetup(selectedRecord) ? "Not Scheduled" : formatDate(selectedRecord.monitoringEndDate)}</strong>
                   </div>
                 </div>
+                {selectedView?.latest && <p className="sm-helper">Permanent sample — {selectedView.latest}</p>}
+                {isStaff && cohortFeatureEnabled && !selectedRecord.archived && selectedView?.action && selectedRecord.plantingReportId && <button type="button" className="sm-primary-small" onClick={() => { const record = selectedRecord; closeDetails(); monitorLifecycle(record); }}>{selectedView.action}</button>}
                 {monitoringSetupBlocker(selectedRecord) && <p className="sm-helper sm-setup-blocker" role="note">{monitoringSetupBlocker(selectedRecord)}</p>}
               </section>
 

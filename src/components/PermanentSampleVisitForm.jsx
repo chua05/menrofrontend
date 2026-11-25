@@ -1,9 +1,9 @@
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import MonitoringInformationPanel from "./MonitoringInformationPanel";
 import { informationEnabled } from "../utils/permanentSampleFeatures";
 import { Camera, Image, MapPin, Trees, ChevronLeft, ChevronRight, CircleCheck, AlertTriangle, Search, Circle, Lock } from "lucide-react";
 import PlantingLocationMap from "./PlantingLocationMap";
-import { MORTALITY_CAUSES, SAMPLE_CONDITIONS, sampleProgress } from "../utils/sampleMonitoringForm";
+import { MORTALITY_CAUSES, SAMPLE_CONDITIONS, growthPreview, hasCurrentEvidence, sampleProgress } from "../utils/sampleMonitoringForm";
 import { scheduleStatusLabel } from "../utils/sampleVisitReadiness";
 const shown = value => value === null || value === undefined || value === "" ? "Not available" : String(value);
 const definitions = { Healthy: "Living tree in good condition.", Damaged: "Living tree with observed damage.", Dead: "Confirmed dead by field assessment.", "Needs Rechecking": "Condition is not yet confirmed." };
@@ -82,8 +82,8 @@ export function PermanentSampleVisitShell({ describedBy, report = null, firstVis
   const baselineVisit = report ? Boolean(report.registersBaseline) || !context && !cohort : firstVisit;
   const firstOfSchedule = context && (report.registersBaseline === true || visitNumber === 1);
   const schedule = context ? {
-    start: firstOfSchedule ? "Set by the Visit 1 monitoring date" : PENDING_SCHEDULE,
-    next: firstOfSchedule ? (report.canCreateVisit ? "Available now (no fixed first-visit due date)" : PENDING_SCHEDULE)
+    start: firstOfSchedule ? "—" : PENDING_SCHEDULE,
+    next: firstOfSchedule ? "Not fixed for Visit 1"
       : report.nextScheduledDueDate || report.openingDate || PENDING_SCHEDULE,
     visit: visitNumber ?? "Not assigned",
     status: context.monitoringStatus === "FIRST_VISIT_AVAILABLE" ? statusText("FIRST_VISIT_AVAILABLE")
@@ -140,8 +140,15 @@ export function PermanentSampleVisitShell({ describedBy, report = null, firstVis
   </fieldset>;
 }
 export default function PermanentSampleVisitForm({ detail, assessments, activeTreeId, onTree, errors, onChange, onSave,
-  saving, onCapture, onUpload, originalEnabled = false, onOriginal, pendingFor, onDiscard, onView, evidenceUrls, evidenceKey, visitRemarks, onVisitRemarks, dateMonitored, onDateMonitored, questions, onQuestion, readOnly = false, inlineEvidenceHistory = true }) {
+  saving, onCapture, onUpload, originalEnabled = false, onOriginal, pendingFor, onDiscard, onView, evidenceUrls, evidenceKey, visitRemarks, onVisitRemarks, dateMonitored, onDateMonitored, questions, onQuestion, readOnly = false, inlineEvidenceHistory = true, onOpenVisit }) {
   const [clarifications, setClarifications] = useState({});
+  // A marker opens its tree; its details stay shown on the map of that tree.
+  const [popupTreeId, setPopupTreeId] = useState("");
+  const selectOnMap = useCallback((sampleId, fromPopup) => {
+    setPopupTreeId(fromPopup ? "" : sampleId); onTree(sampleId);
+    if (fromPopup) window.setTimeout(() => document.getElementById("sample-active-assessment")?.scrollIntoView({ behavior: "smooth", block: "start" }), 0);
+  }, [onTree]);
+  const chooseTree = sampleId => { setPopupTreeId(""); onTree(sampleId); };
   const context=detail.visitContext, savedRows=(detail.sampleAssessments||[]).map(row=>({ ...row, condition: row.condition || "" })), progress=sampleProgress(savedRows), confirmed=progress.healthy+progress.damaged+progress.dead;
   const active=assessments.find(row=>row.sampleId===activeTreeId);
   const index=assessments.findIndex(row=>row.sampleId===active?.sampleId);
@@ -149,11 +156,19 @@ export default function PermanentSampleVisitForm({ detail, assessments, activeTr
   const server=detail.sampleAssessments?.find(row=>row.sampleId===active?.sampleId), pending=active && pendingFor(active.sampleId);
   const previous=sample?.previous || sample?.baseline;
   const locked=Boolean(active?.inheritedConfirmedDead);
+  const photoMissing=row=>Boolean(detail.schedulePolicyVersion||detail.registersBaseline)&&Boolean(row?.condition)&&!hasCurrentEvidence(row);
+  const savedOf=sampleId=>detail.sampleAssessments?.find(row=>row.sampleId===sampleId);
+  const awaitingPhoto=(detail.sampleAssessments||[]).filter(photoMissing).length;
   const dirty = row => {
     const saved = detail.sampleAssessments?.find(item => item.sampleId === row.sampleId) || {};
     return ["condition","remarks","mortalityCause","recheckReason","investigationOutcome","searchFindings","heightCentimeters","stemDiameterMillimeters"]
       .some(field => String(row[field] ?? "") !== String(saved[field] ?? ""));
   };
+  const activeDirty=Boolean(active)&&!readOnly&&dirty(active);
+  const stored={ height:server?.heightDifferenceCm ?? active?.heightDifferenceCm ?? active?.growthDelta?.heightCentimeters ?? null,
+    diameter:server?.stemDiameterDifferenceMm ?? active?.stemDiameterDifferenceMm ?? (active?.growthDelta?.diameterCentimeters==null?null:Number(active.growthDelta.diameterCentimeters)*10),
+    decreased:Boolean(server?.measurementDecreased||active?.measurementDecreased) };
+  const growth=activeDirty&&!detail.registersBaseline?growthPreview(active,server?.previousMeasurement||previous):stored;
   const input = (field, caption, kind="input") => {
     const id=`sample-${active.sampleId}-${field}`, message=errors[`${active.sampleId}.${field}`];
     const props={id, value:active[field], disabled:saving||readOnly||locked, "aria-invalid":Boolean(message), "aria-describedby":message?`${id}-error`:undefined,
@@ -163,6 +178,8 @@ export default function PermanentSampleVisitForm({ detail, assessments, activeTr
       {message&&<small role="alert" id={`${id}-error`}>{message}</small>}</div>;
   };
   return <>
+    {!readOnly&&detail.reviewReasons&&["DRAFT","RETURNED"].includes(detail.status)&&<section className="psm-warning" role="status" aria-label="Returned for Correction">
+      <strong>Returned for Correction</strong><p>{detail.reviewReasons}</p><p>Correct the trees named above and save them. A changed assessment needs a new verified photo before you submit the visit again.</p></section>}
     <section className="psm-section"><h3>1. Verified Planting Site Information</h3>
       {detail.registersBaseline&&<p className="psm-baseline-banner">Visit 1 — Baseline registration. Tree IDs and the 10% sample remain provisional until Admin approval.</p>}
       <dl className="psm-info"><Reference label="Planting Report ID" value={context?.reportNumber||context?.plantingReportId}/><Reference label="Planting Site Name" value={context?.siteName}/>
@@ -175,11 +192,12 @@ export default function PermanentSampleVisitForm({ detail, assessments, activeTr
         <Reference label="Current Monitoring Status" value={scheduleLabel(detail, context)}/></dl>
     </section>
     <section className="psm-section"><h3>2. Monitoring Summary &amp; Automatic Schedule</h3><dl className="psm-info">
-      <Reference label="Start Monitoring Date" value={context?.schedule?.startMonitoringDate||PENDING_SCHEDULE}/>
-      <Reference label="Scheduled Due Date" value={detail.scheduledDueDate||context?.schedule?.nextMonitoringDate||PENDING_SCHEDULE}/>
+      <Reference label="Start Monitoring Date" value={detail.registersBaseline?["APPROVED","PENDING_ADMIN_APPROVAL"].includes(detail.status)&&detail.dateMonitored?`${detail.dateMonitored}${detail.status==="APPROVED"?"":" (Pending Admin Review)"}`:"—":context?.schedule?.startMonitoringDate||PENDING_SCHEDULE}/>
+      <Reference label="Scheduled Due Date" value={detail.registersBaseline?"Not fixed for Visit 1":detail.scheduledDueDate||context?.schedule?.nextMonitoringDate||PENDING_SCHEDULE}/>
       <Reference label="Monitoring Visit Number" value={detail.visitNumber||context?.schedule?.visitNumber||"Not assigned"}/><Reference label="Schedule Status" value={scheduleLabel(detail, context)}/></dl>
-      <div className="psm-field"><label htmlFor="sample-date-monitored">Date Monitored *</label><input id="sample-date-monitored" type="date" required max={new Intl.DateTimeFormat("en-CA",{timeZone:"Asia/Manila",year:"numeric",month:"2-digit",day:"2-digit"}).format(new Date())} value={dateMonitored} disabled={saving||readOnly} aria-invalid={Boolean(errors.dateMonitored)} aria-describedby={errors.dateMonitored?"sample-date-monitored-error":undefined} onChange={event=>onDateMonitored(event.target.value)}/>{errors.dateMonitored&&<small role="alert" id="sample-date-monitored-error">{errors.dateMonitored}</small>}</div>
-      <p className="psm-note">Scheduled dates come from the authorized visit. Recording the actual assessment date does not change the approved schedule.</p>
+      <div className="psm-field"><label htmlFor="sample-date-monitored">Date Monitored *</label><input id="sample-date-monitored" type="date" required min={detail.openingDate||undefined} max={new Intl.DateTimeFormat("en-CA",{timeZone:"Asia/Manila",year:"numeric",month:"2-digit",day:"2-digit"}).format(new Date())} value={dateMonitored} disabled={saving||readOnly} aria-invalid={Boolean(errors.dateMonitored)} aria-describedby={errors.dateMonitored?"sample-date-monitored-error":undefined} onChange={event=>onDateMonitored(event.target.value)}/>{errors.dateMonitored&&<small role="alert" id="sample-date-monitored-error">{errors.dateMonitored}</small>}</div>
+      <p className="psm-note"><strong>Automatic Schedule:</strong> {detail.registersBaseline?"Visit 2 will be due one calendar month after the approved Visit 1 assessment date.":"The next visit is due three calendar months after this visit's scheduled due date, even when this visit is recorded late."}</p>
+      <p className="psm-note">Date Monitored is the actual day of the field assessment. It cannot be in the future{detail.openingDate?` or before ${detail.openingDate}`:""}.</p>
     </section>
     {/* Non-overlapping counts: confirmed condition + unresolved rechecking + not assessed = registered trees. */}
     <section className="psm-section"><h3>3. Assessment Progress</h3><div className="psm-progress">
@@ -187,17 +205,19 @@ export default function PermanentSampleVisitForm({ detail, assessments, activeTr
         <div className="psm-progress-card" key={label}><span>{label}</span><strong>{value}</strong><small>{hint}</small></div>)}</div>
       <div className="psm-progress-bar"><progress aria-label="Confirmed sample assessments" value={confirmed} max={progress.total||1}/><span>{`${confirmed} / ${progress.total} confirmed`}</span></div>
       <p role="status">{`${progress.assessed}/${progress.total} assessments recorded; ${progress.rechecking === 1 ? "1 needs" : `${progress.rechecking} need`} rechecking.`}</p>
+      {awaitingPhoto>0&&<p className="psm-warning" role="status">{`${awaitingPhoto} saved assessment${awaitingPhoto===1?" still needs a verified photo":"s still need a verified photo"} before this visit can be submitted.`}</p>}
     </section>
     <section className="psm-section"><h3>4. Permanent Sample Tree Records</h3>
-      <label className="psm-field">Tree ID selector<select value={activeTreeId} onChange={event=>onTree(event.target.value)}><option value="">Select a Tree ID</option>{assessments.map(row=><option key={row.sampleId} value={row.sampleId}>{row.sampleId}</option>)}</select></label>
+      <p className="psm-note">{detail.registersBaseline?"Staff choose the actual trees on site. The system provides one provisional Tree ID for each tree of the exact sample.":"The same approved permanent trees are assessed on every visit."}</p>
+      <label className="psm-field">Tree ID selector<select value={activeTreeId} onChange={event=>chooseTree(event.target.value)}><option value="">Select a Tree ID</option>{assessments.map(row=><option key={row.sampleId} value={row.sampleId}>{row.sampleId}</option>)}</select></label>
       <div className="psm-tree-list">{assessments.map(row=>{
       const reference=context?.samples?.find(item=>item.sampleId===row.sampleId);
       const prior=row.previousAssessmentReference?.condition||reference?.previous?.condition||reference?.baseline?.condition;
-      return <button type="button" key={row.sampleId} aria-expanded={row.sampleId===active?.sampleId} aria-controls="sample-active-assessment" onClick={()=>onTree(row.sampleId===active?.sampleId?"":row.sampleId)}>
+      return <button type="button" key={row.sampleId} aria-expanded={row.sampleId===active?.sampleId} aria-controls="sample-active-assessment" onClick={()=>chooseTree(row.sampleId===active?.sampleId?"":row.sampleId)}>
         <span><strong>{row.sampleId}</strong>{reference?.species&&` · ${reference.species}`}</span>
-        <span className="psm-tree-state">{treeIcon(row)}{row.inheritedConfirmedDead?"Dead — Carried Forward":row.condition||"Not Assessed"}{readOnly?(SUBMITTED.has(detail.status)?" · Submitted":" · Saved"):dirty(row)?" · Unsaved":" · Saved"}{prior?` · Previous: ${prior}`:""}{row.recheckRequired||row.previousAssessmentReference?" · Rechecking carried forward":""}</span></button>;
+        <span className="psm-tree-state">{treeIcon(row)}{row.inheritedConfirmedDead?"Dead — Carried Forward":row.condition||"Not Assessed"}{readOnly?(SUBMITTED.has(detail.status)?" · Submitted":" · Saved"):dirty(row)?" · Unsaved":" · Saved"}{photoMissing(savedOf(row.sampleId))?" · Photo required":""}{prior?` · Previous: ${prior}`:""}{row.recheckRequired||row.previousAssessmentReference?" · Rechecking carried forward":""}</span></button>;
     })}</div>
-      <div className="psm-tree-nav"><button type="button" disabled={index<=0} onClick={()=>onTree(assessments[index-1].sampleId)}><ChevronLeft size={17}/> Previous Tree</button><button type="button" disabled={index<0||index>=assessments.length-1} onClick={()=>onTree(assessments[index+1].sampleId)}>Next Tree <ChevronRight size={17}/></button></div>
+      <div className="psm-tree-nav"><button type="button" disabled={index<=0} onClick={()=>chooseTree(assessments[index-1].sampleId)}><ChevronLeft size={17}/> Previous Tree</button><button type="button" disabled={index<0||index>=assessments.length-1} onClick={()=>chooseTree(assessments[index+1].sampleId)}>Next Tree <ChevronRight size={17}/></button></div>
     </section>
     {!active&&<section id="sample-active-assessment" hidden /> }
     {active&&<section className="psm-section" id="sample-active-assessment"><h3>5. Individual Tree Assessment</h3><fieldset className="psm-tree" key={active.sampleId}><legend>{active.sampleId}</legend>
@@ -214,16 +234,16 @@ export default function PermanentSampleVisitForm({ detail, assessments, activeTr
       <h4 className="psm-heading"><Camera size={18}/> Monitoring Photo</h4><div className="psm-photo-box"><Camera size={28}/><strong>Monitoring Photo Evidence</strong>
         <p>Private verified evidence for {active.sampleId}.</p><div className="psm-actions">
           {!readOnly&&<button type="button" className="psm-primary" disabled={saving} onClick={()=>onCapture(active.sampleId)} aria-label={`Capture verified photo for ${active.sampleId}`}><Camera size={17}/> Take Photo</button>}
-          {!readOnly&&<button type="button" disabled={!originalEnabled||saving} onClick={()=>document.getElementById(`sample-${active.sampleId}-original-file`)?.click()} aria-describedby={`sample-${active.sampleId}-original-policy`} title="Original-photo verification rules are awaiting MENRO approval."><Image size={17}/> Upload Existing Photo</button>}
+          {!readOnly&&<button type="button" disabled={!originalEnabled||saving} onClick={()=>document.getElementById(`sample-${active.sampleId}-original-file`)?.click()} aria-describedby={`sample-${active.sampleId}-original-policy`} title={originalEnabled?undefined:"Original-photo verification rules are awaiting MENRO approval."}><Image size={17}/> Upload Existing Photo</button>}
           {originalEnabled && <input id={`sample-${active.sampleId}-original-file`} type="file" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" hidden disabled={!originalEnabled||saving||readOnly} onChange={event=>{onOriginal?.(active.sampleId,event.target.files?.[0]);event.target.value="";}}/>}</div>
-        <p className="psm-note">Accepted monitoring photo formats: JPG/JPEG, PNG and WEBP. Maximum file size: 10 MB.</p>
-        <p className="psm-note" id={`sample-${active.sampleId}-original-policy`}>{originalEnabled ? "Local proposed policy: original JPEG EXIF GPS and capture date are checked by the server. GPS accuracy remains Unknown and requires explicit Admin review. EXIF does not prove authenticity." : "Existing-photo uploads are awaiting MENRO approval of original-photo verification rules. Use Take Photo."}</p></div>
-      {pending&&<div className="psm-preview"><img src={pending.previewUrl} alt={`${pending.descriptor.source === "uploaded-original" ? "Original photo" : "Verified evidence"} preview for ${active.sampleId}`}/><p role="status">{pending.descriptor.source === "uploaded-original" ? "Original photo selected ? backend verification and private upload required." : "Verified photo ready for private upload."}</p>
+        <p className="psm-note">Maximum file size: 10 MB. An existing photo must be the original JPEG with its embedded GPS and capture time.</p>
+        <p className="psm-note" id={`sample-${active.sampleId}-original-policy`}>{originalEnabled ? "The server checks the original photo's embedded GPS, capture date and planting site. GPS accuracy is Unknown, so Admin must review it. EXIF does not prove authenticity." : "Existing-photo uploads are awaiting MENRO approval of original-photo verification rules. Use Take Photo."}</p></div>
+      {pending&&<div className="psm-preview"><img src={pending.previewUrl} alt={`${pending.descriptor.source === "uploaded-original" ? "Original photo" : "Verified evidence"} preview for ${active.sampleId}`}/><p role="status">{pending.descriptor.source === "uploaded-original" ? "Original photo selected. Verify its location to upload it." : "Verified photo ready for private upload."}</p>
         <button type="button" disabled={saving} onClick={()=>onDiscard(active.sampleId)}>Remove pending photo</button></div>}
       <h4 className="psm-heading"><MapPin size={18}/> Photo Location Verification</h4><div className="psm-location"><div className="psm-location-title"><strong>Location Verification</strong>
         {!readOnly&&<button type="button" disabled={!pending||saving} onClick={()=>onUpload(active.sampleId)} aria-label={`${pending?.descriptor.source === "uploaded-original" ? "Verify and upload original photo" : "Upload verified photo"} for ${active.sampleId}`}>{saving?"Verifying...":"Verify Photo Location"}</button>}</div>
         <p>{pending?.descriptor.source === "uploaded-original" ? "Original EXIF location must be validated by the server. GPS accuracy: Unknown; Admin review required." : pending?"Location comes from the backend-verified camera capture, not fabricated EXIF.":"Secure camera photos use their separately verified capture location."}</p>
-        <PlantingLocationMap key={`${detail.id}-${active.sampleId}`} site={context?.site||null} treeMarkers={context?.treeMarkers||undefined} selectedTreeId={active.sampleId} registeredTree={sample} onSelectTree={onTree} highlightSitePolygon evidence={pending?.location||server?.evidenceHistory?.at(-1)?.location||null} status={errors[active.sampleId + ".evidence"]
+        <PlantingLocationMap key={`${detail.id}-${active.sampleId}`} site={context?.site||null} treeMarkers={context?.treeMarkers||undefined} selectedTreeId={active.sampleId} registeredTree={sample} onSelectTree={selectOnMap} popupTreeId={popupTreeId} highlightSitePolygon evidence={pending?.location||server?.evidenceHistory?.at(-1)?.location||null} status={errors[active.sampleId + ".evidence"]
           ? {type:"error",label:server?.evidenceHistory?.length?"Replacement Required":"Failed"}
           : saving&&pending?{type:"info",label:"Verifying"}:pending?{type:"warning",label:"Pending Upload"}
             : server?.evidenceHistory?.at(-1)?.location?{type:"success",label:"Verified"}:{type:"info",label:"Awaiting Photo"}}/>
@@ -247,16 +267,18 @@ export default function PermanentSampleVisitForm({ detail, assessments, activeTr
         {input("remarks",["Dead","Needs Rechecking"].includes(active.condition)?"Individual Remarks *":"Individual Remarks","textarea")}
       </>}
       <h4>Automatic Growth Evaluation</h4>
+      {activeDirty&&!detail.registersBaseline&&<p className="psm-note">Based on the values entered now. The server confirms it when the assessment is saved.</p>}
       <dl className="psm-info psm-growth" aria-label="Automatic Growth Evaluation">
-        <Reference label="Height Difference" value={deltaText(server?.heightDifferenceCm ?? active.heightDifferenceCm ?? active.growthDelta?.heightCentimeters,"cm")} />
-        <Reference label="Stem Diameter Difference" value={deltaText(server?.stemDiameterDifferenceMm ?? active.stemDiameterDifferenceMm ?? (active.growthDelta?.diameterCentimeters==null?null:Number(active.growthDelta.diameterCentimeters)*10),"mm")} />
+        <Reference label="Height Difference" value={deltaText(growth.height,"cm")} />
+        <Reference label="Stem Diameter Difference" value={deltaText(growth.diameter,"mm")} />
         <Reference label="Growth Performance" value={server?.growthPerformance||active.growthPerformance||"Pending Approved Criteria"} />
         <Reference label="Growth Stage" value={server?.growthStage||active.growthStage||"Pending Stage Criteria"} />
         <Reference label="Assessment Stage" value={assessmentStage(active.condition)} />
       </dl>
-      {(server?.measurementDecreased||active.measurementDecreased)&&<p className="psm-warning" role="status">A measurement decreased from the latest approved comparison. Re-measure or explain the difference; this warning does not change the recorded condition.</p>}
+      {growth.decreased&&<p className="psm-warning" role="status">A measurement decreased from the latest approved comparison. Re-measure or explain the difference; this warning does not change the recorded condition.</p>}
       {(detail.registersBaseline||server?.baselineOnly||active.baselineOnly)&&<p className="psm-note">Initial baseline recorded. Growth comparison will be available on succeeding monitoring visits.</p>}
-      {!readOnly&&<button type="button" aria-label="Save Tree Assessment" disabled={saving||locked} onClick={()=>onSave(false,active.sampleId)}>Save Tree Assessment</button>}
+      <p className="psm-tree-status"><strong>Assessment Status</strong><span className={activeDirty?"is-unsaved":""}>{readOnly?SUBMITTED.has(detail.status)?"Submitted":"Saved":activeDirty?"Unsaved Changes":!server?.condition?"Not Saved":photoMissing(server)?"Saved — Photo Required":"Saved"}</span></p>
+      {!readOnly&&<button type="button" className="psm-primary" aria-label="Save Tree Assessment" disabled={saving||locked} onClick={()=>onSave(false,active.sampleId)}>Save Tree Assessment</button>}
     </fieldset></section>}
     {active?.condition==="Needs Rechecking"&&<section className="psm-section psm-rechecking"><h3>6. Rechecking &amp; Requester Clarification</h3>
       <dl className="psm-info"><Reference label="Rechecking Required" value="Yes — Needs Rechecking"/><Reference label="Next Scheduled Monitoring Visit" value={context?.schedule?.nextMonitoringDate||PENDING_SCHEDULE}/></dl>
@@ -270,8 +292,8 @@ export default function PermanentSampleVisitForm({ detail, assessments, activeTr
       <p><strong>Sample Survival Result:</strong> {detail.summary?.survivalRate==null?"Pending / Incomplete":`${detail.summary.survivalRate}%`}. Unresolved trees are not classified as dead.</p>
       <label className="psm-field">Overall Visit Remarks (Optional)<textarea value={visitRemarks} maxLength={1000} disabled={saving||readOnly} onChange={event=>onVisitRemarks(event.target.value)} rows={3}/></label></section>
     <section className="psm-section"><h3>8. Actions &amp; Monitoring Visit History</h3>
-      <p className="psm-note">Save Tree Assessment, Save Draft and Submit Monitoring Visit actions appear in the form footer according to your role and this visit's status.</p>
-      <div className="psm-history-table-wrap"><table className="psm-history-table"><caption>Monitoring Visit History</caption><thead><tr><th>Visit</th><th>Due</th><th>Actual</th><th>Status</th><th>Healthy</th><th>Damaged</th><th>Dead</th><th>Rechecking</th><th>Survival</th></tr></thead><tbody>{(context?.history||[]).map((row,index)=><tr key={row.visitId||`scheduled-${row.visitNumber}-${index}`}><td>{row.visitNumber??"—"}</td><td>{row.scheduledDueDate||row.visitDate||"—"}</td><td>{row.dateMonitored||"—"}</td><td>{PLAN_STATUS[row.status]||row.status}{row.availability==="NOT_YET_AVAILABLE"?" — Not yet available":""}</td><td>{row.healthy??"—"}</td><td>{row.damaged??"—"}</td><td>{row.confirmedDead??"—"}</td><td>{row.needsRechecking??"—"}</td><td>{row.survivalRate==null?"Pending / Incomplete":`${row.survivalRate}%`}</td></tr>)}</tbody></table></div>
+      <p className="psm-note">Save Tree Assessment, Save Draft and Submit Monitoring Visit actions follow your role and this visit's status.</p>
+      <div className="psm-history-table-wrap"><table className="psm-history-table"><caption>Monitoring Visit History</caption><thead><tr><th>Visit</th><th>Due</th><th>Actual</th><th>Status</th><th>Healthy</th><th>Damaged</th><th>Dead</th><th>Rechecking</th><th>Survival</th>{onOpenVisit&&<th>Details</th>}</tr></thead><tbody>{(context?.history||[]).map((row,index)=><tr key={row.visitId||`scheduled-${row.visitNumber}-${index}`}><td>{row.visitNumber??"—"}</td><td>{Number(row.visitNumber)===1?"Not fixed":row.scheduledDueDate||row.visitDate||"—"}</td><td>{row.dateMonitored||"—"}</td><td>{PLAN_STATUS[row.status]||row.status}{row.availability==="NOT_YET_AVAILABLE"?" — Not yet available":""}</td><td>{row.healthy??"—"}</td><td>{row.damaged??"—"}</td><td>{row.confirmedDead??"—"}</td><td>{row.needsRechecking??"—"}</td><td>{row.survivalRate==null?"Pending / Incomplete":`${row.survivalRate}%`}</td>{onOpenVisit&&<td>{row.visitId&&row.visitId!==detail.id&&row.canView===true?<button type="button" disabled={saving} onClick={()=>onOpenVisit(row.visitId)} aria-label={`View visit ${row.visitNumber}`}>View</button>:row.visitId===detail.id?"This visit":"—"}</td>}</tr>)}</tbody></table></div>
       {active&&<div className="psm-tree-timeline"><h4>{active.sampleId} approved history</h4>{(context?.treeTimeline?.[active.sampleId]||[]).length?<ul>{context.treeTimeline[active.sampleId].map(entry=><li key={`${entry.visitId}-${entry.assessedOn}`}>Visit {entry.visitNumber}: {entry.assessedOn||entry.dateMonitored||"date unavailable"} — {entry.condition}{entry.heightCentimeters==null?"":` · ${entry.heightCentimeters} cm`}{entry.stemDiameterMillimeters==null?"":` · ${entry.stemDiameterMillimeters} mm`}</li>)}</ul>:<p>No approved per-tree history is available yet.</p>}</div>}
     </section>
   </>;

@@ -15,9 +15,9 @@ assert.equal(backend,path.resolve(snapshot.backend.root));
 for(const key of ["GOOGLE_APPLICATION_CREDENTIALS","FIREBASE_PRIVATE_KEY","FIREBASE_CLIENT_EMAIL","FIREBASE_CONFIG"])assert.equal(process.env[key],undefined);
 assert.equal(existsSync(path.join(root,".env")),false);
 const video=path.join(root,"owned-camera.y4m"),width=320,height=240,chroma=Buffer.alloc(width*height/4,128);
-if(!existsSync(video))writeFileSync(video,Buffer.concat([Buffer.from(`YUV4MPEG2 W${width} H${height} F30:1 Ip A0:0 C420jpeg\n`),...Array.from({length:120},()=>Buffer.concat([Buffer.from("FRAME\n"),randomBytes(width*height),chroma,chroma]))]));
+if(!existsSync(video))writeFileSync(video,Buffer.concat([Buffer.from(`YUV4MPEG2 W${width} H${height} F30:1 Ip A0:0 C420jpeg\n`),...Array.from({length:process.env.MENRO_BROWSER_LIFECYCLES === "true" ? 600 : 120},()=>Buffer.concat([Buffer.from("FRAME\n"),randomBytes(width*height),chroma,chroma]))]));
 const quote=p=>{assert.match(p,/^[a-zA-Z0-9:/\\._ -]+$/);return `"${p}"`;};
-export default defineConfig({testDir:"./tests/e2e",testMatch:process.env.MENRO_MONITORING_ORIGINAL_PHOTO_PROPOSAL === "true" ? "sample-monitoring-original-real.spec.js" : ["first-visit","verified-report"].includes(process.env.MENRO_BROWSER_FIXTURE_MODE) ? "sample-monitoring-first-visit-real.spec.js" : "sample-monitoring-real.spec.js",workers:1,timeout:90000,
+export default defineConfig({testDir:"./tests/e2e",testMatch:process.env.MENRO_MONITORING_ORIGINAL_PHOTO_PROPOSAL === "true" ? "sample-monitoring-original-real.spec.js" : process.env.MENRO_BROWSER_LIFECYCLES === "true" ? "sample-monitoring-lifecycles-real.spec.js" : ["first-visit","verified-report"].includes(process.env.MENRO_BROWSER_FIXTURE_MODE) ? "sample-monitoring-first-visit-real.spec.js" : "sample-monitoring-real.spec.js",workers:1,timeout:90000,
  outputDir:path.join(root,"browser-results"),globalTeardown:"./tests/monitoring-real/teardown.js",
  use:{baseURL:"http://127.0.0.1:5186",geolocation:{latitude:12.662301,longitude:123.932983,accuracy:5},trace:"off",
   launchOptions:{args:["--use-fake-ui-for-media-stream","--use-fake-device-for-media-stream",`--use-file-for-fake-video-capture=${video}`]}},
