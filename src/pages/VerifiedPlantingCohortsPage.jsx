@@ -150,9 +150,9 @@ export default function VerifiedPlantingCohortsPage({ embedded = false, view = "
     } catch (err) { setError(err.message); }
   };
 
-  if (!enabled) return <main className="cohort-page"><h1>Verified Planting Cohorts</h1><p role="status">{visibleCohortMessage(false)}</p></main>;
+  if (!enabled) return <main className="cohort-page"><h1 className="page-title-hidden">Verified Planting Cohorts</h1><p role="status">{visibleCohortMessage(false)}</p></main>;
   return <Container className="cohort-page">
-    <Heading>{contextual ? "Permanent Sample Setup" : "Verified Planting Cohorts"}</Heading>
+    <Heading className={Heading === "h1" ? "page-title-hidden" : undefined}>{contextual ? "Permanent Sample Setup" : "Verified Planting Cohorts"}</Heading>
     <p className="cohort-notice">{contextual ? "Sampling plan and baseline for this verified planting report. Admin approval is required for each; visit creation is never automatic." : "Approved planting records and permanent samples. Existing schedules and official KPIs remain unchanged; sample and visit creation is never automatic."}</p>
     {error && <p className="cohort-error" role="alert">{error}</p>}{message && <p className="cohort-success" role="status">{message}</p>}
     {(!contextual || cohorts.length > 1) && <><label htmlFor="verified-cohort-selection">Verified cohort</label><select id="verified-cohort-selection" value={selectedId} onChange={(event) => setSelectedId(event.target.value)}><option value="">Select a cohort</option>{cohorts.map((cohort) => <option key={cohort.id} value={cohort.id}>{cohort.id} — {cohort.verifiedPlantedQuantity} verified trees</option>)}</select></>}

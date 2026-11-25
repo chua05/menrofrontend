@@ -600,7 +600,7 @@ export default function PermanentSampleMonitoringPage({ embedded = false, open: 
   if (!enabled) {
     return (
       <main>
-        <h1>Permanent Sample Monitoring</h1>
+        <h1 className="page-title-hidden">Permanent Sample Monitoring</h1>
         <p role="status">{visibleCohortMessage(false)}</p>
       </main>
     );
@@ -608,7 +608,7 @@ export default function PermanentSampleMonitoringPage({ embedded = false, open: 
   if (!["staff", "admin"].includes(userRole)) {
     return (
       <main>
-        <h1>Permanent Sample Monitoring</h1>
+        <h1 className="page-title-hidden">Permanent Sample Monitoring</h1>
         <p role="alert">Access is restricted to MENRO Staff and Admin.</p>
       </main>
     );
@@ -913,7 +913,7 @@ export default function PermanentSampleMonitoringPage({ embedded = false, open: 
   if (embedded) return <>{dialog}{camera}</>;
   return (
     <main className="cohort-page">
-      <h1>Permanent Sample Monitoring</h1>
+      <h1 className="page-title-hidden">Permanent Sample Monitoring</h1>
       {detail?.writesPaused && <p role="status">Changes are paused. Authorized visit and photo history remain available.</p>}
       <p>Existing authorized visits only. Scheduling and visit creation are unavailable.</p>
       <label>

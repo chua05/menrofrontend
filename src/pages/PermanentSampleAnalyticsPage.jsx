@@ -47,8 +47,8 @@ export default function PermanentSampleAnalyticsPage() {
     if (nextSite === site && nextCohort === cohort) return;
     setLoading(true); setError(""); setSite(nextSite); setCohort(nextCohort);
   }
-  return <main className="space-y-4 p-4">
-    <h1 className="text-2xl font-semibold">Permanent Sample Monitoring Analytics</h1>
+  return <main className="space-y-4">
+    <h1 className="page-title-hidden">Permanent Sample Monitoring Analytics</h1>
     <p>Approved permanent samples only. Estimates require complete, resolved assessments and explicit sampling-validity approval. Official aggregate KPIs remain separate.</p>
     {error && <p role="alert">{error}</p>}
     {loading && !error && <p role="status">Loading approved monitoring analytics…</p>}

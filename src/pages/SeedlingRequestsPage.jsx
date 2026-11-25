@@ -10,10 +10,7 @@ import "leaflet/dist/leaflet.css";
 import {
   Sprout,
   ClipboardList,
-  Clock3,
   Eye,
-  UserRoundCheck,
-  CircleCheckBig,
   CircleX,
   CalendarDays,
   Plus,
@@ -48,6 +45,7 @@ import { BULAN_BARANGAYS } from "../utils/userTypes";
 import { formatScheduleTime } from "../utils/saplingRequestWorkflow";
 import { downloadPrivateRequestLetter, downloadPrivateWalkInAcknowledgement, hasPrivateRequestLetter } from "../utils/requestLetterDownload";
 
+import KpiCard, { KpiGrid } from "../components/KpiCard";
 import "../styles/seedling-requests.css";
 import ParticipantSaplingRequestWizard from "./ParticipantSaplingRequestWizard";
 import { getRequesterDetailField } from "../utils/requesterDetails";
@@ -1860,24 +1858,7 @@ useEffect(() => {
 
   return (
     <div className="seedling-requests-page">
-      <section className="sr-page-header">
-        <div className="sr-title-wrap">
-          <div className="sr-title-icon">
-            <Sprout
-              size={21}
-              strokeWidth={1.8}
-            />
-          </div>
-
-          <div>
-            <h1>Seedling Requests</h1>
-          </div>
-        </div>
-        {userRole === "staff" && <div className="sr-header-actions">
-          <button type="button" className="sr-primary-btn" onClick={() => navigate("/staff/request-seedlings")}><Plus size={16} /> Submit Seedling Request</button>
-        </div>}
-
-      </section>
+      <h1 className="page-title-hidden">Seedling Requests</h1>
 
 
       {requestError && (
@@ -1891,63 +1872,56 @@ useEffect(() => {
         <div className="sr-api-loading">Loading seedling requests...</div>
       )}
 
-      <section className="sr-kpi-grid">
+      <KpiGrid label="Seedling request summary">
         <KpiCard
-          label="Total Requests"
+          title="Total Requests"
           value={counts.total}
-          note="Active requests"
-          icon={ClipboardList}
-          variant="green"
+          description="Active requests"
+          tone="total"
         />
 
         <KpiCard
-          label="Pending Review"
+          title="Pending Review"
           value={counts.pending}
-          note="Awaiting review"
-          icon={Clock3}
-          variant="orange"
+          description="Awaiting review"
+          tone="amber"
         />
 
         <KpiCard
-          label="Under Review"
+          title="Under Review"
           value={counts.underReview}
-          note="Being evaluated"
-          icon={Eye}
-          variant="blue"
+          description="Being evaluated"
+          tone="blue"
         />
 
         <KpiCard
-          label="Awaiting Approval"
+          title="Awaiting Approval"
           value={counts.reviewed}
-          note="Staff-reviewed or Staff-submitted; awaiting final decision"
-          icon={UserRoundCheck}
-          variant="orange"
+          description="Staff-reviewed or Staff-submitted; awaiting final decision"
+          tone="amber"
         />
 
         <KpiCard
-          label="Approved"
+          title="Approved"
           value={counts.approved}
-          note="Successfully approved"
-          icon={CircleCheckBig}
-          variant="green"
+          description="Successfully approved"
+          tone="green"
         />
 
         <KpiCard
-          label="Rejected"
+          title="Rejected"
           value={counts.rejected}
-          note="Not approved"
-          icon={CircleX}
-          variant="red"
+          description="Not approved"
+          tone="red"
         />
 
         <KpiCard
-          label="This Month"
+          title="This Month"
           value={counts.thisMonth}
-          note="New active requests"
-          icon={CalendarDays}
-          variant="purple"
+          description="New active requests"
+          tone="gray"
         />
-      </section>
+      </KpiGrid>
 
       <section className="sr-record-card">
         <div className="sr-tabs">
@@ -2135,6 +2109,10 @@ useEffect(() => {
           </div>
 
           <div className="sr-filter-spacer" />
+
+          {userRole === "staff" && <div className="sr-header-actions">
+            <button type="button" className="sr-primary-btn" onClick={() => navigate("/staff/request-seedlings")}><Plus size={16} /> Submit Seedling Request</button>
+          </div>}
 
           {showArchiveMode && (
             <div className="sr-archive-selection-actions">
@@ -3419,41 +3397,6 @@ useEffect(() => {
           </div>
         </div>
       )}
-    </div>
-  );
-}
-
-function KpiCard({
-  label,
-  value,
-  note,
-  icon: Icon,
-  variant,
-}) {
-  return (
-    <div className="sr-kpi-card">
-      <div
-        className={`sr-kpi-icon ${variant}`}
-      >
-        <Icon
-          size={25}
-          strokeWidth={1.8}
-        />
-      </div>
-
-      <div>
-        <span className="sr-kpi-label">
-          {label}
-        </span>
-
-        <strong className="sr-kpi-value">
-          {value}
-        </strong>
-
-        <span className="sr-kpi-note">
-          {note}
-        </span>
-      </div>
     </div>
   );
 }
@@ -5190,26 +5133,7 @@ useEffect(() => {
       </div>
     )}
 
-      <section className="sr-page-header participant-request-header">
-        <div className="sr-title-wrap">
-          <div className="sr-title-icon">
-            <Sprout
-              size={21}
-              strokeWidth={1.8}
-            />
-          </div>
-
-          <div>
-            <h1>{editingRequest ? "Edit Seedling Request" : "Request Seedlings"}</h1>
-
-            <p>
-              {editingRequest
-                ? `Correct and resubmit ${getRequestDisplayId(editingRequest)}.`
-                : "Submit a seedling request for your planting activity."}
-            </p>
-          </div>
-        </div>
-      </section>
+      <h1 className="page-title-hidden">{editingRequest ? "Edit Seedling Request" : "Request Seedlings"}</h1>
 
       <section className="sr-record-card participant-request-card">
         <div className="participant-form-header">
@@ -5228,6 +5152,7 @@ useEffect(() => {
           className="sr-modal-body participant-request-form"
           onSubmit={handleSubmit}
         >
+          {editingRequest && <p className="sr-editing-request">Request ID <strong>{getRequestDisplayId(editingRequest)}</strong></p>}
           <div className="participant-section-title">
             <div>
               <h3>Requester Information</h3>

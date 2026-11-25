@@ -6,56 +6,11 @@
   width: 100%;
   min-width: 0;
   min-height: 100%;
-  padding: 28px 30px 40px;
-  background: #f8faf9;
   color: #1f2937;
 }
 
 .ru-page * {
   box-sizing: border-box;
-}
-
-/* HEADER */
-
-.ru-page-header {
-  min-height: 55px;
-  margin-bottom: 14px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 20px;
-}
-
-.ru-title-wrap {
-  min-width: 0;
-  display: flex;
-  align-items: center;
-  gap: 11px;
-}
-
-.ru-title-icon {
-  width: 42px;
-  height: 42px;
-  flex: 0 0 42px;
-  border-radius: 50%;
-  background: #e4f4e7;
-  color: #087443;
-  display: grid;
-  place-items: center;
-}
-
-.ru-title-wrap h1 {
-  margin: 0;
-  color: #17211b;
-  font-size: 21px;
-  line-height: 1.2;
-  font-weight: 700;
-}
-
-.ru-title-wrap p {
-  margin: 4px 0 0;
-  color: #68766e;
-  font-size: 10.5px;
 }
 
 /* BUTTONS */
@@ -122,77 +77,6 @@
 
 .ru-toast-error {
   background: #b93838;
-}
-
-/* KPI */
-
-.ru-kpi-grid {
-  display: grid;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
-  gap: 10px;
-  margin-bottom: 14px;
-}
-
-.ru-kpi-card {
-  min-width: 0;
-  min-height: 91px;
-  padding: 13px 14px;
-  border: 1px solid #e0e7e2;
-  border-radius: 8px;
-  background: #ffffff;
-  display: flex;
-  align-items: center;
-  gap: 11px;
-}
-
-.ru-kpi-icon {
-  width: 45px;
-  height: 45px;
-  flex: 0 0 45px;
-  border-radius: 50%;
-  display: grid;
-  place-items: center;
-}
-
-.ru-kpi-icon.green,
-.ru-kpi-icon.orange,
-.ru-kpi-icon.blue,
-.ru-kpi-icon.purple,
-.ru-kpi-icon.red,
-.ru-kpi-icon {
-  background: #e8f6ed;
-  color: #168a45;
-}
-
-.ru-kpi-card > div:last-child {
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-}
-
-.ru-kpi-label {
-  color: #28342d;
-  font-size: 8.5px;
-  font-weight: 600;
-  white-space: nowrap;
-}
-
-.ru-kpi-value {
-  margin-top: 3px;
-  color: #101713;
-  font-size: 19px;
-  line-height: 1;
-  font-weight: 700;
-}
-
-.ru-kpi-note {
-  margin-top: 6px;
-  overflow: hidden;
-  color: #748078;
-  font-size: 7.7px;
-  font-weight: 400;
-  white-space: nowrap;
-  text-overflow: ellipsis;
 }
 
 /* RECORD CARD */
@@ -994,12 +878,7 @@
 }
 
 /* Match the readable typography already used by the Seedlings page. */
-.ru-title-wrap h1 { font-size: 24px; }
-.ru-title-wrap p { font-size: 14px; }
 .ru-primary-btn, .ru-secondary-btn, .ru-toast { font-size: 13px; }
-.ru-kpi-label { font-size: 12px; }
-.ru-kpi-value { font-size: 23px; }
-.ru-kpi-note { font-size: 11.5px; }
 .ru-tab { font-size: 13px; }
 .ru-tab-count { font-size: 11px; }
 .ru-search input, .ru-filter-select select { font-size: 13px; }
@@ -1021,9 +900,6 @@
 /* RESPONSIVE */
 
 @media (max-width: 1350px) {
-  .ru-kpi-grid {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
 
   .ru-filter-bar {
     flex-wrap: wrap;
@@ -1035,9 +911,6 @@
 }
 
 @media (max-width: 900px) {
-  .ru-kpi-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
 
   .ru-search {
     width: 100%;
@@ -1046,16 +919,7 @@
 }
 
 @media (max-width: 700px) {
-  .ru-page {
-    padding: 20px 16px 32px;
-  }
 
-  .ru-page-header {
-    align-items: flex-start;
-    flex-direction: column;
-  }
-
-  .ru-kpi-grid,
   .ru-form-grid,
   .ru-detail-grid {
     grid-template-columns: 1fr;

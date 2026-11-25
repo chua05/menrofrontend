@@ -5,17 +5,13 @@ import { auth } from "../firebase/config";
 import { formatDisplayId } from "../utils/displayId";
 
 import {
-  FiActivity,
-  FiBarChart2,
-  FiMap,
   FiMapPin,
   FiRefreshCw,
-  FiShield,
-  FiTrendingUp,
 } from "react-icons/fi";
 
 import "leaflet/dist/leaflet.css";
 import { textTooltip } from "../utils/leafletTooltip";
+import KpiCard, { KpiGrid } from "../components/KpiCard";
 import "../styles/map-visualization.css";
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
@@ -912,152 +908,18 @@ export default function MapVisualizationPage() {
 
   return (
     <div className="mv-page">
-      <div className="mv-header">
-        <div className="mv-heading">
-          <div className="mv-heading-icon">
-            <FiMap size={21} />
-          </div>
-
-          <div>
-            <h1>
-              Map Visualization
-            </h1>
-
-            <p>
-              View planting sites,
-              utilization status, verified
-              planting activity, and tree
-              monitoring information across
-              Bulan, Sorsogon.
-            </p>
-          </div>
-        </div>
-
-        <div className="mv-header-actions">
-          <button
-            type="button"
-            className="mv-secondary-button"
-            onClick={refreshData}
-          >
-            <FiRefreshCw size={14} />
-            Refresh Map
-          </button>
-
-        </div>
-      </div>
+      <h1 className="page-title-hidden">Map Visualization</h1>
 
       {sitesLoading && <p role="status">Loading planting sites...</p>}
       {sitesError && <p role="alert">{sitesError} Use Refresh Map to retry.</p>}
 
-      <div className="mv-kpi-grid">
-        <div className="mv-kpi-card">
-          <div className="mv-kpi-icon">
-            <FiMapPin size={20} />
-          </div>
-
-          <div>
-            <strong>
-              {formatNumber(
-                filteredSites.length
-              )}
-            </strong>
-
-            <span>
-              Planting Sites
-            </span>
-
-            <small>
-              Registered sites
-            </small>
-          </div>
-        </div>
-
-        <div className="mv-kpi-card">
-          <div className="mv-kpi-icon">
-            <FiTrendingUp size={20} />
-          </div>
-
-          <div>
-            <strong>
-              {formatNumber(
-                totalTreesPlanted
-              )}
-            </strong>
-
-            <span>
-              Trees Planted
-            </span>
-
-            <small>
-              Verified reports
-            </small>
-          </div>
-        </div>
-
-        <div className="mv-kpi-card">
-          <div className="mv-kpi-icon">
-            <FiActivity size={20} />
-          </div>
-
-          <div>
-            <strong>
-              {overallSurvivalRate}%
-            </strong>
-
-            <span>
-              Overall Survival Rate
-            </span>
-
-            <small>
-              Monitoring records
-            </small>
-          </div>
-        </div>
-
-        <div className="mv-kpi-card">
-          <div className="mv-kpi-icon">
-            <FiBarChart2 size={20} />
-          </div>
-
-          <div>
-            <strong>
-              {formatNumber(
-                barangaysCovered
-              )}
-            </strong>
-
-            <span>
-              Barangays Covered
-            </span>
-
-            <small>
-              With planting sites
-            </small>
-          </div>
-        </div>
-
-        <div className="mv-kpi-card">
-          <div className="mv-kpi-icon">
-            <FiShield size={20} />
-          </div>
-
-          <div>
-            <strong>
-              {formatNumber(
-                activeSites.length
-              )}
-            </strong>
-
-            <span>
-              Active Sites
-            </span>
-
-            <small>
-              Currently active
-            </small>
-          </div>
-        </div>
-      </div>
+      <KpiGrid label="Map summary">
+        <KpiCard title="Planting Sites" value={formatNumber(filteredSites.length)} description="Registered sites" tone="total" />
+        <KpiCard title="Trees Planted" value={formatNumber(totalTreesPlanted)} description="Verified reports" tone="green" />
+        <KpiCard title="Overall Survival Rate" value={`${overallSurvivalRate}%`} description="Monitoring records" tone="green" />
+        <KpiCard title="Barangays Covered" value={formatNumber(barangaysCovered)} description="With planting sites" tone="blue" />
+        <KpiCard title="Active Sites" value={formatNumber(activeSites.length)} description="Currently active" tone="orange" />
+      </KpiGrid>
 
       <div className="mv-filter-card">
         <div className="mv-filter-field">
@@ -1181,6 +1043,15 @@ export default function MapVisualizationPage() {
         </div>
 
         <div className="mv-filter-action">
+          <button
+            type="button"
+            className="mv-secondary-button"
+            onClick={refreshData}
+          >
+            <FiRefreshCw size={14} />
+            Refresh Map
+          </button>
+
           <button
             type="button"
             className="mv-clear-button"

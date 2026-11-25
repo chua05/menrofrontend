@@ -9,7 +9,6 @@ import {
   FileText,
   Minus,
   Plus,
-  Sprout,
   Upload,
   X,
 } from "lucide-react";
@@ -360,6 +359,10 @@ function Radios({ name, value, set, items, ...accessibility }) {
     </>
   );
 }
+
+// Same readable ID the request lists show.
+const requestDisplayId = request => [request?.requestNumber, request?.requestId, request?.requestCode]
+  .find(value => /^REQ-\d{4}-\d{3,}$/i.test(value || ""))?.toUpperCase() || "—";
 
 export default function ParticipantSaplingRequestWizard({ currentUser, requesterRole = "participant", walkIn = false, onSubmittingChange }) {
   const navigate = useNavigate(),
@@ -991,17 +994,7 @@ export default function ParticipantSaplingRequestWizard({ currentUser, requester
     );
   return (
     <div className="seedling-requests-page participant-seedling-page">
-      <section className="sr-page-header participant-request-header">
-        <div className="sr-title-wrap">
-          <div className="sr-title-icon">
-            <Sprout size={21} />
-          </div>
-          <div>
-            <h1>{editing ? "Edit Seedling Request" : requesterRole === "staff" ? "Submit Seedling Request" : "Request Seedlings"}</h1>
-            <p>Complete the four steps to submit your request.</p>
-          </div>
-        </div>
-      </section>
+      <h1 className="page-title-hidden">{editing ? "Edit Seedling Request" : requesterRole === "staff" ? "Submit Seedling Request" : "Request Seedlings"}</h1>
       <section className="sr-record-card participant-request-card">
         <ol className="sr-request-stepper">
           {STEPS.map((name, index) => {
@@ -1048,6 +1041,7 @@ export default function ParticipantSaplingRequestWizard({ currentUser, requester
           className="sr-modal-body participant-request-form"
           onSubmit={(e) => e.preventDefault()}
         >
+          {editing && <p className="sr-editing-request">Request ID <strong>{requestDisplayId(editing)}</strong></p>}
           {step === 1 && (
             <>
               <Title help={walkIn ? "Enter the actual citizen or organization requester. Your Staff account is recorded as the assisting officer." : "Your account information is used for this request."}>

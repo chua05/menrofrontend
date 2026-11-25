@@ -626,7 +626,10 @@ test(`${role} returned request reopens the same wizard and resubmits with its au
   });
   await page.goto(`/${role}/my-requests?role=${role}&request=staff-own-request`);
   await page.getByRole("button", { name: "Edit Request", exact: true }).click(); await expect(page).toHaveURL(new RegExp(`/${role}/request-seedlings\\?edit=staff-own-request`));
+  // The page header is gone; the Request ID stays visible inside the form on every step.
+  await expect(page.locator(".sr-editing-request")).toHaveText(`Request ID ${request.requestNumber}`); await expect(page.locator(".sr-editing-request")).toBeVisible();
   await page.getByRole("button", { name: "Next", exact: true }).click();
+  await expect(page.locator(".sr-editing-request")).toBeVisible();
   await expect(page.getByLabel("Preferred Release Date *")).toHaveValue("2099-01-01");
   await page.getByRole("button", { name: "Next", exact: true }).click();
   await page.getByRole("button", { name: "Next", exact: true }).click();
@@ -2035,8 +2038,8 @@ test(`${role} sees "${label}" for a stored ${stage} planting report`, async ({ p
     await expect(page.getByText(/Awaiting MENRO (Staff review|Admin verification)/)).toHaveCount(0);
     await expect(page.getByText("Verified By / At")).toHaveCount(0);
     await expect(page.getByText("Staff Review", { exact: true })).toHaveCount(0);
-    for (const title of ["Pending Review", "Pending Verification", "Verified"]) await expect(page.locator(".pr-kpi-title").filter({ hasText: new RegExp(`^${title}$`) })).toHaveCount(0);
-    await expect(page.locator(".pr-kpi-title").filter({ hasText: /^Submitted$/ })).toHaveCount(1);
+    for (const title of ["Pending Review", "Pending Verification", "Verified"]) await expect(page.locator(".kpi-card-title").filter({ hasText: new RegExp(`^${title}$`) })).toHaveCount(0);
+    await expect(page.locator(".kpi-card-title").filter({ hasText: /^Submitted$/ })).toHaveCount(1);
   }
   fixture.check();
 });

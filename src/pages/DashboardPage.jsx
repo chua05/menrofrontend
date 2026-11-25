@@ -11,8 +11,6 @@ import "leaflet/dist/leaflet.css";
 import {
   BarChart3,
   CalendarDays,
-  CheckCircle2,
-  CircleCheckBig,
   ClipboardCheck,
   Clock3,
   FileCheck2,
@@ -20,7 +18,6 @@ import {
   PackageCheck,
   Sprout,
   Trees,
-  Users,
 } from "lucide-react";
 
 import {
@@ -45,6 +42,7 @@ import { formatDisplayId } from "../utils/displayId";
 import { monthlySurvivalRates, officialMonitoringHistoryEntries, weightedOfficialSurvivalRate } from "../utils/monitoringForm";
 import { BULAN_BARANGAYS } from "../utils/userTypes";
 import { textTooltip } from "../utils/leafletTooltip";
+import KpiCard, { KpiGrid } from "../components/KpiCard";
 import "../styles/dashboard-page.css";
 
 const BARANGAY_GEOJSON_URL = `${API_BASE_URL}/sites/barangay-boundaries`;
@@ -2222,9 +2220,7 @@ export default function DashboardPage() {
       label:
         "Seedlings Distributed",
       value: managementSummary.totalDistributed.toLocaleString(),
-      icon: Sprout,
-      className:
-        "kpi-green",
+      tone: "green",
       note:
         managementSummary.totalDistributed >
         0
@@ -2241,9 +2237,7 @@ export default function DashboardPage() {
         0
           ? managementSummary.participants
           : "—",
-      icon: Users,
-      className:
-        "kpi-blue",
+      tone: "blue",
       note:
         managementSummary.participants >
         0
@@ -2260,9 +2254,7 @@ export default function DashboardPage() {
       label:
         "Trees Planted",
       value: managementSummary.totalPlanted.toLocaleString(),
-      icon: Trees,
-      className:
-        "kpi-orange",
+      tone: "orange",
       note:
         managementSummary.totalPlanted >
         0
@@ -2279,10 +2271,7 @@ export default function DashboardPage() {
         null
           ? `${managementSummary.survivalRate}%`
           : "—",
-      icon:
-        CircleCheckBig,
-      className:
-        "kpi-green",
+      tone: "green",
       note:
         managementSummary.survivalRate !==
         null
@@ -2295,10 +2284,7 @@ export default function DashboardPage() {
       label:
         "Upcoming Events",
       value: managementSummary.activeEvents,
-      icon:
-        CalendarDays,
-      className:
-        "kpi-purple",
+      tone: "total",
       note:
         managementSummary.activeEvents >
         0
@@ -2318,10 +2304,7 @@ export default function DashboardPage() {
         0
           ? participantSummary.totalRequests
           : "—",
-      icon:
-        ClipboardCheck,
-      className:
-        "kpi-green",
+      tone: "green",
       note:
         participantSummary.totalRequests >
         0
@@ -2339,10 +2322,7 @@ export default function DashboardPage() {
         0
           ? participantSummary.approvedRequests
           : "—",
-      icon:
-        CheckCircle2,
-      className:
-        "kpi-blue",
+      tone: "blue",
       note:
         participantSummary.approvedRequests >
         0
@@ -2360,10 +2340,7 @@ export default function DashboardPage() {
         0
           ? participantSummary.totalReports
           : "—",
-      icon:
-        FileCheck2,
-      className:
-        "kpi-orange",
+      tone: "orange",
       note:
         participantSummary.totalReports >
         0
@@ -2381,9 +2358,7 @@ export default function DashboardPage() {
         0
           ? participantSummary.totalPlanted.toLocaleString()
           : "—",
-      icon: Trees,
-      className:
-        "kpi-green",
+      tone: "green",
       note:
         participantSummary.totalPlanted >
         0
@@ -2505,7 +2480,7 @@ export default function DashboardPage() {
       )}
 
       {isParticipant && (
-        <h1 className="participant-dashboard-welcome">
+        <h1 className="page-title-hidden">
           {participantName ? `Welcome, ${participantName}!` : "Welcome!"}
         </h1>
       )}
@@ -2537,46 +2512,18 @@ export default function DashboardPage() {
         )}
       </div>
 
-      <section className="dashboard-kpi-grid">
-        {kpis.map((item) => {
-          const Icon =
-            item.icon;
-
-          return (
-            <button
-              type="button"
-              className="dashboard-kpi-card"
-              key={item.id}
-              onClick={() =>
-                navigate(item.route)
-              }
-            >
-              <div
-                className={`dashboard-kpi-icon ${item.className}`}
-              >
-                <Icon
-                  size={27}
-                  strokeWidth={1.8}
-                />
-              </div>
-
-              <div className="dashboard-kpi-content">
-                <div className="dashboard-kpi-label">
-                  {item.label}
-                </div>
-
-                <div className="dashboard-kpi-value">
-                  {item.value}
-                </div>
-
-                <div className="dashboard-kpi-note">
-                  {item.note}
-                </div>
-              </div>
-            </button>
-          );
-        })}
-      </section>
+      <KpiGrid label="Dashboard summary" className="dashboard-kpi-grid">
+        {kpis.map((item) => (
+          <KpiCard
+            key={item.id}
+            title={item.label}
+            value={item.value}
+            description={item.note}
+            tone={item.tone}
+            onClick={() => navigate(item.route)}
+          />
+        ))}
+      </KpiGrid>
 
       <section
         className={`dashboard-main-grid ${

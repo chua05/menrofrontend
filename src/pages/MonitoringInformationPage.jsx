@@ -52,8 +52,8 @@ export default function MonitoringInformationPage() {
     } catch (error) { setError(error.message); }
     finally { setBusy(false); }
   }
-  return <main className="space-y-4 p-4">
-    <h1 className="text-2xl font-semibold">Monitoring information requests</h1>
+  return <main className="space-y-4">
+    <h1 className="page-title-hidden">Monitoring information requests</h1>
     <p>Replies provide optional information to MENRO. Private monitoring photos are not shared here.</p>
     {error && <p role="alert">{error}</p>}
     {!rows && !error && <p role="status">Loading requests…</p>}

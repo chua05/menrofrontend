@@ -325,37 +325,7 @@ export default function ReportsPage() {
   return (
     <div className="reports-page">
 
-      {/* =========================
-          PAGE HEADER
-      ========================= */}
-
-      <div className="reports-header">
-        <div className="reports-heading">
-          <div className="reports-heading-icon">
-            <FiFileText
-              size={23}
-              strokeWidth={1.9}
-            />
-          </div>
-
-          <div>
-            <h1>Reports</h1>
-
-            <p>
-              Generate and download environmental
-              monitoring reports.
-            </p>
-          </div>
-        </div>
-
-        <div className="reports-header-note">
-          <FiFileText size={14} />
-
-          <span>
-            Environmental Reports
-          </span>
-        </div>
-      </div>
+      <h1 className="page-title-hidden">Reports</h1>
 
       {/* =========================
           GENERATE REPORT

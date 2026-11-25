@@ -17,63 +17,8 @@
 }
 
 /* =====================================================
-   HEADER
+   PAGE ACTIONS
 ===================================================== */
-
-.ps-page-header {
-  min-height: 68px;
-
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-
-  gap: 20px;
-}
-
-.ps-title-wrap {
-  min-width: 0;
-
-  display: flex;
-  align-items: center;
-
-  gap: 12px;
-}
-
-.ps-title-icon {
-  width: 46px;
-  height: 46px;
-
-  flex: 0 0 46px;
-
-  display: grid;
-  place-items: center;
-
-  border-radius: 8px;
-
-  background: #ddf3e2;
-
-  color: #087443;
-}
-
-.ps-title-wrap h1 {
-  margin: 0;
-
-  color: #144e31;
-
-  font-size: 24px;
-  line-height: 1.25;
-
-  font-weight: 700;
-}
-
-.ps-title-wrap p {
-  margin: 5px 0 0;
-
-  color: #65736b;
-
-  font-size: 14px;
-  line-height: 1.5;
-}
 
 .ps-header-actions {
   display: flex;
@@ -1596,25 +1541,6 @@
     gap: 14px;
   }
 
-  .ps-page-header {
-    align-items: stretch;
-
-    flex-direction: column;
-    gap: 12px;
-  }
-
-  .ps-title-wrap {
-    align-items: center;
-  }
-
-  .ps-title-wrap h1 {
-    font-size: 22px;
-  }
-
-  .ps-title-wrap p {
-    font-size: 14px;
-  }
-
   .ps-header-actions {
     width: 100%;
 
@@ -1786,21 +1712,6 @@
 }
 
 @media (max-width: 480px) {
-  .ps-title-icon {
-    width: 44px;
-    height: 44px;
-
-    flex: 0 0 44px;
-  }
-
-  .ps-title-wrap h1 {
-    font-size: 21px;
-  }
-
-  .ps-title-wrap p {
-    font-size: 13.5px;
-    line-height: 1.5;
-  }
 
   .ps-header-actions {
     display: grid;
@@ -2170,4 +2081,12 @@
   .leaflet-control-attribution {
     font-size: 10px !important;
   }
+}
+
+.ps-filter-row { flex-wrap: wrap; }
+.ps-filter-row > .ps-header-actions { margin-left: auto; }
+
+@media (max-width: 700px) {
+  .ps-filter-row > .ps-header-actions { margin-left: 0; }
+  .ps-filter-row > .ps-header-actions > button { flex: 1 1 150px; justify-content: center; }
 }

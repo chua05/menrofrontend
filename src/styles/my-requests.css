@@ -4,7 +4,6 @@
 
 .myr-page {
   width: 100%;
-  padding: 32px;
   color: #17231c;
   font-size: 15px;
   line-height: 1.5;
@@ -23,51 +22,8 @@
 }
 
 /* =========================================================
-   PAGE HEADER
+   PAGE ACTIONS
 ========================================================= */
-
-.myr-page-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 24px;
-  margin-bottom: 24px;
-}
-
-.myr-title-group {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  min-width: 0;
-}
-
-.myr-title-icon {
-  width: 50px;
-  height: 50px;
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 50%;
-  background: #e8f6ed;
-  color: #168347;
-}
-
-.myr-title-group h1 {
-  margin: 0;
-  color: #111b15;
-  font-size: 26px;
-  font-weight: 700;
-  line-height: 1.25;
-}
-
-.myr-title-group p {
-  margin: 6px 0 0;
-  color: #69766e;
-  font-size: 15px;
-  font-weight: 400;
-  line-height: 1.55;
-}
 
 .myr-request-button {
   min-height: 46px;
@@ -104,96 +60,6 @@
 .myr-request-button:focus-visible {
   outline: 3px solid rgba(20, 124, 67, 0.17);
   outline-offset: 2px;
-}
-
-/* =========================================================
-   SUMMARY CARDS
-========================================================= */
-
-.myr-summary-grid {
-  display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 12px;
-  margin-bottom: 18px;
-}
-
-.myr-summary-card {
-  min-width: 0;
-  min-height: 98px;
-
-  display: flex;
-  align-items: center;
-  gap: 14px;
-
-  padding: 16px;
-
-  border: 1px solid #dce4df;
-  border-radius: 9px;
-  background: #ffffff;
-}
-
-.myr-summary-card > div:last-child {
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-}
-
-.myr-summary-card span {
-  color: #58655d;
-  font-size: 14px;
-  line-height: 1.4;
-  font-weight: 500;
-  white-space: nowrap;
-}
-
-.myr-summary-card strong {
-  color: #101a14;
-  font-size: 25px;
-  font-weight: 700;
-  line-height: 1.1;
-}
-
-.myr-summary-icon {
-  width: 46px;
-  height: 46px;
-  flex-shrink: 0;
-
-  display: flex;
-  align-items: center;
-  justify-content: center;
-
-  border-radius: 50%;
-}
-
-.myr-summary-icon-total,
-.myr-summary-icon-pending,
-.myr-summary-icon-reviewed,
-.myr-summary-icon-approved,
-.myr-summary-icon-rejected,
-.myr-summary-icon {
-  background: #e8f6ed;
-  color: #168a45;
-}
-
-.myr-summary-card-pending {
-  border-color: #f2dfbd;
-  background: #fffdf8;
-}
-
-.myr-summary-card-reviewed {
-  border-color: #d7e4f6;
-  background: #fbfdff;
-}
-
-.myr-summary-card-approved {
-  border-color: #d9ebdf;
-  background: #fbfefc;
-}
-
-.myr-summary-card-rejected {
-  border-color: #f1d9dc;
-  background: #fffdfd;
 }
 
 /* =========================================================
@@ -955,20 +821,7 @@
    RESPONSIVE
 ========================================================= */
 
-@media (max-width: 1200px) {
-  .myr-summary-grid {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-}
-
 @media (max-width: 900px) {
-  .myr-page {
-    padding: 24px;
-  }
-
-  .myr-summary-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
 
   .myr-form-grid {
     grid-template-columns: 1fr;
@@ -980,39 +833,10 @@
 }
 
 @media (max-width: 640px) {
-  .myr-page {
-    padding: 18px 14px;
-  }
-
-  .myr-page-header {
-    align-items: stretch;
-    flex-direction: column;
-    gap: 18px;
-  }
-
-  .myr-title-group {
-    align-items: flex-start;
-  }
-
-  .myr-title-group h1 {
-    font-size: 23px;
-  }
-
-  .myr-title-group p {
-    font-size: 15px;
-  }
 
   .myr-request-button {
     width: 100%;
     min-height: 48px;
-  }
-
-  .myr-summary-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .myr-summary-card {
-    min-height: 88px;
   }
 
   .myr-pagination {
@@ -1062,4 +886,17 @@
   flex-wrap: wrap;
   gap: 10px;
   margin-top: 12px;
+}
+
+.myr-toolbar {
+  padding: 12px 16px;
+  border-bottom: 1px solid #e7ece8;
+
+  display: flex;
+  justify-content: flex-end;
+}
+
+@media (max-width: 640px) {
+  .myr-toolbar { padding: 12px; }
+  .myr-toolbar > .myr-request-button { width: 100%; }
 }

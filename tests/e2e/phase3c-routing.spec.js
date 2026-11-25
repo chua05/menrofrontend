@@ -1153,7 +1153,7 @@ for (const role of ["staff", "admin"]) test(`${role} Monitoring Lifecycles list 
   await expect(footer).toContainText(role === "admin" ? "Showing 1 to 7 of 7 rows · 3 monitoring records" : "Showing 1 to 5 of 5 rows · 1 monitoring record");
   await expect(footer).toContainText("4 verified planting reports awaiting monitoring (tracking only, not monitoring records)");
   for (const label of ["Approved Full Cohorts", "Total Trees Monitored"])
-    await expect(page.locator(".sm-kpi-label", { hasText: label }).locator("xpath=following-sibling::div[contains(@class,'sm-kpi-value')]")).toHaveText("0");
+    await expect(page.locator(".kpi-card-title", { hasText: label }).locator("xpath=following-sibling::strong[contains(@class,'kpi-card-value')]")).toHaveText("0");
   if (role === "admin") await expect(page.locator(".sm-header-actions").getByRole("button", { name: /Monitor|Submit|Create/ })).toHaveCount(0);
   // Existing filters: species/condition exclude tracking rows; search matches their status.
   await page.locator(".sm-search-wrap input").fill("spot-check");
@@ -1435,7 +1435,7 @@ for (const role of ["staff", "admin"]) test(`${role} Monitoring Records paginate
   await page.locator(".sm-search-wrap input").fill("");
   await expect(rows).toHaveCount(10);
   // KPIs come only from approved observations, never from registered lifecycles.
-  await expect(page.locator(".sm-kpi-label", { hasText: "Total Trees Monitored" }).locator("xpath=following-sibling::div[contains(@class,'sm-kpi-value')]")).toHaveText("0");
+  await expect(page.locator(".kpi-card-title", { hasText: "Total Trees Monitored" }).locator("xpath=following-sibling::strong[contains(@class,'kpi-card-value')]")).toHaveText("0");
   // Planting Reports table tokens.
   const style = (locator, props) => locator.evaluate((node, keys) => Object.fromEntries(keys.map(key => [key, getComputedStyle(node)[key]])), props);
   // th/td font sizes come from the app-wide #root readability rule shared by both tables, so they are not pinned here.

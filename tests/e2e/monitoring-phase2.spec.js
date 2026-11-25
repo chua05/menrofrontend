@@ -155,10 +155,10 @@ test.describe.serial("Monitoring Phase 2 authenticated workflows", () => {
     await expect(admin.getByRole("button", { name: "Reject", exact: true })).toHaveCount(0);
     await admin.reload();
     const officialKpi = admin.getByText("Approved Full Cohorts", { exact: true }).locator("..");
-    await expect(officialKpi.locator(".sm-kpi-value")).toHaveText("3");
+    await expect(officialKpi.locator(".kpi-card-value")).toHaveText("3");
     await admin.goto("/admin/dashboard");
-    const dashboardSurvival = admin.getByText("Survival Rate (All Sites)", { exact: true }).locator("../..");
-    await expect(dashboardSurvival.locator(".dashboard-kpi-value")).toHaveText("90%");
+    const dashboardSurvival = admin.getByText("Survival Rate (All Sites)", { exact: true }).locator("..");
+    await expect(dashboardSurvival.locator(".kpi-card-value")).toHaveText("90%");
     await admin.context().close();
   });
 

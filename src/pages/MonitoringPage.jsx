@@ -25,7 +25,6 @@ import {
   FiCamera,
   FiEye,
   FiFileText,
-  FiHeart,
   FiImage,
   FiMapPin,
   FiMoreVertical,
@@ -54,6 +53,7 @@ import { auth } from "../firebase/config";
 import { formatDisplayId } from "../utils/displayId";
 import { canResubmitObservation, canStaffReviewObservation, isOwnPendingObservation } from "../utils/monitoringObservationPermissions";
 import * as exifr from "exifr";
+import KpiCard, { KpiGrid } from "../components/KpiCard";
 import "../styles/survival-monitoring.css";
 
 const API_BASE_URL =
@@ -1644,48 +1644,7 @@ export default function MonitoringPage() {
 
   return (
     <div className="sm-page">
-      {/* PAGE HEADER */}
-      <div className="sm-header">
-        <div className="sm-heading-wrap">
-          <div className="sm-heading-icon">
-            <FiActivity size={21} />
-          </div>
-
-          <div>
-            <h1 className="sm-title">Survival Monitoring</h1>
-            <p className="sm-subtitle">
-              Track the survival and condition of planted trees over time.
-            </p>
-          </div>
-        </div>
-
-        <div className="sm-header-actions">
-          <button
-            type="button"
-            className="sm-icon-button"
-            title="Refresh data"
-            onClick={refreshPlantingReports}
-            disabled={actionLoading}
-          >
-            <FiRefreshCw size={16} />
-          </button>
-
-          {/* The single monitoring action, for authorized MENRO Staff only (label requested by MENRO). It opens
-              the Monitor Planted Trees modal; per-tree data never goes to aggregate records. Admin never creates
-              or submits monitoring records, so Admin has no such button; Admin keeps read-only record details
-              and the review actions inside them (backend RBAC enforces both). */}
-          {isStaff && (
-            <button
-              type="button"
-              className="sm-primary-button"
-              onClick={() => { setSampleFormMounted(true); setSampleFormOpen(true); }}
-            >
-              <FiPlus size={15} aria-hidden="true" data-testid="monitor-planted-trees-add-icon" />
-              Monitor Planted Trees
-            </button>
-          )}
-        </div>
-      </div>
+      <h1 className="page-title-hidden">Survival Monitoring</h1>
 
       {/* Admin: the read-only seven-section form for one visit chosen from Monitoring Records. Remounted per
           visit; Approve/Return sit at its bottom and refresh the table after a decision. */}
@@ -1704,51 +1663,12 @@ export default function MonitoringPage() {
       )}
 
       {/* KPI CARDS */}
-      <div className="sm-kpi-grid">
-        <div className="sm-kpi-card">
-          <div className="sm-kpi-icon sm-kpi-green">
-            <FiFileText size={20} />
-          </div>
-          <div>
-            <div className="sm-kpi-label">Approved Full Cohorts</div>
-            <div className="sm-kpi-value">{loadError ? "—" : summary.totalRecords}</div>
-            <div className="sm-kpi-note">Official observations</div>
-          </div>
-        </div>
-
-        <div className="sm-kpi-card">
-          <div className="sm-kpi-icon sm-kpi-orange">
-            <FiHeart size={20} />
-          </div>
-          <div>
-            <div className="sm-kpi-label">Total Trees Monitored</div>
-            <div className="sm-kpi-value">{loadError ? "—" : summary.totalTreesMonitored}</div>
-            <div className="sm-kpi-note">Admin-approved full cohorts</div>
-          </div>
-        </div>
-
-        <div className="sm-kpi-card">
-          <div className="sm-kpi-icon sm-kpi-green">
-            <FiTrendingUp size={20} />
-          </div>
-          <div>
-            <div className="sm-kpi-label">Official Survival Rate</div>
-            <div className="sm-kpi-value">{loadError || summary.survivalRate == null ? "—" : `${summary.survivalRate}%`}</div>
-            <div className="sm-kpi-note">Admin-approved full cohorts</div>
-          </div>
-        </div>
-
-        <div className="sm-kpi-card">
-          <div className="sm-kpi-icon sm-kpi-red">
-            <FiActivity size={20} />
-          </div>
-          <div>
-            <div className="sm-kpi-label">Total Trees Lost</div>
-            <div className="sm-kpi-value">{loadError ? "—" : summary.dead}</div>
-            <div className="sm-kpi-note">Approved full-cohort records</div>
-          </div>
-        </div>
-      </div>
+      <KpiGrid label="Survival monitoring summary">
+        <KpiCard title="Approved Full Cohorts" value={loadError ? "—" : summary.totalRecords} description="Official observations" tone="total" />
+        <KpiCard title="Total Trees Monitored" value={loadError ? "—" : summary.totalTreesMonitored} description="Admin-approved full cohorts" tone="blue" />
+        <KpiCard title="Official Survival Rate" value={loadError || summary.survivalRate == null ? "—" : `${summary.survivalRate}%`} description="Admin-approved full cohorts" tone="green" />
+        <KpiCard title="Total Trees Lost" value={loadError ? "—" : summary.dead} description="Approved full-cohort records" tone="red" />
+      </KpiGrid>
 
       {/* FILTERS */}
       <div className="sm-filter-row">
@@ -1853,6 +1773,32 @@ export default function MonitoringPage() {
           )}
         </div>
 
+        <div className="sm-header-actions">
+          <button
+            type="button"
+            className="sm-icon-button"
+            title="Refresh data"
+            onClick={refreshPlantingReports}
+            disabled={actionLoading}
+          >
+            <FiRefreshCw size={16} />
+          </button>
+
+          {/* The single monitoring action, for authorized MENRO Staff only (label requested by MENRO). It opens
+              the Monitor Planted Trees modal; per-tree data never goes to aggregate records. Admin never creates
+              or submits monitoring records, so Admin has no such button; Admin keeps read-only record details
+              and the review actions inside them (backend RBAC enforces both). */}
+          {isStaff && (
+            <button
+              type="button"
+              className="sm-primary-button"
+              onClick={() => { setSampleFormMounted(true); setSampleFormOpen(true); }}
+            >
+              <FiPlus size={15} aria-hidden="true" data-testid="monitor-planted-trees-add-icon" />
+              Monitor Planted Trees
+            </button>
+          )}
+        </div>
       </div>
 
 

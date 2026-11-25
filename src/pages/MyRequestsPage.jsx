@@ -12,9 +12,6 @@ import "leaflet/dist/leaflet.css";
 import {
   Sprout,
   ClipboardList,
-  Clock3,
-  SearchCheck,
-  CircleCheckBig,
   CircleX,
   Plus,
   Eye,
@@ -38,6 +35,7 @@ import {
 import { auth } from "../firebase/config";
 import { downloadPrivateRequestLetter, hasPrivateRequestLetter } from "../utils/requestLetterDownload";
 import { textTooltip } from "../utils/leafletTooltip";
+import KpiCard, { KpiGrid } from "../components/KpiCard";
 import "../styles/my-requests.css";
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
@@ -1069,80 +1067,27 @@ export default function MyRequestsPage() {
 
   return (
     <div className="myr-page">
-      <div className="myr-page-header">
-        <div className="myr-title-group">
-          <div className="myr-title-icon">
-            <Sprout size={24} />
-          </div>
+      <h1 className="page-title-hidden">My Seedling Requests</h1>
 
-          <div>
-            <h1>My Seedling Requests</h1>
-          </div>
-        </div>
-
-        <button
-          type="button"
-          className="myr-request-button"
-          onClick={handleRequestSeedlings}
-        >
-          <Plus size={19} />
-          <span>Request Seedlings</span>
-        </button>
-      </div>
-
-      <div className="myr-summary-grid">
-        <div className="myr-summary-card">
-          <div className="myr-summary-icon myr-summary-icon-total">
-            <ClipboardList size={24} />
-          </div>
-          <div>
-            <span>Total Requests</span>
-            <strong>{counts.total}</strong>
-          </div>
-        </div>
-
-        <div className="myr-summary-card myr-summary-card-pending">
-          <div className="myr-summary-icon myr-summary-icon-pending">
-            <Clock3 size={25} />
-          </div>
-          <div>
-            <span>Pending Review</span>
-            <strong>{counts.pending}</strong>
-          </div>
-        </div>
-
-        <div className="myr-summary-card myr-summary-card-reviewed">
-          <div className="myr-summary-icon myr-summary-icon-reviewed">
-            <SearchCheck size={25} />
-          </div>
-          <div>
-            <span>Awaiting Approval</span>
-            <strong>{counts.reviewed}</strong>
-          </div>
-        </div>
-
-        <div className="myr-summary-card myr-summary-card-approved">
-          <div className="myr-summary-icon myr-summary-icon-approved">
-            <CircleCheckBig size={25} />
-          </div>
-          <div>
-            <span>Approved</span>
-            <strong>{counts.approved}</strong>
-          </div>
-        </div>
-
-        <div className="myr-summary-card myr-summary-card-rejected">
-          <div className="myr-summary-icon myr-summary-icon-rejected">
-            <CircleX size={25} />
-          </div>
-          <div>
-            <span>Rejected</span>
-            <strong>{counts.rejected}</strong>
-          </div>
-        </div>
-      </div>
+      <KpiGrid label="Request summary">
+        <KpiCard title="Total Requests" value={counts.total} tone="total" />
+        <KpiCard title="Pending Review" value={counts.pending} tone="amber" />
+        <KpiCard title="Awaiting Approval" value={counts.reviewed} tone="blue" />
+        <KpiCard title="Approved" value={counts.approved} tone="green" />
+        <KpiCard title="Rejected" value={counts.rejected} tone="red" />
+      </KpiGrid>
 
       <div className="myr-table-card">
+        <div className="myr-toolbar">
+          <button
+            type="button"
+            className="myr-request-button"
+            onClick={handleRequestSeedlings}
+          >
+            <Plus size={19} />
+            <span>Request Seedlings</span>
+          </button>
+        </div>
         <div className="myr-table-wrapper">
           <table className="myr-table">
             <thead>
