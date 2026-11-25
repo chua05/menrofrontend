@@ -129,8 +129,8 @@ test("participant: an unconfirmed submission survives closing, reopening and rel
   const otherForm = await openParticipantForm(other, PHOTO_2);
 
   // 3. Check Submission finds nothing saved, so it sends the same report again.
-  //    MENRO saves it but the response never arrives: the 60 s submission
-  //    timeout must end "Submitting..." on its own.
+  //    MENRO saves it but the response never arrives: the 120 s answer
+  //    limit must end "Submitting..." on its own.
   let releaseHeld;
   const held = new Promise((resolve) => { releaseHeld = resolve; });
   await page.route("**/api/planting-reports", async (route) => {
@@ -144,10 +144,10 @@ test("participant: an unconfirmed submission survives closing, reopening and rel
   await submit.click();
   await expect(submit).toHaveText(/Submitting/);
   await expect(alert).toHaveCount(0); // the earlier message is cleared while checking
-  await expect(alert).toContainText(AMBIGUOUS, { timeout: 90_000 });
+  await expect(alert).toContainText(AMBIGUOUS, { timeout: 150_000 });
   const waited = Date.now() - started;
-  expect(waited).toBeGreaterThan(55_000);
-  expect(waited).toBeLessThan(90_000);
+  expect(waited).toBeGreaterThan(110_000);
+  expect(waited).toBeLessThan(150_000);
   expect(posts).toHaveLength(2);
   releaseHeld();
 

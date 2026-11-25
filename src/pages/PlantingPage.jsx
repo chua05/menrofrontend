@@ -10,6 +10,7 @@ import { useSearchParams } from "react-router-dom";
 import L from "leaflet";
 import { boundaryLayerOptions } from "../utils/barangayMap";
 import { createEvidenceAttempt, assertEvidenceComplete } from "../utils/evidenceAttempt";
+import { NOT_SAVED_MESSAGE, PROCESSING_MESSAGE, findUnreadableFile, isEvidenceStillProcessing, sendSubmissionUpload } from "../utils/submissionUpload";
 import { AMBIGUOUS_WRITE_MESSAGE, AUTH_TIMEOUT_MESSAGE, AUTH_TIMEOUT_MS, READ_TIMEOUT_MESSAGE, READ_TIMEOUT_MS, RequestTimeoutError, UPLOAD_TIMEOUT_MS, WRITE_TIMEOUT_MS, isAmbiguousWriteFailure, isGatewayWriteFailure, isWriteMethod, serverFailureMessage, withDeadline } from "../utils/requestTimeout";
 import { findOwnPendingSubmission, findReconciledSubmission, ownSubmissionIdsForEvent } from "../utils/plantingSubmissionReconcile";
 import { clearPendingSubmission, loadPendingSubmission, savePendingSubmission } from "../utils/pendingPlantingSubmission";
@@ -113,7 +114,8 @@ const API_BASE_URL =
 
 const MAX_PHOTO_SIZE = 10 * 1024 * 1024;
 const MAX_EVIDENCE_PHOTOS = 10;
-const PLANTING_SUBMISSION_TIMEOUT_MS = 60_000;
+// The backend can hold a submission for up to three minutes while it processes the photos.
+const PENDING_PROCESSING_MS = 180_000;
 const OUTSIDE_SITE_WARNING =
   "The photo location is outside the selected planting site's coverage area. This report may still be submitted for MENRO Staff verification.";
 const SITE_MATCH_MESSAGE =
@@ -391,6 +393,8 @@ export default function PlantingPage() {
   // { eventId, knownSubmissionIds, contributorId } after a submission timed out
   // once it was sent. The form stays locked until MENRO confirms the outcome.
   const [unconfirmedSubmission, setUnconfirmedSubmission] = useState(null);
+  // Where the current participant submission stands: uploading/processing, or its last definite outcome.
+  const [submissionProgress, setSubmissionProgress] = useState(null);
   // A Staff official report whose save timed out; survives closing the form.
   // undefined until changed in this page: then the tab's stored value is used.
   const [pendingOfficialSubmission, setPendingOfficialSubmission] = useState(undefined);
@@ -536,14 +540,18 @@ export default function PlantingPage() {
       ...(options.headers || {}),
     });
 
-    const { timeoutMs: requestedTimeout, ...requestOptions } = options;
+    const { timeoutMs: requestedTimeout, upload, ...requestOptions } = options;
     // Every request is bounded; uploads get longer than list reads.
     const write = isWriteMethod(requestOptions.method);
     const timeoutMs = requestedTimeout ?? (!write ? READ_TIMEOUT_MS : requestOptions.body instanceof FormData ? UPLOAD_TIMEOUT_MS : WRITE_TIMEOUT_MS);
-    const timeoutController = Number.isFinite(timeoutMs) && timeoutMs > 0 && !requestOptions.signal ? new AbortController() : null;
+    const timeoutController = !upload && Number.isFinite(timeoutMs) && timeoutMs > 0 && !requestOptions.signal ? new AbortController() : null;
     const timeoutId = timeoutController ? window.setTimeout(() => timeoutController.abort(), timeoutMs) : null;
+    // `upload` submissions are limited by inactivity instead of total time (see submissionUpload.js).
+    const send = (authToken) => upload
+      ? sendSubmissionUpload(`${API_BASE_URL}${path}`, { method: requestOptions.method, headers: buildHeaders(authToken), body: requestOptions.body }, upload)
+      : fetch(`${API_BASE_URL}${path}`, { ...requestOptions, signal: requestOptions.signal || timeoutController?.signal, headers: buildHeaders(authToken) });
     let response;
-    try { response = await fetch(`${API_BASE_URL}${path}`, { ...requestOptions, signal: requestOptions.signal || timeoutController?.signal, headers: buildHeaders(token) });
+    try { response = await send(token);
 
     // If Firebase restored an old cached token, force one
     // refresh and retry the request exactly once.
@@ -554,11 +562,7 @@ export default function PlantingPage() {
         throw new Error("Your session has expired. Please sign in again.");
       }
 
-      response = await fetch(`${API_BASE_URL}${path}`, {
-        ...requestOptions,
-        signal: requestOptions.signal || timeoutController?.signal,
-        headers: buildHeaders(refreshedToken),
-      });
+      response = await send(refreshedToken);
     }
 
     let payload;
@@ -570,6 +574,8 @@ export default function PlantingPage() {
 
     // A hosting gateway (not MENRO) gave up on a write: the outcome is unknown.
     if (isGatewayWriteFailure(requestOptions.method, response.status, payload)) throw new RequestTimeoutError(AMBIGUOUS_WRITE_MESSAGE, { ambiguous: true });
+    // Still being processed under the same key: neither saved nor rejected, so it is checked, never replaced.
+    if (upload && isEvidenceStillProcessing(response.status, payload)) throw new RequestTimeoutError(PROCESSING_MESSAGE, { ambiguous: true });
     assertEvidenceComplete(response, payload, options.headers);
     if (!response.ok) {
       if (response.status === 401) {
@@ -850,8 +856,12 @@ export default function PlantingPage() {
     const uid = auth.currentUser?.uid;
     const stored = loadPendingSubmission("participant", uid);
     if (!stored?.eventId) return;
-    clearPendingSubmission("participant", uid);
     const saved = findReconciledSubmission(records, stored);
+    if (!saved && Date.now() - Date.parse(stored.savedAt || "") < PENDING_PROCESSING_MS) {
+      showPopup("MENRO has not confirmed your earlier planting report yet. Refresh this page in a few minutes before submitting it again.", "warning");
+      return;
+    }
+    clearPendingSubmission("participant", uid);
     showPopup(saved
       ? "Your earlier planting report was saved and is awaiting MENRO Staff verification. Do not submit it again."
       : "Your earlier planting report submission was not saved by MENRO. You can submit it again.", saved ? "success" : "warning");
@@ -1486,6 +1496,7 @@ export default function PlantingPage() {
   function resetForm() {
     evidenceContext.current += 1;
     setAttendanceFile(null); setSavedParticipantReport(null);
+    setSubmissionProgress(null);
     setFormErrors({});
     evidenceAttempt.current.reset();
     clearNoEventsAlert();
@@ -2450,6 +2461,7 @@ export default function PlantingPage() {
     if (correctionOf) payload.append("correctionOf", correctionOf);
 
     setSubmitting(true);
+    setSubmissionProgress({ phase: "uploading", percent: 0 });
     const knownSubmissionIds = ownSubmissionIdsForEvent(records, form.eventId);
 
     let savedResponse = null;
@@ -2458,7 +2470,7 @@ export default function PlantingPage() {
         method: "POST",
         body: payload,
         headers: evidenceAttempt.current.headers(),
-        timeoutMs: PLANTING_SUBMISSION_TIMEOUT_MS,
+        upload: { onProgress: setSubmissionProgress },
       });
 
       setSavedParticipantReport(response);
@@ -2476,6 +2488,17 @@ export default function PlantingPage() {
         : `Planting Report Submitted Successfully — ${response.message ||
           "Your planting report has been submitted and is awaiting MENRO Staff verification."} Status: Pending Review.`);
     } catch (error) {
+      setSubmissionProgress(null);
+      // Measurably incomplete upload: nothing was saved. Entries, photos and the submission key stay for the retry.
+      if (!savedResponse && error?.code === "UPLOAD_NOT_COMPLETED") {
+        const unreadable = await findUnreadableFile(photoFiles);
+        setSubmissionProgress({ phase: "not-saved" });
+        if (unreadable) {
+          const message = `The photo "${unreadable.name}" can no longer be read on this device, so your report was not saved. Remove it and add it again.`;
+          setFormErrors(current => ({ ...current, photos: message })); showPopup(message, "error");
+        } else showPopup(NOT_SAVED_MESSAGE, "error");
+        return;
+      }
       if (isAmbiguousWriteFailure(error)) {
         if (!savedResponse) {
           const pending = { eventId: form.eventId, knownSubmissionIds, contributorId: auth.currentUser?.uid || "" };
@@ -2496,6 +2519,7 @@ export default function PlantingPage() {
           return;
         }
       }
+      if (!savedResponse && error?.status >= 400 && error.status < 500) setSubmissionProgress({ phase: "rejected" });
       const fields = finalReportFieldErrors(backendFieldErrors(error, { quantityPlanted: "quantity", inventoryId: "finalItems", items: "finalItems", evidence: "photos", files: "photos" }), finalRows);
       if (Object.keys(fields).length) { setFormErrors(fields); focusFirstInvalid(() => reportFormRef.current); }
       else showPopup((savedResponse ? "The report is already saved. Retry attendance only. " : "") + (error.message || "Unable to submit the planting report. Please try again."), "error");
@@ -3534,6 +3558,10 @@ export default function PlantingPage() {
               </div>
 
               <div className="pr-modal-footer">
+                {submitting && submissionProgress?.phase === "uploading" && <p className="pr-submit-progress" role="status">{`Uploading photos… ${submissionProgress.percent}%. Keep this page open.`}</p>}
+                {submitting && submissionProgress?.phase === "processing" && <p className="pr-submit-progress" role="status">Photos sent. Waiting for MENRO to confirm your report…</p>}
+                {!submitting && !unconfirmedSubmission && submissionProgress?.phase === "not-saved" && <p className="pr-submit-unconfirmed" role="status">Not saved. Your entries and photos are kept; select Submit Report to send them again.</p>}
+                {!submitting && !unconfirmedSubmission && submissionProgress?.phase === "rejected" && <p className="pr-submit-unconfirmed" role="status">Not accepted by MENRO. Correct the problem shown in the form, then submit again.</p>}
                 {unconfirmedSubmission && !submitting && <p className="pr-submit-unconfirmed" role="status">Not yet confirmed by MENRO. Select Check Submission; the report is sent again only if MENRO has not saved it.</p>}
                 <button
                   type="button"

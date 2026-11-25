@@ -3,9 +3,11 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 const plantingPage = readFileSync(new URL("../src/pages/PlantingPage.jsx", import.meta.url), "utf8");
 test("planting submission has a bounded recovery path", () => {
-  assert.match(plantingPage, /const PLANTING_SUBMISSION_TIMEOUT_MS = 60_000/);
+  // The participant upload is limited by inactivity, never by a fixed total that cancels a progressing upload.
+  assert.doesNotMatch(plantingPage, /PLANTING_SUBMISSION_TIMEOUT_MS/);
   assert.match(plantingPage, /new AbortController\(\)/);
-  assert.match(plantingPage, /timeoutMs: PLANTING_SUBMISSION_TIMEOUT_MS/);
+  assert.match(plantingPage, /upload: \{ onProgress: setSubmissionProgress \}/);
+  assert.match(plantingPage, /upload && isEvidenceStillProcessing\(response\.status, payload\)\) throw new RequestTimeoutError\(PROCESSING_MESSAGE, \{ ambiguous: true \}\)/);
   // Every request is bounded, including sign-in and list refreshes.
   assert.match(plantingPage, /requestedTimeout \?\? \(!write \? READ_TIMEOUT_MS/);
   assert.match(plantingPage, /withDeadline\(readAuthToken\(forceRefresh\), AUTH_TIMEOUT_MS/);
