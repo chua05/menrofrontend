@@ -2165,6 +2165,81 @@ test("Staff-submitted report: Staff never see Review; Admin sees Staff Submitted
   fixture.check();
 });
 
+// Staff-encoded walk-in: Admin approves, the Staff encoder releases, and reporting follows the stored policy.
+const walkInApproved = (extra = {}) => ({ ...ownRequest("Approved", "walkin-citizen"), participantName: "Walk-in Citizen", requesterRole: "walk-in", createdByRole: "staff", submissionPath: "STAFF_DIRECT_TO_ADMIN",
+  submittedByUid: "test-staff", submittedByName: "Encoding Staff", approvedBy: "test-admin", eventId: "event-1", walkIn: { encodedBy: "test-staff", encodedByName: "Encoding Staff", citizenHasAccount: false }, ...extra });
+async function openWalkIn(page, initial, reporting, overrides = {}) {
+  const state = { request: initial, bodies: [] };
+  const fixture = await setup(page, { "GET /api/seedling-requests": route => route.fulfill({ json: { success: true, data: [state.request] } }),
+    "GET /api/inventory": route => route.fulfill({ json: { success: true, data: [{ id: "tree-1", species: "Narra", availableQuantity: 10, reservedQuantity: 0 }] } }),
+    "PATCH /api/seedling-requests/staff-own-request/release": (route, req) => { state.bodies.push(req.postDataJSON());
+      state.request = { ...state.request, status: "Released", inventoryReleased: true, requestVersion: 4, releasedBy: "test-staff", releasedAt: "2099-01-01T02:30:00Z", releaseType: "Complete", reportingPolicy: { reporting },
+        releasedItems: [{ inventoryId: "tree-1", species: "Narra", requestedQuantity: 2, releasedQuantity: 2, difference: 0 }] };
+      return route.fulfill({ json: { success: true, data: state.request } }); }, ...overrides });
+  await page.goto("/staff/requests?role=staff");
+  await page.getByRole("button", { name: "View details for REQ-2099-001", exact: true }).click();
+  return { fixture, state };
+}
+async function releaseAll(page) {
+  await page.getByRole("button", { name: "Release Seedlings", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "Release seedlings", exact: true });
+  await expect(dialog).toContainText("Walk-in Citizen");
+  await dialog.getByLabel("Available Release Date").fill("2099-01-01"); await dialog.getByLabel("Actual Released Quantity *").fill("2");
+  await dialog.getByRole("button", { name: "Confirm Release", exact: true }).click();
+  await expect(dialog).toHaveCount(0);
+}
+
+test("the Staff encoder releases an approved walk-in through the existing modal, then submits its required planting report", async ({ page }) => {
+  const { fixture, state } = await openWalkIn(page, walkInApproved(), "REQUIRED", {
+    "GET /api/planting-reports/official/options": route => route.fulfill({ json: { success: true, data: { options: [{ ...releaseOption, requestId: "staff-own-request", reportSubmissionAllowed: true, requesterName: "Walk-in Citizen" }], nextCursor: null } } }) });
+  for (const action of ["Review", "Return Request", "Approve", "Reject", "Submit Planting Report"]) await expect(page.getByRole("button", { name: action, exact: true })).toHaveCount(0);
+  await releaseAll(page);
+  expect(state.bodies).toEqual([{ items: [{ inventoryId: "tree-1", releasedQuantity: 2, shortReleaseReason: "" }], availableReleaseDate: "2099-01-01", expectedVersion: 3 }]);
+  await expect(page.getByText("Seedlings Released", { exact: true }).first()).toBeVisible();
+  await expect(page.getByText("Planting Report Required", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Release Seedlings", exact: true })).toHaveCount(0);
+  await page.getByRole("button", { name: "Submit Planting Report", exact: true }).click();
+  await expect(page).toHaveURL(/\/staff\/planting-reports\?officialRequest=staff-own-request/);
+  const form = page.locator(".pr-official-dialog");
+  await expect(form.locator("#official-request")).toHaveValue("staff-own-request"); await expect(form).toContainText("Walk-in Citizen");
+  fixture.check();
+});
+
+test("a released walk-in whose policy waives the report shows No Planting Report Required and no submission action", async ({ page }) => {
+  const { fixture } = await openWalkIn(page, walkInApproved(), "NOT_REQUIRED");
+  await releaseAll(page);
+  await expect(page.getByText("No Planting Report Required", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: /Submit Planting Report/ })).toHaveCount(0);
+  fixture.check();
+});
+
+test("a directly opened release that needs no report explains it and cannot be submitted", async ({ page }) => {
+  const fixture = await setup(page, { "GET /api/planting-reports": route => route.fulfill({ json: { success: true, data: [] } }),
+    "GET /api/planting-reports/official/options": route => route.fulfill({ json: { success: true, data: { options: [{ ...releaseOption, requestId: "staff-own-request", reportSubmissionAllowed: false, reportingPolicy: { reporting: "NOT_REQUIRED" } }], nextCursor: null } } }) });
+  await page.goto("/staff/planting-reports?role=staff&officialRequest=staff-own-request");
+  const form = page.locator(".pr-official-dialog");
+  await expect(form.getByRole("status").filter({ hasText: "No Planting Report Required." })).toBeVisible();
+  await form.locator('button[type="submit"]').click();
+  await expect(form.getByText("No Planting Report Required for this released request.", { exact: true })).toBeVisible();
+  expect(fixture.calls.filter(call => call.key === "POST /api/planting-reports/official")).toHaveLength(0);
+  fixture.check();
+});
+
+test("another Staff member's approved walk-in stays releasable", async ({ page }) => {
+  const { fixture } = await openWalkIn(page, walkInApproved({ walkIn: { encodedBy: "another-staff", citizenHasAccount: false } }), "REQUIRED");
+  await expect(page.getByRole("button", { name: "Release Seedlings", exact: true })).toBeVisible();
+  fixture.check();
+});
+
+test("the encoder cannot decide a replacement schedule inside the release modal", async ({ page }) => {
+  const { fixture } = await openWalkIn(page, walkInApproved({ lateReleaseRescheduling: { status: "PendingStaffReview", version: 1, availableReleaseDate: "2099-01-04", requesterProposal: { proposalVersion: 1, plantingDate: "2099-01-05", startTime: "08:00" } } }), "REQUIRED");
+  await page.getByRole("button", { name: "Release Seedlings", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "Release seedlings", exact: true });
+  await expect(dialog).toContainText("Another authorized MENRO officer must decide the requester's replacement schedule before release.");
+  await expect(dialog.getByRole("button", { name: "Return for Revision" })).toHaveCount(0);
+  fixture.check();
+});
+
 // Staff-submitted requests (own or encoded walk-in) are stored "Reviewed" with submissionPath STAFF_DIRECT_TO_ADMIN:
 // Awaiting Approval, no Staff review, Admin decides directly. Participant requests keep Staff review first.
 const staffDirect = (extra = {}) => ({ ...ownRequest("Reviewed", "walkin-citizen"), participantName: "Walk-in Citizen", requesterRole: "walk-in", createdByRole: "staff",

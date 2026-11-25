@@ -51,7 +51,7 @@ import { downloadPrivateRequestLetter, downloadPrivateWalkInAcknowledgement, has
 import "../styles/seedling-requests.css";
 import ParticipantSaplingRequestWizard from "./ParticipantSaplingRequestWizard";
 import { getRequesterDetailField } from "../utils/requesterDetails";
-import { ownsSeedlingRequest, canProcessSeedlingRequest, createdSeedlingRequest, isStaffDirectRequest, needsAdminSiteVerification } from "../utils/requestOwnership";
+import { ownsSeedlingRequest, canProcessSeedlingRequest, canReleaseSeedlingRequest, createdSeedlingRequest, plantingReportRequirement, isStaffDirectRequest, needsAdminSiteVerification } from "../utils/requestOwnership";
 import { approvedPolicyLabel } from "../utils/purposePolicyStatus";
 import { textTooltip } from "../utils/leafletTooltip";
 
@@ -1422,7 +1422,7 @@ useEffect(() => {
   };
 
   const openReleaseModal = async (request) => {
-    if (userRole !== "staff" || request.status !== "Approved") return;
+    if (userRole !== "staff" || request.status !== "Approved" || !canReleaseSeedlingRequest(request, currentUser)) return;
     setReleaseModal(request);
     setReleaseInventory([]);
     setReleaseEntries((request.trees || []).map(() => ({ quantity: "", reason: "" })));
@@ -2611,7 +2611,9 @@ useEffect(() => {
                   {availableReleaseDate && availableReleaseDate > (releaseModal.approvedSchedule?.plantingDate || releaseModal.proposedDate || "") &&
                     <button type="button" className="sr-secondary-btn" disabled={actionLoading || !lateReleaseReason.trim()} onClick={() => runLateReleaseAction("conflict")}>Request New Planting Date</button>}
                 </>}
-                {releaseModal.lateReleaseRescheduling?.status === "PendingStaffReview" && <>
+                {releaseModal.lateReleaseRescheduling?.status === "PendingStaffReview" && !canProcessSeedlingRequest(releaseModal, currentUser) &&
+                  <p role="status">Another authorized MENRO officer must decide the requester's replacement schedule before release.</p>}
+                {releaseModal.lateReleaseRescheduling?.status === "PendingStaffReview" && canProcessSeedlingRequest(releaseModal, currentUser) && <>
                   <DetailItem label="Requester Proposal" value={`${formatDate(releaseModal.lateReleaseRescheduling.requesterProposal?.plantingDate)} ${formatTime(releaseModal.lateReleaseRescheduling.requesterProposal?.startTime)}`} />
                   <label className="sr-form-field"><span>Return Reason</span><textarea value={lateReleaseReturnReason} onChange={(event) => setLateReleaseReturnReason(event.target.value)} /></label>
                   <div className="sr-modal-footer"><button type="button" className="sr-secondary-btn" disabled={actionLoading || !lateReleaseReturnReason.trim()} onClick={() => runLateReleaseAction("return")}>Return for Revision</button><button type="button" className="sr-approve-btn" disabled={actionLoading} onClick={() => runLateReleaseAction("approve")}>Approve Rescheduling</button></div>
@@ -3143,7 +3145,8 @@ useEffect(() => {
                     </div>
                   ))}
                   {selectedRequest.releasedBy && <div className="sr-detail-tree-row"><span>Released By</span><strong>{selectedRequest.releasedBy}</strong></div>}
-                  {selectedRequest.releasedAt && <div className="sr-detail-tree-row"><span>Released At</span><strong>{formatDate(selectedRequest.releasedAt)}</strong></div>}
+                  {selectedRequest.releasedAt && <div className="sr-detail-tree-row"><span>Released At</span><strong>{[formatDate(selectedRequest.releasedAt), formatTime(selectedRequest.releasedAt)].filter(Boolean).join(" ")}</strong></div>}
+                  {plantingReportRequirement(selectedRequest) && <div className="sr-detail-tree-row"><span>Planting Report</span><strong>{plantingReportRequirement(selectedRequest).label}</strong></div>}
                 </div>
               )}
 
@@ -3254,7 +3257,7 @@ useEffect(() => {
                     </>
                   )}
 
-                {userRole === "staff" && canProcessSeedlingRequest(selectedRequest, currentUser) &&
+                {userRole === "staff" && canReleaseSeedlingRequest(selectedRequest, currentUser) &&
                   selectedRequest.status === "Approved" && (
                     <button
                       type="button"
@@ -3265,6 +3268,16 @@ useEffect(() => {
                       Release Seedlings
                     </button>
                   )}
+
+                {userRole === "staff" && plantingReportRequirement(selectedRequest)?.staffAction && (
+                  <button
+                    type="button"
+                    className="sr-approve-btn sr-large-action"
+                    onClick={() => navigate(`/staff/planting-reports?officialRequest=${encodeURIComponent(selectedRequest.id)}`)}
+                  >
+                    {plantingReportRequirement(selectedRequest).staffAction}
+                  </button>
+                )}
               </div>
             </div>
           </div>

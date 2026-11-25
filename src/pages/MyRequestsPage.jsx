@@ -1284,7 +1284,7 @@ export default function MyRequestsPage() {
               <div>
                 <span className="myr-modal-label">Seedling Request</span>
                 <h2 id="myr-details-title">Request Details</h2>
-                  {selectedRequest.reportingPolicy && <p>{selectedRequest.reportingPolicy.reportingStatus}. Requesters provide planting documentation only; permanent-sample monitoring is performed by MENRO Staff.</p>}
+                  {selectedRequest.reportingPolicy && <p>{selectedRequest.reportingPolicy.reporting === "NOT_REQUIRED" && ["Released", "Saplings Released"].includes(selectedRequest.status) ? "No Planting Report Required" : selectedRequest.reportingPolicy.reportingStatus}. Requesters provide planting documentation only; permanent-sample monitoring is performed by MENRO Staff.</p>}
                 <p>{getRequestDisplayId(selectedRequest)}</p>
               </div>
 
