@@ -60,6 +60,7 @@ export function installJsxHarness({ modules = {} } = {}) {
       export function useRef(initial) { return h.slot(() => ({ current: initial })); }
       export function useState(initial) { const cell = h.slot(() => ({ value: initial })); return [cell.value, next => { cell.value = typeof next === "function" ? next(cell.value) : next; }]; }
       export function useEffect(effect, deps) { h.effect(effect, deps); }
+      export function useCallback(callback) { return callback; }
     `,
     "stub:jsx": "export const jsx = (type, props) => ({ type, props }); export const jsxs = jsx; export const Fragment = 'fragment';",
     "stub:css": "export default {};",

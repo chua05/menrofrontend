@@ -1732,3 +1732,8 @@
 @media (max-width: 900px) and (min-width: 761px) {
   .sm-filter-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
+
+/* Monitoring action of an existing lifecycle */
+.sm-row-monitor-button { display: block; margin-top: 8px; min-height: 34px; padding: 0 12px; border: 1px solid #17643a; border-radius: 8px; background: #17643a; color: #fff; font-family: inherit; font-size: 13px; font-weight: 650; white-space: nowrap; cursor: pointer; }
+.sm-row-monitor-button:hover { background: #124f2e; }
+.sm-row-monitor-button:focus-visible { outline: 3px solid rgba(23, 100, 58, 0.3); outline-offset: 2px; }

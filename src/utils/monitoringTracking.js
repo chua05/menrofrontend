@@ -10,7 +10,7 @@ import { formatDisplayId } from "./displayId.js";
 // Headline monitoring stage of a tracking row (user-facing), mapped only from stored policy, cohort and readiness.
 export const TRACKING_STAGE = Object.freeze({
   // Display wording only; tracking rows never enable a submission.
-  AWAITING_SETUP: "Awaiting Monitoring Submission",
+  AWAITING_SETUP: "Awaiting First Monitoring Visit",
   AWAITING_SUBMISSION: "Awaiting Submission",
   NOT_YET_AVAILABLE: "Not Yet Available",
   READY_FOR_VISIT: "Ready for Monitoring Visit",
@@ -21,7 +21,7 @@ export const TRACKING_STAGE = Object.freeze({
 });
 // Legacy aggregate lifecycles open 14 days after the authoritative planting date (backend baseLifecycle rule).
 export const LEGACY_START_OFFSET_DAYS = 14;
-export const SCHEDULE_LABEL = Object.freeze({ POLICY: "Awaiting Policy Decision", NOT_SCHEDULED: "Not Scheduled" });
+export const SCHEDULE_LABEL = Object.freeze({ POLICY: "—", NOT_SCHEDULED: "Not Scheduled" });
 const addDays = (date, days) => {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date || "")) return "";
   const value = new Date(`${date}T00:00:00Z`); value.setUTCDate(value.getUTCDate() + days);
@@ -182,7 +182,7 @@ export function deriveTrackingRows({ reports = [], lifecycles = [], visitCohortI
 }
 
 // Dropdown-only fields. A missing cohort says only that MENRO must complete the setup (the cause is not known here),
-// and the table headline ("Awaiting Monitoring Submission") is not repeated: `stage` stays empty, `status` is shown.
+// and the table headline ("Awaiting First Monitoring Visit") is not repeated: `stage` stays empty, `status` is shown.
 function pickerProjection({ report, policy, cohort, status, setupSummary, hasMonitoringRecord }) {
   const eligibleMethod = policy === MONITORING_POLICY.PERMANENT_SAMPLE || policy === MONITORING_POLICY.LEGACY && Boolean(cohort);
   const legacyStatus = cohort ? TRACKING_STATUS.SETUP_IN_PROGRESS : hasMonitoringRecord ? TRACKING_STATUS.LEGACY_TRACKED : TRACKING_STATUS.LEGACY;

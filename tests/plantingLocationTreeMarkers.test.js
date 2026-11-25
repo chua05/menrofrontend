@@ -15,7 +15,7 @@ test("permanent sample trees use accessible divIcon markers with approved, draft
 
 test("tree popups use DOM APIs and an assessment callback, never string onclick handlers", () => {
   assert.match(source, /document\.createElement\("button"\)/);
-  assert.match(source, /onSelectTree\(tree\.sampleId\)/);
+  assert.match(source, /onSelectTree\(tree\.sampleId,true\)/);
   assert.doesNotMatch(source, /onclick\s*=/i);
   for (const label of ["Draft — not official", "Latest approved condition", "Visit", "Assessment date", "Stem diameter", "GPS verification", "Open assessment"]) {
     assert.ok(source.includes(label), label);

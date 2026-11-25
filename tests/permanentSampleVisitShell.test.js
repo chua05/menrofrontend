@@ -95,8 +95,8 @@ test("M4: Section 2 reads the readiness context, so Section 1 and Section 2 show
   assert.equal(new Map(definitions(section(tree, "1."))).get("Monitoring Visit Number"), "1");
   assert.equal(summary.get("Monitoring Visit"), "1");
   assert.equal(summary.get("Schedule Status"), "First Visit Available");
-  assert.equal(summary.get("Next Monitoring Date"), "Available now (no fixed first-visit due date)");
-  assert.equal(summary.get("Start Monitoring Date"), "Set by the Visit 1 monitoring date");
+  assert.equal(summary.get("Next Monitoring Date"), "Not fixed for Visit 1");
+  assert.equal(summary.get("Start Monitoring Date"), "—");
   assert.doesNotMatch(textOf(section(tree, "2.")), /Not assigned|DUE/);
 });
 
