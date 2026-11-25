@@ -8,6 +8,7 @@ import { canDecideVisit, createLatestRequestGate, loadSubmittedVisitPages, visit
 import { createEvidenceAttempt, assertEvidenceComplete } from "../utils/evidenceAttempt";
 import { useSearchParams } from "react-router-dom";
 import { TRACKING_STATUS, deriveTrackingRows, isVerifiedPlantingReport, trackingMatchesRecordFilters, trackingNeedsCohortLookup, trackingReportNumber } from "../utils/monitoringTracking";
+import { loadReadiness, readinessPath } from "../utils/sampleReadinessLoader";
 import { isAwaitingMonitoringSetup, lifecycleMethodLabel, monitoringDisplayId, monitoringSetupBlocker, monitoringStatusLabel, monitoringStatusTone } from "../utils/monitoringRecordView";
 import MonitoringTrackingDetails from "../components/MonitoringTrackingDetails";
 import ModalDialog from "../components/ModalDialog";
@@ -823,7 +824,7 @@ export default function MonitoringPage() {
           update({ readinessState: "ready", readiness: { cohorts: [] } });
           return;
         }
-        try { update({ readinessState: "ready", readiness: await read("/verified-sample-monitoring/readiness") }); }
+        try { update({ readinessState: "ready", readiness: await loadReadiness((cursor) => read(readinessPath(cursor))) }); }
         catch { update({ readinessState: "error" }); }
       })
       .catch(() => update({ cohortState: "error", readinessState: "error" }));
@@ -839,10 +840,33 @@ export default function MonitoringPage() {
     readinessState: trackingLookup ? trackingLookupCurrent.readinessState : "idle", readiness: trackingLookupCurrent.readiness,
     sites,
   }) : []), [trackingEnabled, plantingReports, records, sampleVisits, cohortFeatureEnabled, trackingLookup, trackingLookupCurrent, sites]);
+  // Staff "Monitor Planted Trees" dropdown only: the same verified reports including those that already have a monitoring
+  // record. Kept apart from trackingRows, so table rows, counts, filters and the table's retry notice never change.
+  // The cohort list is reused when the table already reads it; visit readiness is read by the form itself.
+  const formLookup = isStaff && sampleFormMounted && trackingNeedsCohortLookup(plantingReports, cohortFeatureEnabled);
+  const formOwnLookup = formLookup && !trackingLookup && sampleFormOpen;
+  const [formCohorts, setFormCohorts] = useState({ state: "loading", rows: [] });
+  useEffect(() => {
+    if (!formOwnLookup) return undefined;
+    let active = true;
+    authenticatedFetch("/verified-planting-cohorts")
+      .then(async (response) => {
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok || !payload.success) throw new Error("unavailable");
+        if (active) setFormCohorts({ state: "ready", rows: Array.isArray(payload.data) ? payload.data : [] });
+      })
+      .catch(() => active && setFormCohorts({ state: "error", rows: [] }));
+    return () => { active = false; };
+  }, [formOwnLookup]);
+  const formRows = useMemo(() => (isStaff && sampleFormMounted ? deriveTrackingRows({
+    reports: plantingReports, lifecycles: records, cohortEnabled: cohortFeatureEnabled, includeTracked: true, sites,
+    cohortState: !formLookup ? "idle" : trackingLookup ? trackingLookupCurrent.cohortState : formCohorts.state,
+    cohorts: trackingLookup ? trackingLookupCurrent.cohorts : formCohorts.rows,
+  }) : []), [isStaff, sampleFormMounted, plantingReports, records, cohortFeatureEnabled, sites, formLookup, trackingLookup, trackingLookupCurrent, formCohorts]);
   // Tracking row opened in the read-only Monitoring Record Details drawer (no navigation).
   const [trackingDetailsId, setTrackingDetailsId] = useState("");
   const trackingDetails = trackingRows.find((row) => row.plantingReportId === trackingDetailsId) || null;
-  const trackingLookupFailed = trackingLookup && (trackingLookupCurrent.cohortState === "error" || trackingLookupCurrent.readinessState === "error");
+  const trackingLookupFailed = trackingLookup && (trackingLookupCurrent.cohortState === "error" || trackingLookupCurrent.readinessState === "error" || trackingLookupCurrent.readiness?.partial === true);
 
   const siteOptions = useMemo(
     () =>
@@ -1672,7 +1696,7 @@ export default function MonitoringPage() {
 
       {/* Mounted on first use and kept mounted, so unsaved per-tree edits survive closing and reopening. */}
       {isStaff && sampleFormMounted && (
-        <PermanentSampleMonitoringPage embedded open={sampleFormOpen} onClose={() => setSampleFormOpen(false)} setupPendingReports={trackingRows} />
+        <PermanentSampleMonitoringPage embedded open={sampleFormOpen} onClose={() => setSampleFormOpen(false)} setupPendingReports={formRows} />
       )}
 
       {isParticipant && loadError && (

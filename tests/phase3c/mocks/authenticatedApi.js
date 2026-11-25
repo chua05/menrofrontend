@@ -257,6 +257,11 @@ export async function authenticatedFetch(path, options = {}) {
   }
   if (url.pathname === "/verified-sample-monitoring/readiness") {
     window.__PHASE3C_READINESS_CALLS__ = (window.__PHASE3C_READINESS_CALLS__ || 0) + 1;
+    // Tests may answer readiness per page/call: (cursor, callNumber) => ({ data } | { status, code, message }).
+    if (window.__PHASE3C_READINESS_HANDLER__) {
+      const answer = await window.__PHASE3C_READINESS_HANDLER__(url.searchParams.get("cursor") || "", window.__PHASE3C_READINESS_CALLS__);
+      return answer.data ? response(200, { success: true, data: answer.data }) : response(answer.status || 500, { success: false, code: answer.code, message: answer.message });
+    }
     if (activeFixture === "empty-readiness-error") return failure(500, "Readiness unavailable.");
     if (activeFixture === "empty-no-cohorts") return response(200, { success: true, data: { cohorts: [], truncated: false, visitCreationAvailable: false, schedulingPolicyStatus: "PENDING_MENRO_APPROVAL" } });
     return response(200, { success: true, data: { truncated: false, visitCreationAvailable: false, schedulingPolicyStatus: "PENDING_MENRO_APPROVAL", cohorts: [
@@ -265,6 +270,15 @@ export async function authenticatedFetch(path, options = {}) {
       { cohortId: "cohort-pending", reportNumber: null, siteName: null, canCreateVisit: false,
         reasons: [{ code: "SAMPLING_POLICY_PENDING", pending: ["MINIMUM_SAMPLE_POLICY_PENDING"] }, { code: "SAMPLING_PLAN_NOT_APPROVED", planStatus: "DRAFT" }, { code: "VISIT_SCHEDULING_POLICY_PENDING" }] },
     ] } });
+  }
+  const createMatch = url.pathname.match(/^\/verified-sample-monitoring\/cohorts\/([^/]+)\/visits$/);
+  if (createMatch && options.method === "POST") {
+    const cohortId = decodeURIComponent(createMatch[1]);
+    window.__PHASE3C_CREATED__ = [...(window.__PHASE3C_CREATED__ || []), { cohortId, payload: JSON.parse(options.body || "{}") }];
+    return response(201, { success: true, data: { ...detail, id: "VPMV-CREATED-001", cohortId, visitNumber: 1 } });
+  }
+  if (url.pathname === "/verified-sample-monitoring/visits/VPMV-CREATED-001" && window.__PHASE3C_CREATED__?.length) {
+    return response(200, { success: true, data: { ...detail, id: "VPMV-CREATED-001", cohortId: window.__PHASE3C_CREATED__[0].cohortId, visitNumber: 1 } });
   }
   if (url.pathname === "/verified-sample-monitoring/visits") return listResponse(url, ["empty-readiness-error", "empty-no-cohorts"].includes(activeFixture) ? "empty" : activeFixture);
   const detailMatch = url.pathname.match(/^\/verified-sample-monitoring\/visits\/([^/]+)$/);

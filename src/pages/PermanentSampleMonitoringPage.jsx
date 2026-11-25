@@ -15,7 +15,9 @@ import {
 import { useAuth } from "../context/AuthContext";
 import { Trees, X } from "lucide-react";
 import { Link, useSearchParams } from "react-router-dom";
-import { readinessMessages, readinessTitle, scheduleStatusLabel, withoutEligibleDuplicates } from "../utils/sampleVisitReadiness";
+import { approvedVisitNote, readinessErrorMessage, readinessGateNotices, readinessMessages, readinessTitle, scheduleStatusLabel, withoutEligibleDuplicates } from "../utils/sampleVisitReadiness";
+import { PICKER_GROUP, withPickerReadiness } from "../utils/monitoringTracking";
+import { loadReadiness, mergeReadiness, readinessPath, withoutEligibleCohort } from "../utils/sampleReadinessLoader";
 import { monitoringApiErrorMessage, monitoringErrorSampleId, monitoringEvidenceErrorMessage, monitoringWriteErrorMessage } from "../utils/monitoringApiError";
 
 const STATUS_LABELS = { DRAFT: "Draft", RETURNED: "Returned for Correction", PENDING_ADMIN_APPROVAL: "Pending Admin Review", APPROVED: "Approved" };
@@ -32,6 +34,17 @@ async function api(path, options = {}) {
     return body.data;
   })(), write ? WRITE_TIMEOUT_MS : READ_TIMEOUT_MS, () => new RequestTimeoutError(write ? "MENRO has not confirmed this save. Check the saved outcome before trying again." : "Monitoring data could not be loaded in time. Please retry.", { ambiguous: Boolean(write) }));
 }
+
+// One selectable row per planting report, even if two eligible cohorts name the same report.
+const uniqueByReport = rows => {
+  const seen = new Set();
+  return (Array.isArray(rows) ? rows : []).filter(row => {
+    const reportId = String(row?.context?.plantingReportId || "");
+    if (!reportId) return true;
+    return seen.has(reportId) ? false : Boolean(seen.add(reportId));
+  });
+};
+const fetchReadinessPage = cursor => api(readinessPath(cursor));
 
 function formAssessment(value) {
   return {
@@ -65,8 +78,8 @@ const draftSnapshot = (rows, remarks, date) => JSON.stringify([rows.map(row =>
 // `embedded`: rendered inside Survival Monitoring — the Staff "Monitor Planted Trees" modal, or (with
 // `reviewVisitId`) the Admin "Review Monitoring Visit" read-only form opened from the Monitoring Records table.
 // The same state, validation and API handlers serve both the embedded modal and the standalone route.
-// `setupPendingReports` (Staff, embedded): read-only tracking rows for verified planting reports that have no
-// authorized monitoring visit yet. They can be selected to view truthful readiness; nothing becomes editable.
+// `setupPendingReports` (Staff, embedded): read-only rows for verified planting reports without a startable visit
+// (Setup Pending or Not Eligible). They can be selected to view truthful readiness; nothing becomes editable.
 export default function PermanentSampleMonitoringPage({ embedded = false, open: embeddedOpen = false, onClose, reviewVisitId = "", onReviewed, setupPendingReports = [] } = {}) {
   const enabled = resolveVerifiedPlantingCohortEnabled();
   const { userRole } = useAuth();
@@ -105,10 +118,16 @@ export default function PermanentSampleMonitoringPage({ embedded = false, open: 
   const [readiness, setReadiness] = useState(null);
   // A report whose cohort is already eligible is listed once, as the eligible row (not again under Setup Pending).
   const pendingReports = withoutEligibleDuplicates(offeredPendingReports, readiness?.data?.eligible || []);
-  const pendingReport = pendingReports.find(row => row.plantingReportId === pendingReportId) || null;
+  const pickerRows = pendingReports.map(row => withPickerReadiness(row, readiness));
+  const pendingReport = pickerRows.find(row => row.plantingReportId === pendingReportId) || null;
+  const pendingNotEligible = pendingReport?.pickerGroup === PICKER_GROUP.NOT_ELIGIBLE;
   const unsaved = userRole === "staff" && ["DRAFT", "RETURNED"].includes(detail?.status) &&
     (Object.keys(pendingEvidence).length > 0 || Object.values(questions).some(value => value.trim()) ||
       savedDraft !== draftSnapshot(assessments, visitRemarks, dateMonitored));
+  // Only the latest visit-list and readiness requests may update the page; older or unmounted answers are ignored.
+  const listEpoch = useRef(0);
+  const readinessEpoch = useRef(0);
+  useEffect(() => () => { listEpoch.current += 1; readinessEpoch.current += 1; }, []);
   const uploadKeys = useRef({});
   const evidenceEpoch = useRef(0);
   const objectUrls = useRef(new Set());
@@ -161,16 +180,35 @@ export default function PermanentSampleMonitoringPage({ embedded = false, open: 
     }
   }, [resetEvidence]);
 
+  // `keep`: refresh in place; a failed refresh keeps the rows already shown.
+  const refreshReadiness = useCallback(async ({ keep = false } = {}) => {
+    readinessEpoch.current += 1;
+    const epoch = readinessEpoch.current;
+    if (!keep) setReadiness({ loading: true });
+    try {
+      const data = await loadReadiness(fetchReadinessPage);
+      if (epoch === readinessEpoch.current) setReadiness({ data });
+    } catch (requestError) {
+      if (epoch === readinessEpoch.current) setReadiness(current => keep && current?.data ? { data: current.data } : { error: readinessErrorMessage(requestError) });
+    }
+  }, []);
+
   const load = useCallback(
     async (next = "") => {
+      listEpoch.current += 1;
+      const epoch = listEpoch.current;
       setLoading(true);
       setError("");
+      if (!next) { readinessEpoch.current += 1; setReadiness(null); }
       try {
         const query = new URLSearchParams();
         if (status) query.set("status", status);
         if (next) query.set("cursor", next);
         const data = await api(`/verified-sample-monitoring/visits?${query}`);
-        setPage(data);
+        if (epoch !== listEpoch.current) return;
+        setPage({ ...data, firstPage: !next });
+        // Eligible reports are offered with or without listed visits, and never delay the visit list.
+        if (!next) void refreshReadiness();
         resetEvidence();
         setDetail(null);
         setAssessments([]);
@@ -185,13 +223,9 @@ export default function PermanentSampleMonitoringPage({ embedded = false, open: 
           if (["staff", "admin"].includes(userRole) && actionable.length === 1 && !data.nextCursor) await showVisit(actionable[0].id);
           else setSelectPrompt(true);
         }
-        // No authorized visit on the first page: ask the backend why, so Staff see real blockers instead of a bare empty list.
-        if (!next && !(data.visits || []).length) {
-          setReadiness({ loading: true });
-          try { setReadiness({ data: await api("/verified-sample-monitoring/readiness") }); }
-          catch { setReadiness({ error: true }); }
-        } else setReadiness(null);
       } catch (requestError) {
+        if (epoch !== listEpoch.current) return;
+        if (!next) setReadiness({ error: readinessErrorMessage(requestError) });
         setError(
           requestError.status === 401
             ? "Sign in is required."
@@ -200,10 +234,10 @@ export default function PermanentSampleMonitoringPage({ embedded = false, open: 
               : requestError.message
         );
       } finally {
-        setLoading(false);
+        if (epoch === listEpoch.current) setLoading(false);
       }
     },
-    [status, resetEvidence, showVisit, userRole]
+    [status, resetEvidence, showVisit, refreshReadiness, userRole]
   );
 
   useEffect(() => {
@@ -225,26 +259,35 @@ export default function PermanentSampleMonitoringPage({ embedded = false, open: 
     if (unconfirmed) { if (detail?.id === visitId) { setDialogOpen(true); return; } setError("Check the saved outcome before switching visits."); return; }
     if (!refresh && detail?.id === visitId) { setDialogOpen(true); return; }
     if (!allowDiscard()) return;
-    setPendingReportId("");
+    setPendingReportId(""); setReadinessCohortId("");
     await showVisit(visitId);
   };
 
-  // Selecting a setup-pending verified report leaves any open visit (after the usual unsaved-changes check)
-  // and shows that report's read-only readiness. It never creates a visit or enables editing.
-  const choosePendingReport = (reportId) => {
-    if (operationBusy.current) return;
-    if (unconfirmed) { setError("Check the saved outcome before switching visits."); return; }
+  // Selecting a verified report (pending or eligible) leaves any open visit after the usual unsaved-changes check.
+  // A pending report shows its read-only readiness; an eligible one shows its Start Visit. Selecting never creates
+  // a visit and never enables editing.
+  const leaveVisit = () => {
+    if (operationBusy.current) return false;
+    if (unconfirmed) { setError("Check the saved outcome before switching visits."); return false; }
     if (detail) {
-      if (!allowDiscard()) return;
+      if (!allowDiscard()) return false;
       resetEvidence(); setDetail(null); setAssessments([]);
     }
     setError("");
-    setPendingReportId(reportId);
+    return true;
   };
-  const pendingOptions = pendingReports.length > 0 && <optgroup label="Setup Pending">
-    {pendingReports.map(row => <option key={row.plantingReportId} value={`pending:${row.plantingReportId}`}>
-      {`${row.reportNumber || "Verified planting report"} · ${row.siteName || "Planting site"} · ${row.stage || row.status}`}</option>)}
-  </optgroup>;
+  const choosePendingReport = reportId => { if (leaveVisit()) { setReadinessCohortId(""); setPendingReportId(reportId); } };
+  const chooseEligible = cohortId => { if (leaveVisit()) { setPendingReportId(""); setReadinessCohortId(cohortId); } };
+  const pendingOptions = rows => [PICKER_GROUP.SETUP_PENDING, PICKER_GROUP.NOT_ELIGIBLE].map(group => {
+    const listed = rows.filter(row => (row.pickerGroup || PICKER_GROUP.SETUP_PENDING) === group);
+    return listed.length > 0 && <optgroup key={group} label={group}>
+      {listed.map(row => <option key={row.plantingReportId} value={`pending:${row.plantingReportId}`}>
+        {`${row.reportNumber || "Verified planting report"} · ${row.siteName || "Planting site"} · ${group === PICKER_GROUP.NOT_ELIGIBLE ? row.requirement : row.stage || row.status}`}</option>)}
+    </optgroup>;
+  });
+  // With a visit open, a report whose visits are listed is represented by those visits, not again as a pending row.
+  const listedVisitCohorts = new Set((page?.visits || []).map(visit => String(visit.cohortId || "")).filter(Boolean));
+  const pendingBesideVisits = pickerRows.filter(row => !listedVisitCohorts.has(String(row.cohort?.id || "")));
 
   const updateAssessment = (sampleId, field, value) => {
     const resolved = field === "condition" && value !== "Needs Rechecking";
@@ -321,6 +364,19 @@ export default function PermanentSampleMonitoringPage({ embedded = false, open: 
     } finally { operationBusy.current = false; setSaving(false); }
   };
 
+  // Continues after the last loaded readiness page. A failure keeps every loaded report and can be retried.
+  const loadMoreReadiness = async () => {
+    const cursor = readiness?.data?.nextCursor;
+    if (!cursor || readiness.more === "loading") return;
+    readinessEpoch.current += 1;
+    const epoch = readinessEpoch.current;
+    setReadiness(current => ({ ...current, more: "loading" }));
+    try {
+      const next = await loadReadiness(fetchReadinessPage, { cursor });
+      if (epoch === readinessEpoch.current) setReadiness(current => ({ data: mergeReadiness(current.data, next) }));
+    } catch { if (epoch === readinessEpoch.current) setReadiness(current => ({ ...current, more: "error" })); }
+  };
+
   const createVisit = async (cohort) => {
     if (!cohort?.cohortId || cohort.canCreateVisit !== true || !cohort.nextScheduledDueDate || operationBusy.current) return;
     operationBusy.current = true; setCreatingCohortId(cohort.cohortId); setError(""); setSavedNotice("");
@@ -330,11 +386,14 @@ export default function PermanentSampleMonitoringPage({ embedded = false, open: 
         body: JSON.stringify({ visitDate: cohort.nextScheduledDueDate }),
       });
       setPage(current => current ? { ...current, visits: [{ ...created, progress: { completed: 0, total: created.sampleAssessments?.length || 0, rechecking: 0 } }, ...(current.visits || [])] } : current);
+      // The started cohort stops being selectable at once; the refreshed answer then states its open visit.
+      setReadiness(current => current?.data ? { ...current, data: withoutEligibleCohort(current.data, cohort.cohortId) } : current);
+      void refreshReadiness({ keep: true });
       await showVisit(created.id);
       setSavedNotice(created.visitNumber ? `Visit ${created.visitNumber} opened from the authorized MENRO schedule.` : "Monitoring visit opened from the authorized MENRO schedule.");
     } catch (requestError) {
       setError(requestError.message || "The authorized monitoring visit could not be opened.");
-      try { setReadiness({ data: await api("/verified-sample-monitoring/readiness") }); } catch { /* retain the actionable error */ }
+      await refreshReadiness({ keep: true });
     } finally {
       operationBusy.current = false; setCreatingCohortId("");
     }
@@ -559,14 +618,47 @@ export default function PermanentSampleMonitoringPage({ embedded = false, open: 
   const completed = assessments.filter((assessment) => assessment.condition).length;
   // Only backend-authorized eligible cohorts are selectable. Blocked cohorts stay visible
   // in the readiness cards with their reasons, but cannot be mistaken for a valid choice.
-  const readinessRows = readiness?.data?.eligible || [];
+  const readinessRows = uniqueByReport(readiness?.data?.eligible);
   const selectedReadiness = readinessRows.find(row => row.cohortId === readinessCohortId) || null;
-  const readinessOption = row => `${row.reportNumber || "Verified planting report"} · ${row.siteName || "Planting site"} · ${row.canCreateVisit ? `Visit ${row.nextVisitNumber || ""} ready` : row.scheduleStatus ? scheduleStatusLabel(row.scheduleStatus) : "Setup pending"}`;
+  const readinessOption = row => `${row.reportNumber || "Verified planting report"} · ${row.siteName || "Planting site"} · ${row.canCreateVisit ? `${approvedVisitNote(row) ? `${approvedVisitNote(row)}, ` : ""}Visit ${row.nextVisitNumber || ""} ready` : row.scheduleStatus ? scheduleStatusLabel(row.scheduleStatus) : "Setup pending"}`;
   // Spec §6: under the first-visit workflow, Visit 1 itself registers the baseline and the 10% sample.
   // Legacy cohorts keep the sampling-plan and baseline wording.
   const readinessCohorts = readiness?.data?.cohorts || [];
   const firstVisitReadiness = readinessCohorts.some(row => row.registersBaseline === true);
   const legacyReadiness = !readinessCohorts.length || readinessCohorts.some(row => row.registersBaseline !== true);
+
+  const loadedCount = readinessCohorts.length;
+  const readinessMore = readiness?.data?.truncated && (readiness.data.nextCursor ? <div className="psm-readiness-more">
+    <p>{`${loadedCount} verified planting report${loadedCount === 1 ? " is" : "s are"} loaded. ${readiness.data.partial ? "Some could not be loaded." : "More are available."}`}</p>
+    {readiness.more === "error" && <p role="alert">More verified planting reports could not be loaded. Try again.</p>}
+    <button type="button" disabled={readiness.more === "loading"} onClick={loadMoreReadiness}>{readiness.more === "loading" ? "Loading…" : "Load more verified planting reports"}</button>
+  </div> : <p>{readiness.data.partial ? "Some verified planting reports could not be loaded. Refresh to try again." : "Only the first 25 planting reports are shown."}</p>);
+
+  const eligibleOptions = readinessRows.length > 0 && <optgroup label="Eligible Verified Planting Reports">
+    {readinessRows.map(row => <option key={row.cohortId} value={`ready:${row.cohortId}`}>{readinessOption(row)}</option>)}</optgroup>;
+  const startButton = cohort => userRole === "staff" && cohort.canCreateVisit === true && <button type="button" disabled={Boolean(creatingCohortId)} onClick={() => createVisit(cohort)}>
+    {creatingCohortId === cohort.cohortId ? "Opening visit…" : `Start Visit ${cohort.nextVisitNumber || ""}`}
+  </button>;
+  const readinessCard = cohort => <article key={cohort.cohortId} className="psm-readiness-site">
+    <h3>{readinessTitle(cohort)}</h3>
+    {cohort.nextVisitNumber && <p>{approvedVisitNote(cohort) && `${approvedVisitNote(cohort)}. `}Next visit: {cohort.nextVisitNumber}. Scheduled date: {cohort.nextScheduledDueDate || "Pending approved schedule"}. Status: {scheduleStatusLabel(cohort.scheduleStatus)}.</p>}
+    <ul>{readinessMessages(cohort.reasons).map(message => <li key={message}>{message}</li>)}</ul>
+    {startButton(cohort)}
+  </article>;
+  const gateNotices = readinessGateNotices(readiness?.data?.gates);
+  const readinessProgress = <>
+    {readiness?.loading && <p aria-live="polite">Checking visit readiness…</p>}
+    {readiness?.error && <p>{readiness.error}</p>}
+  </>;
+  // Beside listed visits: Staff keep access to eligible reports (inside the modal they are in the report selector).
+  const readinessBesideVisits = userRole === "staff" && <>
+    {readinessProgress}
+    {!embedded && readinessRows.length > 0 && <section className="psm-readiness" aria-labelledby="psm-eligible-title">
+      <h2 id="psm-eligible-title">Eligible Verified Planting Reports</h2>
+      {readinessRows.map(readinessCard)}
+    </section>}
+    {readinessMore}
+  </>;
 
   const visitList = (
     <>
@@ -574,6 +666,7 @@ export default function PermanentSampleMonitoringPage({ embedded = false, open: 
       {loading && <p role="status">Loading monitoring visits…</p>}
       {page && !loading && (
         <>
+          {gateNotices.length > 0 && <ul className="psm-note" aria-label="Monitoring availability">{gateNotices.map(notice => <li key={notice}>{notice}</li>)}</ul>}
           {selectPrompt && page.visits?.length > 0 && <p role="status">Select the monitoring visit to continue.</p>}
           {page.visits?.length ? (
             <ul>
@@ -596,20 +689,12 @@ export default function PermanentSampleMonitoringPage({ embedded = false, open: 
               {firstVisitReadiness && <p>Start Visit 1 for an eligible verified planting report. Visit 1 registers the baseline and the automatic 10% permanent sample; its Tree IDs remain provisional until Admin approval.</p>}
               {legacyReadiness && <p>A visit appears here after MENRO creates it from an approved sampling plan and baseline.</p>}
               {!embedded && <Link to={`/${userRole}/survival-monitoring`}>Back to Survival Monitoring</Link>}
-              {readiness && <section className="psm-readiness" aria-labelledby="psm-readiness-title">
+              {readiness && page.firstPage && <section className="psm-readiness" aria-labelledby="psm-readiness-title">
                 <h2 id="psm-readiness-title">Why no monitoring visit is available</h2>
-                {readiness.loading && <p role="status">Checking visit readiness…</p>}
-                {readiness.error && <p>Visit readiness details could not be loaded. Refresh to try again.</p>}
+                {readinessProgress}
                 {readiness.data && !readiness.data.cohorts?.length && <p>No verified planting reports are ready for permanent-sample monitoring yet.</p>}
-                {(readiness.data?.cohorts || []).map(cohort => <article key={cohort.cohortId} className="psm-readiness-site">
-                  <h3>{readinessTitle(cohort)}</h3>
-                  {cohort.nextVisitNumber && <p>Next visit: {cohort.nextVisitNumber}. Scheduled date: {cohort.nextScheduledDueDate || "Pending approved schedule"}. Status: {scheduleStatusLabel(cohort.scheduleStatus)}.</p>}
-                  <ul>{readinessMessages(cohort.reasons).map(message => <li key={message}>{message}</li>)}</ul>
-                  {userRole === "staff" && cohort.canCreateVisit === true && <button type="button" disabled={Boolean(creatingCohortId)} onClick={() => createVisit(cohort)}>
-                    {creatingCohortId === cohort.cohortId ? "Opening visit…" : `Start Visit ${cohort.nextVisitNumber || ""}`}
-                  </button>}
-                </article>)}
-                {readiness.data?.truncated && <p>Only the first 25 planting reports are shown.</p>}
+                {(readiness.data?.cohorts || []).map(readinessCard)}
+                {readinessMore}
               </section>}
             </>
           )}
@@ -618,6 +703,7 @@ export default function PermanentSampleMonitoringPage({ embedded = false, open: 
               Next page
             </button>
           )}
+          {(page.visits?.length > 0 || !page.firstPage) && readinessBesideVisits}
         </>
       )}
     </>
@@ -631,14 +717,14 @@ export default function PermanentSampleMonitoringPage({ embedded = false, open: 
         <div className="psm-body psm-picker">
           <label className="psm-field">Verified Planting Report *<select value={selectedReadiness ? `ready:${selectedReadiness.cohortId}` : pendingReport ? `pending:${pendingReport.plantingReportId}` : ""}
             disabled={!pendingReports.length && !readinessRows.length} aria-describedby="psm-shell-reason"
-            onChange={event => { const value = event.target.value; if (value.startsWith("ready:")) { setPendingReportId(""); setReadinessCohortId(value.slice(6)); }
-              else if (value.startsWith("pending:")) { setReadinessCohortId(""); choosePendingReport(value.slice(8)); } else { setPendingReportId(""); setReadinessCohortId(""); } }}>
+            onChange={event => { const value = event.target.value; if (value.startsWith("ready:")) chooseEligible(value.slice(6));
+              else if (value.startsWith("pending:")) choosePendingReport(value.slice(8)); else { setPendingReportId(""); setReadinessCohortId(""); } }}>
             <option value="">No authorized visit selected</option>
-            {readinessRows.length > 0 && <optgroup label="Eligible Verified Planting Reports">{readinessRows.map(row => <option key={row.cohortId} value={`ready:${row.cohortId}`}>{readinessOption(row)}</option>)}</optgroup>}
-            {pendingOptions}</select></label>
+            {eligibleOptions}
+            {pendingOptions(pickerRows)}</select></label>
           {visitList}
           {pendingReport && <section className="psm-readiness psm-setup-pending" aria-labelledby="psm-setup-pending-title" data-setup-pending-report={pendingReport.plantingReportId}>
-            <h2 id="psm-setup-pending-title">Setup pending: {pendingReport.reportNumber || "Verified planting report"}</h2>
+            <h2 id="psm-setup-pending-title">{pendingNotEligible ? "Not eligible for permanent-sample monitoring" : "Setup pending"}: {pendingReport.reportNumber || "Verified planting report"}</h2>
             <dl className="psm-info">
               <div><dt>Monitoring requirement</dt><dd>{pendingReport.requirement}</dd></div>
               <div><dt>Monitoring status</dt><dd>{pendingReport.stage || pendingReport.status}</dd></div>
@@ -646,10 +732,13 @@ export default function PermanentSampleMonitoringPage({ embedded = false, open: 
               {pendingReport.setup && <div><dt>Setup progress</dt><dd>{pendingReport.setup}</dd></div>}
             </dl>
             {pendingReport.notes.map(note => <p key={note}>{note}</p>)}
+            {pendingReport.pickerGroup === PICKER_GROUP.SETUP_PENDING && !pendingReport.cohort && readiness?.data?.gates?.pilotRestricted === true && <p>Permanent-sample monitoring is currently limited to a MENRO pilot, so setup for reports outside the pilot is not shown here.</p>}
+            {pendingReport.hasMonitoringRecord && <p>This report already has a monitoring record in Monitoring Records.</p>}
             {pendingReport.reasons.length > 0 && <ul aria-label="Why this report has no monitoring visit">{pendingReport.reasons.map(reason => <li key={reason}>{reason}</li>)}</ul>}
           </section>}
           {selectedReadiness && <section className="psm-readiness psm-setup-pending" aria-labelledby="psm-readiness-selection-title">
             <h2 id="psm-readiness-selection-title">{readinessTitle(selectedReadiness)}</h2>
+            {approvedVisitNote(selectedReadiness) && <p>{`${approvedVisitNote(selectedReadiness)}.`}</p>}
             <dl className="psm-info"><div><dt>Next visit</dt><dd>{selectedReadiness.nextVisitNumber || "Pending"}</dd></div>
               <div><dt>Scheduled date</dt><dd>{selectedReadiness.nextScheduledDueDate || "Pending approved schedule"}</dd></div>
               <div><dt>Schedule status</dt><dd>{scheduleStatusLabel(selectedReadiness.scheduleStatus)}</dd></div></dl>
@@ -662,7 +751,10 @@ export default function PermanentSampleMonitoringPage({ embedded = false, open: 
           {reviewVisitId ? <p className="psm-note" id="psm-shell-reason">{error && !loading
             ? "The selected monitoring visit could not be opened. Close this form and try again from Monitoring Records."
             : "Loading the selected monitoring visit…"}</p>
-          : <p className="psm-note" id="psm-shell-reason">{pendingReport ? "This verified planting report has no authorized monitoring visit yet. Assessment editing, evidence, Save Draft and Submit stay unavailable until MENRO creates one."
+          : <p className="psm-note" id="psm-shell-reason">{pendingNotEligible ? "This verified planting report is not eligible for permanent-sample monitoring. Assessment editing, evidence, Save Draft and Submit are unavailable for it."
+            : pendingReport?.cohort ? "No new monitoring visit can be started for this verified planting report right now. Assessment editing, evidence, Save Draft and Submit stay unavailable until a visit is authorized."
+            : pendingReport ? "This verified planting report has no authorized monitoring visit yet. Assessment editing, evidence, Save Draft and Submit stay unavailable until MENRO creates one."
+            : selectedReadiness?.canCreateVisit === true ? "Nothing is editable until the authorized visit for this report is started with Start Visit above."
             : page?.visits?.length ? "Select an authorized monitoring visit above to load its registered sample trees."
             : userRole === "admin" ? "No monitoring visit is available for review. MENRO Staff record and submit visits; Admin reviews, approves or returns them."
             : "Assessment editing, evidence submission, Save Draft and Submit are unavailable until MENRO creates an authorized monitoring visit."}</p>}
@@ -672,9 +764,9 @@ export default function PermanentSampleMonitoringPage({ embedded = false, open: 
         <footer className="psm-footer">{userRole !== "admin" && <><button type="button" disabled aria-describedby="psm-shell-reason">Save Draft</button><button type="button" className="psm-primary" disabled aria-describedby="psm-shell-reason">Submit Monitoring Visit</button></>}</footer>
         </> : <>
         <div className="psm-body">
-        <label className="psm-field">Verified Planting Report *<select value={detail.id} disabled={saving || Boolean(unconfirmed)} onChange={event => { const value = event.target.value; if (value.startsWith("pending:")) choosePendingReport(value.slice(8)); else open(value); }}>{(page?.visits || [detail]).map(row => <option key={row.id} value={row.id}>{row.id === detail.id && detail.visitContext?.reportNumber
+        <label className="psm-field">Verified Planting Report *<select value={detail.id} disabled={saving || Boolean(unconfirmed)} onChange={event => { const value = event.target.value; if (value.startsWith("pending:")) choosePendingReport(value.slice(8)); else if (value.startsWith("ready:")) chooseEligible(value.slice(6)); else open(value); }}>{(page?.visits || [detail]).map(row => <option key={row.id} value={row.id}>{row.id === detail.id && detail.visitContext?.reportNumber
           ? `${detail.visitContext.reportNumber} · ${detail.visitContext.siteName || "Planting site"} · Visit ${row.visitDate || ""}`
-          : `Visit ${row.visitDate || row.id} · ${statusLabel(row.status)}`}</option>)}{pendingOptions}</select></label>
+          : `Visit ${row.visitDate || row.id} · ${statusLabel(row.status)}`}</option>)}{embedded && userRole === "staff" && eligibleOptions}{pendingOptions(pendingBesideVisits)}</select></label>
         {error && <p role="alert" className="psm-error">{error}</p>}
         {savedNotice && <p role="status" className="psm-success">{savedNotice}</p>}
         {unconfirmed ? <button type="button" disabled={saving} onClick={reconcile}>Check saved outcome</button> : <button type="button" disabled={saving || reviewing} onClick={() => open(detail.id, true)}>Reload visit</button>}

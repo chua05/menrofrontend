@@ -5,6 +5,7 @@ import { Camera, Image, MapPin, Trees, ChevronLeft, ChevronRight, CircleCheck, A
 import PlantingLocationMap from "./PlantingLocationMap";
 import { MORTALITY_CAUSES, SAMPLE_CONDITIONS, sampleProgress } from "../utils/sampleMonitoringForm";
 import { scheduleStatusLabel } from "../utils/sampleVisitReadiness";
+import { TRACKING_STATUS } from "../utils/monitoringTracking";
 const shown = value => value === null || value === undefined || value === "" ? "Not available" : String(value);
 const definitions = { Healthy: "Living tree in good condition.", Damaged: "Living tree with observed damage.", Dead: "Confirmed dead by field assessment.", "Needs Rechecking": "Condition is not yet confirmed." };
 const PENDING_SCHEDULE = "Pending Official Schedule";
@@ -46,7 +47,11 @@ export function PermanentSampleVisitShell({ describedBy, report = null, firstVis
   const context = report?.context || null;
   const cohort = report?.cohort || null;
   const noCohort = report ? (report.policy === "STAFF_SPOT_CHECK" ? "Not applicable (Staff spot-check)"
-    : report.policy === "PENDING_MENRO_POLICY" ? "Pending MENRO monitoring policy" : "No permanent-sample cohort") : none;
+    : report.policy === "PENDING_MENRO_POLICY" ? "Pending MENRO monitoring policy"
+    : report.policy === "NONE" ? "Not applicable (no monitoring required)"
+    : report.policy === "LEGACY" ? "Not applicable (historical aggregate monitoring)"
+    : report.policy === "UNKNOWN" ? "Not available (unrecognized monitoring method)"
+    : [TRACKING_STATUS.CHECKING, TRACKING_STATUS.UNAVAILABLE].includes(report.status) ? "Not available" : "No permanent-sample cohort") : none;
   const statusText = value => PLAN_STATUS[value] || value;
   const values = context ? {
     "Planting Report ID": context.plantingReportNumber || report.reportNumber || context.plantingReportId,
@@ -64,13 +69,13 @@ export function PermanentSampleVisitShell({ describedBy, report = null, firstVis
     "Planting Report ID": report.reportNumber || "Not available",
     "Planting Site Name": report.siteName || "Not available",
     "Barangay / Address": report.barangay || "Not available",
-    "Verification Status": "Verified",
+    "Verification Status": report.verificationStatus || "Verified",
     "Planting Date": report.plantingDate || "Not available",
     "Verified Planted Quantity": report.verifiedPlantedQuantity ?? "Not available",
     "Automatic 10% Sample Target": cohort ? cohort.approvedSampleTarget ?? "Not approved" : noCohort,
     "Sample Registration Status": cohort ? cohort.samplingPlanStatus : noCohort,
     "Registered Sample Tree Count": cohort ? cohort.registeredSampleTrees ?? "None registered" : noCohort,
-    "Species and Quantities": "Shown after an authorized visit is created",
+    "Species and Quantities": report.species || "Shown after an authorized visit is created",
     "Monitoring Visit Number": "Not assigned",
     "Current Monitoring Status": report.stage || report.status,
   } : { "Monitoring Visit Number": "Not assigned" };
