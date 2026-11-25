@@ -1534,6 +1534,75 @@ test("Participant preserves the backend's existing generic HTTP 500 message and 
   fixture.check();
 });
 
+// Mobile participant submission: the user always knows whether the report is saved, unconfirmed, not saved or rejected.
+const savedRow = { id: "event_event-1", reportType: "parent", eventId: "event-1", submissions: [{ id: "submission-new", contributorId: "test-participant", staffReviewStatus: "Pending Review" }] };
+async function mobileReport(page, overrides) {
+  await page.setViewportSize({ width: 390, height: 844 });
+  const fixture = await participantEvidenceForm(page, overrides);
+  await reportIdentity(page); await takeFixturePhoto(page);
+  return { fixture, submit: page.locator('form button[type="submit"]'), posts: () => fixture.calls.filter(call => call.key === "POST /api/planting-reports").length };
+}
+async function expectKept(page) {
+  await expect(page.locator("#planting-submittedByName")).toHaveValue("Fixture requester");
+  await expect(page.locator("#planting-submittedByContactNumber")).toHaveValue("09123456789");
+  await expect(cameraEvidence(page)).toHaveCount(1);
+}
+
+test("mobile participant: an upload cut off partway is Not saved, keeps everything, and the retry succeeds", async ({ page }) => {
+  // The first submission uploads 40% and then loses its connection; later ones are real.
+  await page.addInitScript(() => {
+    const Native = window.XMLHttpRequest; let cut = false;
+    window.XMLHttpRequest = class extends Native {
+      open(method, url, ...rest) { this.__cut = method === "POST" && /\/planting-reports$/.test(url) && !cut; return super.open(method, url, ...rest); }
+      send(body) {
+        if (!this.__cut) return super.send(body);
+        cut = true; window.__photosInFirstAttempt = body.getAll("photos").length;
+        setTimeout(() => { this.upload.onprogress({ lengthComputable: true, loaded: 40, total: 100 }); setTimeout(() => this.onerror(), 600); }, 20);
+      }
+    };
+  });
+  const { fixture, submit, posts } = await mobileReport(page, { "POST /api/planting-reports": route => route.fulfill({ status: 201, json: { success: true, message: "Awaiting MENRO Staff verification.", data: { id: "saved" } } }) });
+  await submit.click();
+  await expect(page.getByRole("status").filter({ hasText: "Uploading photos… 40%. Keep this page open." })).toBeVisible();
+  await expect(page.getByRole("status").filter({ hasText: "Not saved. Your entries and photos are kept" })).toBeInViewport();
+  await expect(page.locator(".pr-submit-alert")).toContainText("your report was not saved");
+  await expect(submit).toHaveText(/Submit Report/); await expect(submit).toBeEnabled();
+  await expect(page.getByText(/may already be saved|Check Submission/)).toHaveCount(0);
+  await expectKept(page); expect(await page.evaluate(() => window.__photosInFirstAttempt)).toBe(1); expect(posts()).toBe(0);
+  await submit.click();
+  await expect(page.getByRole("status").filter({ hasText: "Planting Report Submitted Successfully" })).toContainText("Status: Pending Review.");
+  expect(posts()).toBe(1);
+  fixture.check();
+});
+
+test("mobile participant: still processing is Not yet confirmed, never replaced, and Check Submission finds the saved report", async ({ page }) => {
+  let saved = false;
+  const { fixture, submit, posts } = await mobileReport(page, {
+    "POST /api/planting-reports": route => route.fulfill({ status: 202, json: { success: false, code: "EVIDENCE_IN_PROGRESS", message: "Evidence processing is still in progress." } }),
+    "GET /api/planting-reports/my-reports": route => route.fulfill({ json: { success: true, data: saved ? [savedRow] : [] } }) });
+  await submit.click();
+  await expect(page.locator(".pr-submit-alert")).toContainText("still processing the photos");
+  await expect(page.getByRole("status").filter({ hasText: "Not yet confirmed by MENRO." })).toBeVisible();
+  await expect(submit).toHaveText(/Check Submission/); await expect(page.locator("#planting-submittedByName")).toBeDisabled(); await expectKept(page);
+  // Checked too early: the same submission is sent again under the same key and is still processing.
+  await submit.click();
+  await expect.poll(posts).toBe(2); await expect(submit).toHaveText(/Check Submission/); await expectKept(page);
+  saved = true; await submit.click();
+  await expect(page.getByText(/Your planting report was saved and is awaiting MENRO Staff verification/).first()).toBeVisible();
+  expect(posts()).toBe(2);
+  fixture.check();
+});
+
+test("mobile participant: a refusal is shown as Not accepted with MENRO's reason and an editable form", async ({ page }) => {
+  const { fixture, submit, posts } = await mobileReport(page, { "POST /api/planting-reports": route => route.fulfill({ status: 400, json: { success: false, message: "Duplicate planting image detected." } }) });
+  await submit.click();
+  await expect(page.locator(".pr-submit-alert")).toContainText("Duplicate planting image detected.");
+  await expect(page.getByRole("status").filter({ hasText: "Not accepted by MENRO." })).toBeVisible();
+  await expect(submit).toHaveText(/Submit Report/); await expect(page.locator("#planting-submittedByName")).toBeEnabled(); await expectKept(page);
+  expect(posts()).toBe(1);
+  fixture.check();
+});
+
 test("Staff saved report retries evidence after a lost upload response without checking or reposting quantities", async ({ page }) => {
   let attempts = 0; const keys = [];
   const fixture = await staffForm(page, { "PUT /api/planting-reports/official/submission-fixture/photos": (route, request) => {
