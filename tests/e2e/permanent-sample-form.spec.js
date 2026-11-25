@@ -29,6 +29,7 @@ async function setup(page,{error=0,errorBody=null,uploadError=null,timeout=false
    if(method==="POST"){const body=r.request().postDataJSON();state.questions.push(body);return json(r,{id:"question-fixture",...body,status:"OPEN",history:[]});}
    return json(r,{requests:[],nextCursor:null});
   }
+  if(path==="/verified-sample-monitoring/readiness")return json(r,{cohorts:[],eligible:[],notEligible:[],truncated:false,nextCursor:null,gates:{writesPaused:false,firstVisitBaselineEnabled:true,scheduleEnabled:true,pilotRestricted:false}});
   if(path==="/verified-sample-monitoring/visits")return json(r,{visits:[{...state.visit,progress:{completed:1,total:2,rechecking:0}},...(multiple?[{...state.visit,id:visitId+"-SECOND",progress:{completed:1,total:2,rechecking:0}}]:[])],nextCursor:null});
   if(path===`/verified-sample-monitoring/visits/${visitId}`){
    if(method==="PUT"){
@@ -275,7 +276,7 @@ test("carried-forward Dead is labelled and locked while retaining its original r
 
 test("history table and marker navigation use authoritative backend rows",async({page})=>{
  await setup(page);const table=page.getByRole("table",{name:"Monitoring Visit History"});await expect(table).toContainText("Approved");await expect(table).toContainText("Scheduled — Not yet available");
- await page.locator(".psm-tree-marker-draft").click({force:true});await expect(active(page)).toContainText("TREE-B");
+ const marker=page.getByTitle("Open TREE-B assessment");await expect(marker).toBeVisible();await marker.focus();await marker.press("Enter");await expect(active(page)).toContainText("TREE-B");
 });
 
 test("sampling plan status in Section 1 is shown as a readable label, never a raw backend code", async ({ page }) => {

@@ -33,6 +33,20 @@ test("nested policy definitions and compatible flat snapshots keep the stored me
   assert.equal(monitoringPolicyOf({ reportingPolicy: { definition: { monitoring: "OTHER" } } }), "UNKNOWN");
 });
 
+test("a pending reporting policy status blocks permanent-sample monitoring regardless of its stored method", () => {
+  for (const policy of [
+    { policyStatus: "PENDING_MENRO_POLICY", monitoring: "PERMANENT_SAMPLE" },
+    { policyStatus: "PENDING_MENRO_POLICY", definition: { monitoring: "PERMANENT_SAMPLE" } },
+  ]) {
+    const stored = { id: "report-1", reportingPolicy: policy };
+    assert.equal(monitoringPolicyOf(stored), "PENDING_MENRO_POLICY");
+    assert.equal(needsCohortLookup(stored, true), false);
+    const status = describeMonitoringStatus({ report: stored, ...ready() });
+    assert.equal(status.requirement, "Pending MENRO Policy Decision");
+    assert.deepEqual(status.rows, []);
+  }
+});
+
 test("conflicting policy snapshots stay unknown without mutating them or looking up a cohort", () => {
   for (const [flat, nested] of [["NONE", "STAFF_SPOT_CHECK"], ["STAFF_SPOT_CHECK", "PERMANENT_SAMPLE"], ["PERMANENT_SAMPLE", "NONE"]]) {
     const stored = { id: "report-1", reportingPolicy: { monitoring: flat, definition: { monitoring: nested } } };
@@ -78,6 +92,9 @@ test("a missing cohort is reported as missing; no cohort ID is computed or inven
   const status = describeMonitoringStatus({ report: report("PERMANENT_SAMPLE"), ...ready({ cohorts: [{ ...cohort, source: { plantingReportId: "other" } }] }) });
   assert.deepEqual(status.rows, []);
   assert.match(status.notes.join(" "), /No permanent-sample cohort exists for this report/);
+  // The cause is unknown here, and nobody is told to repeat the verification.
+  assert.match(status.notes.join(" "), /MENRO must complete/);
+  assert.doesNotMatch(status.notes.join(" "), /verification workflow|re-?approve|re-?create/i);
   assert.doesNotMatch(JSON.stringify(status), /VPC-/);
 });
 

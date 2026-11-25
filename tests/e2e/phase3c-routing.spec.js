@@ -380,12 +380,12 @@ test("readiness reports when no verified planting cohort exists yet", async ({ p
   await expect(page.getByText("No verified planting reports are ready for permanent-sample monitoring yet.", { exact: true })).toBeVisible();
 });
 
-test("readiness is not requested when authorized visits exist", async ({ page }) => {
+test("readiness is requested when authorized visits exist, but the empty-list explanation stays hidden", async ({ page }) => {
   await isolate(page);
   await page.goto("/staff/permanent-sample-monitoring?role=staff");
   await expect(page.getByRole("button", { name: "VPMV-STAFF-001", exact: true })).toBeVisible();
   await expect(page.getByRole("region", { name: "Why no monitoring visit is available" })).toHaveCount(0);
-  expect(await page.evaluate(() => window.__PHASE3C_READINESS_CALLS__ || 0)).toBe(0);
+  await expect.poll(() => page.evaluate(() => window.__PHASE3C_READINESS_CALLS__ || 0)).toBe(1);
 });
 
 for (const viewport of [{ width: 1366, height: 800 }, { width: 768, height: 1024 }, { width: 390, height: 844 }, { width: 320, height: 640 }]) {
@@ -494,7 +494,8 @@ test("status filtering and cursor pagination use only backend-provided cursors",
 
   await page.getByRole("combobox", { name: "Status" }).selectOption("RETURNED");
   await expect(page.getByRole("button", { name: "VPMV-STAFF-002" })).toBeVisible();
-  await expect.poll(() => page.evaluate(() => window.__PHASE3C_REQUESTS__.at(-1))).toBe("/verified-sample-monitoring/visits?status=RETURNED");
+  // Readiness follows every first-page load; the last visit-list request is the filtered one.
+  await expect.poll(() => page.evaluate(() => window.__PHASE3C_REQUESTS__.filter(path => path.startsWith("/verified-sample-monitoring/visits")).at(-1))).toBe("/verified-sample-monitoring/visits?status=RETURNED");
 });
 
 test("existing visit selection loads authoritative sample details", async ({ page }) => {
@@ -1190,18 +1191,20 @@ test("Staff Monitor Planted Trees offers verified reports under Setup Pending wi
   await expect(dialog).toBeVisible();
   const select = dialog.getByRole("combobox", { name: "Verified Planting Report *", exact: true });
   await expect(select).toBeEnabled();
-  await expect(select.locator('optgroup[label="Setup Pending"] option')).toHaveCount(4);
-  await expect(select.locator('option[value="pending:report-tracked"], option[value="pending:report-pending"]')).toHaveCount(0);
+  await expect(select.locator('optgroup[label="Setup Pending"] option')).toHaveCount(2);
+  await expect(select.locator('optgroup[label="Not Eligible for Permanent-Sample Monitoring"] option')).toHaveCount(3);
+  await expect(select.locator('option[value="pending:report-tracked"]')).toHaveCount(1);
+  await expect(select.locator('option[value="pending:report-pending"]')).toHaveCount(0);
   await select.selectOption("pending:report-spot");
   const pending = dialog.locator('section[data-setup-pending-report="report-spot"]');
-  await expect(pending.getByRole("heading", { name: "Setup pending: RPT-2026-020" })).toBeVisible();
+  await expect(pending.getByRole("heading", { name: "Not eligible for permanent-sample monitoring: RPT-2026-020" })).toBeVisible();
   await expect(pending).toContainText("Staff Spot-Check");
   await expect(pending).toContainText("Awaiting MENRO spot-check procedure");
   await expect(pending).toContainText(/Monitoring workflow pending MENRO policy/);
   await expect(shellValue(dialog, "Planting Report ID")).toHaveText("RPT-2026-020");
   await expect(shellValue(dialog, "Verification Status")).toHaveText("Verified");
   await expect(shellValue(dialog, "Sample Registration Status")).toHaveText("Not applicable (Staff spot-check)");
-  await expect(select).toHaveAccessibleDescription(/no authorized monitoring visit yet/);
+  await expect(select).toHaveAccessibleDescription(/not eligible for permanent-sample monitoring/);
   for (const name of ["Take Photo", "Upload Existing Photo", "Verify Photo Location", "Save Draft", "Submit Monitoring Visit"])
     await expect(dialog.getByRole("button", { name, exact: true })).toBeDisabled();
   await expect(dialog.getByLabel("Date Monitored *", { exact: true })).toBeDisabled();
@@ -1221,7 +1224,7 @@ test("real visit selection still works beside Setup Pending reports", async ({ p
   const dialog = page.getByRole("dialog", { name: "Monitor Planted Trees" });
   const select = dialog.getByRole("combobox", { name: "Verified Planting Report *", exact: true });
   await expect(select).toHaveValue("VPMV-RETURNED-001");
-  await expect(select.locator('optgroup[label="Setup Pending"] option')).toHaveCount(4);
+  await expect(select.locator('optgroup[label="Setup Pending"] option')).toHaveCount(2);
   await select.selectOption("pending:report-perm");
   await expect(dialog.locator('section[data-setup-pending-report="report-perm"]')).toContainText("Monitoring setup pending");
   await expect(dialog.getByRole("button", { name: "Save Draft", exact: true })).toBeDisabled();
@@ -1468,4 +1471,416 @@ test("Monitoring Records table keeps the phone layout without page-level horizon
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   expect(await page.locator(".sm-table-wrap").evaluate(node => getComputedStyle(node).overflowX)).toBe("auto");
   await expect(page.getByRole("navigation", { name: "Monitoring records pages" })).toBeVisible();
+});
+
+// ---- Survival monitoring eligibility: readiness paging, visibility, gates and messages ----
+const readinessRow = (id, extra = {}) => ({ cohortId: id, reportNumber: `PR-${id}`, siteName: `Site ${id}`, canCreateVisit: false, nextVisitNumber: 1,
+  nextScheduledDueDate: "2026-11-25", scheduleStatus: "DUE", reasons: [{ code: "VISIT_SCHEDULING_POLICY_PENDING" }], context: { plantingReportId: `report-of-${id}` }, ...extra });
+const readinessPage = (cohorts, extra = {}) => ({ cohorts, eligible: cohorts.filter(row => row.canCreateVisit), notEligible: cohorts.filter(row => !row.canCreateVisit),
+  truncated: Boolean(extra.nextCursor), nextCursor: null, visitCreationAvailable: cohorts.some(row => row.canCreateVisit), schedulingPolicyStatus: "ACTIVE", ...extra });
+// `pages`: { "<cursor>": data | { status, code } }; unknown cursors fail the request.
+const readinessPages = (page, pages) => page.addInitScript(value => {
+  window.__PHASE3C_READINESS_CURSORS__ = [];
+  window.__PHASE3C_READINESS_HANDLER__ = cursor => { window.__PHASE3C_READINESS_CURSORS__.push(cursor); const entry = value[cursor]; return entry?.cohorts ? { data: entry } : entry || { status: 500 }; };
+}, pages);
+const loadMore = scope => scope.getByRole("button", { name: "Load more verified planting reports", exact: true });
+
+test("readiness follows the backend cursor and Load more reaches every planting report beyond the bounded pages", async ({ page }) => {
+  await isolate(page);
+  await readinessPages(page, Object.fromEntries(Array.from({ length: 9 }, (_, index) => [index ? `c${index}` : "",
+    readinessPage([readinessRow(`c${index + 1}`)], index < 8 ? { nextCursor: `c${index + 1}` } : {})])));
+  await page.goto("/staff/permanent-sample-monitoring?role=staff&fixture=empty");
+  const panel = page.getByRole("region", { name: "Why no monitoring visit is available" });
+  await expect(panel.getByRole("heading", { name: "PR-c8 · Site c8" })).toBeVisible();
+  await expect(panel.locator(".psm-readiness-site")).toHaveCount(8);
+  await expect(panel.getByText("8 verified planting reports are loaded. More are available.", { exact: true })).toBeVisible();
+  await loadMore(panel).click();
+  await expect(panel.locator(".psm-readiness-site")).toHaveCount(9);
+  await expect(loadMore(panel)).toHaveCount(0);
+  expect(await page.evaluate(() => window.__PHASE3C_READINESS_CURSORS__)).toEqual(["", "c1", "c2", "c3", "c4", "c5", "c6", "c7", "c8"]);
+});
+
+test("a failed later readiness page keeps the loaded reports, says some are missing and can be continued", async ({ page }) => {
+  await isolate(page);
+  await readinessPages(page, { "": readinessPage([readinessRow("c1")], { nextCursor: "c1" }), c1: { status: 500 } });
+  await page.goto("/staff/permanent-sample-monitoring?role=staff&fixture=empty");
+  const panel = page.getByRole("region", { name: "Why no monitoring visit is available" });
+  await expect(panel.getByRole("heading", { name: "PR-c1 · Site c1" })).toBeVisible();
+  await expect(panel.getByText("1 verified planting report is loaded. Some could not be loaded.", { exact: true })).toBeVisible();
+  await loadMore(panel).click();
+  await expect(panel.getByRole("alert")).toHaveText("More verified planting reports could not be loaded. Try again.");
+  await expect(panel.locator(".psm-readiness-site")).toHaveCount(1);
+  await page.evaluate(data => { window.__PHASE3C_READINESS_HANDLER__ = () => ({ data }); }, readinessPage([readinessRow("c2")]));
+  await loadMore(panel).click();
+  await expect(panel.locator(".psm-readiness-site")).toHaveCount(2);
+  await expect(panel.getByRole("alert")).toHaveCount(0);
+  await expect(loadMore(panel)).toHaveCount(0);
+});
+
+test("a backend without readiness cursors keeps the previous truncation text and one request", async ({ page }) => {
+  await isolate(page);
+  await readinessPages(page, { "": { cohorts: [readinessRow("c1")], truncated: true, visitCreationAvailable: false } });
+  await page.goto("/staff/permanent-sample-monitoring?role=staff&fixture=empty");
+  const panel = page.getByRole("region", { name: "Why no monitoring visit is available" });
+  await expect(panel.getByText("Only the first 25 planting reports are shown.", { exact: true })).toBeVisible();
+  await expect(loadMore(page)).toHaveCount(0);
+  expect(await page.evaluate(() => window.__PHASE3C_READINESS_CURSORS__)).toEqual([""]);
+});
+
+test("Monitoring Records tracking rows read every readiness page", async ({ page }) => {
+  await readinessPages(page, { "": readinessPage([readinessRow("c1")], { nextCursor: "c1" }), c1: readinessPage([readinessRow("cohort-pending")]) });
+  await openTracking(page, "admin", { fixture: "admin-records" });
+  await expect(trackingRow(page, "report-cohort")).toContainText("Sampling plan: Draft · Baseline: Not Started · Visit: Not ready");
+  await expect(page.locator(".sm-records-header").getByRole("alert")).toHaveCount(0);
+});
+
+test("Monitoring Records keep the loaded readiness and offer the existing retry when a later page fails", async ({ page }) => {
+  await readinessPages(page, { "": readinessPage([readinessRow("cohort-pending")], { nextCursor: "c1" }), c1: { status: 500 } });
+  await openTracking(page, "admin", { fixture: "admin-records" });
+  await expect(trackingRow(page, "report-cohort")).toContainText("Visit: Not ready");
+  await expect(page.locator(".sm-records-header").getByRole("alert")).toContainText("Monitoring setup status for verified planting reports could not be loaded");
+});
+
+// Staff form visibility: MON-tracked reports (the normal state after verification) appear once, in a truthful group.
+const monLifecycle = (id, reportId, reportNumber) => ({ id, monitoringNumber: id, plantingReportId: reportId, plantingReportNumber: reportNumber, siteName: `${reportNumber} Site`,
+  barangay: "Bical", species: "Narra", condition: "Not Yet Monitored", status: "Awaiting Monitoring Setup", history: [] });
+const nestedPolicy = method => ({ reportingPolicy: { definition: { monitoring: method } } });
+async function openTracked(page, { reports, cohorts = [], readiness = null, fixture = "empty", tracked = reports.map(report => report.id), role = "staff" } = {}) {
+  await isolate(page);
+  await page.addInitScript(rows => { window.__PHASE3C_COHORTS__ = rows; }, cohorts);
+  if (readiness) await readinessPages(page, readiness);
+  await mockLegacyMonitoringApi(page, { monitoring: reports.filter(report => tracked.includes(report.id)).map((report, index) => monLifecycle(`MON-2026-10${index}`, report.id, report.reportNumber)), plantingReports: reports });
+  const writes = [];
+  page.on("request", request => { if (request.method() !== "GET" && request.url().includes("/api/")) writes.push(request.url()); });
+  await page.goto(`/${role}/survival-monitoring?role=${role}&fixture=${fixture}`);
+  await expect(page.getByRole("heading", { name: "Survival Monitoring" })).toBeVisible();
+  return writes;
+}
+const openForm = async page => {
+  await page.locator(".sm-header-actions").getByRole("button", { name: "Monitor Planted Trees", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "Monitor Planted Trees" });
+  await expect(dialog).toBeVisible();
+  return { dialog, select: dialog.getByRole("combobox", { name: "Verified Planting Report *", exact: true }) };
+};
+const optionsIn = (select, label) => select.locator(`optgroup[label="${label}"] option`);
+const NOT_ELIGIBLE = "Not Eligible for Permanent-Sample Monitoring", ELIGIBLE = "Eligible Verified Planting Reports";
+async function expectNothingRecordable(dialog, startScope = dialog) {
+  await expect(startScope.getByRole("button", { name: /^Start Visit/ })).toHaveCount(0);
+  for (const name of ["Take Photo", "Upload Existing Photo", "Verify Photo Location", "Save Draft", "Submit Monitoring Visit"])
+    await expect(dialog.getByRole("button", { name, exact: true })).toBeDisabled();
+  await expect(dialog.getByLabel("Date Monitored *", { exact: true })).toBeDisabled();
+  await expect(dialog.getByLabel("Height (cm)", { exact: true })).toBeDisabled();
+}
+
+test("a MON-tracked verified report without a cohort is visible in the Staff form with its reason; the records table does not change", async ({ page }) => {
+  const report = verifiedReport("report-mon", "RPT-2026-201", null, { ...nestedPolicy("PERMANENT_SAMPLE"), species: "Narra", verificationStatus: "Approved" });
+  const writes = await openTracked(page, { reports: [report], readiness: { "": readinessPage([]) } });
+  await expect(page.locator(".sm-records-card table.sm-table").getByText("MON-2026-100")).toBeVisible();
+  const footer = page.locator(".sm-table-footer"), before = await footer.innerText();
+  expect(await page.evaluate(() => [window.__PHASE3C_COHORT_CALLS__ || 0, window.__PHASE3C_READINESS_CALLS__ || 0])).toEqual([0, 0]);
+  const { dialog, select } = await openForm(page);
+  await expect(optionsIn(select, "Setup Pending")).toHaveText(["RPT-2026-201 · RPT-2026-201 Site · Monitoring setup pending"]);
+  await select.selectOption("pending:report-mon");
+  const pending = dialog.locator('section[data-setup-pending-report="report-mon"]');
+  await expect(pending.getByRole("heading", { name: "Setup pending: RPT-2026-201" })).toBeVisible();
+  await expect(pending).toContainText("Monitoring setup has not been created for this report yet. MENRO must complete it");
+  await expect(pending).toContainText("This report already has a monitoring record");
+  await expect(pending).not.toContainText(/re-?approve|re-?create|resubmit|Awaiting Monitoring Submission/i);
+  for (const [label, value] of [["Planting Report ID", "RPT-2026-201"], ["Planting Site Name", "RPT-2026-201 Site"], ["Planting Date", "2026-10-01"], ["Verification Status", "Approved"],
+    ["Verified Planted Quantity", "20"], ["Species and Quantities", "Narra"], ["Sample Registration Status", "No permanent-sample cohort"]]) await expect(shellValue(dialog, label)).toHaveText(value);
+  await expectNothingRecordable(dialog);
+  // Table rows, counts and KPIs are exactly as before the form was opened.
+  expect(await footer.innerText()).toBe(before);
+  await expect(page.locator("tr[data-tracking-row]")).toHaveCount(0);
+  expect(await page.evaluate(() => window.__PHASE3C_COHORT_CALLS__)).toBe(1);
+  expect(writes).toEqual([]);
+});
+
+test("spot-check, no-monitoring, undecided, conflicting and legacy reports are Not Eligible with no Start, Save or Submit", async ({ page }) => {
+  const reports = [verifiedReport("r-spot", "RPT-SPOT", "STAFF_SPOT_CHECK"), verifiedReport("r-none", "RPT-NONE", null, nestedPolicy("NONE")),
+    verifiedReport("r-undecided", "RPT-UNDECIDED", "PENDING_MENRO_POLICY"),
+    verifiedReport("r-statuspending", "RPT-STATUS-PENDING", null, { reportingPolicy: { policyStatus: "PENDING_MENRO_POLICY", definition: { monitoring: "PERMANENT_SAMPLE" } } }),
+    verifiedReport("r-conflict", "RPT-CONFLICT", null, { reportingPolicy: { monitoring: "PERMANENT_SAMPLE", definition: { monitoring: "NONE" } } }),
+    verifiedReport("r-legacy", "RPT-LEGACY", null)];
+  const writes = await openTracked(page, { reports, tracked: ["r-spot", "r-legacy"], readiness: { "": readinessPage([]) } });
+  const { dialog, select } = await openForm(page);
+  await expect(optionsIn(select, NOT_ELIGIBLE)).toHaveText(["RPT-SPOT · RPT-SPOT Site · Staff Spot-Check", "RPT-NONE · RPT-NONE Site · No Monitoring Required",
+    "RPT-UNDECIDED · RPT-UNDECIDED Site · Pending MENRO Policy Decision", "RPT-STATUS-PENDING · RPT-STATUS-PENDING Site · Pending MENRO Policy Decision",
+    "RPT-CONFLICT · RPT-CONFLICT Site · Unrecognized Monitoring Method", "RPT-LEGACY · RPT-LEGACY Site · Historical Aggregate Monitoring"]);
+  await expect(select.locator('optgroup[label="Setup Pending"], optgroup[label="Eligible Verified Planting Reports"]')).toHaveCount(0);
+  for (const [id, text] of [["r-spot", /spot-check procedures, schedule and evidence rules have not been approved/], ["r-none", /does not require monitoring/], ["r-undecided", /neither waived nor authorized/], ["r-statuspending", /neither waived nor authorized/],
+    ["r-conflict", /not recognized/], ["r-legacy", /historical aggregate monitoring workflow/]]) {
+    await select.selectOption(`pending:${id}`);
+    const section = dialog.locator(`section[data-setup-pending-report="${id}"]`);
+    await expect(section.getByRole("heading", { name: /^Not eligible for permanent-sample monitoring: / })).toBeVisible();
+    await expect(section).toContainText(text);
+    await expect(select).toHaveAccessibleDescription(/not eligible for permanent-sample monitoring/);
+    await expectNothingRecordable(dialog);
+  }
+  await expect(shellValue(dialog, "Sample Registration Status")).toHaveText("Not applicable (historical aggregate monitoring)");
+  await select.selectOption("pending:r-none");
+  await expect(shellValue(dialog, "Sample Registration Status")).toHaveText("Not applicable (no monitoring required)");
+  expect(writes).toEqual([]);
+});
+
+test("each MON-tracked report has exactly one dropdown entry: eligible, blocked and without a cohort", async ({ page }) => {
+  const reports = ["a", "b", "c"].map(id => verifiedReport(`r-${id}`, `RPT-${id}`, "PERMANENT_SAMPLE"));
+  const cohorts = ["a", "b"].map(id => ({ id: `VPC-${id}`, verifiedPlantedQuantity: 18, source: { plantingReportId: `r-${id}` }, samplingPlan: { status: "APPROVED" }, baseline: { approvalStatus: "APPROVED" } }));
+  await openTracked(page, { reports, cohorts, readiness: { "": readinessPage([
+    readinessRow("VPC-a", { canCreateVisit: true, reasons: [], context: { plantingReportId: "r-a" } }),
+    readinessRow("VPC-b", { nextVisitNumber: 2, reasons: [{ code: "VISIT_NOT_OPEN", openingDate: "2027-01-01" }], context: { plantingReportId: "r-b" } })]) } });
+  const { dialog, select } = await openForm(page);
+  await expect(optionsIn(select, ELIGIBLE)).toHaveCount(1);
+  await expect(optionsIn(select, ELIGIBLE)).toHaveAttribute("value", "ready:VPC-a");
+  await expect(optionsIn(select, "Setup Pending")).toHaveCount(2);
+  const values = await select.locator("optgroup option").evaluateAll(options => options.map(option => option.value));
+  expect(values.sort()).toEqual(["pending:r-b", "pending:r-c", "ready:VPC-a"]);
+  await select.selectOption("pending:r-b");
+  const section = dialog.locator('section[data-setup-pending-report="r-b"]');
+  await expect(section).toContainText("Visit 1 approved");
+  await expect(section.getByRole("list", { name: "Why this report has no monitoring visit" })).toContainText("The next monitoring visit opens on 2027-01-01.");
+  // Only the other, eligible report keeps its own Start Visit card.
+  await expectNothingRecordable(dialog, section);
+});
+
+test("a failed cohort lookup for the Staff form is explicit and never reported as a missing setup or as a table problem", async ({ page }) => {
+  await openTracked(page, { reports: [verifiedReport("r-a", "RPT-a", "PERMANENT_SAMPLE")], fixture: "tracking-cohort-error" });
+  const { dialog, select } = await openForm(page);
+  // This fixture lists one visit page; the picker stays available beside it.
+  await select.selectOption("pending:r-a");
+  const section = dialog.locator('section[data-setup-pending-report="r-a"]');
+  await expect(section).toContainText("Permanent-sample status could not be loaded");
+  await expect(section).not.toContainText("has not been created");
+  await expect(shellValue(dialog, "Sample Registration Status")).toHaveText("Not available");
+  await expect(page.locator(".sm-records-header").getByRole("alert")).toHaveCount(0);
+});
+
+test("Admin and Participants get no dropdown projection and no extra requests from it", async ({ page }) => {
+  const reports = [verifiedReport("r-a", "RPT-a", "PERMANENT_SAMPLE")];
+  await openTracked(page, { reports, role: "admin", fixture: "admin-records" });
+  await expect(page.getByText("MON-2026-100")).toBeVisible();
+  expect(await page.evaluate(() => [window.__PHASE3C_COHORT_CALLS__ || 0, window.__PHASE3C_READINESS_CALLS__ || 0])).toEqual([0, 0]);
+  await page.goto("/participant/my-planting-reports?role=participant");
+  await expect(page).toHaveURL(/\/participant\/my-planting-reports/);
+  expect(await page.evaluate(() => [window.__PHASE3C_COHORT_CALLS__ || 0, window.__PHASE3C_READINESS_CALLS__ || 0])).toEqual([0, 0]);
+});
+
+// Readiness loads with or without listed visits; late or failed answers never disturb the form.
+const startable = (id, extra = {}) => readinessRow(id, { canCreateVisit: true, reasons: [], ...extra });
+// Holds readiness call N until the test releases it: releaseReadiness(page, N, answer).
+const heldReadiness = (page, held, others) => page.addInitScript(({ held, others }) => {
+  window.__PHASE3C_RELEASE__ = {};
+  window.__PHASE3C_READINESS_HANDLER__ = (cursor, call) => held.includes(call) ? new Promise(resolve => { window.__PHASE3C_RELEASE__[call] = resolve; }) : { data: others };
+}, { held, others });
+const releaseReadiness = async (page, call, answer) => {
+  await page.waitForFunction(number => Boolean(window.__PHASE3C_RELEASE__?.[number]), call);
+  await page.evaluate(([number, value]) => window.__PHASE3C_RELEASE__[number](value), [call, answer]);
+};
+
+test("an eligible report is selectable and startable while another visit already exists, exactly once", async ({ page }) => {
+  const reports = [verifiedReport("r-a", "RPT-a", "PERMANENT_SAMPLE")];
+  const cohorts = [{ id: "VPC-a", verifiedPlantedQuantity: 18, source: { plantingReportId: "r-a" } }];
+  await openTracked(page, { reports, cohorts, fixture: "returned", readiness: { "": readinessPage([startable("VPC-a", { context: { plantingReportId: "r-a" } })]) } });
+  const { dialog, select } = await openForm(page);
+  // The one returned visit opens directly and stays openable; the eligible report is offered beside it.
+  await expect(select).toHaveValue("VPMV-RETURNED-001");
+  await expect(optionsIn(select, ELIGIBLE)).toHaveText(["PR-VPC-a · Site VPC-a · Visit 1 ready"]);
+  await expect(optionsIn(select, "Setup Pending")).toHaveCount(0);
+  await select.selectOption("ready:VPC-a");
+  await expect(select).toHaveValue("ready:VPC-a");
+  await expect(dialog.locator(".psm-visit-choice")).toHaveCount(1);
+  await expect(dialog.getByRole("region", { name: "Why no monitoring visit is available" })).toHaveCount(0);
+  await expect(dialog.getByRole("button", { name: "Save Draft", exact: true })).toBeDisabled();
+  await dialog.locator(".psm-visit-choice").click();
+  await expect(select).toHaveValue("VPMV-RETURNED-001");
+  await select.selectOption("ready:VPC-a");
+  await page.evaluate(data => { window.__PHASE3C_READINESS_HANDLER__ = () => ({ data }); }, readinessPage([readinessRow("VPC-a", { reasons: [{ code: "OPEN_VISIT_EXISTS", visitStatus: "DRAFT", ownedByYou: true }], context: { plantingReportId: "r-a" } })]));
+  await dialog.getByRole("button", { name: "Start Visit 1", exact: true }).click();
+  await expect(select).toHaveValue("VPMV-CREATED-001");
+  expect(await page.evaluate(() => window.__PHASE3C_CREATED__)).toEqual([{ cohortId: "VPC-a", payload: { visitDate: "2026-11-25" } }]);
+  // The started report is represented by its visit only: no second Start, no pending duplicate.
+  await expect(select.locator('option[value="ready:VPC-a"], option[value="pending:r-a"]')).toHaveCount(0);
+});
+
+test("leaving a visit for an eligible report keeps unsaved edits unless Staff discard them", async ({ page }) => {
+  await openTracked(page, { reports: [], fixture: "returned", readiness: { "": readinessPage([startable("VPC-a")]) } });
+  const { dialog, select } = await openForm(page);
+  await expect(optionsIn(select, ELIGIBLE)).toHaveCount(1);
+  await dialog.getByRole("radio", { name: "Damaged", exact: true }).check();
+  page.once("dialog", confirm => confirm.dismiss());
+  await select.selectOption("ready:VPC-a");
+  await expect(select).toHaveValue("VPMV-RETURNED-001");
+  await expect(dialog.getByRole("radio", { name: "Damaged", exact: true })).toBeChecked();
+  page.once("dialog", confirm => confirm.accept());
+  await select.selectOption("ready:VPC-a");
+  await expect(dialog.getByRole("button", { name: "Start Visit 1", exact: true })).toBeEnabled();
+});
+
+test("choosing a pending report after an eligible one replaces the selection", async ({ page }) => {
+  const reports = [verifiedReport("r-b", "RPT-b", "PERMANENT_SAMPLE")];
+  await openTracked(page, { reports, fixture: "returned", readiness: { "": readinessPage([startable("VPC-a")]) } });
+  const { dialog, select } = await openForm(page);
+  await select.selectOption("ready:VPC-a");
+  await dialog.locator(".psm-visit-choice").click();
+  await expect(select).toHaveValue("VPMV-RETURNED-001");
+  await select.selectOption("pending:r-b");
+  await expect(select).toHaveValue("pending:r-b");
+  await expectNothingRecordable(dialog);
+});
+
+test("the visit list does not wait for readiness, and the next visit page keeps the eligible reports", async ({ page }) => {
+  await isolate(page);
+  await heldReadiness(page, [1], readinessPage([]));
+  await page.goto("/staff/permanent-sample-monitoring?role=staff");
+  await expect(page.getByRole("button", { name: "VPMV-STAFF-001", exact: true })).toBeVisible();
+  await expect(page.getByText("Checking visit readiness…", { exact: true })).toBeVisible();
+  await releaseReadiness(page, 1, { data: readinessPage([startable("VPC-a")]) });
+  const eligible = page.getByRole("region", { name: ELIGIBLE });
+  await expect(eligible.getByRole("button", { name: "Start Visit 1", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Next page" }).click();
+  await expect(page.getByRole("button", { name: "VPMV-STAFF-002", exact: true })).toBeVisible();
+  await expect(eligible.getByRole("button", { name: "Start Visit 1", exact: true })).toBeVisible();
+  expect(await page.evaluate(() => window.__PHASE3C_READINESS_CALLS__)).toBe(1);
+});
+
+test("a readiness answer from before a reload is ignored", async ({ page }) => {
+  await isolate(page);
+  await heldReadiness(page, [1], readinessPage([startable("VPC-new")]));
+  await page.goto("/staff/permanent-sample-monitoring?role=staff");
+  await expect(page.getByRole("button", { name: "VPMV-STAFF-001", exact: true })).toBeVisible();
+  await page.getByLabel("Status").selectOption("RETURNED");
+  const eligible = page.getByRole("region", { name: ELIGIBLE });
+  await expect(eligible.getByRole("heading", { name: "PR-VPC-new · Site VPC-new" })).toBeVisible();
+  await releaseReadiness(page, 1, { data: readinessPage([startable("VPC-stale")]) });
+  await page.waitForTimeout(200);
+  await expect(eligible.getByRole("heading", { name: "PR-VPC-new · Site VPC-new" })).toBeVisible();
+  await expect(page.getByText(/VPC-stale/)).toHaveCount(0);
+});
+
+for (const outcome of ["success", "failure"]) test(`a readiness ${outcome} that arrives after the form is closed never reopens it or touches the open visit`, async ({ page }) => {
+  await isolate(page);
+  await heldReadiness(page, [1], readinessPage([]));
+  await mockLegacyMonitoringApi(page, { monitoring: [], plantingReports: [] });
+  await page.goto("/staff/survival-monitoring?role=staff&fixture=returned");
+  await expect(page.getByRole("heading", { name: "Survival Monitoring" })).toBeVisible();
+  const { dialog, select } = await openForm(page);
+  await dialog.getByRole("radio", { name: "Damaged", exact: true }).check();
+  await dialog.getByRole("button", { name: "Close monitoring visit" }).click();
+  await expect(dialog).toHaveCount(0);
+  await releaseReadiness(page, 1, outcome === "success" ? { data: readinessPage([startable("VPC-a")]) } : { status: 500 });
+  await page.waitForTimeout(200);
+  await expect(dialog).toHaveCount(0);
+  await openForm(page);
+  await expect(select).toHaveValue("VPMV-RETURNED-001");
+  await expect(dialog.getByRole("radio", { name: "Damaged", exact: true })).toBeChecked();
+  await expect(optionsIn(select, ELIGIBLE)).toHaveCount(outcome === "success" ? 1 : 0);
+});
+
+test("a readiness failure beside existing visits is stated and the visits stay openable", async ({ page }) => {
+  await isolate(page);
+  await readinessPages(page, { "": { status: 500 } });
+  await page.goto("/staff/permanent-sample-monitoring?role=staff");
+  await expect(page.getByText("Visit readiness details could not be loaded. Refresh to try again.", { exact: true })).toBeVisible();
+  await expect(page.getByRole("region", { name: "Why no monitoring visit is available" })).toHaveCount(0);
+  await page.getByRole("button", { name: "VPMV-STAFF-001", exact: true }).click();
+  await expect(page.getByRole("dialog", { name: "Monitor Planted Trees" })).toBeVisible();
+});
+
+test("Load more works beside existing visits", async ({ page }) => {
+  await isolate(page);
+  await readinessPages(page, Object.fromEntries(Array.from({ length: 9 }, (_, index) => [index ? `c${index}` : "",
+    readinessPage([index === 8 ? startable("c9") : readinessRow(`c${index + 1}`)], index < 8 ? { nextCursor: `c${index + 1}` } : {})])));
+  await page.goto("/staff/permanent-sample-monitoring?role=staff");
+  await expect(page.getByRole("region", { name: ELIGIBLE })).toHaveCount(0);
+  await loadMore(page).click();
+  await expect(page.getByRole("region", { name: ELIGIBLE }).getByRole("heading", { name: "PR-c9 · Site c9" })).toBeVisible();
+  await expect(loadMore(page)).toHaveCount(0);
+});
+
+test("Admin stays read-only: no eligible reports to start, and opening a review requests no readiness", async ({ page }) => {
+  await isolate(page);
+  await readinessPages(page, { "": readinessPage([startable("VPC-a")]) });
+  const writes = [];
+  page.on("request", request => { if (request.method() !== "GET" && request.url().includes("/api/")) writes.push(request.url()); });
+  await page.goto("/admin/permanent-sample-monitoring?role=admin&fixture=review-pending");
+  await expect(page.getByRole("button", { name: "VPMV-PENDING-REVIEW-001", exact: true })).toBeVisible();
+  await expect(page.getByRole("region", { name: ELIGIBLE })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /^Start Visit/ })).toHaveCount(0);
+  await mockLegacyMonitoringApi(page, { monitoring: [], plantingReports: [] });
+  await page.goto("/admin/survival-monitoring?role=admin&fixture=admin-records");
+  await page.locator(".sm-records-card").getByRole("button", { name: /View/ }).first().click();
+  const dialog = page.getByRole("dialog", { name: "Review Monitoring Visit" });
+  await expect(dialog).toBeVisible();
+  await expect(dialog.getByRole("radiogroup", { name: "Tree Condition *" })).toBeVisible();
+  await expect(dialog.locator('optgroup[label="Eligible Verified Planting Reports"], option[value^="ready:"], option[value^="pending:"]')).toHaveCount(0);
+  await expect(dialog.getByRole("button", { name: /^Start Visit|Save Draft|Submit Monitoring Visit/ })).toHaveCount(0);
+  expect(await page.evaluate(() => window.__PHASE3C_READINESS_CALLS__ || 0)).toBe(0);
+  expect(writes).toEqual([]);
+});
+
+// Global gates and truthful messages.
+const gatesOn = { writesPaused: false, firstVisitBaselineEnabled: true, scheduleEnabled: true, pilotRestricted: false };
+const gateNotices = scope => scope.getByRole("list", { name: "Monitoring availability" }).getByRole("listitem");
+for (const [name, gates, text] of [
+  ["paused", { writesPaused: true }, /paused permanent-sample monitoring changes/],
+  ["first-visit off", { firstVisitBaselineEnabled: false }, /First-visit baseline registration is turned off/],
+  ["schedule off", { scheduleEnabled: false }, /monitoring visit schedule is turned off/],
+]) test(`${name}: one global notice is shown even with zero cohorts`, async ({ page }) => {
+  const writes = await openTracked(page, { reports: [], readiness: { "": readinessPage([], { gates: { ...gatesOn, ...gates } }) } });
+  const { dialog } = await openForm(page);
+  await expect(gateNotices(dialog)).toHaveText([text]);
+  await expect(dialog.getByText("No verified planting reports are ready for permanent-sample monitoring yet.", { exact: true })).toBeVisible();
+  await expectNothingRecordable(dialog);
+  expect(writes).toEqual([]);
+});
+
+test("gate notices also appear beside existing visits; open gates and older backends show none", async ({ page }) => {
+  await isolate(page);
+  await readinessPages(page, { "": readinessPage([], { gates: { writesPaused: true, firstVisitBaselineEnabled: false, scheduleEnabled: false, pilotRestricted: false } }) });
+  await page.goto("/staff/permanent-sample-monitoring?role=staff");
+  await expect(page.getByRole("button", { name: "VPMV-STAFF-001", exact: true })).toBeVisible();
+  await expect(gateNotices(page)).toHaveCount(3);
+  await page.addInitScript(gates => { window.__PHASE3C_READINESS_HANDLER__ = () => ({ data: { cohorts: [], truncated: false, gates } }); }, gatesOn);
+  await page.goto("/staff/permanent-sample-monitoring?role=staff&fixture=empty");
+  await expect(page.getByText("No verified planting reports are ready for permanent-sample monitoring yet.", { exact: true })).toBeVisible();
+  await expect(gateNotices(page)).toHaveCount(0);
+});
+
+test("readiness cards list report problems, the first-visit block and approved history in plain words", async ({ page }) => {
+  await isolate(page);
+  await readinessPages(page, { "": readinessPage([
+    readinessRow("c1", { reasons: [{ code: "REPORT_NOT_ELIGIBLE", problems: ["POLICY_CONFLICT", "SITE_UNAVAILABLE"] }] }),
+    readinessRow("c2", { reasons: [{ code: "SAMPLING_PLAN_NOT_APPROVED", planStatus: "NOT_STARTED" }, { code: "BASELINE_NOT_APPROVED", baselineStatus: "NOT_STARTED" }, { code: "FIRST_VISIT_POLICY_DISABLED" }] }),
+    readinessRow("c3", { nextVisitNumber: 2, scheduleStatus: "SCHEDULED", reasons: [{ code: "VISIT_NOT_OPEN", openingDate: "2027-01-01" }] }),
+  ]) });
+  await page.goto("/staff/permanent-sample-monitoring?role=staff&fixture=empty");
+  const cards = page.getByRole("region", { name: "Why no monitoring visit is available" }).locator(".psm-readiness-site");
+  await expect(cards.nth(0).getByRole("listitem")).toHaveText(["This planting report has conflicting monitoring methods on record. MENRO must resolve them before monitoring can start.", "The planting site is missing or inactive."]);
+  await expect(cards.nth(1).getByRole("listitem")).toHaveText(["MENRO has not enabled first-visit baseline registration, so Visit 1 cannot be started for this report yet."]);
+  await expect(cards.nth(2)).toContainText("Visit 1 approved. Next visit: 2.");
+  await expect(cards.nth(0)).not.toContainText("approved. Next visit");
+});
+
+test("an eligible second visit states the approved first visit in the selector and the selection", async ({ page }) => {
+  await openTracked(page, { reports: [], readiness: { "": readinessPage([startable("VPC-a", { nextVisitNumber: 2 })]) } });
+  const { dialog, select } = await openForm(page);
+  await expect(optionsIn(select, ELIGIBLE)).toHaveText(["PR-VPC-a · Site VPC-a · Visit 1 approved, Visit 2 ready"]);
+  await select.selectOption("ready:VPC-a");
+  await expect(dialog.getByRole("region", { name: "PR-VPC-a · Site VPC-a" })).toContainText("Visit 1 approved");
+});
+
+test("a disabled readiness feature is named instead of a generic failure", async ({ page }) => {
+  await isolate(page);
+  await readinessPages(page, { "": { status: 409, code: "COHORT_WORKFLOW_DISABLED" } });
+  await page.goto("/staff/permanent-sample-monitoring?role=staff&fixture=empty");
+  await expect(page.getByRole("region", { name: "Why no monitoring visit is available" })).toContainText("Permanent sample tree monitoring is not enabled on the MENRO server yet.");
+});
+
+test("during a pilot a missing cohort is qualified, because setup outside the pilot is not listed", async ({ page }) => {
+  await openTracked(page, { reports: [verifiedReport("r-a", "RPT-a", "PERMANENT_SAMPLE")], readiness: { "": readinessPage([], { gates: { ...gatesOn, pilotRestricted: true } }) } });
+  const { dialog, select } = await openForm(page);
+  await select.selectOption("pending:r-a");
+  const section = dialog.locator('section[data-setup-pending-report="r-a"]');
+  await expect(section).toContainText("limited to a MENRO pilot");
+  await expect(gateNotices(dialog)).toHaveCount(0);
 });

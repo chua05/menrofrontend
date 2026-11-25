@@ -19,6 +19,11 @@ export const MONITORING_POLICY = Object.freeze({
 export function monitoringPolicyOf(report = {}) {
   const policy = report?.reportingPolicy;
   if (!policy) return MONITORING_POLICY.LEGACY;
+  // The backend treats this snapshot status as authoritative even when a method was copied into the
+  // same snapshot. Do not project setup or offer cohort readiness until MENRO has decided the policy.
+  if (String(policy.policyStatus || "").trim() === MONITORING_POLICY.PENDING_MENRO_POLICY) {
+    return MONITORING_POLICY.PENDING_MENRO_POLICY;
+  }
   // Current snapshots store the method under definition; retain older flat snapshots.
   // Conflicting stored methods require review, never a guessed exemption or workflow.
   const flat = String(policy.monitoring || "").trim();
@@ -105,7 +110,7 @@ export function describeMonitoringStatus({ report, cohortEnabled, cohortState = 
   const cohort = (Array.isArray(cohorts) ? cohorts : []).find(row => reportId && String(row?.source?.plantingReportId || "") === reportId);
   if (!cohort) {
     if (policy === MONITORING_POLICY.PERMANENT_SAMPLE) {
-      result.notes.push("No permanent-sample cohort exists for this report. Monitoring cannot start until one is created through the approved verification workflow.");
+      result.notes.push("No permanent-sample cohort exists for this report. Monitoring setup has not been created for it yet, and MENRO must complete the setup before monitoring can start.");
     }
     return result;
   }

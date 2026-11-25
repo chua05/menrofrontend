@@ -4,7 +4,7 @@
 // submits anything: a tracking row is not a monitoring record, carries no observation and is never counted
 // in monitoring analytics. Stored monitoring policies are shown as-is and never converted.
 import { MONITORING_POLICY, describeMonitoringStatus, monitoringPolicyOf } from "./monitoringStatus.js";
-import { readinessStatusLabel } from "./sampleVisitReadiness.js";
+import { approvedVisitNote, readinessMessages, readinessStatusLabel } from "./sampleVisitReadiness.js";
 import { formatDisplayId } from "./displayId.js";
 
 // Headline monitoring stage of a tracking row (user-facing), mapped only from stored policy, cohort and readiness.
@@ -41,7 +41,19 @@ export const TRACKING_STATUS = Object.freeze({
   UNAVAILABLE: "Monitoring setup status unavailable",
   NOT_AVAILABLE: "Permanent-sample monitoring not available",
   UNKNOWN: "Monitoring requirement not recognized",
+  // Staff form dropdown only (includeTracked).
+  NO_MONITORING: "Monitoring not required",
+  LEGACY_TRACKED: "Monitored through historical aggregate records",
 });
+
+// Staff form dropdown groups for verified reports that have no startable visit.
+export const PICKER_GROUP = Object.freeze({ SETUP_PENDING: "Setup Pending", NOT_ELIGIBLE: "Not Eligible for Permanent-Sample Monitoring" });
+const samplingMethod = (policy) => policy === MONITORING_POLICY.PERMANENT_SAMPLE || policy === MONITORING_POLICY.LEGACY;
+const speciesText = (report, cohort) => {
+  const rows = Array.isArray(cohort?.source?.species) ? cohort.source.species : [];
+  const names = rows.map((row) => (typeof row?.species === "string" ? row.species.trim() : "")).filter(Boolean);
+  return names.join(", ") || (typeof report?.species === "string" ? report.species.trim() : "");
+};
 
 export const reportIdOf = (report) => String(report?.id || report?.reportId || "");
 // The stored planting report number is authoritative (it also names the report in the visit picker, the row's
@@ -75,9 +87,11 @@ function verifiedQuantity(report, cohort) {
  * @param {Array} [input.cohorts]
  * @param {"idle"|"loading"|"error"|"ready"} input.readinessState
  * @param {object} [input.readiness]
+ * @param {boolean} [input.includeTracked] Staff form dropdown projection: also returns MON-tracked reports and
+ *   reports that need no monitoring, once each, with their dropdown group. Never used for the records table or counts.
  */
 export function deriveTrackingRows({ reports = [], lifecycles = [], visitCohortIds = new Set(), cohortEnabled = false,
-  cohortState = "idle", cohorts = [], readinessState = "idle", readiness = null, sites = [], today = todayInManila() } = {}) {
+  cohortState = "idle", cohorts = [], readinessState = "idle", readiness = null, sites = [], today = todayInManila(), includeTracked = false } = {}) {
   const siteById = new Map((Array.isArray(sites) ? sites : []).map((site) => [String(site?.id || site?.siteId || ""), site]).filter(([id]) => id));
   // A report that already has an actual monitoring lifecycle (archived or not) is represented by it.
   const tracked = new Set((Array.isArray(lifecycles) ? lifecycles : []).map((record) => String(record?.plantingReportId || "")).filter(Boolean));
@@ -85,20 +99,22 @@ export function deriveTrackingRows({ reports = [], lifecycles = [], visitCohortI
   const seen = new Set();
   for (const report of Array.isArray(reports) ? reports : []) {
     const reportId = reportIdOf(report);
-    if (!reportId || seen.has(reportId) || tracked.has(reportId) || !isVerifiedPlantingReport(report)) continue;
+    if (!reportId || seen.has(reportId) || !includeTracked && tracked.has(reportId) || !isVerifiedPlantingReport(report)) continue;
     seen.add(reportId);
     const policy = monitoringPolicyOf(report);
     // The approved purpose policy requires no monitoring for this report.
-    if (policy === MONITORING_POLICY.NONE) continue;
-    const cohort = cohortState === "ready" ? cohortFor(reportId, cohorts) : null;
-    if (cohort && visitCohortIds.has(String(cohort.id))) continue;
+    if (policy === MONITORING_POLICY.NONE && !includeTracked) continue;
+    // In the dropdown a report whose method is not permanent-sample never shows sampling values.
+    const cohort = cohortState === "ready" && (!includeTracked || samplingMethod(policy)) ? cohortFor(reportId, cohorts) : null;
+    if (!includeTracked && cohort && visitCohortIds.has(String(cohort.id))) continue;
     const described = describeMonitoringStatus({ report, cohortEnabled, cohortState, cohorts, readinessState, readiness });
     const readinessEntry = cohort && readinessState === "ready"
       ? (readiness?.cohorts || []).find((row) => String(row?.cohortId || "") === String(cohort.id)) || null : null;
 
     let status;
-    let setup = "";
-    if (policy === MONITORING_POLICY.STAFF_SPOT_CHECK) status = TRACKING_STATUS.SPOT_CHECK;
+    let setup = "", setupSummary = "";
+    if (policy === MONITORING_POLICY.NONE) status = TRACKING_STATUS.NO_MONITORING;
+    else if (policy === MONITORING_POLICY.STAFF_SPOT_CHECK) status = TRACKING_STATUS.SPOT_CHECK;
     else if (policy === MONITORING_POLICY.PENDING_MENRO_POLICY) status = TRACKING_STATUS.POLICY_PENDING;
     else if (policy === MONITORING_POLICY.UNKNOWN) status = TRACKING_STATUS.UNKNOWN;
     else if (!cohortEnabled) status = policy === MONITORING_POLICY.LEGACY ? TRACKING_STATUS.LEGACY : TRACKING_STATUS.NOT_AVAILABLE;
@@ -108,7 +124,8 @@ export function deriveTrackingRows({ reports = [], lifecycles = [], visitCohortI
     else {
       const visit = readinessState === "error" || readinessState === "ready" && !readinessEntry ? "Unavailable"
         : readinessState !== "ready" ? "Checking" : readinessEntry.canCreateVisit === true ? "Ready" : "Not ready";
-      setup = `Sampling plan: ${readinessStatusLabel(cohort.samplingPlan?.status || "NOT_STARTED")} · Baseline: ${readinessStatusLabel(cohort.baseline?.approvalStatus || cohort.baselineStatus || "NOT_STARTED")} · Visit: ${visit}`;
+      setupSummary = `Sampling plan: ${readinessStatusLabel(cohort.samplingPlan?.status || "NOT_STARTED")} · Baseline: ${readinessStatusLabel(cohort.baseline?.approvalStatus || cohort.baselineStatus || "NOT_STARTED")}`;
+      setup = `${setupSummary} · Visit: ${visit}`;
       status = policy === MONITORING_POLICY.LEGACY ? TRACKING_STATUS.LEGACY
         : readinessEntry?.canCreateVisit === true ? TRACKING_STATUS.READY : TRACKING_STATUS.SETUP_IN_PROGRESS;
     }
@@ -132,6 +149,7 @@ export function deriveTrackingRows({ reports = [], lifecycles = [], visitCohortI
       startMonitoringDate = cohort.samplingReadiness.firstVisitDueDate;
     }
     const site = siteById.get(String(report.siteId || ""));
+    const pickerFields = includeTracked ? pickerProjection({ report, policy, cohort, status, setupSummary, hasMonitoringRecord: tracked.has(reportId) }) : {};
 
     rows.push({
       kind: "tracking",
@@ -157,9 +175,43 @@ export function deriveTrackingRows({ reports = [], lifecycles = [], visitCohortI
         approvedSampleTarget: cohort.samplingPlan?.status === "APPROVED" && Array.isArray(cohort.samplingPlan?.selectedSamples) ? cohort.samplingPlan.selectedSamples.length : null,
         registeredSampleTrees: Array.isArray(cohort.baseline?.sampleUnits) ? cohort.baseline.sampleUnits.length : null,
       } : null,
+      ...pickerFields,
     });
   }
   return rows;
+}
+
+// Dropdown-only fields. A missing cohort says only that MENRO must complete the setup (the cause is not known here),
+// and the table headline ("Awaiting Monitoring Submission") is not repeated: `stage` stays empty, `status` is shown.
+function pickerProjection({ report, policy, cohort, status, setupSummary, hasMonitoringRecord }) {
+  const eligibleMethod = policy === MONITORING_POLICY.PERMANENT_SAMPLE || policy === MONITORING_POLICY.LEGACY && Boolean(cohort);
+  const legacyStatus = cohort ? TRACKING_STATUS.SETUP_IN_PROGRESS : hasMonitoringRecord ? TRACKING_STATUS.LEGACY_TRACKED : TRACKING_STATUS.LEGACY;
+  return {
+    hasMonitoringRecord,
+    pickerGroup: eligibleMethod ? PICKER_GROUP.SETUP_PENDING : PICKER_GROUP.NOT_ELIGIBLE,
+    stage: "",
+    status: policy === MONITORING_POLICY.LEGACY ? legacyStatus : status,
+    setupSummary,
+    species: speciesText(report, cohort),
+    verificationStatus: String(report.verificationStatus || "").trim().toLowerCase() === "approved" ? "Approved" : "Verified",
+    ...(status === TRACKING_STATUS.SETUP_PENDING ? { notes: ["Monitoring setup has not been created for this report yet. MENRO must complete it before a monitoring visit can be recorded."] } : {}),
+  };
+}
+
+// Applies the Staff form's own readiness answer ({ loading } | { error } | { data }) to a dropdown row that has a cohort.
+export function withPickerReadiness(row, readiness) {
+  if (!row?.cohort || !row.setupSummary) return row;
+  const data = readiness?.data;
+  const entry = (Array.isArray(data?.cohorts) ? data.cohorts : []).find((item) => String(item?.cohortId || "") === String(row.cohort.id));
+  if (!entry) {
+    const unread = data?.truncated === true;
+    return { ...row, setup: `${row.setupSummary} · Visit: ${readiness?.error ? "Unavailable" : !data ? "Checking" : unread ? "Not loaded yet" : "Unavailable"}`,
+      reasons: unread ? ["Visit readiness for this report has not been loaded yet. Use Load more verified planting reports to check it."] : row.reasons };
+  }
+  const canCreate = entry.canCreateVisit === true;
+  return { ...row, setup: `${row.setupSummary} · Visit: ${canCreate ? "Ready" : "Not ready"}`,
+    status: canCreate ? TRACKING_STATUS.READY : approvedVisitNote(entry) || TRACKING_STATUS.SETUP_IN_PROGRESS,
+    reasons: canCreate ? [] : readinessMessages(entry.reasons) };
 }
 
 // Applies the existing Monitoring Records filters to a tracking row. Tracking rows have no species,

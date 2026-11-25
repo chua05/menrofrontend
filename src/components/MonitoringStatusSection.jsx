@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { FiActivity } from "react-icons/fi";
 import { authenticatedFetch } from "../services/authenticatedApi";
 import { describeMonitoringStatus, needsCohortLookup } from "../utils/monitoringStatus";
+import { loadReadiness, readinessPath } from "../utils/sampleReadinessLoader";
 
 async function readData(path) {
   const response = await authenticatedFetch(path);
@@ -26,7 +27,7 @@ export default function MonitoringStatusSection({ report, cohortEnabled }) {
     readData("/verified-planting-cohorts")
       .then(data => update({ cohortState: "ready", cohorts: Array.isArray(data) ? data : [] }))
       .catch(() => update({ cohortState: "error" }));
-    readData("/verified-sample-monitoring/readiness")
+    loadReadiness(cursor => readData(readinessPath(cursor)))
       .then(data => update({ readinessState: "ready", readiness: data }))
       .catch(() => update({ readinessState: "error" }));
     return () => { active = false; };

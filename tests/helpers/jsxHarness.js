@@ -58,7 +58,7 @@ export function installJsxHarness({ modules = {} } = {}) {
     "stub:react": `
       const h = globalThis.__jsxHarness;
       export function useRef(initial) { return h.slot(() => ({ current: initial })); }
-      export function useState(initial) { const cell = h.slot(() => ({ value: initial })); return [cell.value, next => { cell.value = next; }]; }
+      export function useState(initial) { const cell = h.slot(() => ({ value: initial })); return [cell.value, next => { cell.value = typeof next === "function" ? next(cell.value) : next; }]; }
       export function useEffect(effect, deps) { h.effect(effect, deps); }
     `,
     "stub:jsx": "export const jsx = (type, props) => ({ type, props }); export const jsxs = jsx; export const Fragment = 'fragment';",
