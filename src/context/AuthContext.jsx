@@ -6,6 +6,7 @@ import {
   resetMenroSessionRequest,
   verifyMenroSession,
 } from "../services/authenticatedApi";
+import { clearPendingSubmission } from "../utils/pendingPlantingSubmission";
 import { normalizeRole } from "../utils/roleRoutes";
 import { clearSuccessfulLogin } from "../utils/loginSuccess";
 
@@ -70,6 +71,7 @@ export function AuthProvider({ children }) {
   };
 
   const logout = async () => {
+    clearPendingSubmission("participant-draft", auth.currentUser?.uid);
     clearSuccessfulLogin();
     authRevision.current += 1;
     resetMenroSessionRequest();

@@ -52,6 +52,12 @@ export default function ModalDialog({ open = true, onClose, dismissible = true, 
       if (event.target !== event.currentTarget) return;
       event.preventDefault(); close();
     }}
+    onClose={event => {
+      // Android's Back button can close a dialog without asking first. Tell the owner, or reopen one that may not be dismissed.
+      if (event.target !== event.currentTarget || !open || !restoreRef.current || dialogRef.current?.open) return;
+      event.stopPropagation();
+      if (dismissible) close(); else dialogRef.current.showModal();
+    }}
     onClick={event => { if (event.target.closest("[data-modal-close]")) close(); }}
     onMouseDown={event => { if (event.target === event.currentTarget) close(); }}>
     {children}
