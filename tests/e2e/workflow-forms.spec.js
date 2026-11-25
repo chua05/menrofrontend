@@ -2357,3 +2357,31 @@ test("Staff My Requests page lists an encoded walk-in for the citizen and routes
   await expect(page).toHaveURL(/\/staff\/walk-in-requests\/new\?edit=walkin-returned/);
   expect(fixture.calls.filter(call => call.key.startsWith("PATCH"))).toHaveLength(0); fixture.check();
 });
+
+test("Participant report options come only from their own releases and a lost release clears only what depends on it", async ({ page }) => {
+  const sites = [site, { ...site, id: "site-2", siteName: "Other requester site", barangay: "Calomagon" }];
+  const event = (id, siteId, extra = {}) => ({ id, name: id, type: "Tree Planting", plantingSiteId: siteId, sourceRequestId: id.replace("event", "request"), date: "2026-01-01", startTime: "08:00", status: "Approved", recordStatus: "Authorized", ...extra });
+  const release = { id: "release-own", requestId: "request-own", eventId: "event-own", plantingSiteId: site.id, participantId: "test-participant", status: "Released", items: [{ inventoryId: "narra", species: "Narra", releasedQuantity: 5, quantity: 5 }] };
+  let releases = [release];
+  const fixture = await setup(page, {
+    "GET /api/sites": route => route.fulfill({ json: { success: true, data: sites } }),
+    "GET /api/events": route => route.fulfill({ json: { success: true, data: [event("event-own", site.id), event("event-shared", site.id), event("event-other", "site-2")] } }),
+    "GET /api/distributions/my-distributions": route => route.fulfill({ json: { success: true, data: releases } }),
+  });
+  await page.goto("/participant/my-planting-reports?role=participant");
+  await page.getByRole("button", { name: "Submit Planting Report", exact: true }).click();
+  const values = id => page.locator(`#planting-${id} option`).evaluateAll(options => options.map(option => option.value).filter(Boolean));
+  await expect.poll(() => values("barangay")).toEqual(["Bical"]);
+  await page.locator("#planting-barangay").selectOption("Bical"); expect(await values("siteId")).toEqual([site.id]);
+  await page.locator("#planting-siteId").selectOption(site.id); expect(await values("eventId")).toEqual(["event-own"]);
+  await page.locator("#planting-eventId").selectOption("event-own"); expect(await values("distributionId")).toEqual(["release-own"]);
+  await page.locator("#planting-distributionId").selectOption("release-own");
+  await page.locator("#planting-submittedByName").fill("Kept name");
+  // The release was reported elsewhere: the refreshed list no longer offers it.
+  releases = [];
+  await page.locator("button.pr-secondary-button", { hasText: "Reset" }).first().dispatchEvent("click");
+  await expect(page.locator("#planting-barangay")).toHaveValue(""); await expect(page.locator("#planting-siteId")).toHaveValue(""); await expect(page.locator("#planting-distributionId")).toHaveValue("");
+  await expect(page.locator("#planting-submittedByName")).toHaveValue("Kept name"); expect(await values("barangay")).toEqual([]);
+  await expect(page.getByText("You have no released seedlings awaiting a planting report.")).toBeVisible();
+  fixture.check();
+});

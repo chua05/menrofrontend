@@ -134,6 +134,14 @@ const UNREADABLE_PHOTO_MESSAGE =
 const NO_DISTRIBUTION_MESSAGE =
   "No released seedling distributions are available for this planting event.";
 const PHOTO_EXIF_LOCATION_SOURCE = "Photo Metadata";
+const getEventSiteId = (event) => String(event?.plantingSiteId || event?.siteId || "");
+// The planting event of one released distribution: linked directly or through the same request, at the same site.
+const distributionMatchesEvent = (distribution, event) => {
+  const siteId = getEventSiteId(event), requestId = String(event?.sourceRequestId || "").trim();
+  return Boolean(siteId) && (!distribution.plantingSiteId || String(distribution.plantingSiteId) === siteId) &&
+    (String(distribution.eventId || "") === String(getEventId(event)) ||
+      Boolean(requestId) && String(distribution.requestId || "") === requestId);
+};
 const BARANGAY_GEOJSON_URL = `${API_BASE_URL}/sites/barangay-boundaries`;
 const BULAN_FALLBACK_CENTER = { lat: 12.6598, lng: 123.918 };
 
@@ -384,6 +392,9 @@ export default function PlantingPage() {
   const [records, setRecords] = useState([]);
   const [sites, setSites] = useState([]);
   const [distributions, setDistributions] = useState([]);
+  // False until this user's own releases are known; selections are never cleared on an unknown list.
+  const [distributionsReady, setDistributionsReady] = useState(false);
+  const requesterUidRef = useRef("");
   const [events, setEvents] = useState([]);
   const [bulanGeoJson, setBulanGeoJson] = useState(null);
 
@@ -712,9 +723,11 @@ export default function PlantingPage() {
 
   async function loadMyDistributions({ quiet = false } = {}) {
     if (!isParticipant) return true;
+    const requesterUid = auth.currentUser?.uid || "";
 
     try {
       const response = await apiRequest("/distributions/my-distributions");
+      if ((auth.currentUser?.uid || "") !== requesterUid) return false;
       const raw = Array.isArray(response.data) ? response.data : [];
 
       const normalized = raw.filter((d) => d.status === "Released").map((d) => ({
@@ -734,9 +747,11 @@ export default function PlantingPage() {
       }));
 
       setDistributions(normalized);
+      setDistributionsReady(true);
       return true;
     } catch (error) {
-      if (quiet) return false;
+      if (quiet || (auth.currentUser?.uid || "") !== requesterUid) return false;
+      setDistributionsReady(false);
       setDistributions([]);
 
       if (!isSessionError(error)) {
@@ -796,7 +811,7 @@ export default function PlantingPage() {
     window.clearTimeout(
       initializationTimer
     );
-}, [userRole]); // eslint-disable-line react-hooks/exhaustive-deps
+}, [userRole, currentUser?.uid]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     const reportId = pageSearchParams.get("report") || "";
@@ -1166,18 +1181,28 @@ export default function PlantingPage() {
     [distributions]
   );
 
+  // Every choice comes from the participant's own released distributions: event, then its site, then its barangay.
+  const reportableEvents = useMemo(() => events.filter((event) =>
+    availableDistributions.some((distribution) => distributionMatchesEvent(distribution, event))),
+  [events, availableDistributions]);
+
+  const reportableSites = useMemo(() => {
+    const siteIds = new Set(reportableEvents.map(getEventSiteId));
+    return sites.filter((site) => siteIds.has(String(getSiteId(site))));
+  }, [sites, reportableEvents]);
+
   const barangaysWithSites = useMemo(
-    () => new Set(sites.map((site) => normalizeBarangayName(getSiteBarangay(site))).filter(Boolean)),
-    [sites]
+    () => new Set(reportableSites.map((site) => normalizeBarangayName(getSiteBarangay(site))).filter(Boolean)),
+    [reportableSites]
   );
 
   const filteredSites = useMemo(() => {
     if (!form.barangay) return [];
     const selectedBarangay = normalizeBarangayName(form.barangay);
-    return sites.filter((site) =>
+    return reportableSites.filter((site) =>
       normalizeBarangayName(getSiteBarangay(site)) === selectedBarangay
     );
-  }, [sites, form.barangay]);
+  }, [reportableSites, form.barangay]);
 
   const filteredEvents = useMemo(() => {
   if (!form.siteId) {
@@ -1187,7 +1212,7 @@ export default function PlantingPage() {
   const selectedSiteId =
     String(form.siteId);
 
-  return events.filter((event) => {
+  return reportableEvents.filter((event) => {
     const eventSiteId = String(
       event?.plantingSiteId ||
         event?.siteId ||
@@ -1233,7 +1258,7 @@ export default function PlantingPage() {
       (getEventStartTime(left)?.getTime() || 0);
   });
 }, [
-  events,
+  reportableEvents,
   form.siteId,
 ]);
 
@@ -1293,15 +1318,19 @@ export default function PlantingPage() {
     if (!form.siteId || !form.eventId) return [];
     const selectedEvent = events.find((event) =>
       String(getEventId(event)) === String(form.eventId));
-    const selectedEventRequestId = String(selectedEvent?.sourceRequestId || "").trim();
-    return availableDistributions
-      .filter((distribution) =>
-        (!distribution.plantingSiteId ||
-          String(distribution.plantingSiteId) === String(form.siteId)) &&
-        (String(distribution.eventId || "") === String(form.eventId) ||
-          (selectedEventRequestId &&
-            String(distribution.requestId || "") === selectedEventRequestId)));
+    if (!selectedEvent || getEventSiteId(selectedEvent) !== String(form.siteId)) return [];
+    return availableDistributions.filter((distribution) => distributionMatchesEvent(distribution, selectedEvent));
   }, [availableDistributions, events, form.siteId, form.eventId]);
+
+  // A selection that is no longer one of the participant's own options is cleared with everything that depends on it and the
+  // photos bound to it. Names, contact details and remarks stay.
+  const staleSelection = !showSubmitModal || !isParticipant || referenceLoading || submitting || unconfirmedSubmission ||
+    !distributionsReady || eventsLoadStatus !== "success" || !sites.length ? ""
+    : form.barangay && !barangaysWithSites.has(normalizeBarangayName(form.barangay)) ? "barangay"
+    : form.siteId && !filteredSites.some((site) => String(getSiteId(site)) === String(form.siteId)) ? "site"
+    : form.eventId && !filteredEvents.some((event) => String(getEventId(event)) === String(form.eventId)) ? "event"
+    : form.distributionId && !eligibleDistributions.some((entry) => String(entry.id) === String(form.distributionId)) ? "distribution" : "";
+
 
   const eligibleDistributionItems = useMemo(() => {
     const distribution = eligibleDistributions.find((entry) =>
@@ -1690,6 +1719,32 @@ export default function PlantingPage() {
     setFormErrors(previous => ({ ...previous, photos: "" }));
     evidenceAttempt.current.reset();
   }
+
+  useEffect(() => {
+    if (!staleSelection) return undefined;
+    const timer = window.setTimeout(() => {
+      invalidateBoundEvidence();
+      setForm((previous) => ({
+        ...previous,
+        ...(staleSelection === "barangay" ? { barangay: "" } : {}),
+        ...(["barangay", "site"].includes(staleSelection) ? { siteId: "", siteName: "" } : {}),
+        ...(staleSelection !== "distribution" ? { eventId: "", eventName: "", plantingDate: "" } : {}),
+        distributionId: "", distributionItemKey: "", inventoryId: "", species: "", requestedQuantity: "",
+        quantityReleased: "", remainingQuantity: "", quantity: "", leftoverQuantity: "0",
+      }));
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [staleSelection]);
+
+  // Another signed-in user never sees the previous user's releases or entries.
+  useEffect(() => {
+    const requesterUid = currentUser?.uid || "", previousUid = requesterUidRef.current;
+    requesterUidRef.current = requesterUid;
+    if (!previousUid || previousUid === requesterUid) return undefined;
+    setDistributions([]); setDistributionsReady(false); setUnconfirmedSubmission(null);
+    setShowSubmitModal(false); setCorrectionTarget(null); resetForm();
+    return undefined;
+  }, [currentUser?.uid]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function updateFormField(field, value) {
     if (field === "barangay") invalidateBoundEvidence();
@@ -3069,15 +3124,15 @@ export default function PlantingPage() {
                         <option value="">
                           {referenceLoading ? "Loading barangays..." : "Select barangay"}
                         </option>
-                        {BULAN_BARANGAYS.map((barangay) => {
-                          const hasSite = barangaysWithSites.has(normalizeBarangayName(barangay));
-                          return (
-                            <option key={barangay} value={barangay} disabled={!hasSite}>
-                              {barangay}
-                            </option>
-                          );
-                        })}
+                        {BULAN_BARANGAYS.filter((barangay) => barangaysWithSites.has(normalizeBarangayName(barangay))).map((barangay) => (
+                          <option key={barangay} value={barangay}>{barangay}</option>
+                        ))}
                       </select>
+                      {distributionsReady && !referenceLoading && eventsLoadStatus === "success" && barangaysWithSites.size === 0 && (
+                        <div className="pr-helper-text" role="status">
+                          You have no released seedlings awaiting a planting report.
+                        </div>
+                      )}
 {formErrors.barangay && <small id="planting-error-barangay" className="pr-field-error" role="alert">{formErrors.barangay}</small>}
                     </div>
 
