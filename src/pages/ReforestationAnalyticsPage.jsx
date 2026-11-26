@@ -16,13 +16,14 @@ const TREND_CHART_INITIAL_SIZE = { width: 420, height: 240 };
 const DONUT_CHART_INITIAL_SIZE = { width: 180, height: 180 };
 const EMPTY_ANALYTICS = { summary: {}, distributionTrend: [], plantingTrend: [], survivalTrend: [], monitoringConditions: [], speciesDistribution: [], barangaySurvival: [], siteMap: [], permanentSample: null, options: { barangays: [], species: [], sites: [] }, meta: {} };
 const EMPTY_FILTERS = { dateFrom: "", dateTo: "", barangay: "All", species: "All", site: "All" };
-const NO_MONITORING = "No official monitoring data yet";
+const NO_SAMPLE_RESULTS = "No Admin-approved Monitor Planted Trees results yet";
+const EMPTY_SAMPLE = { summary: {}, conditions: [], trend: [], trees: [], locationUnavailable: 0 };
 const formatNumber = (value) => new Intl.NumberFormat("en-PH").format(Number(value) || 0);
 const displayRate = (value) => value == null ? "—" : `${formatNumber(value)}%`;
 const share = (part, total) => total > 0 ? `${Math.round((Number(part || 0) / total) * 100)}%` : "—";
 
 function EmptyRing() {
-  return <div className="ra-donut-chart ra-zero-ring-wrap"><ResponsiveContainer width="100%" height="100%" initialDimension={DONUT_CHART_INITIAL_SIZE}><PieChart><Pie data={[{ value: 1 }]} dataKey="value" innerRadius="68%" outerRadius="100%" isAnimationActive={false}><Cell fill="#e5e9e7" /></Pie></PieChart></ResponsiveContainer><div className="ra-zero-ring-center"><strong>0</strong><span>Monitored Trees</span></div></div>;
+  return <div className="ra-donut-chart ra-zero-ring-wrap"><ResponsiveContainer width="100%" height="100%" initialDimension={DONUT_CHART_INITIAL_SIZE}><PieChart><Pie data={[{ value: 1 }]} dataKey="value" innerRadius="68%" outerRadius="100%" isAnimationActive={false}><Cell fill="#e5e9e7" /></Pie></PieChart></ResponsiveContainer><div className="ra-zero-ring-center"><strong>0</strong><span>Sample Trees</span></div></div>;
 }
 function ChartCard({ title, subtitle, empty, children }) {
   return <section className="ra-chart-card"><div className="ra-card-heading"><h2>{title}</h2><p>{subtitle}</p></div>
@@ -31,42 +32,10 @@ function ChartCard({ title, subtitle, empty, children }) {
 function MonthlyBars({ data, label, color = "#2f9e57" }) {
   return <ResponsiveContainer width="100%" height="100%" initialDimension={TREND_CHART_INITIAL_SIZE}><BarChart data={data} margin={{ top: 8, right: 8, bottom: 0, left: -8 }}><CartesianGrid strokeDasharray="4 4" vertical={false} /><XAxis dataKey="period" tick={{ fontSize: 11 }} interval="preserveStartEnd" /><YAxis allowDecimals={false} domain={[0, "auto"]} tick={{ fontSize: 11 }} /><Tooltip formatter={(value) => [formatNumber(value), label]} /><Bar dataKey="count" fill={color} radius={[5, 5, 0, 0]} maxBarSize={44} /></BarChart></ResponsiveContainer>;
 }
-// Admin-approved Monitor Planted Trees visits: sampled permanent trees, shown apart from the whole-cohort official figures above.
-function PermanentSampleSection({ data }) {
-  const summary = data?.summary || {}, conditions = data?.conditions || [], trend = data?.trend || [], cohorts = data?.cohorts || [];
-  const total = conditions.reduce((sum, row) => sum + Number(row.count || 0), 0);
-  const hasTrend = trend.some((row) => row.rate != null);
-  const tiles = [
-    ["Permanent Sample Survival Rate", displayRate(summary.survivalRate), summary.survivalRate == null ? (summary.cohortsAwaitingRechecking ? "Awaiting rechecking results" : "No approved sample visits yet") : "Latest approved visit per planting"],
-    ["Total Sample Trees", formatNumber(summary.totalSampleTrees), "Permanent sample trees, counted once"],
-    ["Approved Monitoring Visits", formatNumber(summary.approvedVisits), "Approved by the MENRO Admin"],
-    ["Latest Approved Monitoring", summary.latestApprovedMonitoringDate || "—", "Date monitored"],
-  ];
-  return <section className="ra-ps-section" aria-labelledby="ra-ps-title">
-    <div className="ra-card-heading"><h2 id="ra-ps-title">Permanent Sample Monitoring Analytics</h2><p>From Admin-approved Monitor Planted Trees visits. Sampled trees only; kept separate from the official whole-cohort survival rate above.</p></div>
-    <div className="ra-ps-tiles">{tiles.map(([label, value, note]) => <div className="ra-ps-tile" key={label}><span>{label}</span><strong>{value}</strong><small>{note}</small></div>)}</div>
-    <div className="ra-ps-grid">
-      <section className="ra-chart-card"><div className="ra-card-heading"><h2>Sample Tree Conditions</h2><p>Latest approved visit per planting</p></div>
-        <div className="ra-donut-layout">{total === 0 ? <EmptyRing /> : <div className="ra-donut-chart"><ResponsiveContainer width="100%" height="100%" initialDimension={DONUT_CHART_INITIAL_SIZE}><PieChart><Pie data={conditions} dataKey="count" nameKey="condition" innerRadius="68%" outerRadius="100%" isAnimationActive={false}>{conditions.map((item) => <Cell key={item.condition} fill={CONDITION_COLORS[item.condition]} />)}</Pie><Tooltip formatter={(value, name) => [`${formatNumber(value)} trees (${share(value, total)})`, name]} /></PieChart></ResponsiveContainer><div className="ra-zero-ring-center"><strong>{formatNumber(total)}</strong><span>Sample Trees</span></div></div>}
-          <div className="ra-legend">{conditions.map((item) => <div className="ra-legend-row" key={item.condition}><span className="ra-legend-dot" style={{ background: CONDITION_COLORS[item.condition] }} /><span>{item.condition === "Damaged" ? "Damaged (living)" : item.condition}</span><strong>{total ? `${formatNumber(item.count)} · ${share(item.count, total)}` : "—"}</strong></div>)}</div></div>
-        {total === 0 && <p className="ra-neutral-empty" role="status">No approved sample monitoring visits for the selected filters.</p>}
-      </section>
-      <ChartCard title="Sample Survival Trend" subtitle="Survival of sampled trees in approved visits, by month monitored" empty={!hasTrend && "No complete approved sample visits for the selected filters."}>
-        {hasTrend && <ResponsiveContainer width="100%" height="100%" initialDimension={TREND_CHART_INITIAL_SIZE}><LineChart data={trend} margin={{ top: 8, right: 12, bottom: 0, left: -8 }}><CartesianGrid strokeDasharray="4 4" vertical={false} /><XAxis dataKey="period" tick={{ fontSize: 11 }} interval="preserveStartEnd" /><YAxis domain={[0, 100]} tick={{ fontSize: 11 }} tickFormatter={(value) => `${value}%`} /><Tooltip content={<SurvivalTooltip />} /><Line type="linear" dataKey="rate" stroke="#17643a" strokeWidth={2.5} dot={{ r: 4 }} connectNulls={false} isAnimationActive={false} /></LineChart></ResponsiveContainer>}
-      </ChartCard>
-      <section className="ra-chart-card"><div className="ra-card-heading"><h2>Latest Monitoring Results</h2><p>Latest approved visit of each monitored planting</p></div>
-        <DataTable headers={["Planting", ["Visit", "Visit number and date monitored"], ["Trees", "Sample trees"], ["H / D / X / R", "Healthy / Damaged / Dead / Needs Rechecking"], ["Survival", "Sample survival rate"]]} empty="No approved sample monitoring visits for the selected filters.">
-          {cohorts.map((row) => <tr key={row.cohortId}><td>{row.reportNumber || "Planting"}<small className="ra-cell-note">{[row.siteName, row.barangay].filter(Boolean).join(" · ")}</small></td><td>{row.visitNumber ? `Visit ${row.visitNumber}` : "Visit"}<small className="ra-cell-note">{row.date}</small></td><td>{formatNumber(row.total)}</td><td>{[row.Healthy, row.Damaged, row.Dead, row["Needs Rechecking"]].join(" / ")}</td><td>{row.survivalRate == null ? "Rechecking" : displayRate(row.survivalRate)}</td></tr>)}
-        </DataTable>
-      </section>
-    </div>
-  </section>;
-}
-
 function SurvivalTooltip({ active, payload, label }) {
   const row = payload?.[0]?.payload;
   if (!active || row?.rate == null) return null;
-  return <div className="ra-tooltip"><strong>{label}</strong><span>Survival rate: {displayRate(row.rate)}</span><span>Trees checked: {formatNumber(row.checked)}</span><span>Surviving (healthy and damaged): {formatNumber(row.surviving)}</span></div>;
+  return <div className="ra-tooltip"><strong>{label}</strong><span>Survival rate: {displayRate(row.rate)}</span><span>Sample trees checked: {formatNumber(row.checked)}</span><span>Surviving (healthy and damaged): {formatNumber(row.surviving)}</span><span>Approved visits: {formatNumber(row.visits)}</span></div>;
 }
 
 export default function ReforestationAnalyticsPage() {
@@ -113,12 +82,15 @@ export default function ReforestationAnalyticsPage() {
 
   const summary = analytics.summary || {};
   const options = analytics.options || EMPTY_ANALYTICS.options;
-  const conditions = analytics.monitoringConditions || [];
+  // Sample results (Admin-approved Monitor Planted Trees visits) feed the survival KPI, trend, condition summary, barangay sample columns and tree markers.
+  const sample = analytics.permanentSample || EMPTY_SAMPLE;
+  const sampleSummary = sample.summary || {};
+  const conditions = (sample.conditions || []).filter((item) => item.condition !== "Needs Rechecking" || Number(item.count) > 0);
   const speciesRows = analytics.speciesDistribution || [];
   const barangayRows = analytics.barangaySurvival || [];
   const distributionTrend = analytics.distributionTrend || [];
   const plantingTrend = analytics.plantingTrend || [];
-  const survivalTrend = analytics.survivalTrend || [];
+  const survivalTrend = sample.trend || [];
   const conditionTotal = conditions.reduce((total, item) => total + Number(item.count || 0), 0);
   const speciesTotal = speciesRows.reduce((total, item) => total + Number(item.planted || 0), 0);
   const hasCounts = (rows) => rows.some((row) => Number(row.count) > 0);
@@ -133,14 +105,14 @@ export default function ReforestationAnalyticsPage() {
   return <div className="ra-page" aria-busy={updating || undefined}>
     <header className="ra-page-header">
       <span className="ra-page-icon" aria-hidden="true"><FiBarChart2 /></span>
-      <div><h1>Analytics and Visualization</h1><p>Reforestation statistics, charts, and trends</p></div>
+      <div><h1>Analytics and Visualization Module</h1><p>Reforestation statistics, charts, and trends</p></div>
       {sampleAnalyticsEnabled() && <Link className="ra-secondary-button ra-header-link" to={`${routeBase}/permanent-sample-analytics`}>Permanent Sample Monitoring Analytics</Link>}
     </header>
     {loadError && <div className="ra-error-banner" role="alert"><FiAlertCircle />{loadError}</div>}
     <KpiGrid label="Analytics summary" className="ra-kpis">
       <KpiCard tone="green" title="Total Seedlings Distributed" value={formatNumber(summary.totalSaplingsDistributed)} description="Actual released quantity" />
       <KpiCard tone="green" title="Verified Trees Planted" value={formatNumber(summary.totalTreesPlanted)} description="From verified planting reports" />
-      <KpiCard tone="green" title="Overall Survival Rate" value={displayRate(summary.overallSurvivalRate)} description={summary.overallSurvivalRate == null ? NO_MONITORING : "Latest official full observations"} />
+      <KpiCard tone="green" title="Sample Survival Rate" value={displayRate(summary.sampleSurvivalRate)} description={summary.sampleSurvivalRate == null ? (sampleSummary.cohortsAwaitingRechecking ? "Awaiting rechecking results" : NO_SAMPLE_RESULTS) : "Permanent sample trees, latest approved visits"} />
       <KpiCard tone="blue" title="Verified Planting Reports" value={formatNumber(summary.verifiedPlantingReports)} description="Approved planting reports" />
       <KpiCard tone="total" title="Barangays Covered" value={formatNumber(summary.barangaysCovered)} description="With verified planting activity" />
     </KpiGrid>
@@ -160,25 +132,24 @@ export default function ReforestationAnalyticsPage() {
       <ChartCard title="Monthly Verified Trees Planted" subtitle="Verified trees planted per month (from approved planting reports)" empty={!hasCounts(plantingTrend) && "No verified planting records available for the selected filters."}>
         {hasCounts(plantingTrend) && <MonthlyBars data={plantingTrend} label="Verified Trees Planted" color="#238b45" />}
       </ChartCard>
-      <ChartCard title="Survival Rate Trend" subtitle="Verified survival rate from official monitoring observations" empty={!hasSurvival && "No official survival monitoring data available yet."}>
-        {/* A month without official observations stays a gap: it is not 0 %. */}
+      <ChartCard title="Sample Survival Rate Trend" subtitle="Permanent sample survival by month monitored (Admin-approved visits)" empty={!hasSurvival && "No complete Admin-approved sample monitoring results for the selected filters."}>
+        {/* A month without complete approved sample results stays a gap: it is not 0 %. */}
         {hasSurvival && <ResponsiveContainer width="100%" height="100%" initialDimension={TREND_CHART_INITIAL_SIZE}><LineChart data={survivalTrend} margin={{ top: 8, right: 12, bottom: 0, left: -8 }}><CartesianGrid strokeDasharray="4 4" vertical={false} /><XAxis dataKey="period" tick={{ fontSize: 11 }} interval="preserveStartEnd" /><YAxis domain={[0, 100]} tick={{ fontSize: 11 }} tickFormatter={(value) => `${value}%`} /><Tooltip content={<SurvivalTooltip />} /><Line type="linear" dataKey="rate" stroke="#238b45" strokeWidth={2.5} dot={{ r: 4 }} connectNulls={false} isAnimationActive={false} /></LineChart></ResponsiveContainer>}
       </ChartCard>
     </div>
     <div className="ra-detail-grid">
-      <section className="ra-chart-card"><div className="ra-card-heading"><h2>Monitoring Condition Summary</h2><p>Latest valid entry per monitoring lifecycle</p></div>
-        <div className="ra-donut-layout">{conditionTotal === 0 ? <EmptyRing /> : <div className="ra-donut-chart"><ResponsiveContainer width="100%" height="100%" initialDimension={DONUT_CHART_INITIAL_SIZE}><PieChart><Pie data={conditions} dataKey="count" nameKey="condition" innerRadius="68%" outerRadius="100%" isAnimationActive={false}>{conditions.map((item) => <Cell key={item.condition} fill={CONDITION_COLORS[item.condition]} />)}</Pie><Tooltip formatter={(value, name) => [`${formatNumber(value)} trees (${share(value, conditionTotal)})`, name]} /></PieChart></ResponsiveContainer><div className="ra-zero-ring-center"><strong>{formatNumber(conditionTotal)}</strong><span>Monitored Trees</span></div></div>}
-          <div className="ra-legend">{conditions.map((item) => <div className="ra-legend-row" key={item.condition}><span className="ra-legend-dot" style={{ background: CONDITION_COLORS[item.condition] }} /><span>{item.condition}</span><strong>{share(item.count, conditionTotal)}</strong></div>)}</div></div>
-        {conditionTotal === 0 && <p className="ra-neutral-empty" role="status">{NO_MONITORING}.</p>}
+      <section className="ra-chart-card"><div className="ra-card-heading"><h2>Monitoring Condition Summary</h2><p>Permanent sample trees, latest Admin-approved visit per planting</p></div>
+        <div className="ra-donut-layout">{conditionTotal === 0 ? <EmptyRing /> : <div className="ra-donut-chart"><ResponsiveContainer width="100%" height="100%" initialDimension={DONUT_CHART_INITIAL_SIZE}><PieChart><Pie data={conditions} dataKey="count" nameKey="condition" innerRadius="68%" outerRadius="100%" isAnimationActive={false}>{conditions.map((item) => <Cell key={item.condition} fill={CONDITION_COLORS[item.condition]} />)}</Pie><Tooltip formatter={(value, name) => [`${formatNumber(value)} trees (${share(value, conditionTotal)})`, name]} /></PieChart></ResponsiveContainer><div className="ra-zero-ring-center"><strong>{formatNumber(conditionTotal)}</strong><span>Sample Trees</span></div></div>}
+          <div className="ra-legend">{conditions.map((item) => <div className="ra-legend-row" key={item.condition}><span className="ra-legend-dot" style={{ background: CONDITION_COLORS[item.condition] }} /><span>{item.condition === "Damaged" ? "Damaged (Living)" : item.condition}</span><strong>{conditionTotal ? `${formatNumber(item.count)} · ${share(item.count, conditionTotal)}` : "—"}</strong></div>)}</div></div>
+        {conditionTotal === 0 && <p className="ra-neutral-empty" role="status">{NO_SAMPLE_RESULTS}.</p>}
       </section>
       <section className="ra-chart-card"><div className="ra-card-heading"><h2>Verified Trees Planted by Species</h2><p>Number of planted trees from verified reports</p></div>
         <DataTable headers={["Seedling Tree", "Planted (Verified)", "Percent"]} empty="No seedling tree records for this selection.">{speciesRows.map((item) => <tr key={item.species}><td>{item.species}</td><td>{formatNumber(item.planted)}</td><td>{share(item.planted, speciesTotal)}</td></tr>)}</DataTable>
         <div className="ra-total-inline"><span>Total Verified Trees Planted</span><strong>{formatNumber(speciesTotal)}</strong></div></section>
       <section className="ra-chart-card"><div className="ra-card-heading"><h2>Planting Coverage by Barangay</h2><p>Verified planting activity by barangay</p></div>
-        <DataTable headers={["Barangay", ["Planted", "Verified trees planted"], ["Monitored", "Official trees monitored (latest full observation)"], ["Survival", "Official survival rate"]]} empty="No qualifying barangay activity for this selection.">{barangayRows.map((item) => <tr key={item.barangay}><td>{item.barangay}</td><td>{formatNumber(item.planted)}</td><td>{formatNumber(item.monitored)}</td><td>{displayRate(item.rate)}</td></tr>)}</DataTable></section>
-      <AnalyticsSitesMap sites={analytics.siteMap || []} onViewFullMap={() => navigate(`${routeBase}/planting-sites`)} />
+        <DataTable headers={["Barangay", ["Planted (Verified)", "Verified trees planted"], ["Monitored (Sample)", "Permanent sample trees in the latest approved visits"], ["Survival (Sample)", "Permanent sample survival rate"]]} empty="No qualifying barangay activity for this selection.">{barangayRows.map((item) => <tr key={item.barangay}><td>{item.barangay}</td><td>{formatNumber(item.planted)}</td><td>{item.sampleMonitored ? formatNumber(item.sampleMonitored) : "—"}</td><td>{displayRate(item.sampleRate)}</td></tr>)}</DataTable></section>
+      <AnalyticsSitesMap sites={analytics.siteMap || []} trees={sample.trees || []} locationUnavailable={sample.locationUnavailable || 0} onViewFullMap={() => navigate(`${routeBase}/planting-sites`)} />
     </div>
-    <PermanentSampleSection data={analytics.permanentSample} />
     <p className="ra-sync-note">Updates every 60 seconds and when this window regains focus.{analytics.meta?.generatedAt ? ` Last updated: ${new Date(analytics.meta.generatedAt).toLocaleString("en-PH", { timeZone: "Asia/Manila" })}.` : ""}</p>
   </div>;
 }
