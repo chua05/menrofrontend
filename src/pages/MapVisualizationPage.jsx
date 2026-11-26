@@ -12,16 +12,31 @@ import {
 import "leaflet/dist/leaflet.css";
 import { textTooltip } from "../utils/leafletTooltip";
 import KpiCard, { KpiGrid } from "../components/KpiCard";
+import { TREE_CONDITIONS, TREE_PATH, locatedTrees, renderTreeMarkers } from "../components/map/treeMarkerLayer";
+import { filterMapTrees, siteHasMatchingTree } from "../utils/mapTrees";
 import "../styles/map-visualization.css";
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
 
-const CONDITION_OPTIONS = [
+// Site-center colours (aggregate of the site's monitoring records).
+const SITE_CONDITIONS = [
   "Healthy",
   "Damaged",
   "Dead",
   "Not Yet Monitored",
 ];
+// The filter also reaches each permanent-sample tree's latest condition, which can be Needs Rechecking.
+const CONDITION_OPTIONS = [...SITE_CONDITIONS.slice(0, 3), "Needs Rechecking", "Not Yet Monitored"];
+const EMPTY_TREE_DATA = { trees: [], pendingTrees: [], locationUnavailable: 0 };
+
+function TreeKey({ slug, count }) {
+  return (
+    <span className={`ra-tree-marker ra-tree-${slug} mv-tree-key`} aria-hidden="true">
+      <svg viewBox="0 0 24 30"><path d={TREE_PATH} /></svg>
+      {count && <span className="ra-tree-count">{count}</span>}
+    </span>
+  );
+}
 
 function normalizeText(value) {
   return String(value || "").trim();
@@ -278,6 +293,10 @@ export default function MapVisualizationPage() {
   const mapRef = useRef(null);
   const barangayLayerRef = useRef(null);
   const siteLayerRef = useRef(null);
+  const treeLayerRef = useRef(null);
+
+  const [treeData, setTreeData] = useState(EMPTY_TREE_DATA);
+  const [treeError, setTreeError] = useState("");
 
   const [plantingSites, setPlantingSites] = useState([]);
   const [sitesLoading, setSitesLoading] = useState(true);
@@ -296,12 +315,34 @@ export default function MapVisualizationPage() {
   const [selectedSite, setSelectedSite] = useState(null);
 
   const refreshData = async () => {
+    // Admin-approved permanent-sample trees (and, kept apart, trees of visits awaiting Admin review).
+    const loadTreeMarkers = async (token) => {
+      try {
+        const response = await fetch(`${API_BASE_URL}/analytics/map-trees`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok || !Array.isArray(payload?.data?.trees)) throw new Error(payload?.message || "Invalid tree marker response.");
+        setTreeData({
+          trees: payload.data.trees,
+          pendingTrees: Array.isArray(payload.data.pendingTrees) ? payload.data.pendingTrees : [],
+          locationUnavailable: Number(payload.data.locationUnavailable) || 0,
+        });
+        setTreeError("");
+      } catch (error) {
+        console.error("Unable to load monitored tree markers:", error);
+        setTreeError("Unable to load monitored tree markers. The planting sites are still shown; use Refresh Map to retry.");
+      }
+    };
+
     setSitesLoading(true);
     setSitesError("");
     try {
       if (typeof auth.authStateReady === "function") await auth.authStateReady();
       const token = await auth.currentUser?.getIdToken();
       if (!token) throw new Error("Your session has expired. Please sign in again.");
+      // Tree markers load beside the site records; a failure there never removes the planting sites.
+      const treesLoaded = loadTreeMarkers(token);
       const paths = ["/sites", "/planting-reports", "/monitoring"];
       const responses = await Promise.all(paths.map((path) => fetch(`${API_BASE_URL}${path}`, {
         headers: { Authorization: `Bearer ${token}` },
@@ -313,6 +354,7 @@ export default function MapVisualizationPage() {
       setPlantingSites(payloads[0].data);
       setPlantingReports(payloads[1].data);
       setMonitoringRecords(payloads[2].data);
+      await treesLoaded;
     } catch (error) {
       console.error("Unable to load map planting sites:", error);
       setSitesError("Unable to load current map records.");
@@ -554,6 +596,9 @@ export default function MapVisualizationPage() {
     activeMonitoringRecords,
   ]);
 
+  // Approved markers first; Pending Review markers are drawn but never counted as approved.
+  const markerTrees = useMemo(() => [...treeData.trees, ...treeData.pendingTrees], [treeData]);
+
   const speciesOptions = useMemo(() => {
     const values = new Set();
 
@@ -562,11 +607,16 @@ export default function MapVisualizationPage() {
         values.add(species);
       });
     });
+    // Each registered permanent tree's own species.
+    markerTrees.forEach((tree) => {
+      const species = normalizeText(tree.species);
+      if (species && ![...values].some((value) => value.toLowerCase() === species.toLowerCase())) values.add(species);
+    });
 
     return [...values].sort((a, b) =>
       a.localeCompare(b)
     );
-  }, [siteAnalytics]);
+  }, [siteAnalytics, markerTrees]);
 
   const barangayOptions = useMemo(() =>
     [...new Set(siteAnalytics.map((site) => site.barangay).filter(Boolean))]
@@ -605,16 +655,19 @@ export default function MapVisualizationPage() {
         siteFilter === site.siteId ||
         siteFilter === site.siteName;
 
+      // A site also matches through its own permanent-sample trees, so it is never hidden for lacking a direct field.
       const speciesMatches =
         speciesFilter === "All" ||
         site.species.includes(
           speciesFilter
-        );
+        ) ||
+        siteHasMatchingTree(site, markerTrees, { species: speciesFilter });
 
       const conditionMatches =
         conditionFilter === "All" ||
         site.condition ===
-          conditionFilter;
+          conditionFilter ||
+        siteHasMatchingTree(site, markerTrees, { condition: conditionFilter });
 
       return (
         barangayMatches &&
@@ -625,11 +678,28 @@ export default function MapVisualizationPage() {
     });
   }, [
     siteAnalytics,
+    markerTrees,
     barangayFilter,
     siteFilter,
     speciesFilter,
     conditionFilter,
   ]);
+
+  // Every tree is filtered on its own barangay, site, species and latest condition.
+  const filteredTrees = useMemo(() => filterMapTrees(markerTrees, {
+    barangay: barangayFilter, site: siteFilter, species: speciesFilter, condition: conditionFilter,
+  }), [markerTrees, barangayFilter, siteFilter, speciesFilter, conditionFilter]);
+  const approvedTreeCount = filteredTrees.filter((tree) => tree.reviewStatus !== "Pending Review").length;
+  const pendingTreeCount = filteredTrees.length - approvedTreeCount;
+  const siteTreeCount = (site) => filteredTrees.filter((tree) => tree.siteId === site.siteId && tree.reviewStatus !== "Pending Review").length;
+
+  const zoomToTrees = () => {
+    const map = mapRef.current;
+    const points = locatedTrees(filteredTrees).map((tree) => [Number(tree.latitude), Number(tree.longitude)]);
+    if (!map || points.length === 0) return;
+    if (points.length === 1) map.setView(points[0], 18);
+    else map.fitBounds(L.latLngBounds(points).pad(0.2), { maxZoom: 18 });
+  };
 
   const totalTreesPlanted = useMemo(() => {
     return filteredSites.reduce(
@@ -690,10 +760,14 @@ export default function MapVisualizationPage() {
       mapContainerRef.current,
       {
         zoomControl: true,
+        // A finite limit lets overlapping trees open as one list at the deepest zoom.
+        maxZoom: 19,
       }
     );
 
     mapRef.current = map;
+    // Added once; tree markers sit in Leaflet's marker pane, above site polygons and site-center circles.
+    treeLayerRef.current = L.layerGroup().addTo(map);
 
     const mapTilerKey =
       import.meta.env
@@ -721,8 +795,15 @@ export default function MapVisualizationPage() {
     return () => {
       map.remove();
       mapRef.current = null;
+      treeLayerRef.current = null;
     };
   }, []);
+
+  useEffect(() => {
+    const map = mapRef.current, layer = treeLayerRef.current;
+    if (!map || !layer) return undefined;
+    return renderTreeMarkers(map, layer, filteredTrees);
+  }, [filteredTrees]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -912,6 +993,7 @@ export default function MapVisualizationPage() {
 
       {sitesLoading && <p role="status">Loading planting sites...</p>}
       {sitesError && <p role="alert">{sitesError} Use Refresh Map to retry.</p>}
+      {treeError && <p role="alert" className="mv-tree-error">{treeError}</p>}
 
       <KpiGrid label="Map summary">
         <KpiCard title="Planting Sites" value={formatNumber(filteredSites.length)} description="Registered sites" tone="total" />
@@ -1127,6 +1209,12 @@ export default function MapVisualizationPage() {
             </button>
             </div>
 
+          {filteredTrees.length > 0 && (
+            <button type="button" className="mv-zoom-trees" onClick={zoomToTrees}>
+              Zoom to monitored trees
+            </button>
+          )}
+
           {filteredSites.length === 0 && (
             <div className="mv-empty-map-message">
               <FiMapPin size={20} />
@@ -1193,10 +1281,10 @@ export default function MapVisualizationPage() {
 
             <div className="mv-legend-section">
               <strong>
-                Monitoring Condition
+                Site Monitoring Condition
               </strong>
 
-              {CONDITION_OPTIONS.map(
+              {SITE_CONDITIONS.map(
                 (condition) => (
                   <div
                     className="mv-legend-row"
@@ -1216,6 +1304,29 @@ export default function MapVisualizationPage() {
                   </div>
                 )
               )}
+            </div>
+
+            <div className="mv-legend-section">
+              <strong>
+                Permanent Sample Trees
+              </strong>
+
+              {TREE_CONDITIONS.map(([value, slug, label]) => (
+                <div className="mv-legend-row" key={value}>
+                  <TreeKey slug={slug} />
+                  {label}
+                </div>
+              ))}
+
+              <div className="mv-legend-row">
+                <TreeKey slug="pending" />
+                Pending Review (submitted, not yet approved)
+              </div>
+
+              <div className="mv-legend-row">
+                <TreeKey slug="mixed" count="3" />
+                Overlapping trees — click to zoom in
+              </div>
             </div>
 
             <div className="mv-legend-section">
@@ -1276,6 +1387,36 @@ export default function MapVisualizationPage() {
                 {overallSurvivalRate}%
               </strong>
             </div>
+
+            <div className="mv-summary-row">
+              <span>
+                Approved permanent-sample trees
+              </span>
+
+              <strong>
+                {formatNumber(approvedTreeCount)}
+              </strong>
+            </div>
+
+            {pendingTreeCount > 0 && (
+              <div className="mv-summary-row">
+                <span>
+                  Pending Review trees (not counted)
+                </span>
+
+                <strong>
+                  {formatNumber(pendingTreeCount)}
+                </strong>
+              </div>
+            )}
+
+            {treeData.locationUnavailable > 0 && (
+              <p className="mv-tree-note" role="status">
+                Location unavailable: {formatNumber(treeData.locationUnavailable)} monitored sample{" "}
+                {treeData.locationUnavailable === 1 ? "tree has" : "trees have"} no saved registration GPS and{" "}
+                {treeData.locationUnavailable === 1 ? "is" : "are"} not drawn.
+              </p>
+            )}
           </div>
 
           {selectedSite && (
@@ -1384,6 +1525,16 @@ export default function MapVisualizationPage() {
                     selectedSite.survivalRate
                   }
                   %
+                </strong>
+              </div>
+
+              <div className="mv-summary-row">
+                <span>
+                  Approved permanent-sample trees
+                </span>
+
+                <strong>
+                  {formatNumber(siteTreeCount(selectedSite))}
                 </strong>
               </div>
             </div>

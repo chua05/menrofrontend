@@ -19,6 +19,7 @@ async function setup(page, role) {
     else if (url.pathname === "/api/inventory/available") data = [{ id: "tree-1", species: "Narra", currentQuantity: 100 }];
     else if (url.pathname === "/api/analytics/dashboard") data = { summary: { totalSaplingsDistributed: 1234567, totalTreesPlanted: 1200, overallSurvivalRate: 87.5, verifiedPlantingReports: 4, barangaysCovered: 2, activePlantingSites: 1 },
       plantingTrend: [], survivalTrend: [], monitoringConditions: [], speciesDistribution: [], barangaySurvival: [], siteMap: [], verificationAnalytics: {}, accountability: {}, decisionSupport: {}, options: { barangays: [], species: [], sites: [] }, meta: {} };
+    else if (url.pathname === "/api/analytics/map-trees") data = { trees: [], pendingTrees: [], locationUnavailable: 0, summary: { approvedTrees: 0, pendingTrees: 0 } };
     else if (url.pathname === "/api/purpose-policies") data = { version: 0, purposes: [], sampling: {} };
     else if (url.pathname === "/api/notifications/unread-count") data = { unreadCount: 0 };
     return route.fulfill({ json: { success: true, data } });
@@ -232,4 +233,79 @@ test("analytics map keeps every densely planted sample tree reachable", async ({
   expect(await reachable()).toBe(10);
   // The deepest grouping (trees 0.4 m apart) lists every tree in one popup instead of hiding one.
   if (await page.locator(".leaflet-popup-content").count()) expect(await page.locator(".leaflet-popup-content .ra-tree-popup-item").count()).toBeGreaterThan(1);
+});
+
+// Full Planting Sites Map: RPT-2026-030's ten approved permanent-sample trees at their saved positions, one pending tree kept apart,
+// all four filters on each tree's own fields, Refresh Map reloading trees, and a tree-data failure that leaves the sites on the map.
+test("full map shows approved permanent-sample tree markers with working filters and refresh", async ({ page }) => {
+  await setup(page, "staff");
+  const z8 = { id: "z8", siteId: "SITE-0008", siteName: "Zone 8 Green Site - Testing Site 02", barangay: "Zone VIII Poblacion", status: "active", latitude: 12.66625, longitude: 123.88045, maximumCapacity: 100 };
+  const bical = { ...site, id: "bc", siteName: "Bical Site" };
+  await page.route("**/api/sites", route => route.fulfill({ json: { success: true, data: [z8, bical] } }));
+  const offsets = [[0, 0], [4, -17], [-10, -27], [5, -35], [5.4, -35.3], [11, -22], [10, -22.8], [3, -15], [-1, -23], [9.5, -24]];
+  const conditions = ["Healthy", "Healthy", "Healthy", "Healthy", "Healthy", "Healthy", "Damaged", "Damaged", "Damaged", "Dead"];
+  const trees = offsets.map(([north, east], i) => ({ treeId: `RPT-2026-030-T${String(i + 1).padStart(3, "0")}`, species: i === 9 ? "Narra" : "Kalamansi",
+    latitude: 12.6662 + north / 111_320, longitude: 123.8806 + east / 108_650, siteId: "z8", siteName: z8.siteName, barangay: z8.barangay, reportNumber: "RPT-2026-030",
+    condition: conditions[i], visitNumber: 1, dateMonitored: "2026-11-20", heightCentimeters: 30, stemDiameterMillimeters: 6, reviewStatus: "Approved", pendingReview: null }));
+  const pending = { ...trees[0], treeId: "RPT-2026-031-T001", siteId: "bc", siteName: "Bical Site", barangay: "Bical", reportNumber: "RPT-2026-031", species: "Pili",
+    latitude: 12.6598, longitude: 123.918, condition: "Healthy", reviewStatus: "Pending Review" };
+  let treeRequests = 0, failTrees = false;
+  await page.route("**/api/analytics/map-trees", route => { treeRequests += 1;
+    if (failTrees) return route.fulfill({ status: 500, json: { success: false, message: "Failed to retrieve monitored tree markers." } });
+    return route.fulfill({ json: { success: true, data: { trees, pendingTrees: [pending], locationUnavailable: 0, summary: { approvedTrees: 10, pendingTrees: 1 } } } }); });
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.goto("/staff/map-visualization?role=staff");
+  const markers = page.locator(".mv-map .ra-tree-marker");
+  const reachable = async () => markers.evaluateAll(nodes => nodes.reduce((total, node) => total + Number(node.querySelector(".ra-tree-count")?.textContent || 1), 0));
+  const summary = (label) => page.locator(".mv-summary-row", { hasText: label }).locator("strong").first();
+  await expect.poll(reachable).toBe(11);
+  await expect(summary("Approved permanent-sample trees")).toHaveText("10");
+  await expect(summary("Pending Review trees")).toHaveText("1");
+  await expect(page.locator(".mv-map .ra-tree-pending")).toHaveCount(1);
+  for (const text of ["Permanent Sample Trees", "Damaged (Living)", "Needs Rechecking", "Pending Review (submitted, not yet approved)", "Overlapping trees"]) await expect(page.locator(".mv-side-panel")).toContainText(text);
+
+  // Zoom in on Zone VIII: all ten Tree IDs stay reachable at their saved positions, overlapping ones as numbered markers or one shared popup.
+  const select = (label) => page.locator(".mv-filter-field", { hasText: label }).locator("select");
+  await select("Planting Site").selectOption("z8");
+  await expect.poll(reachable).toBe(10);
+  await page.getByRole("button", { name: "Zoom to monitored trees" }).click();
+  await expect.poll(async () => markers.count()).toBeGreaterThan(1); expect(await reachable()).toBe(10);
+  const positions = await page.evaluate(() => [...document.querySelectorAll(".mv-map .ra-tree-marker")].map(node => node.getAttribute("title")));
+  expect(positions.join(" ")).not.toContain("Pending");
+  for (let i = 0; i < 4 && await markers.count() < 10; i++) {
+    const cluster = page.locator(".mv-map .ra-tree-marker:has(.ra-tree-count)").first(); if (!(await cluster.count())) break;
+    await cluster.click(); await page.waitForTimeout(400);
+    if (await page.locator(".leaflet-popup-content").count()) break;
+  }
+  expect(await reachable()).toBe(10);
+  const single = page.locator(".mv-map .ra-tree-marker:not(:has(.ra-tree-count))").first();
+  await single.click();
+  const popup = page.locator(".leaflet-popup-content .ra-tree-popup-item").first();
+  for (const text of ["RPT-2026-030-T", "Kalamansi", "Zone 8 Green Site - Testing Site 02", "Visit 1", "2026-11-20", "30 cm", "6 mm"]) await expect(popup).toContainText(text);
+
+  // Condition, species and barangay filter the trees by their own latest condition and species.
+  await page.getByRole("button", { name: "Clear Filters" }).click();
+  await select("Monitoring Condition").selectOption("Dead");
+  await expect.poll(reachable).toBe(1);
+  await expect(summary("Approved permanent-sample trees")).toHaveText("1");
+  await select("Monitoring Condition").selectOption("Damaged");
+  await expect.poll(reachable).toBe(3);
+  await page.getByRole("button", { name: "Clear Filters" }).click();
+  await select("Tree Species").selectOption("Narra");
+  await expect.poll(reachable).toBe(1);
+  await expect(page.locator(".mv-map .leaflet-interactive").first()).toBeVisible();
+  await page.getByRole("button", { name: "Clear Filters" }).click();
+  await select("Barangay").selectOption("Bical");
+  await expect.poll(reachable).toBe(1); await expect(page.locator(".mv-map .ra-tree-pending")).toHaveCount(1);
+  await page.getByRole("button", { name: "Clear Filters" }).click();
+  await expect.poll(reachable).toBe(11);
+
+  // Refresh Map reloads the trees; a failed tree load keeps the sites and the last markers and says so.
+  const before = treeRequests;
+  failTrees = true;
+  await page.getByRole("button", { name: "Refresh Map" }).click();
+  await expect.poll(() => treeRequests).toBeGreaterThan(before);
+  await expect(page.getByText("Unable to load monitored tree markers.", { exact: false })).toBeVisible();
+  await expect(summary("Total Planting Sites")).toHaveText("2");
+  expect(await reachable()).toBe(11);
 });
