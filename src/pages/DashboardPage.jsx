@@ -2437,7 +2437,7 @@ export default function DashboardPage() {
             id:
               "analytics",
             label:
-              "Reforestation Analytics",
+              "Analytics and Visualization",
             route: `${routeBase}/reforestation-analytics`,
             icon:
               BarChart3,
