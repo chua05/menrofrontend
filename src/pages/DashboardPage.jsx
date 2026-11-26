@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import PageLoadingState from "../components/PageLoadingState";
+import DashboardTutorial from "../components/DashboardTutorial";
 import { useToast } from "../context/ToastContext";
 import { consumeSuccessfulLogin } from "../utils/loginSuccess";
 import { DASHBOARD_SOURCES, DASHBOARD_UNAVAILABLE_MESSAGE, metricAvailability } from "../utils/dashboardAvailability";
@@ -2510,6 +2511,7 @@ export default function DashboardPage() {
             )}
           </select>
         )}
+        <DashboardTutorial role={userRole} uid={currentUser?.uid} />
       </div>
 
       <KpiGrid label="Dashboard summary" className="dashboard-kpi-grid">
