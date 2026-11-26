@@ -122,7 +122,7 @@ export default function AnalyticsSitesMap({ sites = [], onViewFullMap }) {
   const selectedUtilization = selected ? utilization(selected) : 0;
   return (
     <section className="ra-map-card">
-      <div className="ra-card-heading"><h2>Planting Sites Map</h2><p>Registered sites, utilization, and latest recorded tree condition</p></div>
+      <div className="ra-card-heading"><h2>Planting Sites Map</h2><p>Registered planting sites in Bulan, Sorsogon</p></div>
       <div className="ra-map-frame">
         <div ref={containerRef} className="ra-map" aria-label="Interactive map of registered planting sites in Bulan" />
         {error && <div className="ra-map-error" role="alert">{error}</div>}

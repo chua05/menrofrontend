@@ -85,7 +85,7 @@ const NAVIGATION = {
       section: "Analytics",
       items: [
         {
-          label: "Reforestation Analytics",
+          label: "Analytics and Visualization",
           icon: ChartNoAxesCombined,
           to: "/admin/reforestation-analytics",
         },
@@ -175,7 +175,7 @@ const NAVIGATION = {
       section: "Analytics",
       items: [
         {
-          label: "Reforestation Analytics",
+          label: "Analytics and Visualization",
           icon: ChartNoAxesCombined,
           to: "/staff/reforestation-analytics",
         },

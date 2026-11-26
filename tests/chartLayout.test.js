@@ -51,10 +51,12 @@ test("recent activities keeps its heading fixed and scrolls only its list", () =
   assert.match(dashboardCss, /\.recent-list\s*\{[\s\S]*min-height: 0;[\s\S]*flex: 1 1 auto;[\s\S]*overflow-y: auto/);
 });
 
-test("analytics trend charts retain their existing data and chart configuration", () => {
-  assert.match(analytics, /<BarChart data=\{analytics\.plantingTrend\}>/);
-  assert.match(analytics, /<LineChart data=\{analytics\.survivalTrend\}>/);
-  assert.equal((analytics.match(/initialDimension=\{TREND_CHART_INITIAL_SIZE\}/g) || []).length, 2);
-  assert.equal((analytics.match(/initialDimension=\{DONUT_CHART_INITIAL_SIZE\}/g) || []).length, 2);
-  assert.doesNotMatch(analytics, /<ChartEmpty/);
+test("analytics charts read the backend series and keep valid initial dimensions", () => {
+  assert.match(analytics, /<MonthlyBars data=\{distributionTrend\}/);
+  assert.match(analytics, /<MonthlyBars data=\{plantingTrend\}/);
+  assert.match(analytics, /<LineChart data=\{survivalTrend\}/);
+  assert.match(analytics, /connectNulls=\{false\}/);
+  assert.equal((analytics.match(/initialDimension=\{TREND_CHART_INITIAL_SIZE\}/g) || []).length, 3);
+  assert.equal((analytics.match(/initialDimension=\{DONUT_CHART_INITIAL_SIZE\}/g) || []).length, 3);
+  assert.doesNotMatch(analytics, /Decision Support|decisionSupport|Seedling Accountability/);
 });

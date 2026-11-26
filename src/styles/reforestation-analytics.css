@@ -642,3 +642,86 @@
   .ra-table { min-width: 520px; }
   .ra-stat-list strong { min-width: 64px; font-size: 16px; }
 }
+
+/* Analytics and Visualization: header, KPIs, filters, then charts. One spacing scale for every row. */
+.ra-page { --ra-gap: 14px; display: flex; flex-direction: column; gap: var(--ra-gap); }
+.ra-page > * { margin: 0; }
+.ra-page-header { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+.ra-page-icon { flex: none; width: 52px; height: 52px; border-radius: 12px; background: #e8f5ec; color: #17643a; display: grid; place-items: center; font-size: 26px; }
+.ra-page-header h1 { margin: 0; color: #173b28; font-size: 24px; line-height: 1.2; font-weight: 750; }
+.ra-page-header p { margin: 4px 0 0; color: #5f6b64; font-size: 14px; }
+.ra-page-header > div { flex: 1 1 0; min-width: 0; }
+.ra-header-link { text-decoration: none; }
+.ra-filter-card { margin: 0; grid-template-columns: minmax(260px, 1.4fr) repeat(3, minmax(140px, 1fr)) auto; align-items: end; }
+.ra-reset { min-height: 44px; }
+.ra-reset:disabled { opacity: 0.55; cursor: not-allowed; }
+.ra-date-range.is-invalid { border-color: #b42318; }
+.ra-field-error { display: block; margin-top: 5px; color: #b42318; font-size: 12.5px; }
+.ra-updating { grid-column: 1 / -1; margin: 0; color: #5f6b64; font-size: 12.5px; }
+.ra-chart-grid, .ra-detail-grid { margin: 0; display: grid; gap: var(--ra-gap); align-items: stretch; }
+.ra-chart-grid-top { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.ra-detail-grid { grid-template-columns: minmax(0, 0.9fr) minmax(0, 1fr) minmax(0, 1.25fr) minmax(0, 1fr); }
+.ra-chart-card, .ra-map-card { min-width: 0; display: flex; flex-direction: column; }
+.ra-chart-grid-top .ra-chart-area { position: relative; height: 240px; min-height: 0; }
+.ra-chart-empty { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; padding: 12px; color: #5f6b64; text-align: center; font-size: 13px; }
+.ra-chart-empty svg { width: 30px; height: 30px; color: #9bb3a4; }
+.ra-chart-empty strong { max-width: 260px; font-weight: 600; color: #4c5a52; }
+.ra-tooltip { display: grid; gap: 2px; padding: 8px 10px; border: 1px solid #dce3df; border-radius: 8px; background: #fff; font-size: 12px; color: #3e4a43; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08); }
+.ra-detail-grid .ra-donut-layout { display: flex; flex-direction: column; align-items: center; gap: 12px; }
+.ra-detail-grid .ra-donut-chart { position: relative; width: 170px; height: 170px; flex: none; }
+.ra-detail-grid .ra-zero-ring-center { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; pointer-events: none; }
+.ra-detail-grid .ra-legend { width: 100%; }
+.ra-detail-grid .ra-table-wrap { flex: 1 1 auto; max-width: 100%; overflow-x: auto; }
+.ra-detail-grid .ra-table { min-width: 0; table-layout: auto; }
+.ra-detail-grid .ra-table th, .ra-detail-grid .ra-table td { padding: 9px 8px; white-space: normal; overflow-wrap: break-word; vertical-align: top; }
+/* Table text keeps the app-wide readable size (index.css); headers in sentence case so four columns fit. */
+.ra-detail-grid .ra-table th { text-transform: none; color: #4f5d55; }
+.ra-detail-grid .ra-table td:first-child { overflow-wrap: anywhere; }
+.ra-detail-grid .ra-table abbr { text-decoration: none; }
+.ra-detail-grid .ra-table th, .ra-detail-grid .ra-table td { padding-left: 6px; padding-right: 6px; }
+.ra-detail-grid .ra-table th:not(:first-child), .ra-detail-grid .ra-table td:not(:first-child) { text-align: right; white-space: nowrap; }
+.ra-detail-grid .ra-table th:not(:first-child) { white-space: normal; }
+/* In the small map card the legend sits under the map instead of covering it. */
+.ra-detail-grid .ra-map-frame { min-height: 0; }
+.ra-detail-grid .ra-map-legend { position: static; max-width: none; margin: 0; border: 0; border-top: 1px solid #dce4df; border-radius: 0; box-shadow: none; flex-wrap: wrap; gap: 10px 18px; }
+.ra-detail-grid .ra-map-card .ra-map { height: 300px; }
+.ra-detail-grid .ra-map-card .ra-map-legend { font-size: 10.5px; }
+@media (max-width: 1400px) { .ra-detail-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 1100px) {
+  .ra-filter-card { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .ra-filter-card .ra-filter-field:first-child { grid-column: 1 / -1; }
+  .ra-reset { justify-self: start; }
+  .ra-chart-grid-top { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .ra-chart-grid-top > :last-child { grid-column: 1 / -1; }
+}
+@media (max-width: 700px) {
+  .ra-page { --ra-gap: 12px; }
+  .ra-page-header h1 { font-size: 20px; }
+  .ra-page-icon { width: 44px; height: 44px; font-size: 22px; }
+  .ra-filter-card, .ra-chart-grid-top, .ra-detail-grid { grid-template-columns: minmax(0, 1fr); }
+  .ra-chart-grid-top > :last-child { grid-column: auto; }
+  .ra-date-range { flex-wrap: wrap; }
+  .ra-chart-grid-top .ra-chart-area { height: 220px; }
+}
+
+/* Permanent Sample Monitoring Analytics (approved Monitor Planted Trees visits) */
+.ra-ps-section { display: flex; flex-direction: column; gap: var(--ra-gap); padding: 18px; border: 1px solid #cfe3d6; border-radius: 12px; background: #f5faf6; }
+.ra-ps-section > .ra-card-heading { margin: 0; }
+.ra-ps-tiles { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--ra-gap); }
+.ra-ps-tile { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; min-width: 0; padding: 12px; border: 1px solid #dde8e1; border-radius: 10px; background: #fff; text-align: center; overflow-wrap: anywhere; }
+.ra-ps-tile span { color: #4f5d55; font-weight: 700; }
+.ra-ps-tile strong { color: #17643a; font-size: 24px; line-height: 1.2; }
+.ra-ps-tile small { color: #66756c; }
+.ra-ps-grid { display: grid; grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.2fr) minmax(0, 1.4fr); gap: var(--ra-gap); align-items: stretch; }
+.ra-ps-grid .ra-chart-area { position: relative; height: 240px; }
+.ra-ps-grid .ra-donut-layout { display: flex; flex-direction: column; align-items: center; gap: 12px; }
+.ra-ps-grid .ra-donut-chart { position: relative; width: 170px; height: 170px; flex: none; }
+.ra-ps-grid .ra-zero-ring-center { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; pointer-events: none; }
+.ra-ps-grid .ra-legend { width: 100%; }
+.ra-ps-grid .ra-table { min-width: 0; }
+.ra-ps-grid .ra-table th, .ra-ps-grid .ra-table td { padding: 9px 6px; white-space: normal; overflow-wrap: break-word; vertical-align: top; }
+.ra-ps-grid .ra-table th { text-transform: none; color: #4f5d55; }
+.ra-ps-grid .ra-table abbr { text-decoration: none; }
+.ra-cell-note { display: block; color: #66756c; }
+@media (max-width: 1100px) { .ra-ps-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); } .ra-ps-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .ra-ps-grid > :last-child { grid-column: 1 / -1; } }
+@media (max-width: 700px) { .ra-ps-section { padding: 12px; } .ra-ps-tiles, .ra-ps-grid { grid-template-columns: minmax(0, 1fr); } .ra-ps-grid > :last-child { grid-column: auto; } }

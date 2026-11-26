@@ -1,4 +1,4 @@
-// Every signed-in page: no visible page header, one shared KPI card design, and no horizontal overflow.
+// Every signed-in page: no visible page header (except the pages listed in VISIBLE_HEADERS), one shared KPI card design, and no horizontal overflow.
 import process from "node:process";
 import { expect, test } from "@playwright/test";
 
@@ -42,13 +42,15 @@ const PAGES = [
   ["participant", "my-planting-reports", "My Planting Reports", 4, ["Submit Planting Report"]],
   ["staff", "survival-monitoring", "Survival Monitoring", 4, ["Monitor Planted Trees", "Refresh data"]],
   ["admin", "survival-monitoring", "Survival Monitoring", 4, ["Refresh data"]],
-  ["admin", "reforestation-analytics", "Reforestation Analytics", 6, []],
+  ["admin", "reforestation-analytics", "Analytics and Visualization", 5, ["Reset"]],
   ["admin", "map-visualization", "Map Visualization", 5, ["Refresh Map", "Clear Filters"]],
   ["admin", "reports", "Reports", 0, []],
   ["admin", "registered-users", "Registered Users", 6, []],
   ["admin", "settings", "System Settings", 0, ["Save Settings"]],
   ["staff", "settings", "System Settings", 0, []],
 ];
+// Pages whose design includes a visible title.
+const VISIBLE_HEADERS = { "reforestation-analytics": ["Analytics and Visualization"] };
 const WIDTHS = [1440, 1024, 768, 390, 320];
 const CARD = ["backgroundColor", "borderTopWidth", "borderTopColor", "borderTopStyle", "borderTopLeftRadius", "boxShadow", "minHeight", "paddingTop", "paddingLeft", "textAlign", "alignItems"];
 const TITLE = ["fontSize", "fontWeight", "lineHeight", "letterSpacing", "textTransform", "fontFamily"];
@@ -93,7 +95,7 @@ for (const [role, path, title, cards, buttons] of PAGES) for (const width of WID
     };
   }, [CARD, TITLE]);
   expect(layout.scroll, "horizontal overflow").toBeLessThanOrEqual(layout.inner);
-  expect(layout.visibleH1).toEqual([]);
+  expect(layout.visibleH1).toEqual(VISIBLE_HEADERS[path] || []);
   expect(layout.top, "blank space above the first element").toBeLessThanOrEqual(2);
   // Every page starts at the same left edge.
   expect(Math.abs(layout.left), `left edge (${layout.leftmost})`).toBeLessThanOrEqual(2);
@@ -118,4 +120,75 @@ for (const [role, path, title, cards, buttons] of PAGES) for (const width of WID
     expect(Math.abs((row[0].x - grid.x) - (grid.x + grid.w - row.at(-1).right)), "row is centred").toBeLessThan(2);
   }
   expect(Math.abs(rows[0].at(-1).right - (grid.x + grid.w)), "first row fills the grid").toBeLessThan(2);
+});
+
+// Analytics and Visualization: order, filters sent to the backend, honest empty states and layout at every width.
+const analyticsData = (filtered) => ({ summary: { totalSaplingsDistributed: filtered ? 150 : 717, totalTreesPlanted: filtered ? 150 : 210, overallSurvivalRate: filtered ? null : 82.5, verifiedPlantingReports: 3, barangaysCovered: 2, activePlantingSites: 2 },
+  distributionTrend: ["Jun 2026", "Jul 2026", "Nov 2026"].map((period, i) => ({ period, count: [0, 500, 217][i] })),
+  plantingTrend: ["Jun 2026", "Jul 2026", "Nov 2026"].map((period, i) => ({ period, count: [0, 0, filtered ? 0 : 210][i] })),
+  survivalTrend: [{ period: "Jul 2026", rate: 90, checked: 100, surviving: 90 }, { period: "Aug 2026", rate: null, checked: 0, surviving: 0 }, { period: "Sep 2026", rate: 82, checked: 50, surviving: 41 }].map(row => filtered ? { ...row, rate: null } : row),
+  monitoringConditions: [["Healthy", 120], ["Damaged", 12], ["Dead", 18]].map(([condition, count]) => ({ condition, count: filtered ? 0 : count })),
+  speciesDistribution: [{ species: "Pili", planted: 110 }, { species: "Kalamansi", planted: 100 }, { species: "A very long seedling tree name that must wrap inside its card", planted: 0 }],
+  barangaySurvival: [{ barangay: "ZoneVIIIPoblacion", planted: 150, monitored: 150, rate: 82 }, { barangay: "ZoneIVPoblacion", planted: 60, monitored: 0, rate: null }],
+  siteMap: [{ id: "s1", siteName: "Site 1", barangay: "Bical", latitude: 12.66, longitude: 123.9, planted: 1, maximumCapacity: 10 }],
+  // The one approved production visit, as the backend reports it (RPT-2026-030, Visit 1: 6 healthy, 3 damaged, 1 dead).
+  permanentSample: filtered ? { summary: { survivalRate: null, totalSampleTrees: 0, monitoredCohorts: 0, cohortsAwaitingRechecking: 0, approvedVisits: 0, latestApprovedMonitoringDate: null },
+    conditions: ["Healthy", "Damaged", "Dead", "Needs Rechecking"].map(condition => ({ condition, count: 0 })), trend: [], cohorts: [], exclusions: {} }
+    : { summary: { survivalRate: 90, totalSampleTrees: 10, monitoredCohorts: 1, cohortsAwaitingRechecking: 0, approvedVisits: 1, latestApprovedMonitoringDate: "2026-11-26" },
+      conditions: [["Healthy", 6], ["Damaged", 3], ["Dead", 1], ["Needs Rechecking", 0]].map(([condition, count]) => ({ condition, count })),
+      trend: [{ period: "Oct 2026", rate: null, checked: 0, surviving: 0, visits: 0 }, { period: "Nov 2026", rate: 90, checked: 10, surviving: 9, visits: 1 }],
+      cohorts: [{ cohortId: "c1", reportNumber: "RPT-2026-030", siteName: "Zone 8 Green Site", barangay: "ZoneVIIIPoblacion", visitNumber: 1, date: "2026-11-26", total: 10, Healthy: 6, Damaged: 3, Dead: 1, "Needs Rechecking": 0, survivalRate: 90 }], exclusions: {} },
+  verificationAnalytics: {}, accountability: {}, decisionSupport: { pendingPlantingReports: 4 },
+  options: { barangays: ["Bical", "ZoneVIIIPoblacion"], species: ["Kalamansi", "Pili"], sites: [{ value: "s1", label: "Site 1" }] }, meta: { generatedAt: "2026-11-26T01:00:00Z" } });
+for (const width of [1440, 1024, 768, 375]) test(`analytics and visualization at ${width}px`, async ({ page }, info) => {
+  await setup(page, "admin");
+  const queries = [];
+  await page.route("**/api/analytics/dashboard*", route => { const query = new URL(route.request().url()).searchParams; queries.push(query.toString()); return route.fulfill({ json: { success: true, data: analyticsData(query.has("barangay")) } }); });
+  await page.setViewportSize({ width, height: 1000 });
+  await page.goto("/admin/reforestation-analytics?role=admin");
+  const top = async selector => (await page.locator(selector).first().boundingBox()).y;
+  await expect(page.getByRole("heading", { level: 1, name: "Analytics and Visualization" })).toBeVisible();
+  await expect(page.getByText("Reforestation statistics, charts, and trends")).toBeVisible();
+  expect(await top(".kpi-grid")).toBeLessThan(await top(".ra-filter-card"));
+  expect(await top(".ra-filter-card")).toBeLessThan(await top(".ra-chart-grid-top"));
+  await expect(page.locator(".kpi-card-title")).toHaveText(["Total Seedlings Distributed", "Verified Trees Planted", "Overall Survival Rate", "Verified Planting Reports", "Barangays Covered"]);
+  await expect(page.locator(".ra-chart-grid-top h2")).toHaveText(["Monthly Seedling Distribution", "Monthly Verified Trees Planted", "Survival Rate Trend"]);
+  await expect(page.locator(".ra-detail-grid h2")).toHaveText(["Monitoring Condition Summary", "Verified Trees Planted by Species", "Planting Coverage by Barangay", "Planting Sites Map"]);
+  await expect(page.getByText(/Decision Support|Seedling Accountability|Planting Verification Analytics/)).toHaveCount(0);
+  const sample = page.getByRole("region", { name: "Permanent Sample Monitoring Analytics" });
+  expect(await top(".ra-detail-grid")).toBeLessThan(await top(".ra-ps-section"));
+  await expect(sample.locator(".ra-ps-tile strong")).toHaveText(["90%", "10", "1", "2026-11-26"]);
+  await expect(sample.locator(".ra-legend-row strong")).toHaveText(["6 · 60%", "3 · 30%", "1 · 10%", "0 · 0%"]);
+  await expect(sample.locator("tbody tr")).toHaveCount(1); await expect(sample.locator("tbody tr")).toContainText("RPT-2026-030");
+  await expect(page.locator(".ra-chart-grid-top .recharts-surface")).toHaveCount(3);
+  await expect(page.locator(".ra-detail-grid tbody tr")).toHaveCount(5);
+  await expect(page.locator(".ra-detail-grid tbody tr").filter({ hasText: "ZoneIVPoblacion" })).toContainText("—");
+  // Layout: no page overflow, equal cards in each row, charts and the map inside their cards.
+  const layout = await page.evaluate(() => {
+    const boxes = selector => [...document.querySelectorAll(selector)].map(node => node.getBoundingClientRect());
+    const rows = list => Object.values(Object.groupBy(list, r => Math.round(r.top))).map(row => row.map(r => Math.round(r.height)));
+    return { overflow: document.documentElement.scrollWidth - window.innerWidth, kpiRows: rows(boxes(".kpi-card")), chartRows: rows(boxes(".ra-chart-grid-top > *")),
+      spill: [...document.querySelectorAll(".ra-chart-card, .ra-map-card, .ra-ps-tile")].filter(card => card.scrollWidth > card.clientWidth + 1).length,
+      hiddenCells: [...document.querySelectorAll(".ra-detail-grid td, .ra-detail-grid th, .ra-ps-grid td, .ra-ps-grid th")].filter(cell => { const r = cell.getBoundingClientRect(), wrap = cell.closest(".ra-table-wrap").getBoundingClientRect(); return r.right > wrap.right + 1 || r.width < 20; }).map(cell => `${cell.textContent}:${Math.round(cell.getBoundingClientRect().width)}:${Math.round(cell.getBoundingClientRect().right - cell.closest(".ra-table-wrap").getBoundingClientRect().right)}`),
+      mapInside: (() => { const map = document.querySelector(".ra-map").getBoundingClientRect(), card = document.querySelector(".ra-map-card").getBoundingClientRect(); return map.left >= card.left - 1 && map.right <= card.right + 1; })() };
+  });
+  expect(layout.overflow).toBeLessThanOrEqual(0);
+  for (const row of [...layout.kpiRows, ...layout.chartRows]) expect(new Set(row).size, JSON.stringify(row)).toBe(1);
+  expect(layout.spill).toBe(0); expect(layout.mapInside).toBe(true); if (width > 375) expect(layout.hiddenCells, "every table column is visible without scrolling").toEqual([]);
+  await page.screenshot({ path: info.outputPath(`analytics-${width}.png`), fullPage: true });
+  if (width !== 1440) return;
+  // Filters reach the backend; empty results say so instead of drawing zeros; Reset restores the defaults.
+  await page.locator("#ra-barangay").selectOption("Bical");
+  await expect.poll(() => queries.at(-1)).toBe("barangay=Bical");
+  await expect(page.getByText("No verified planting records available for the selected filters.")).toBeVisible();
+  await expect(page.getByText("No official survival monitoring data available yet.")).toBeVisible();
+  await expect(page.locator(".kpi-card").nth(2)).toContainText("—"); await expect(page.locator(".kpi-card").nth(2)).toContainText("No official monitoring data yet");
+  await expect(page.locator(".ra-detail-grid .ra-legend-row strong")).toHaveText(["—", "—", "—"]);
+  await expect(page.getByRole("region", { name: "Permanent Sample Monitoring Analytics" }).locator(".ra-ps-tile strong").first()).toHaveText("—");
+  await expect(page.getByText("No approved sample monitoring visits for the selected filters.").first()).toBeVisible();
+  await page.locator('input[aria-label="From date"]').fill("2026-12-01"); await page.locator('input[aria-label="To date"]').fill("2026-11-01");
+  await expect(page.getByText("The From date cannot be later than the To date.")).toBeVisible();
+  const sent = queries.length; await page.waitForTimeout(300); expect(queries.length).toBe(sent);
+  await page.getByRole("button", { name: "Reset", exact: true }).click();
+  await expect.poll(() => queries.at(-1)).toBe(""); await expect(page.locator("#ra-barangay")).toHaveValue("All");
 });
