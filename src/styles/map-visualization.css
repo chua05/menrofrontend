@@ -448,3 +448,71 @@
 @media (max-width: 760px) {
   .mv-filter-action > button { flex: 1 1 130px; }
 }
+
+/* PERMANENT SAMPLE TREES (markers drawn by components/map/treeMarkerLayer) */
+
+.mv-tree-key {
+  position: relative;
+  display: inline-block;
+  width: 14px;
+  height: 18px;
+  flex-shrink: 0;
+}
+
+.mv-tree-key .ra-tree-count {
+  top: -5px;
+  right: -9px;
+  min-width: 13px;
+  height: 13px;
+  font-size: 8px;
+  line-height: 13px;
+}
+
+.mv-zoom-trees {
+  position: absolute;
+  z-index: 500;
+  top: 12px;
+  right: 12px;
+  min-height: 36px;
+  padding: 0 14px;
+  border: 1px solid #cfd8d3;
+  border-radius: 10px;
+  background: #ffffff;
+  color: #17643a;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.12);
+}
+
+.mv-zoom-trees:focus-visible {
+  outline: 3px solid #93c5aa;
+  outline-offset: 2px;
+}
+
+.mv-tree-error {
+  margin: 0 0 12px;
+  padding: 10px 14px;
+  border: 1px solid #f3c98b;
+  border-radius: 10px;
+  background: #fff8ec;
+  color: #8a4b08;
+  font-size: 13px;
+}
+
+.mv-tree-note {
+  margin: 10px 0 0;
+  font-size: 12px;
+  line-height: 1.45;
+  color: #8a4b08;
+}
+
+@media (max-width: 480px) {
+  .mv-zoom-trees {
+    top: 8px;
+    right: 8px;
+    min-height: 32px;
+    padding: 0 10px;
+    font-size: 12px;
+  }
+}

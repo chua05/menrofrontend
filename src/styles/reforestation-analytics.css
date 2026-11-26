@@ -703,25 +703,11 @@
 }
 
 /* Permanent sample tree markers: registered GPS, colored by the latest Admin-approved condition */
-.ra-tree-marker { background: transparent; border: 0; filter: drop-shadow(0 1px 2px rgb(0 0 0 / 0.4)); }
-.ra-tree-marker svg { width: 100%; height: 100%; stroke: #fff; stroke-width: 1.5; }
-.ra-tree-healthy svg { fill: #2f9e57; }
-.ra-tree-damaged svg { fill: #f3a62f; }
-.ra-tree-dead svg { fill: #e54848; }
-.ra-tree-rechecking svg { fill: #7c8ba1; }
-.ra-tree-mixed svg { fill: #17643a; stroke: #f3a62f; stroke-width: 2; }
-.ra-tree-count { position: absolute; top: -6px; right: -8px; min-width: 16px; height: 16px; padding: 0 3px; border-radius: 8px; background: #17643a; color: #fff; font-size: 10px; font-weight: 700; line-height: 16px; text-align: center; }
 .ra-map-legend i.ra-tree-key { width: 10px; height: 12px; border-radius: 0; clip-path: polygon(50% 0, 100% 45%, 75% 45%, 100% 75%, 62% 75%, 62% 100%, 38% 100%, 38% 75%, 0 75%, 25% 45%, 0 45%); }
 .ra-map-legend i.ra-tree-healthy { background: #2f9e57; }
 .ra-map-legend i.ra-tree-damaged { background: #f3a62f; }
 .ra-map-legend i.ra-tree-dead { background: #e54848; }
 .ra-map-legend i.ra-tree-rechecking { background: #7c8ba1; }
-.ra-tree-popup { display: grid; gap: 10px; }
-.ra-tree-popup-item + .ra-tree-popup-item { padding-top: 8px; border-top: 1px solid #dde8e1; }
-.ra-tree-popup strong { color: #17643a; }
-.ra-tree-popup dl { display: grid; grid-template-columns: auto 1fr; gap: 2px 8px; margin: 6px 0 0; }
-.ra-tree-popup dt { color: #66756c; }
-.ra-tree-popup dd { margin: 0; font-weight: 600; }
 .ra-map-zoom { position: absolute; top: 10px; left: 54px; z-index: 500; padding: 6px 10px; border: 1px solid #17643a; border-radius: 8px; background: #fff; color: #17643a; font-weight: 700; cursor: pointer; }
 .ra-map-popup .ra-map-popup-zoom { justify-self: start; margin-top: 4px; padding: 4px 10px; border: 1px solid #17643a; border-radius: 6px; background: #fff; color: #17643a; font-weight: 700; cursor: pointer; }
 .ra-map-note { margin: 6px 0 0; color: #66756c; font-size: 12px; }

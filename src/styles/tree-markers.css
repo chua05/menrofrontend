@@ -1,0 +1,18 @@
+/* Permanent-sample tree markers: shared by the Analytics map and the full Planting Sites Map. */
+.ra-tree-marker { background: transparent; border: 0; filter: drop-shadow(0 1px 2px rgb(0 0 0 / 0.4)); }
+.ra-tree-marker svg { width: 100%; height: 100%; stroke: #fff; stroke-width: 1.5; }
+.ra-tree-healthy svg { fill: #2f9e57; }
+.ra-tree-damaged svg { fill: #f3a62f; }
+.ra-tree-dead svg { fill: #e54848; }
+.ra-tree-rechecking svg { fill: #7c8ba1; }
+.ra-tree-mixed svg { fill: #17643a; stroke: #f3a62f; stroke-width: 2; }
+.ra-tree-count { position: absolute; top: -6px; right: -8px; min-width: 16px; height: 16px; padding: 0 3px; border-radius: 8px; background: #17643a; color: #fff; font-size: 10px; font-weight: 700; line-height: 16px; text-align: center; }
+.ra-tree-popup { display: grid; gap: 10px; }
+.ra-tree-popup-item + .ra-tree-popup-item { padding-top: 8px; border-top: 1px solid #dde8e1; }
+.ra-tree-popup strong { color: #17643a; }
+.ra-tree-popup dl { display: grid; grid-template-columns: auto 1fr; gap: 2px 8px; margin: 6px 0 0; }
+.ra-tree-popup dt { color: #66756c; }
+.ra-tree-popup dd { margin: 0; font-weight: 600; }
+/* Submitted, awaiting Admin review: hollow dashed tree, never a verified condition colour. */
+.ra-tree-pending svg { fill: #f4effc; stroke: #6d3fc0; stroke-width: 1.6; stroke-dasharray: 2.2 1.6; }
+.ra-tree-popup-item.is-pending strong { color: #6d3fc0; }
