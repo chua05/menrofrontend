@@ -56,7 +56,7 @@ test("analytics charts read the backend series and keep valid initial dimensions
   assert.match(analytics, /<MonthlyBars data=\{plantingTrend\}/);
   assert.match(analytics, /<LineChart data=\{survivalTrend\}/);
   assert.match(analytics, /connectNulls=\{false\}/);
-  assert.equal((analytics.match(/initialDimension=\{TREND_CHART_INITIAL_SIZE\}/g) || []).length, 2);
-  assert.equal((analytics.match(/initialDimension=\{DONUT_CHART_INITIAL_SIZE\}/g) || []).length, 2);
+  assert.equal((analytics.match(/initialDimension=\{TREND_CHART_INITIAL_SIZE\}/g) || []).length, 3);
+  assert.equal((analytics.match(/initialDimension=\{DONUT_CHART_INITIAL_SIZE\}/g) || []).length, 3);
   assert.doesNotMatch(analytics, /Decision Support|decisionSupport|Seedling Accountability/);
 });

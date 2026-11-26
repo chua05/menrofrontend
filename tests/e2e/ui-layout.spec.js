@@ -131,6 +131,13 @@ const analyticsData = (filtered) => ({ summary: { totalSaplingsDistributed: filt
   speciesDistribution: [{ species: "Pili", planted: 110 }, { species: "Kalamansi", planted: 100 }, { species: "A very long seedling tree name that must wrap inside its card", planted: 0 }],
   barangaySurvival: [{ barangay: "ZoneVIIIPoblacion", planted: 150, monitored: 150, rate: 82 }, { barangay: "ZoneIVPoblacion", planted: 60, monitored: 0, rate: null }],
   siteMap: [{ id: "s1", siteName: "Site 1", barangay: "Bical", latitude: 12.66, longitude: 123.9, planted: 1, maximumCapacity: 10 }],
+  // The one approved production visit, as the backend reports it (RPT-2026-030, Visit 1: 6 healthy, 3 damaged, 1 dead).
+  permanentSample: filtered ? { summary: { survivalRate: null, totalSampleTrees: 0, monitoredCohorts: 0, cohortsAwaitingRechecking: 0, approvedVisits: 0, latestApprovedMonitoringDate: null },
+    conditions: ["Healthy", "Damaged", "Dead", "Needs Rechecking"].map(condition => ({ condition, count: 0 })), trend: [], cohorts: [], exclusions: {} }
+    : { summary: { survivalRate: 90, totalSampleTrees: 10, monitoredCohorts: 1, cohortsAwaitingRechecking: 0, approvedVisits: 1, latestApprovedMonitoringDate: "2026-11-26" },
+      conditions: [["Healthy", 6], ["Damaged", 3], ["Dead", 1], ["Needs Rechecking", 0]].map(([condition, count]) => ({ condition, count })),
+      trend: [{ period: "Oct 2026", rate: null, checked: 0, surviving: 0, visits: 0 }, { period: "Nov 2026", rate: 90, checked: 10, surviving: 9, visits: 1 }],
+      cohorts: [{ cohortId: "c1", reportNumber: "RPT-2026-030", siteName: "Zone 8 Green Site", barangay: "ZoneVIIIPoblacion", visitNumber: 1, date: "2026-11-26", total: 10, Healthy: 6, Damaged: 3, Dead: 1, "Needs Rechecking": 0, survivalRate: 90 }], exclusions: {} },
   verificationAnalytics: {}, accountability: {}, decisionSupport: { pendingPlantingReports: 4 },
   options: { barangays: ["Bical", "ZoneVIIIPoblacion"], species: ["Kalamansi", "Pili"], sites: [{ value: "s1", label: "Site 1" }] }, meta: { generatedAt: "2026-11-26T01:00:00Z" } });
 for (const width of [1440, 1024, 768, 375]) test(`analytics and visualization at ${width}px`, async ({ page }, info) => {
@@ -148,6 +155,11 @@ for (const width of [1440, 1024, 768, 375]) test(`analytics and visualization at
   await expect(page.locator(".ra-chart-grid-top h2")).toHaveText(["Monthly Seedling Distribution", "Monthly Verified Trees Planted", "Survival Rate Trend"]);
   await expect(page.locator(".ra-detail-grid h2")).toHaveText(["Monitoring Condition Summary", "Verified Trees Planted by Species", "Planting Coverage by Barangay", "Planting Sites Map"]);
   await expect(page.getByText(/Decision Support|Seedling Accountability|Planting Verification Analytics/)).toHaveCount(0);
+  const sample = page.getByRole("region", { name: "Permanent Sample Monitoring Analytics" });
+  expect(await top(".ra-detail-grid")).toBeLessThan(await top(".ra-ps-section"));
+  await expect(sample.locator(".ra-ps-tile strong")).toHaveText(["90%", "10", "1", "2026-11-26"]);
+  await expect(sample.locator(".ra-legend-row strong")).toHaveText(["6 · 60%", "3 · 30%", "1 · 10%", "0 · 0%"]);
+  await expect(sample.locator("tbody tr")).toHaveCount(1); await expect(sample.locator("tbody tr")).toContainText("RPT-2026-030");
   await expect(page.locator(".ra-chart-grid-top .recharts-surface")).toHaveCount(3);
   await expect(page.locator(".ra-detail-grid tbody tr")).toHaveCount(5);
   await expect(page.locator(".ra-detail-grid tbody tr").filter({ hasText: "ZoneIVPoblacion" })).toContainText("—");
@@ -156,8 +168,8 @@ for (const width of [1440, 1024, 768, 375]) test(`analytics and visualization at
     const boxes = selector => [...document.querySelectorAll(selector)].map(node => node.getBoundingClientRect());
     const rows = list => Object.values(Object.groupBy(list, r => Math.round(r.top))).map(row => row.map(r => Math.round(r.height)));
     return { overflow: document.documentElement.scrollWidth - window.innerWidth, kpiRows: rows(boxes(".kpi-card")), chartRows: rows(boxes(".ra-chart-grid-top > *")),
-      spill: [...document.querySelectorAll(".ra-chart-card, .ra-map-card")].filter(card => card.scrollWidth > card.clientWidth + 1).length,
-      hiddenCells: [...document.querySelectorAll(".ra-detail-grid td, .ra-detail-grid th")].filter(cell => { const r = cell.getBoundingClientRect(), wrap = cell.closest(".ra-table-wrap").getBoundingClientRect(); return r.right > wrap.right + 1 || r.width < 20; }).map(cell => `${cell.textContent}:${Math.round(cell.getBoundingClientRect().width)}:${Math.round(cell.getBoundingClientRect().right - cell.closest(".ra-table-wrap").getBoundingClientRect().right)}`),
+      spill: [...document.querySelectorAll(".ra-chart-card, .ra-map-card, .ra-ps-tile")].filter(card => card.scrollWidth > card.clientWidth + 1).length,
+      hiddenCells: [...document.querySelectorAll(".ra-detail-grid td, .ra-detail-grid th, .ra-ps-grid td, .ra-ps-grid th")].filter(cell => { const r = cell.getBoundingClientRect(), wrap = cell.closest(".ra-table-wrap").getBoundingClientRect(); return r.right > wrap.right + 1 || r.width < 20; }).map(cell => `${cell.textContent}:${Math.round(cell.getBoundingClientRect().width)}:${Math.round(cell.getBoundingClientRect().right - cell.closest(".ra-table-wrap").getBoundingClientRect().right)}`),
       mapInside: (() => { const map = document.querySelector(".ra-map").getBoundingClientRect(), card = document.querySelector(".ra-map-card").getBoundingClientRect(); return map.left >= card.left - 1 && map.right <= card.right + 1; })() };
   });
   expect(layout.overflow).toBeLessThanOrEqual(0);
@@ -171,7 +183,9 @@ for (const width of [1440, 1024, 768, 375]) test(`analytics and visualization at
   await expect(page.getByText("No verified planting records available for the selected filters.")).toBeVisible();
   await expect(page.getByText("No official survival monitoring data available yet.")).toBeVisible();
   await expect(page.locator(".kpi-card").nth(2)).toContainText("—"); await expect(page.locator(".kpi-card").nth(2)).toContainText("No official monitoring data yet");
-  await expect(page.locator(".ra-legend-row strong")).toHaveText(["—", "—", "—"]);
+  await expect(page.locator(".ra-detail-grid .ra-legend-row strong")).toHaveText(["—", "—", "—"]);
+  await expect(page.getByRole("region", { name: "Permanent Sample Monitoring Analytics" }).locator(".ra-ps-tile strong").first()).toHaveText("—");
+  await expect(page.getByText("No approved sample monitoring visits for the selected filters.").first()).toBeVisible();
   await page.locator('input[aria-label="From date"]').fill("2026-12-01"); await page.locator('input[aria-label="To date"]').fill("2026-11-01");
   await expect(page.getByText("The From date cannot be later than the To date.")).toBeVisible();
   const sent = queries.length; await page.waitForTimeout(300); expect(queries.length).toBe(sent);
