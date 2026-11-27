@@ -890,8 +890,8 @@
   padding: 10px 16px 16px;
   display: grid;
   grid-template-columns:
-    minmax(150px, 1fr)
-    minmax(130px, 0.82fr);
+    minmax(0, 1fr)
+    minmax(0, 0.82fr);
   align-items: center;
   gap: 12px;
 }
@@ -1058,6 +1058,15 @@
 .sites-table th:nth-child(6),
 .sites-table td:nth-child(6) {
   width: 17%;
+}
+
+/* Tablet width: the docked sidebar leaves a narrower page column, so tighten cell padding to keep every column in view. */
+@media (min-width: 701px) and (max-width: 1100px) {
+  .sites-table th,
+  .sites-table td {
+    padding-right: 8px;
+    padding-left: 8px;
+  }
 }
 
 /* =====================================================

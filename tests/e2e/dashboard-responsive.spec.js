@@ -26,7 +26,13 @@ const monitoring = Array.from({ length: 10 }, (_, index) => ({
   id: `m${index}`, userId: uid, status: "Verified", siteId: `s${index % 8}`, siteName: sites[index % 8].name, barangay,
   aliveCount: 900 + index, deadCount: 100, survivalRate: 87.4, monitoringDate: `2026-10-2${index % 9}`, createdAt: `2026-10-2${index % 9}T02:00:00Z`,
 }));
+const analytics = {
+  summary: { totalSaplingsDistributed: 1234567, totalTreesPlanted: 1200, overallSurvivalRate: 87.5, verifiedPlantingReports: 4, barangaysCovered: 2, activePlantingSites: 1 },
+  distributionTrend: [], plantingTrend: [], survivalTrend: [], monitoringConditions: [], speciesDistribution: [], barangaySurvival: [], siteMap: [],
+  permanentSample: null, options: { barangays: [], species: [], sites: [] }, meta: {},
+};
 const responses = {
+  "/api/analytics/dashboard": analytics,
   "/api/seedling-requests": requests, "/api/seedling-requests/my": requests, "/api/sites": sites,
   "/api/planting-reports": reports, "/api/planting-reports/my-reports": reports, "/api/events": events,
   "/api/monitoring": monitoring, "/api/monitoring/my-records": monitoring,
@@ -44,7 +50,7 @@ async function openDashboard(page, role, width, height = 900) {
     return route.fulfill({ json: { success: true, data: responses[url.pathname] ?? [] } });
   });
   await page.goto(`/${role}/dashboard?role=${role}`);
-  await page.locator(".dashboard-kpi-card").first().waitFor();
+  await page.locator(".kpi-card").first().waitFor();
   await page.locator(role === "participant" ? ".activity-card" : ".sites-table").first().waitFor();
   await page.waitForTimeout(400);
 }
@@ -52,7 +58,7 @@ async function openDashboard(page, role, width, height = 900) {
 const kpiRows = page => page.evaluate(() => {
   const grid = document.querySelector(".dashboard-kpi-grid").getBoundingClientRect();
   const rows = new Map();
-  for (const card of document.querySelectorAll(".dashboard-kpi-card")) {
+  for (const card of document.querySelectorAll(".kpi-card")) {
     const box = card.getBoundingClientRect(), top = Math.round(box.top);
     rows.set(top, Math.max(rows.get(top) ?? 0, box.right));
   }
@@ -65,7 +71,8 @@ for (const [role, widths] of [["participant", allWidths], ["staff", allWidths], 
     test(`${role} KPI rows fill the grid at ${width}px`, async ({ page }) => {
       await openDashboard(page, role, width);
       const { gridRight, rowRights } = await kpiRows(page);
-      for (const right of rowRights) expect(Math.abs(gridRight - right)).toBeLessThanOrEqual(1);
+      // Cards are centred, so only the full rows reach the grid edge; a shorter last row keeps the same card width.
+      for (const right of rowRights.slice(0, -1).length ? rowRights.slice(0, -1) : rowRights) expect(Math.abs(gridRight - right)).toBeLessThanOrEqual(1);
     });
   }
 }

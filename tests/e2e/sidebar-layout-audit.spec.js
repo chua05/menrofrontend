@@ -35,9 +35,21 @@ const policy = {
     purpose, reporting: "REQUIRED", monitoring: "PERMANENT_SAMPLE", quantityThreshold: 500, organizationCondition: null })),
   sampling: { percentage: 10, minimum: 30, firstVisitDelayWeeks: 12, intervalMonths: 6, speciesAllocationProcedure: "", physicalSelectionProcedure: "" },
 };
+const barangays = ["San Francisco (Poblacion)", "Sagrada", "Cogon", "Zone 1", "Zone 2", "Zone 3"];
+const speciesNames = ["Narra", "Mahogany", "Molave", "Bagras", "Kamagong", "Acacia"];
+const month = m => `2026-${String(m).padStart(2, "0")}`;
 const analytics = {
-  summary: { totalSaplingsDistributed: 1234567, totalTreesPlanted: 1200, overallSurvivalRate: 87.5, verifiedPlantingReports: 4, barangaysCovered: 2, activePlantingSites: 1 },
-  plantingTrend: [], survivalTrend: [], monitoringConditions: [], speciesDistribution: [], barangaySurvival: [], siteMap: [], verificationAnalytics: {}, accountability: {}, decisionSupport: {}, options: { barangays: [], species: [], sites: [] }, meta: {},
+  summary: { totalSaplingsDistributed: 6850, totalTreesPlanted: 4300, overallSurvivalRate: 87.5, verifiedPlantingReports: 6, barangaysCovered: 6, activePlantingSites: 8, sampleSurvivalRate: 86.4 },
+  distributionTrend: [6, 7, 8, 9, 10, 11].map((m, i) => ({ period: month(m), count: [800, 1250, 950, 1400, 1100, 1350][i] })),
+  plantingTrend: [6, 7, 8, 9, 10, 11].map((m, i) => ({ period: month(m), count: [600, 900, 820, 980, 410, 590][i] })),
+  survivalTrend: [6, 7, 8, 9, 10, 11].map((m, i) => ({ period: month(m), rate: [91, 89, 88, 87, 86, 86.4][i] })),
+  monitoringConditions: [{ condition: "Healthy", count: 412 }, { condition: "Damaged", count: 38 }, { condition: "Dead", count: 27 }],
+  speciesDistribution: speciesNames.map((name, i) => ({ species: name, planted: [1050, 900, 760, 640, 520, 430][i] })),
+  barangaySurvival: barangays.map((name, i) => ({ barangay: name, planted: [1050, 900, 760, 640, 520, 430][i], sampleMonitored: 80 - i * 6, sampleRate: 92 - i * 2 })),
+  siteMap: sites.map(site => ({ ...site, treesPlanted: 700 })),
+  permanentSample: { summary: { cohortsAwaitingRechecking: 1 }, conditions: [{ condition: "Healthy", count: 412 }, { condition: "Damaged", count: 38 }, { condition: "Dead", count: 27 }], trend: [], trees: [], locationUnavailable: 0 },
+  verificationAnalytics: {}, accountability: {}, decisionSupport: {},
+  options: { barangays, species: speciesNames, sites: sites.map(site => site.name) }, meta: {},
 };
 const responses = {
   "/api/analytics/dashboard": analytics,
@@ -62,6 +74,7 @@ async function mockApi(page) {
 // Geometry audit run inside the page; returns readable problem strings.
 const audit = (sidebarWidth) => {
   const problems = [];
+  const counts = { leaflet: 0, recharts: 0 };
   const label = el => `${el.tagName.toLowerCase()}${typeof el.className === "string" && el.className.trim() ? "." + el.className.trim().split(/\s+/).slice(0, 2).join(".") : ""}`;
   const doc = document.documentElement;
   if (doc.scrollWidth > doc.clientWidth + 1) problems.push(`horizontal scroll: ${doc.scrollWidth} > ${doc.clientWidth}`);
@@ -78,18 +91,33 @@ const audit = (sidebarWidth) => {
   };
   // Page content is everything inside the main column; the shell wrappers legitimately span the full viewport.
   for (const el of document.querySelectorAll(".dashboard-main, .dashboard-main *")) {
-    if (el.closest("aside.sidebar, dialog, svg, [aria-hidden='true']")) continue;
+    if (el.closest("aside.sidebar, dialog, svg, .leaflet-container *, [aria-hidden='true']")) continue;
     const box = el.getBoundingClientRect();
     if (box.width === 0 || box.height === 0 || ignored(el)) continue;
     if (box.left < side.right - 1 && box.right > 0) problems.push(`${label(el)} starts at ${Math.round(box.left)} < sidebar edge ${Math.round(side.right)}`);
+    if (box.width <= 1 && box.height <= 1) continue; // visually hidden text
+    // Right edge: content must end inside the viewport unless it sits in a deliberate sideways scroller, and must not be cut off by an overflow:hidden/clip ancestor.
+    let scroller = false;
+    for (let node = el.parentElement; node && node !== document.body; node = node.parentElement) {
+      const overflowX = getComputedStyle(node).overflowX;
+      if (overflowX === "visible") continue;
+      if (overflowX === "auto" || overflowX === "scroll") { scroller = true; break; }
+      const nodeRight = node.getBoundingClientRect().right;
+      if (box.right > nodeRight + 1 && box.left < nodeRight) {
+        problems.push(`${label(el)} clipped by ${label(node)} (right ${Math.round(box.right)} > ${Math.round(nodeRight)})`);
+        break;
+      }
+    }
+    if (!scroller && box.right > doc.clientWidth + 1) problems.push(`${label(el)} ends at ${Math.round(box.right)} > viewport ${doc.clientWidth}`);
   }
   for (const el of document.querySelectorAll(".leaflet-container, .recharts-responsive-container")) {
     if (ignored(el)) continue;
+    counts[el.classList.contains("leaflet-container") ? "leaflet" : "recharts"] += 1;
     const box = el.getBoundingClientRect(), parent = el.parentElement.getBoundingClientRect();
     if (box.width <= 0 || box.height <= 0) problems.push(`${label(el)} has no size`);
     if (box.width > parent.width + 1) problems.push(`${label(el)} wider than parent (${Math.round(box.width)} > ${Math.round(parent.width)})`);
   }
-  return [...new Set(problems)].slice(0, 8);
+  return { problems: [...new Set(problems)].slice(0, 8), counts };
 };
 
 async function settle(page, sidebarWidth) {
@@ -115,6 +143,12 @@ for (const role of ["admin", "staff", "participant"]) {
     expect(routes.length).toBeGreaterThan(5);
 
     const failures = [];
+    const seen = { leaflet: 0, recharts: 0 };
+    const run = async (width, state, route, sidebarWidth) => {
+      const result = await page.evaluate(audit, sidebarWidth);
+      seen.leaflet += result.counts.leaflet; seen.recharts += result.counts.recharts;
+      for (const problem of result.problems) failures.push(`${width} ${state} ${route}: ${problem}`);
+    };
     for (const width of [1920, 1440, 1280, 1024, 768]) {
       await page.setViewportSize({ width, height: 900 });
       for (const route of routes) {
@@ -123,14 +157,17 @@ for (const role of ["admin", "staff", "participant"]) {
         await expect(toggle).toHaveAccessibleName("Collapse sidebar");
         await settle(page, 248);
         await page.waitForTimeout(300);
-        for (const problem of await page.evaluate(audit, 248)) failures.push(`${width} expanded ${route}: ${problem}`);
+        await run(width, "expanded", route, 248);
         await toggle.click();
         await expect(toggle).toHaveAccessibleName("Expand sidebar");
         await settle(page, 72);
-        for (const problem of await page.evaluate(audit, 72)) failures.push(`${width} rail ${route}: ${problem}`);
+        await run(width, "rail", route, 72);
       }
     }
     expect(failures).toEqual([]);
+    // The map and chart assertions must not pass vacuously: each role has at least one page with each.
+    expect(seen.leaflet, "Leaflet maps were audited").toBeGreaterThan(0);
+    expect(seen.recharts, "Recharts charts were audited").toBeGreaterThan(0);
   });
 }
 

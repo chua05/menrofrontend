@@ -27,7 +27,7 @@ const edges = page => page.evaluate(() => ({
 async function expectSettled(page, width) {
   await expect.poll(async () => {
     const box = await edges(page);
-    return Math.abs(box.sidebarWidth - width) <= 1 && Math.abs(box.mainLeft - box.sidebarRight) <= 1;
+    return Math.abs(box.sidebarWidth - width) < 0.5 && Math.abs(box.mainLeft - box.sidebarRight) < 0.5;
   }).toBe(true);
 }
 
@@ -48,7 +48,7 @@ test("admin docked sidebar pushes the page, collapses to an icon rail with toolt
   await expect(page.locator("dialog[open]")).toHaveCount(0);
   await expect(sidebar.getByRole("button", { name: "Close sidebar" })).toHaveCount(0);
   await expectSettled(page, 248);
-  let box = await edges(page);
+  const box = await edges(page);
   expect(box.topbarLeft).toBeCloseTo(box.sidebarRight, 0);
   expect(box.mainRight).toBeCloseTo(1440, 0);
   const expandedNames = await sidebar.getByRole("navigation", { name: "Main navigation" }).getByRole("link").allInnerTexts();
@@ -61,8 +61,6 @@ test("admin docked sidebar pushes the page, collapses to an icon rail with toolt
   await expect(toggle).toHaveAccessibleName("Expand sidebar");
   await expect(toggle).toHaveAttribute("aria-expanded", "false");
   await expectSettled(page, 72);
-  box = await edges(page);
-  expect(box.mainLeft).toBeCloseTo(72, 0);
   await expect.poll(() => page.evaluate(() => window.__resizes)).toBe(1);
   await page.waitForTimeout(500);
   expect(await page.evaluate(() => window.__resizes)).toBe(1);
@@ -131,7 +129,7 @@ test("tablet width defaults to the rail and phone width uses the overlay drawer"
   await page.evaluate(() => { window.__resizes = 0; window.addEventListener("resize", () => { window.__resizes += 1; }); });
   await page.getByRole("button", { name: "Expand sidebar" }).click();
   await expect.poll(() => page.evaluate(() => window.__resizes)).toBe(1);
-  expect((await edges(page)).mainLeft).toBeCloseTo(248, 0);
+  await expectSettled(page, 248);
   await page.getByRole("button", { name: "Collapse sidebar" }).click();
   await expectSettled(page, 72);
 

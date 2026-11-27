@@ -26,6 +26,8 @@ async function fixture(page, overrides = {}) {
     else if (url.pathname === "/api/search") data = { results: [{ id: "release-fixture", title: "Fixture request", type: "Sapling Request", path: "/staff/requests" }] };
     else if (url.pathname === "/api/auth/profile") data = { uid: "test-staff", fullName: "Fixture Staff" };
     else if (url.pathname === "/api/sites") data = [];
+    else if (url.pathname === "/api/analytics/dashboard") data = { summary: { totalSaplingsDistributed: 0, totalTreesPlanted: 0, overallSurvivalRate: 0, verifiedPlantingReports: 0, barangaysCovered: 0, activePlantingSites: 0 },
+      distributionTrend: [], plantingTrend: [], survivalTrend: [], monitoringConditions: [], speciesDistribution: [], barangaySurvival: [], siteMap: [], permanentSample: null, options: { barangays: [], species: [], sites: [] }, meta: {} };
     else if (["/api/planting-reports", "/api/planting-reports/my-reports", "/api/events", "/api/monitoring", "/api/monitoring/my-records", "/api/users", "/api/distributions"].includes(url.pathname)) data = [];
     else if (["/api/seedling-requests/my", "/api/seedling-requests/my-requests"].includes(url.pathname)) data = [];
     else { unexpected.push(key); return route.fulfill({ status: 500, json: { success: false, message: "Unregistered request" } }); }
