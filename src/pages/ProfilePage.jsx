@@ -1208,8 +1208,12 @@ export default function ProfilePage() {
       <style>{`
         @media (max-width: 1050px) {
           .profile-page-main-grid {
-            grid-template-columns: 1fr !important;
+            grid-template-columns: minmax(0, 1fr) !important;
           }
+        }
+
+        .profile-page-main-grid > * {
+          min-width: 0;
         }
 
         @media (max-width: 760px) {
