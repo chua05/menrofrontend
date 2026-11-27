@@ -1,6 +1,6 @@
 import ModalDialog from "../components/ModalDialog";
 import SidebarTooltip from "./SidebarTooltip";
-import { NavLink } from "react-router-dom";
+import { NavLink, useLocation } from "react-router-dom";
 import { useEffect, useMemo, useState } from "react";
 import {
   House,
@@ -322,9 +322,11 @@ export default function Sidebar({ mode, expanded = true, isOpen, onClose }) {
   const rail = docked && !expanded;
 
   // Expanding (or leaving docked mode) drops any rail tooltip that was showing.
-  const [tooltipRail, setTooltipRail] = useState(rail);
-  if (tooltipRail !== rail) {
-    setTooltipRail(rail);
+  // A route change also drops it: the sidebar outlives navigation, so a focused link would keep it on screen.
+  const { pathname } = useLocation();
+  const [tooltipKey, setTooltipKey] = useState({ rail, pathname });
+  if (tooltipKey.rail !== rail || tooltipKey.pathname !== pathname) {
+    setTooltipKey({ rail, pathname });
     setTooltip(null);
   }
 
@@ -409,9 +411,14 @@ export default function Sidebar({ mode, expanded = true, isOpen, onClose }) {
               className={({ isActive }) =>
                 `sb-item sb-rail-item ${isActive ? "active" : ""}`
               }
-              onMouseEnter={(event) => showTooltip(event, item.label)}
-              onFocus={(event) => showTooltip(event, item.label)}
-              onMouseLeave={hideTooltip}
+              onPointerEnter={(event) => {
+                if (event.pointerType === "mouse") showTooltip(event, item.label);
+              }}
+              onFocus={(event) => {
+                if (event.currentTarget.matches(":focus-visible")) showTooltip(event, item.label);
+              }}
+              onPointerLeave={hideTooltip}
+              onClick={hideTooltip}
               onBlur={hideTooltip}
               onKeyDown={(event) => { if (event.key === "Escape") hideTooltip(); }}
             >

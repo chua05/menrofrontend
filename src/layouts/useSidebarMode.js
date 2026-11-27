@@ -10,7 +10,7 @@ function isDockedViewport() {
   return window.matchMedia(DOCKED_QUERY).matches;
 }
 
-function readInitialExpanded() {
+function readStoredExpanded() {
   try {
     const stored = window.localStorage.getItem(STORAGE_KEY);
     if (stored === "1") return true;
@@ -18,7 +18,11 @@ function readInitialExpanded() {
   } catch {
     // Storage can be unavailable (private mode, blocked site data): use the default.
   }
-  return window.innerWidth >= DEFAULT_EXPANDED_MIN_WIDTH;
+  return null;
+}
+
+function readInitialExpanded() {
+  return readStoredExpanded() ?? window.innerWidth >= DEFAULT_EXPANDED_MIN_WIDTH;
 }
 
 export default function useSidebarMode() {
@@ -32,6 +36,16 @@ export default function useSidebarMode() {
       setDocked(event.matches);
       // Entering docked mode never leaves a modal drawer open (or reopening later).
       if (event.matches) setDrawerOpen(false);
+    };
+    query.addEventListener("change", handleChange);
+    return () => query.removeEventListener("change", handleChange);
+  }, []);
+
+  // With no remembered choice the default follows the 1280px breakpoint; a stored choice is never overridden.
+  useEffect(() => {
+    const query = window.matchMedia(`(min-width: ${DEFAULT_EXPANDED_MIN_WIDTH}px)`);
+    const handleChange = (event) => {
+      if (readStoredExpanded() === null) setExpanded(event.matches);
     };
     query.addEventListener("change", handleChange);
     return () => query.removeEventListener("change", handleChange);

@@ -72,7 +72,10 @@ for (const [role, widths] of [["participant", allWidths], ["staff", allWidths], 
       await openDashboard(page, role, width);
       const { gridRight, rowRights } = await kpiRows(page);
       // Cards are centred, so only the full rows reach the grid edge; a shorter last row keeps the same card width.
-      for (const right of rowRights.slice(0, -1).length ? rowRights.slice(0, -1) : rowRights) expect(Math.abs(gridRight - right)).toBeLessThanOrEqual(1);
+      const fullRows = rowRights.slice(0, -1);
+      const lastRow = rowRights[rowRights.length - 1];
+      for (const right of fullRows) expect(Math.abs(gridRight - right)).toBeLessThanOrEqual(1);
+      expect(lastRow).toBeLessThanOrEqual(gridRight + 1);
     });
   }
 }

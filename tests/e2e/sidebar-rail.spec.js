@@ -11,6 +11,9 @@ async function mockApi(page) {
     if (!url.pathname.startsWith("/api/")) return route.continue();
     if (url.pathname === "/api/notifications/unread-count") return route.fulfill({ json: { success: true, data: { unreadCount: 0 } } });
     if (url.pathname === "/api/notifications") return route.fulfill({ json: { success: true, data: { notifications: [], unreadCount: 0, hasMore: false, nextCursor: null } } });
+    if (url.pathname === "/api/analytics/dashboard") return route.fulfill({ json: { success: true, data: {
+      summary: {}, distributionTrend: [], plantingTrend: [], survivalTrend: [], monitoringConditions: [], speciesDistribution: [],
+      barangaySurvival: [], siteMap: [], permanentSample: null, options: { barangays: [], species: [], sites: [] }, meta: {} } } });
     return route.fulfill({ json: { success: true, data: [] } });
   });
   return { check: () => expect(unexpected).toEqual([]) };
@@ -81,6 +84,7 @@ test("admin docked sidebar pushes the page, collapses to an icon rail with toolt
   expect(tipBox.x).toBeGreaterThan(iconBox.x + iconBox.width);
   await page.mouse.move(800, 600);
   await expect(tooltip).toHaveCount(0);
+  await page.keyboard.press("Shift"); // keyboard modality, so :focus-visible matches
   await rail.getByRole("link", { name: "Settings", exact: true }).focus();
   await expect(tooltip).toHaveText("Settings");
   await page.keyboard.press("Escape");
@@ -154,5 +158,67 @@ test("tablet width defaults to the rail and phone width uses the overlay drawer"
   const home = page.locator("aside#menro-sidebar").getByRole("link", { name: "Home", exact: true });
   await home.click();
   await expect(page).toHaveURL(/\/admin\/dashboard/);
+  api.check();
+});
+
+test("rail tooltip is gone after a click navigation", async ({ page }) => {
+  const api = await mockApi(page);
+  await page.setViewportSize({ width: 1024, height: 768 });
+  await page.goto("/admin/requests?role=admin");
+  await expect(page.locator("aside#menro-sidebar")).toHaveClass(/rail/);
+  const rail = page.locator("aside#menro-sidebar").getByRole("navigation", { name: "Main navigation" });
+  await rail.getByRole("link", { name: "Seedling Inventory", exact: true }).click();
+  await expect(page).toHaveURL(/\/admin\/seedlings/);
+  await page.waitForTimeout(300);
+  await expect(page.locator(".sb-tooltip")).toHaveCount(0);
+  api.check();
+});
+
+test("a touch tap on a rail link leaves no tooltip behind", async ({ browser }) => {
+  const context = await browser.newContext({ hasTouch: true, viewport: { width: 1024, height: 768 } });
+  const page = await context.newPage();
+  const api = await mockApi(page);
+  await page.goto("http://127.0.0.1:5184/admin/requests?role=admin");
+  await expect(page.locator("aside#menro-sidebar")).toHaveClass(/rail/);
+  await page.locator("aside#menro-sidebar").getByRole("link", { name: "Seedling Inventory", exact: true }).tap();
+  await expect(page).toHaveURL(/\/admin\/seedlings/);
+  await page.waitForTimeout(300);
+  await expect(page.locator(".sb-tooltip")).toHaveCount(0);
+  api.check();
+  await context.close();
+});
+
+test("keyboard Tab focus and mouse hover still show the rail tooltip", async ({ page }) => {
+  const api = await mockApi(page);
+  await page.setViewportSize({ width: 1024, height: 768 });
+  await page.goto("/admin/requests?role=admin");
+  const rail = page.locator("aside#menro-sidebar").getByRole("navigation", { name: "Main navigation" });
+  const links = rail.getByRole("link");
+  await links.first().focus();
+  await page.keyboard.press("Tab");
+  await expect(links.nth(1)).toBeFocused();
+  await expect(page.locator(".sb-tooltip")).toBeVisible();
+  await rail.getByRole("link", { name: "Settings", exact: true }).hover();
+  await expect(page.locator(".sb-tooltip")).toHaveText("Settings");
+  api.check();
+});
+
+test("without a stored choice the default follows the 1280px breakpoint until the user toggles", async ({ page }) => {
+  const api = await mockApi(page);
+  const sidebar = page.locator("aside#menro-sidebar");
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto("/admin/requests?role=admin");
+  await expect(sidebar).toHaveClass(/expanded/);
+  await page.setViewportSize({ width: 1100, height: 900 });
+  await expect(sidebar).toHaveClass(/rail/);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await expect(sidebar).toHaveClass(/expanded/);
+
+  await page.locator(".topbar-menu-btn").click();
+  await expect(sidebar).toHaveClass(/rail/);
+  await page.setViewportSize({ width: 1100, height: 900 });
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.waitForTimeout(300);
+  await expect(sidebar).toHaveClass(/rail/);
   api.check();
 });
