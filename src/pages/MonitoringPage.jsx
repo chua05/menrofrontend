@@ -642,6 +642,29 @@ export default function MonitoringPage() {
     };
   }, [isParticipant, userRole, retryKey]);
 
+  // Admin-approved permanent-sample results (Monitor Planted Trees), from the analytics service. Shown apart from the
+  // official full-cohort figures above them; reloaded with the page's own refresh.
+  const [sampleResults, setSampleResults] = useState(null);
+  const [sampleResultsError, setSampleResultsError] = useState(false);
+  useEffect(() => {
+    if (isParticipant || !userRole) return undefined;
+    let cancelled = false;
+    apiRequest("/analytics/dashboard")
+      .then((response) => {
+        if (cancelled) return;
+        const sample = response?.data?.permanentSample;
+        if (!sample?.summary) throw new Error("Invalid analytics response.");
+        setSampleResults(sample);
+        setSampleResultsError(false);
+      })
+      .catch((error) => {
+        if (cancelled) return;
+        console.error("Failed to load approved sample monitoring results:", error);
+        setSampleResultsError(true);
+      });
+    return () => { cancelled = true; };
+  }, [isParticipant, userRole, retryKey]);
+
   useEffect(() => {
     const refresh = () => setRetryKey((current) => current + 1);
     const interval = window.setInterval(() => {
@@ -1117,7 +1140,8 @@ export default function MonitoringPage() {
 
     return [...grouped.values()].sort((a, b) => a.month.localeCompare(b.month)).map((item) => ({
       month: getMonthLabel(item.month),
-      survivalRate: item.total > 0 ? Math.round((item.alive / item.total) * 100) : 0,
+      // A month without official observations is a gap, never 0%.
+      survivalRate: item.total > 0 ? Math.round((item.alive / item.total) * 100) : null,
     }));
   }, [visibleRecords, trendRange]);
 
@@ -1677,6 +1701,24 @@ export default function MonitoringPage() {
         <KpiCard title="Total Trees Lost" value={loadError ? "—" : summary.dead} description="Approved full-cohort records" tone="red" />
       </KpiGrid>
 
+      {!isParticipant && (
+        <section className="sm-sample-summary" aria-label="Approved permanent-sample monitoring">
+          <div>
+            <strong>Sample Survival Rate</strong>
+            <span>{sampleResults?.summary?.survivalRate == null ? "—" : `${sampleResults.summary.survivalRate}%`}</span>
+          </div>
+          <p>
+            {sampleResultsError && !sampleResults
+              ? "Approved sample monitoring results are unavailable right now."
+              : !sampleResults
+                ? "Loading approved sample monitoring results…"
+                : sampleResults.summary.totalSampleTrees > 0
+                  ? `Permanent-sample results from ${sampleResults.summary.approvedVisits} Admin-approved Monitor Planted Trees ${sampleResults.summary.approvedVisits === 1 ? "visit" : "visits"} (${sampleResults.summary.totalSampleTrees} sample trees${sampleResults.summary.latestApprovedMonitoringDate ? `, latest ${sampleResults.summary.latestApprovedMonitoringDate}` : ""}). ${(sampleResults.conditions || []).map((row) => `${row.condition === "Damaged" ? "Damaged (Living)" : row.condition}: ${row.count}`).join(" · ")}. These are sampled trees, not official full-cohort survival.`
+                  : "No Admin-approved sample monitoring yet."}
+          </p>
+        </section>
+      )}
+
       {/* FILTERS */}
       <div className="sm-filter-row">
         <div className="sm-search-wrap">
@@ -1850,6 +1892,7 @@ export default function MonitoringPage() {
                   <Line
                     type="monotone"
                     dataKey="survivalRate"
+                    connectNulls={false}
                     stroke="#138a4b"
                     strokeWidth={2.5}
                     dot={{ r: 4 }}

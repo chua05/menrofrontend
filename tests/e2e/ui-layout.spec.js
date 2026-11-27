@@ -309,3 +309,53 @@ test("full map shows approved permanent-sample tree markers with working filters
   await expect(summary("Total Planting Sites")).toHaveText("2");
   expect(await reachable()).toBe(11);
 });
+
+// One set of figures on every page: the Admin dashboard, Analytics and Survival Monitoring read the same analytics records;
+// sample survival is labelled as such and never stands in for official full-cohort survival; approvals appear without a reload.
+test("dashboard, analytics and survival monitoring show the same verified and approved-sample figures", async ({ page }) => {
+  await setup(page, "admin");
+  let data = analyticsData(false);
+  const queries = [];
+  await page.route("**/api/analytics/dashboard*", route => { queries.push(new URL(route.request().url()).searchParams.toString()); return route.fulfill({ json: { success: true, data } }); });
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.goto("/admin/dashboard?role=admin");
+  const card = (title) => page.locator(".kpi-card", { hasText: title });
+  await expect(card("Seedlings Distributed").locator(".kpi-card-value")).toHaveText("717");
+  await expect(card("Trees Planted").locator(".kpi-card-value")).toHaveText("210");
+  await expect(card("Sample Survival Rate").locator(".kpi-card-value")).toHaveText("90%");
+  await expect(card("Sample Survival Rate")).toContainText("10 sample trees · official full-cohort survival 82.5%");
+  await expect(page.getByText("Survival Rate (All Sites)")).toHaveCount(0);
+  await expect(page.locator(".survival-card h2")).toHaveText("Sample Survival Rate by Barangay");
+  await expect(page.locator(".survival-center strong")).toHaveText("90%");
+  await expect(page.locator(".survival-card")).toContainText("not official full-cohort survival");
+  await expect(page.locator(".survival-card")).not.toContainText("0%Overall");
+
+  // The barangay filter reaches the analytics service.
+  await page.locator("#dashboard-barangay-filter").selectOption("Bical");
+  await expect.poll(() => queries.at(-1)).toBe("barangay=Bical");
+  await page.locator("#dashboard-barangay-filter").selectOption("All Barangays");
+  await expect.poll(() => queries.at(-1)).toBe("");
+
+  // An Admin approval raises the planted total and the sample rate: the next refresh (window focus) shows it without a reload.
+  data = { ...data, summary: { ...data.summary, totalTreesPlanted: 260, sampleSurvivalRate: 85 } };
+  await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+  await expect(card("Trees Planted").locator(".kpi-card-value")).toHaveText("260");
+  await expect(card("Sample Survival Rate").locator(".kpi-card-value")).toHaveText("85%");
+
+  // No approved sample results and no official observations: dashes, never 0%.
+  data = { ...analyticsData(true), summary: { ...analyticsData(true).summary, sampleSurvivalRate: null, overallSurvivalRate: null } };
+  await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+  await expect(card("Sample Survival Rate").locator(".kpi-card-value")).toHaveText("—");
+  await expect(card("Sample Survival Rate")).toContainText("No Admin-approved sample monitoring yet");
+  await expect(page.locator(".survival-center strong")).toHaveText("—");
+
+  // Analytics and Survival Monitoring show the same approved-sample figure as the dashboard did.
+  data = analyticsData(false);
+  await page.goto("/admin/reforestation-analytics?role=admin");
+  await expect(page.locator(".kpi-card", { hasText: "Sample Survival Rate" }).locator(".kpi-card-value")).toHaveText("90%");
+  await page.goto("/admin/survival-monitoring?role=admin");
+  await expect(page.locator(".sm-sample-summary span")).toHaveText("90%");
+  await expect(page.locator(".sm-sample-summary")).toContainText("10 sample trees");
+  await expect(page.locator(".sm-sample-summary")).toContainText("not official full-cohort survival");
+  await expect(page.locator(".kpi-card", { hasText: "Official Survival Rate" }).locator(".kpi-card-value")).toHaveText("—");
+});

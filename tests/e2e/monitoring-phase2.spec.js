@@ -157,8 +157,9 @@ test.describe.serial("Monitoring Phase 2 authenticated workflows", () => {
     const officialKpi = admin.getByText("Approved Full Cohorts", { exact: true }).locator("..");
     await expect(officialKpi.locator(".kpi-card-value")).toHaveText("3");
     await admin.goto("/admin/dashboard");
-    const dashboardSurvival = admin.getByText("Survival Rate (All Sites)", { exact: true }).locator("..");
-    await expect(dashboardSurvival.locator(".kpi-card-value")).toHaveText("90%");
+    // The dashboard card is the permanent-sample rate; official full-cohort survival is reported in its note, never as the sample rate.
+    const dashboardSurvival = admin.getByText("Sample Survival Rate", { exact: true }).locator("..");
+    await expect(dashboardSurvival).toContainText("official full-cohort survival 90%");
     await admin.context().close();
   });
 

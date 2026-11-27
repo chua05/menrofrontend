@@ -40,9 +40,10 @@ import { useAuth } from "../context/AuthContext";
 import { auth } from "../firebase/config";
 import { API_BASE_URL } from "../services/authenticatedApi";
 import { formatDisplayId } from "../utils/displayId";
-import { monthlySurvivalRates, officialMonitoringHistoryEntries, weightedOfficialSurvivalRate } from "../utils/monitoringForm";
+import { monthlySurvivalRates, officialMonitoringHistoryEntries } from "../utils/monitoringForm";
 import { BULAN_BARANGAYS } from "../utils/userTypes";
 import { drawSiteOverlay } from "../components/map/siteOverlayLayer";
+import { barangaySurvivalView, managementFigures, monthlyActivityView, survivalCardView } from "../utils/dashboardAnalytics";
 import { MAP_MAX_ZOOM, addBasemap } from "../components/map/basemap";
 import KpiCard, { KpiGrid } from "../components/KpiCard";
 import "../styles/dashboard-page.css";
@@ -149,7 +150,9 @@ async function getFreshToken() {
   });
 }
 
-async function apiGet(path, token, requestSignal) {
+const DASHBOARD_REFRESH_INTERVAL_MS = 60_000;
+
+async function apiGet(path, token, requestSignal, { data = false } = {}) {
   const controller = new AbortController();
   const abortRequest = () => controller.abort();
   if (requestSignal?.aborted) controller.abort();
@@ -188,7 +191,7 @@ async function apiGet(path, token, requestSignal) {
     throw new Error(payload?.message || `Unable to load ${path}.`);
   }
 
-  return unwrapArray(payload);
+  return data ? payload?.data ?? null : unwrapArray(payload);
 }
 
 function normalizeStatus(value) {
@@ -754,32 +757,6 @@ function buildMonthlyActivity(distributions, reports, monitoring) {
   }));
 }
 
-function buildSurvivalByBarangay(monitoring) {
-  const grouped = new Map();
-
-  monitoring.forEach((record) => {
-    const barangay = record?.barangay;
-    const counts = getMonitoringCounts(record);
-
-    if (!barangay) return;
-
-    if (!grouped.has(barangay)) {
-      grouped.set(barangay, { surviving: 0, total: 0 });
-    }
-
-    const current = grouped.get(barangay);
-    current.surviving += counts.surviving;
-    current.total += counts.total;
-  });
-
-  return Array.from(grouped.entries())
-    .map(([barangay, counts]) => ({
-      barangay,
-      rate: counts.total > 0 ? Math.round((counts.surviving / counts.total) * 100) : 0,
-    }))
-    .sort((a, b) => b.rate - a.rate)
-    .slice(0, 7);
-}
 
 function createRecentActivities({
   requests,
@@ -1414,6 +1391,11 @@ export default function DashboardPage() {
     useState("");
   const [fatalLoadError, setFatalLoadError] = useState("");
   const [retryKey, setRetryKey] = useState(0);
+  // Bumped every 60 s while visible and on window focus, so approvals and releases appear without a reload.
+  const [refreshTick, setRefreshTick] = useState(0);
+  // Admin/Staff figures from the analytics service (same rules as Analytics and Visualization).
+  const [analytics, setAnalytics] = useState(null);
+  const [analyticsUnavailable, setAnalyticsUnavailable] = useState(false);
 
   const [barangay, setBarangay] =
     useState("All Barangays");
@@ -1547,7 +1529,46 @@ export default function DashboardPage() {
       cancelled = true;
       requestController.abort();
     };
-  }, [isManagement, isParticipant, retryKey]);
+  }, [isManagement, isParticipant, retryKey, refreshTick]);
+
+  useEffect(() => {
+    const refresh = () => setRefreshTick((tick) => tick + 1);
+    const interval = window.setInterval(() => {
+      if (document.visibilityState === "visible") refresh();
+    }, DASHBOARD_REFRESH_INTERVAL_MS);
+    window.addEventListener("focus", refresh);
+    return () => {
+      window.clearInterval(interval);
+      window.removeEventListener("focus", refresh);
+    };
+  }, []);
+
+  // D. Distributed, planted, verified reports, trends and survival for Admin/Staff, filtered like the dashboard.
+  useEffect(() => {
+    if (!isManagement) return undefined;
+    let cancelled = false;
+    const controller = new AbortController();
+    (async () => {
+      try {
+        const token = await getFreshToken();
+        const query = barangay && barangay !== "All Barangays" ? `?barangay=${encodeURIComponent(barangay)}` : "";
+        const data = await apiGet(`/analytics/dashboard${query}`, token, controller.signal, { data: true });
+        if (cancelled) return;
+        if (!data || typeof data !== "object" || !data.summary) throw new Error("Invalid analytics response.");
+        setAnalytics(data);
+        setAnalyticsUnavailable(false);
+      } catch (error) {
+        if (cancelled) return;
+        console.error("Dashboard analytics refresh failed", { message: error?.message || null });
+        // The last figures stay on screen; with none yet, the cards show "—" rather than 0.
+        setAnalyticsUnavailable(true);
+      }
+    })();
+    return () => {
+      cancelled = true;
+      controller.abort();
+    };
+  }, [isManagement, barangay, retryKey, refreshTick]);
 
   const participantIdentity =
     useMemo(
@@ -1917,6 +1938,7 @@ export default function DashboardPage() {
             [
               "verified",
               "approved",
+              "completed",
             ].includes(
               getReportStatus(
                 record
@@ -1939,9 +1961,13 @@ export default function DashboardPage() {
       visibleRequests,
     ]);
 
+  // Admin/Staff: the analytics trends (planting month, release month, official survival). Participants: their own records.
+  const analyticsFigures = useMemo(() => managementFigures(analytics), [analytics]);
+  const survivalCard = useMemo(() => survivalCardView(analytics), [analytics]);
+  const barangaySurvival = useMemo(() => barangaySurvivalView(analytics), [analytics]);
   const monthlyActivity =
     useMemo(
-      () =>
+      () => isManagement ? monthlyActivityView(analytics) :
         buildMonthlyActivity(
           dashboardDistributions,
           dashboardReports,
@@ -1952,6 +1978,8 @@ export default function DashboardPage() {
             survivalRate: unavailableSources.has("monitoring") || unavailableSources.has("reports") ? null : row.survivalRate,
           })),
       [
+        analytics,
+        isManagement,
         dashboardDistributions,
         dashboardMonitoring,
         dashboardReports,
@@ -1959,16 +1987,6 @@ export default function DashboardPage() {
       ]
     );
 
-  const survivalBarangays =
-    useMemo(
-      () =>
-        buildSurvivalByBarangay(
-          dashboardMonitoring
-        ),
-      [
-        dashboardMonitoring,
-      ]
-    );
 
   const recentActivities =
     useMemo(
@@ -2060,20 +2078,20 @@ export default function DashboardPage() {
           null
     );
 
-  const overallSurvival = weightedOfficialSurvivalRate(dashboardMonitoring);
 
   const managementKpis = [
     {
       id: "allocated",
       label:
         "Seedlings Distributed",
-      value: managementSummary.totalDistributed.toLocaleString(),
+      value: analyticsFigures.totalDistributed === null ? "—" : analyticsFigures.totalDistributed.toLocaleString(),
       tone: "green",
       note:
-        managementSummary.totalDistributed >
-        0
-          ? "Recorded distribution total"
-          : "No data available",
+        analyticsFigures.totalDistributed === null
+          ? analyticsUnavailable ? "Analytics unavailable" : "Loading…"
+          : analyticsFigures.totalDistributed > 0
+            ? "Released seedlings"
+            : "No releases recorded",
       route: `${routeBase}/seedlings`,
     },
     {
@@ -2101,30 +2119,23 @@ export default function DashboardPage() {
       id: "planted",
       label:
         "Trees Planted",
-      value: managementSummary.totalPlanted.toLocaleString(),
+      value: analyticsFigures.totalPlanted === null ? "—" : analyticsFigures.totalPlanted.toLocaleString(),
       tone: "orange",
       note:
-        managementSummary.totalPlanted >
-        0
-          ? "From planting reports"
-          : "No planting data yet",
+        analyticsFigures.totalPlanted === null
+          ? analyticsUnavailable ? "Analytics unavailable" : "Loading…"
+          : analyticsFigures.totalPlanted > 0
+            ? "Verified planting"
+            : "No verified planting yet",
       route: `${routeBase}/planting-reports`,
     },
     {
       id: "survival",
-      label:
-        "Survival Rate (All Sites)",
-      value:
-        managementSummary.survivalRate !==
-        null
-          ? `${managementSummary.survivalRate}%`
-          : "—",
+      // Permanent-sample results of Admin-approved Monitor Planted Trees visits; official full-cohort survival is in the note.
+      label: survivalCard.label,
+      value: survivalCard.value,
       tone: "green",
-      note:
-        managementSummary.survivalRate !==
-        null
-          ? "Based on monitoring records"
-          : "No monitoring data yet",
+      note: survivalCard.note,
       route: `${routeBase}/survival-monitoring`,
     },
     {
@@ -2435,7 +2446,7 @@ export default function DashboardPage() {
 
                 <span>
                   <i className="survival-dot" />
-                  Survival Rate (%)
+                  {isParticipant ? "Survival Rate (%)" : "Official Survival Rate (%)"}
                 </span>
               </div>
 
@@ -2544,7 +2555,7 @@ export default function DashboardPage() {
                         yAxisId="right"
                         type="monotone"
                         dataKey="survivalRate"
-                        connectNulls
+                        connectNulls={false}
                         stroke="#f1a600"
                         strokeWidth={2}
                         dot={{
@@ -2615,7 +2626,7 @@ export default function DashboardPage() {
                   </span>
 
                   <strong>
-                    {managementSummary.totalDistributed.toLocaleString()}
+                    {analyticsFigures.totalDistributed === null ? "—" : analyticsFigures.totalDistributed.toLocaleString()}
                   </strong>
                 </div>
 
@@ -2625,21 +2636,18 @@ export default function DashboardPage() {
                   </span>
 
                   <strong>
-                    {managementSummary.totalPlanted.toLocaleString()}
+                    {analyticsFigures.totalPlanted === null ? "—" : analyticsFigures.totalPlanted.toLocaleString()}
                   </strong>
                 </div>
 
                 <div>
                   <span>
-                    Overall Survival
+                    Sample Survival
                     Rate
                   </span>
 
                   <strong className="green">
-                    {managementSummary.survivalRate !==
-                    null
-                      ? `${managementSummary.survivalRate}%`
-                      : "—"}
+                    {survivalCard.value}
                   </strong>
                 </div>
 
@@ -2649,7 +2657,7 @@ export default function DashboardPage() {
                   </span>
 
                   <strong>
-                    {managementSummary.verifiedReports}
+                    {analyticsFigures.verifiedReports === null ? "—" : analyticsFigures.verifiedReports.toLocaleString()}
                   </strong>
                 </div>
               </>
@@ -2897,8 +2905,7 @@ export default function DashboardPage() {
           <section className="dash-card survival-card">
             <div className="dash-card-header">
               <h2>
-                Survival Rate by
-                Barangay
+                {barangaySurvival.title}
               </h2>
             </div>
 
@@ -2911,7 +2918,7 @@ export default function DashboardPage() {
                   >
                     <PieChart>
                       <Pie
-                        data={survivalBarangays.some((item) => item.rate > 0) ? survivalBarangays : [{ barangay: "Zero survival", rate: 1 }]}
+                        data={barangaySurvival.rows.some((item) => item.rate > 0) ? barangaySurvival.rows : [{ barangay: "No rate", rate: 1 }]}
                         dataKey="rate"
                         nameKey="barangay"
                         innerRadius={
@@ -2922,7 +2929,7 @@ export default function DashboardPage() {
                         }
                         stroke="none"
                       >
-                        {(survivalBarangays.some((item) => item.rate > 0) ? survivalBarangays : [{ barangay: "Zero survival", rate: 1 }]).map(
+                        {(barangaySurvival.rows.some((item) => item.rate > 0) ? barangaySurvival.rows : [{ barangay: "No rate", rate: 1 }]).map(
                           (
                             _,
                             index
@@ -2931,7 +2938,7 @@ export default function DashboardPage() {
                               key={
                                 index
                               }
-                              fill={survivalBarangays.some((item) => item.rate > 0) ? SURVIVAL_COLORS[index % SURVIVAL_COLORS.length] : "#e5e9e7"}
+                              fill={barangaySurvival.rows.some((item) => item.rate > 0) ? SURVIVAL_COLORS[index % SURVIVAL_COLORS.length] : "#e5e9e7"}
                             />
                           )
                         )}
@@ -2941,17 +2948,17 @@ export default function DashboardPage() {
 
                   <div className="survival-center">
                     <strong>
-                      {overallSurvival !== null ? `${overallSurvival}%` : "0%"}
+                      {barangaySurvival.center}
                     </strong>
 
                     <span>
-                      Overall
+                      {barangaySurvival.centerLabel}
                     </span>
                   </div>
                 </div>
 
                 <div className="survival-list">
-                  {survivalBarangays.map(
+                  {barangaySurvival.rows.map(
                     (
                       item,
                       index
@@ -2978,7 +2985,11 @@ export default function DashboardPage() {
                           }
                         </span>
 
-                        <strong>
+                        <strong
+                          title={barangaySurvival.mode === "sample"
+                            ? `${item.trees} sample trees; official full-cohort ${item.officialRate === null ? "not yet available" : `${item.officialRate}%`}`
+                            : `${item.trees} trees in official observations`}
+                        >
                           {
                             item.rate
                           }
@@ -2987,8 +2998,13 @@ export default function DashboardPage() {
                       </div>
                     )
                   )}
-                  {survivalBarangays.length === 0 && (
-                    <span className="dashboard-chart-zero-copy">No survival monitoring records have been submitted yet.</span>
+                  {barangaySurvival.rows.length === 0 && (
+                    <span className="dashboard-chart-zero-copy">
+                      {analytics ? "No Admin-approved survival results yet." : analyticsUnavailable ? "Survival results are unavailable right now." : "Loading survival results…"}
+                    </span>
+                  )}
+                  {barangaySurvival.mode === "sample" && (
+                    <span className="dashboard-chart-zero-copy">Permanent-sample results from Admin-approved Monitor Planted Trees visits, not official full-cohort survival.</span>
                   )}
                 </div>
               </div>
