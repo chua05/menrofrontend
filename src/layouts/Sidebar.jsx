@@ -2,7 +2,7 @@ import ModalDialog from "../components/ModalDialog";
 import { NavLink } from "react-router-dom";
 import { useEffect, useMemo, useState } from "react";
 import {
-  LayoutDashboard,
+  House,
   ClipboardList,
   Sprout,
   CalendarDays,
@@ -31,11 +31,11 @@ import { informationEnabled, sampleAnalyticsEnabled } from "../utils/permanentSa
 const NAVIGATION = {
   admin: [
     {
-      section: "Main",
+      section: "Home",
       items: [
         {
-          label: "Dashboard",
-          icon: LayoutDashboard,
+          label: "Home",
+          icon: House,
           to: "/admin/dashboard",
         },
       ],
@@ -120,11 +120,11 @@ const NAVIGATION = {
 
   staff: [
     {
-      section: "Main",
+      section: "Home",
       items: [
         {
-          label: "Dashboard",
-          icon: LayoutDashboard,
+          label: "Home",
+          icon: House,
           to: "/staff/dashboard",
         },
       ],
@@ -210,11 +210,11 @@ const NAVIGATION = {
 
   participant: [
     {
-      section: "Main",
+      section: "Home",
       items: [
         {
-          label: "Dashboard",
-          icon: LayoutDashboard,
+          label: "Home",
+          icon: House,
           to: "/participant/dashboard",
         },
       ],
