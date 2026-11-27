@@ -10,9 +10,12 @@ import {
 } from "react-icons/fi";
 
 import "leaflet/dist/leaflet.css";
-import { textTooltip } from "../utils/leafletTooltip";
 import KpiCard, { KpiGrid } from "../components/KpiCard";
-import { TREE_CONDITIONS, TREE_PATH, locatedTrees, renderTreeMarkers } from "../components/map/treeMarkerLayer";
+import { TREE_CONDITIONS, locatedTrees, renderTreeMarkers } from "../components/map/treeMarkerLayer";
+import { MAP_MAX_ZOOM, addBasemap } from "../components/map/basemap";
+import { drawSiteOverlay } from "../components/map/siteOverlayLayer";
+import { SiteCenterKey, TreeKey, UtilizationSwatch } from "../components/map/MapLegendKeys";
+import { UTILIZATION_LEGEND, siteUtilization } from "../utils/siteUtilization";
 import { filterMapTrees, siteHasMatchingTree } from "../utils/mapTrees";
 import "../styles/map-visualization.css";
 
@@ -29,14 +32,6 @@ const SITE_CONDITIONS = [
 const CONDITION_OPTIONS = [...SITE_CONDITIONS.slice(0, 3), "Needs Rechecking", "Not Yet Monitored"];
 const EMPTY_TREE_DATA = { trees: [], pendingTrees: [], locationUnavailable: 0 };
 
-function TreeKey({ slug, count }) {
-  return (
-    <span className={`ra-tree-marker ra-tree-${slug} mv-tree-key`} aria-hidden="true">
-      <svg viewBox="0 0 24 30"><path d={TREE_PATH} /></svg>
-      {count && <span className="ra-tree-count">{count}</span>}
-    </span>
-  );
-}
 
 function normalizeText(value) {
   return String(value || "").trim();
@@ -202,42 +197,7 @@ function formatNumber(value) {
   );
 }
 
-function getUtilizationStatus(percent) {
-  if (percent >= 90) {
-    return {
-      label: "Full",
-      color: "#e54848",
-    };
-  }
 
-  if (percent >= 50) {
-    return {
-      label: "Partially Occupied",
-      color: "#f3a62f",
-    };
-  }
-
-  return {
-    label: "Available",
-    color: "#2f9e57",
-  };
-}
-
-function getConditionColor(condition) {
-  if (condition === "Healthy") {
-    return "#2f9e57";
-  }
-
-  if (condition === "Damaged") {
-    return "#f3a62f";
-  }
-
-  if (condition === "Dead") {
-    return "#e54848";
-  }
-
-  return "#3182ce";
-}
 
 function getLatestMonitoringCondition(records) {
   if (!records.length) {
@@ -480,8 +440,11 @@ export default function MapVisualizationPage() {
           }
         );
 
-      const treesPlanted =
-        relatedReports.reduce(
+      // The backend's verified planted total (analytics rules); summing reports here is only for an older backend.
+      const verifiedPlanted = Number(site?.verifiedPlanted);
+      const treesPlanted = Number.isFinite(verifiedPlanted)
+        ? verifiedPlanted
+        : relatedReports.reduce(
           (total, report) =>
             total +
             getReportQuantity(report),
@@ -490,19 +453,9 @@ export default function MapVisualizationPage() {
 
       const capacity = getSiteCapacity(site);
 
-      const utilization =
-        capacity > 0
-          ? Math.min(
-              100,
-              Math.round(
-                (treesPlanted / capacity) *
-                  100
-              )
-            )
-          : 0;
-
-      const utilizationStatus =
-        getUtilizationStatus(utilization);
+      // One utilization rule and colour set for every map (utils/siteUtilization).
+      const utilizationStatus = siteUtilization({ maximumCapacity: capacity, verifiedPlanted: treesPlanted });
+      const utilization = utilizationStatus.percent;
 
       const condition =
         getLatestMonitoringCondition(
@@ -580,11 +533,12 @@ export default function MapVisualizationPage() {
         utilization,
         utilizationLabel:
           utilizationStatus.label,
-        utilizationColor:
-          utilizationStatus.color,
+        utilizationKnown: utilizationStatus.known,
+        overCapacity: utilizationStatus.overCapacity,
+        // Read by drawSiteOverlay.
+        maximumCapacity: capacity,
+        verifiedPlanted: treesPlanted,
         condition,
-        conditionColor:
-          getConditionColor(condition),
         survivalRate,
         monitoringTotals,
         species,
@@ -760,8 +714,8 @@ export default function MapVisualizationPage() {
       mapContainerRef.current,
       {
         zoomControl: true,
-        // A finite limit lets overlapping trees open as one list at the deepest zoom.
-        maxZoom: 19,
+        // A finite limit lets overlapping trees open as one list at the deepest zoom; the basemap draws at every level up to it.
+        maxZoom: MAP_MAX_ZOOM,
       }
     );
 
@@ -769,23 +723,7 @@ export default function MapVisualizationPage() {
     // Added once; tree markers sit in Leaflet's marker pane, above site polygons and site-center circles.
     treeLayerRef.current = L.layerGroup().addTo(map);
 
-    const mapTilerKey =
-      import.meta.env
-        .VITE_MAPTILER_API_KEY;
-
-    if (mapTilerKey) {
-      L.tileLayer(
-        `https://api.maptiler.com/maps/streets-v4/{z}/{x}/{y}.png?key=${mapTilerKey}`,
-        {
-          tileSize: 512,
-          zoomOffset: -1,
-          minZoom: 1,
-          attribution:
-            '<a href="https://www.maptiler.com/copyright/" target="_blank">&copy; MapTiler</a> <a href="https://www.openstreetmap.org/copyright" target="_blank">&copy; OpenStreetMap contributors</a>',
-          crossOrigin: true,
-        }
-      ).addTo(map);
-    }
+    addBasemap(map, { style: "streets-v4" });
 
     map.setView(
       [12.6598, 123.918],
@@ -882,100 +820,8 @@ export default function MapVisualizationPage() {
     const group =
       L.layerGroup().addTo(map);
 
-    filteredSites.forEach((site) => {
-      const polygon =
-        Array.isArray(site.polygon)
-          ? site.polygon
-          : [];
-
-      if (polygon.length >= 3) {
-        const latLngs = polygon
-          .map((point) => {
-            if (Array.isArray(point)) {
-              return [
-                Number(point[0]),
-                Number(point[1]),
-              ];
-            }
-
-            return [
-              Number(
-                point?.lat ||
-                  point?.latitude
-              ),
-              Number(
-                point?.lng ||
-                  point?.longitude
-              ),
-            ];
-          })
-          .filter(
-            ([lat, lng]) =>
-              Number.isFinite(lat) &&
-              Number.isFinite(lng)
-          );
-
-        if (latLngs.length >= 3) {
-          const polygonLayer =
-            L.polygon(latLngs, {
-              color:
-                site.utilizationColor,
-              fillColor:
-                site.utilizationColor,
-              fillOpacity: 0.28,
-              weight: 2,
-            });
-
-          polygonLayer.on(
-            "click",
-            () => {
-              setSelectedSite(site);
-            }
-          );
-
-          polygonLayer.addTo(group);
-        }
-      }
-
-      if (
-        Number.isFinite(
-          site.latitude
-        ) &&
-        Number.isFinite(
-          site.longitude
-        )
-      ) {
-        const marker =
-          L.circleMarker(
-            [
-              site.latitude,
-              site.longitude,
-            ],
-            {
-              radius: 7,
-              color: "#ffffff",
-              weight: 2,
-              fillColor:
-                site.conditionColor,
-              fillOpacity: 1,
-            }
-          );
-
-        marker.bindTooltip(
-          textTooltip(
-            site.siteName ||
-              site.siteId ||
-              "Planting Site"
-          )
-        );
-
-        marker.on("click", () => {
-          setSelectedSite(site);
-        });
-
-        marker.addTo(group);
-      }
-    });
+    // Coverage overlay coloured by utilization, blue site-center marker on top; tree markers stay above both.
+    filteredSites.forEach((site) => drawSiteOverlay(group, site, { onSelect: setSelectedSite }));
 
     siteLayerRef.current = group;
   }, [filteredSites]);
@@ -1245,37 +1091,18 @@ export default function MapVisualizationPage() {
                 Site Utilization
               </strong>
 
-              <div className="mv-legend-row">
-                <span
-                  className="mv-legend-dot"
-                  style={{
-                    background:
-                      "#2f9e57",
-                  }}
-                />
-                Available 0–49%
-              </div>
+              <span className="mv-legend-hint">Coverage area and outline colour: verified planted ÷ site capacity</span>
+
+              {UTILIZATION_LEGEND.map(({ level, label, range }) => (
+                <div className="mv-legend-row" key={level}>
+                  <UtilizationSwatch level={level} />
+                  {range ? `${label} ${range}` : label}
+                </div>
+              ))}
 
               <div className="mv-legend-row">
-                <span
-                  className="mv-legend-dot"
-                  style={{
-                    background:
-                      "#f3a62f",
-                  }}
-                />
-                Partially Occupied 50–89%
-              </div>
-
-              <div className="mv-legend-row">
-                <span
-                  className="mv-legend-dot"
-                  style={{
-                    background:
-                      "#e54848",
-                  }}
-                />
-                Full 90–100%
+                <SiteCenterKey />
+                Registered site center
               </div>
             </div>
 
@@ -1284,32 +1111,7 @@ export default function MapVisualizationPage() {
                 Site Monitoring Condition
               </strong>
 
-              {SITE_CONDITIONS.map(
-                (condition) => (
-                  <div
-                    className="mv-legend-row"
-                    key={condition}
-                  >
-                    <span
-                      className="mv-legend-dot"
-                      style={{
-                        background:
-                          getConditionColor(
-                            condition
-                          ),
-                      }}
-                    />
-
-                    {condition}
-                  </div>
-                )
-              )}
-            </div>
-
-            <div className="mv-legend-section">
-              <strong>
-                Permanent Sample Trees
-              </strong>
+              <span className="mv-legend-hint">Tree icons: latest Admin-approved condition of each monitored permanent-sample tree</span>
 
               {TREE_CONDITIONS.map(([value, slug, label]) => (
                 <div className="mv-legend-row" key={value}>
@@ -1327,6 +1129,10 @@ export default function MapVisualizationPage() {
                 <TreeKey slug="mixed" count="3" />
                 Overlapping trees — click to zoom in
               </div>
+
+              <span className="mv-legend-hint">
+                Site summaries ({SITE_CONDITIONS.join(", ")}) are shown in each site&apos;s details.
+              </span>
             </div>
 
             <div className="mv-legend-section">
@@ -1484,10 +1290,9 @@ export default function MapVisualizationPage() {
                 </span>
 
                 <strong>
-                  {
-                    selectedSite.utilization
-                  }
-                  %
+                  {selectedSite.utilizationKnown
+                    ? `${selectedSite.utilization}%${selectedSite.overCapacity ? " (over capacity)" : ""}`
+                    : "Capacity not set"}
                 </strong>
               </div>
 

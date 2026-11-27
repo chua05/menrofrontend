@@ -587,6 +587,8 @@
 .ra-map-legend .partial { background: #facc15; }
 .ra-map-legend .full { background: #ef4444; }
 .ra-map-legend .site-center { background: #3186d9; }
+.ra-map-legend small { max-width: 190px; color: #66756c; font-size: 10px; line-height: 1.35; white-space: normal; }
+.ra-map-legend .map-tree-key .ra-tree-count { display: block; }
 .ra-map-popup {
   position: absolute;
   z-index: 650;

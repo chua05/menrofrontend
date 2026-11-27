@@ -29,7 +29,9 @@ import { auth } from "../firebase/config";
 import { formatDisplayId } from "../utils/displayId";
 import { BULAN_BARANGAYS } from "../utils/userTypes";
 import { boundaryLayerOptions, siteBoundaryDiagnostic } from "../utils/barangayMap";
-import { textTooltip } from "../utils/leafletTooltip";
+import { MAP_MAX_ZOOM, addBasemap } from "../components/map/basemap";
+import { SITE_CENTER_COLOR, drawSiteOverlay, siteOverlayStyle } from "../components/map/siteOverlayLayer";
+import { UTILIZATION_LEVELS, plantedOf, siteUtilization } from "../utils/siteUtilization";
 import "../styles/planting-sites.css";
 
 const API_BASE_URL =
@@ -192,53 +194,21 @@ function sanitizePositiveDecimal(value) {
     : whole;
 }
 
+// Verified planted ÷ capacity, shared with every MENRO map (utils/siteUtilization). Shown capped at 100%.
 function getUtilization(site) {
-  const capacity = Number(site.maximumCapacity || 0);
-  const planted = Number(site.planted || 0);
-
-  if (capacity <= 0) return 0;
-
-  return Math.min(
-    100,
-    Math.round((planted / capacity) * 100)
-  );
+  return siteUtilization(site).displayPercent ?? 0;
 }
 
+// "Capacity not set" when no capacity is saved, instead of a misleading "Available".
 function getSiteStatus(site) {
-  const utilization = getUtilization(site);
-
-  if (utilization >= 90) {
-    return "Full";
-  }
-
-  if (utilization >= 50) {
-    return "Partially Occupied";
-  }
-
-  return "Available";
+  return siteUtilization(site).label;
 }
 
-function getUtilizationColor(status) {
-  switch (status) {
-    case "Partially Occupied":
-      return {
-        fill: "#facc15",
-        stroke: "#d6a900",
-      };
-
-    case "Full":
-      return {
-        fill: "#ef4444",
-        stroke: "#d72f2f",
-      };
-
-    default:
-      return {
-        fill: "#4caf63",
-        stroke: "#2f9847",
-      };
-  }
+function getAvailableCapacity(site) {
+  const { capacity, planted } = siteUtilization(site);
+  return capacity === null ? 0 : Math.max(0, capacity - planted);
 }
+
 
 function getConditionColor(condition) {
   switch (condition) {
@@ -638,7 +608,7 @@ export default function SitesPage() {
           center: [BULAN_FALLBACK_CENTER.lat, BULAN_FALLBACK_CENTER.lng],
           zoom: 12,
           minZoom: 11,
-          maxZoom: 19,
+          maxZoom: MAP_MAX_ZOOM,
           zoomControl: true,
           attributionControl: true,
         });
@@ -652,18 +622,7 @@ export default function SitesPage() {
           );
         }
 
-        L.tileLayer(
-          `https://api.maptiler.com/maps/streets-v2/{z}/{x}/{y}.png?key=${mapTilerKey}`,
-          {
-            tileSize: 512,
-            zoomOffset: -1,
-            minZoom: 1,
-            maxZoom: 20,
-            crossOrigin: true,
-            attribution:
-              '&copy; <a href="https://www.maptiler.com/copyright/">MapTiler</a> &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
-          }
-        ).addTo(map);
+        addBasemap(map, { key: mapTilerKey });
 
         const PanControl = L.Control.extend({
           options: {
@@ -901,105 +860,17 @@ export default function SitesPage() {
     setActiveDetailTab("information");
   };
 
+  // Coverage overlay coloured by verified utilization, blue site-center marker on top (components/map/siteOverlayLayer).
   filteredSites.forEach((site) => {
-    const status = getSiteStatus(site);
-    const utilizationColors =
-      getUtilizationColor(status);
-
-    const latitude = Number(site.latitude);
-    const longitude = Number(site.longitude);
-    const coverageRadiusMeters = Number(site.coverageRadiusMeters);
-    const hasCoverageRadius =
-      Number.isFinite(coverageRadiusMeters) && coverageRadiusMeters > 0;
-
-    const polygonPath = Array.isArray(site.polygon)
-      ? site.polygon
-          .filter(
-            (point) =>
-              Number.isFinite(Number(point.lat)) &&
-              Number.isFinite(Number(point.lng))
-          )
-          .map((point) => [
-            Number(point.lat),
-            Number(point.lng),
-          ])
-      : [];
-
-    if (
-      hasCoverageRadius &&
-      Number.isFinite(latitude) &&
-      Number.isFinite(longitude)
-    ) {
-      const coverageCircle = L.circle([latitude, longitude], {
-        color: utilizationColors.stroke,
-        opacity: 0.95,
-        weight: 1.5,
-        fillColor: utilizationColors.fill,
-        fillOpacity: 0.24,
-        radius: coverageRadiusMeters,
-      }).addTo(map);
-
-      coverageCircle.on("click", () => {
-        handleSiteClick(site);
-      });
-
-      sitePolygonsRef.current.push(coverageCircle);
-    } else if (polygonPath.length >= 3) {
-      const legacyPolygon = L.polygon(polygonPath, {
-        color: utilizationColors.stroke,
-        opacity: 0.95,
-        weight: 1.5,
-        fillColor: utilizationColors.fill,
-        fillOpacity: 0.24,
-      }).addTo(map);
-
-      legacyPolygon.on("click", () => {
-        handleSiteClick(site);
-      });
-
-      sitePolygonsRef.current.push(legacyPolygon);
-    }
-
-    if (
-      !Number.isFinite(latitude) ||
-      !Number.isFinite(longitude)
-    ) {
-      return;
-    }
-
-    const conditionColor = getConditionColor(
-      site.treeCondition || "Not Yet Monitored"
-    );
-
-    const marker = L.circleMarker(
-      [latitude, longitude],
-      {
-        radius: 7,
-        color: "#ffffff",
-        weight: 2,
-        fillColor: conditionColor,
-        fillOpacity: 1,
-      }
-    ).addTo(map);
-
-    marker.bindTooltip(
-      textTooltip(
-        site.siteName ||
-          site.id ||
-          site.siteId ||
-          "Planting Site"
-      ),
-      {
-        direction: "top",
-        offset: [0, -6],
-      }
-    );
-
-    marker.on("click", () => {
-      handleSiteClick(site);
+    const { overlay, marker } = drawSiteOverlay(map, site, {
+      onSelect: handleSiteClick,
+      label: site.siteName ||
+        site.id ||
+        site.siteId ||
+        "Planting Site",
     });
-
-    siteMarkersRef.current.push(marker);
+    if (overlay) sitePolygonsRef.current.push(overlay);
+    if (marker) siteMarkersRef.current.push(marker);
   });
 
   return () => {
@@ -1450,17 +1321,7 @@ export default function SitesPage() {
 
   const selectedAvailable =
     selectedSite
-      ? Math.max(
-          Number(
-            selectedSite.maximumCapacity ||
-              0
-          ) -
-            Number(
-              selectedSite.planted ||
-                0
-            ),
-          0
-        )
+      ? getAvailableCapacity(selectedSite)
       : 0;
 
   return (
@@ -1833,12 +1694,13 @@ export default function SitesPage() {
                 site={detailsSite}
                 status={getSiteStatus(detailsSite)}
                 utilization={getUtilization(detailsSite)}
-                available={Math.max(0, Number(detailsSite.maximumCapacity || 0) - Number(detailsSite.planted || 0))}
+                available={getAvailableCapacity(detailsSite)}
               />
               <SiteCoverageMap
                 latitude={detailsSite.latitude}
                 longitude={detailsSite.longitude}
                 radius={detailsSite.coverageRadiusMeters}
+                utilizationSite={detailsSite}
                 barangay={detailsSite.barangay}
                 barangayBoundaries={barangayBoundaries}
                 readOnly
@@ -2447,6 +2309,8 @@ function SiteCoverageMap({
   latitude,
   longitude,
   radius,
+  // A registered site: its coverage is coloured by utilization. A site being placed in the form keeps the neutral preview.
+  utilizationSite = null,
   barangay,
   barangayBoundaries = null,
   onSelect,
@@ -2474,23 +2338,12 @@ function SiteCoverageMap({
       center: [BULAN_FALLBACK_CENTER.lat, BULAN_FALLBACK_CENTER.lng],
       zoom: 13,
       minZoom: 11,
-      maxZoom: 20,
+      maxZoom: MAP_MAX_ZOOM,
       zoomControl: true,
       attributionControl: true,
     });
 
-    L.tileLayer(
-      `https://api.maptiler.com/maps/streets-v2/{z}/{x}/{y}.png?key=${mapTilerKey}`,
-      {
-        tileSize: 512,
-        zoomOffset: -1,
-        minZoom: 1,
-        maxZoom: 20,
-        crossOrigin: true,
-        attribution:
-          '&copy; <a href="https://www.maptiler.com/copyright/">MapTiler</a> &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
-      }
-    ).addTo(map);
+    addBasemap(map, { key: mapTilerKey });
 
     coverageLayerRef.current = L.layerGroup().addTo(map);
 
@@ -2581,11 +2434,9 @@ function SiteCoverageMap({
     if (Number.isFinite(coverageRadius) && coverageRadius > 0) {
       const circle = L.circle([siteLatitude, siteLongitude], {
         radius: coverageRadius,
-        color: "#087443",
-        weight: 2,
-        opacity: 0.95,
-        fillColor: "#6fb98a",
-        fillOpacity: 0.2,
+        ...(utilizationSite
+          ? siteOverlayStyle(utilizationSite)
+          : { color: "#087443", weight: 2, opacity: 0.95, fillColor: "#6fb98a", fillOpacity: 0.2 }),
       }).addTo(coverageLayer);
 
       map.fitBounds(circle.getBounds(), {
@@ -2601,14 +2452,14 @@ function SiteCoverageMap({
       radius: 8,
       color: "#ffffff",
       weight: 2,
-      fillColor: "#087443",
+      fillColor: SITE_CENTER_COLOR,
       fillOpacity: 1,
     })
       .bindTooltip("Site Center", { direction: "top", offset: [0, -8] })
       .addTo(coverageLayer);
 
     window.setTimeout(() => map.invalidateSize(), 0);
-  }, [latitude, longitude, radius]);
+  }, [latitude, longitude, radius, utilizationSite]);
 
   const boundaryWarning = siteBoundaryDiagnostic(barangayBoundaries, barangay, latitude, longitude);
 
@@ -2743,7 +2594,7 @@ function SiteInformation({
         <InfoRow
           label="Planted"
           value={`${formatNumber(
-            site.planted
+            plantedOf(site)
           )} seedlings`}
         />
 
@@ -3028,25 +2879,25 @@ function MapLegend() {
             </button>
           </div>
 
-          <LegendSquare
-            color="#4caf63"
-            label="Available (0–49%)"
-          />
+          {["available", "partial", "full", "unknown"].map((level) => (
+            <LegendSquare
+              key={level}
+              color={UTILIZATION_LEVELS[level].fill}
+              label={UTILIZATION_LEVELS[level].range
+                ? `${UTILIZATION_LEVELS[level].label} (${UTILIZATION_LEVELS[level].range})`
+                : UTILIZATION_LEVELS[level].label}
+            />
+          ))}
 
-          <LegendSquare
-            color="#facc15"
-            label="Partially Occupied (50–89%)"
-          />
-
-          <LegendSquare
-            color="#ef4444"
-            label="Full (90–100%)"
+          <LegendDot
+            color={SITE_CENTER_COLOR}
+            label="Registered site center"
           />
         </section>
 
         <section>
           <h3>
-            Tree Condition
+            Site Summary Condition (site details)
           </h3>
 
           <LegendDot

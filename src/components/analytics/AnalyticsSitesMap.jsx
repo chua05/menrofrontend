@@ -1,28 +1,16 @@
 import { useEffect, useRef, useState } from "react";
 import L from "leaflet";
 import { boundaryLayerOptions } from "../../utils/barangayMap";
-import { textTooltip } from "../../utils/leafletTooltip";
 import { TREE_CONDITIONS, locatedTrees as located, renderTreeMarkers } from "../map/treeMarkerLayer";
+import { MAP_MAX_ZOOM, addBasemap } from "../map/basemap";
+import { drawSiteOverlay } from "../map/siteOverlayLayer";
+import { UTILIZATION_LEGEND, siteUtilization } from "../../utils/siteUtilization";
+import { SiteCenterKey, TreeKey, UtilizationSwatch } from "../map/MapLegendKeys";
 import "leaflet/dist/leaflet.css";
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
 const BOUNDARY_URL = `${API_BASE_URL}/sites/barangay-boundaries`;
 const FALLBACK_CENTER = [12.6598, 123.918];
-const MAPTILER_KEY = import.meta.env.VITE_MAPTILER_API_KEY;
-
-function utilization(site) {
-  const capacity = Number(site.maximumCapacity || 0);
-  const planted = Number(site.planted || 0);
-  return capacity > 0 ? Math.min(100, Math.round((planted / capacity) * 100)) : 0;
-}
-
-function utilizationMeta(value) {
-  if (value >= 90) return { label: "Full", fill: "#ef4444", stroke: "#d72f2f" };
-  if (value >= 50) return { label: "Partially Occupied", fill: "#facc15", stroke: "#d6a900" };
-  return { label: "Available", fill: "#4caf63", stroke: "#2f9847" };
-}
-
-const SITE_CENTER_COLOR = "#3186d9";
 const EMPTY_TREES = [];
 export default function AnalyticsSitesMap({ sites = [], trees = EMPTY_TREES, locationUnavailable = 0, onViewFullMap }) {
   const containerRef = useRef(null);
@@ -38,20 +26,11 @@ export default function AnalyticsSitesMap({ sites = [], trees = EMPTY_TREES, loc
       center: FALLBACK_CENTER,
       zoom: 12,
       minZoom: 9,
-      maxZoom: 19,
+      maxZoom: MAP_MAX_ZOOM,
       zoomControl: true,
       attributionControl: true,
     });
-    const tileUrl = MAPTILER_KEY
-      ? `https://api.maptiler.com/maps/streets-v2/{z}/{x}/{y}.png?key=${MAPTILER_KEY}`
-      : "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png";
-    L.tileLayer(tileUrl, MAPTILER_KEY ? {
-      tileSize: 512, zoomOffset: -1, maxZoom: 20, crossOrigin: true,
-      attribution: '&copy; <a href="https://www.maptiler.com/copyright/">MapTiler</a> &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
-    } : {
-      maxZoom: 19,
-      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
-    }).addTo(map);
+    addBasemap(map);
     siteLayerRef.current = L.layerGroup().addTo(map);
     treeLayerRef.current = L.layerGroup().addTo(map);
     mapRef.current = map;
@@ -99,23 +78,7 @@ export default function AnalyticsSitesMap({ sites = [], trees = EMPTY_TREES, loc
     const layer = siteLayerRef.current;
     if (!layer) return;
     layer.clearLayers();
-    for (const site of sites) {
-      const latitude = Number(site.latitude);
-      const longitude = Number(site.longitude);
-      if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) continue;
-      const percent = utilization(site);
-      const meta = utilizationMeta(percent);
-      const radius = Number(site.coverageRadiusMeters);
-      if (Number.isFinite(radius) && radius > 0) {
-        L.circle([latitude, longitude], { radius, color: meta.stroke, weight: 1.5, fillColor: meta.fill, fillOpacity: 0.24 }).on("click", () => setSelected(site)).addTo(layer);
-      } else if (Array.isArray(site.polygon) && site.polygon.length >= 3) {
-        const points = site.polygon.map((point) => [Number(point.lat), Number(point.lng)]).filter(([lat, lng]) => Number.isFinite(lat) && Number.isFinite(lng));
-        if (points.length >= 3) L.polygon(points, { color: meta.stroke, weight: 1.5, fillColor: meta.fill, fillOpacity: 0.24 }).on("click", () => setSelected(site)).addTo(layer);
-      }
-      L.circleMarker([latitude, longitude], { radius: 7, color: "#fff", weight: 2, fillColor: SITE_CENTER_COLOR, fillOpacity: 1 })
-        .bindTooltip(textTooltip(site.siteName || site.siteId || "Planting Site"), { direction: "top", offset: [0, -6] })
-        .on("click", () => setSelected(site)).addTo(layer);
-    }
+    for (const site of sites) drawSiteOverlay(layer, site, { onSelect: setSelected });
   }, [sites]);
 
   useEffect(() => {
@@ -138,7 +101,7 @@ export default function AnalyticsSitesMap({ sites = [], trees = EMPTY_TREES, loc
     fitTo(points);
   };
 
-  const selectedUtilization = selected ? utilization(selected) : 0;
+  const selectedUtilization = selected ? siteUtilization(selected) : null;
   return (
     <section className="ra-map-card">
       <div className="ra-card-heading"><h2>Planting Sites Map</h2><p>Registered planting sites in Bulan, Sorsogon</p></div>
@@ -148,10 +111,10 @@ export default function AnalyticsSitesMap({ sites = [], trees = EMPTY_TREES, loc
         {!error && sites.length === 0 && <div className="ra-map-empty">No registered sites match the selected filters.</div>}
         {trees.length > 0 && <button type="button" className="ra-map-zoom" onClick={() => fitTo(treePoints())}>Zoom to monitored trees</button>}
         <div className="ra-map-legend">
-          <div><strong>Site Utilization</strong><span><i className="available" />Available (0–49%)</span><span><i className="partial" />Partially Occupied (50–89%)</span><span><i className="full" />Full (90–100%)</span></div>
-          <div><strong>Permanent Sample Trees</strong>{TREE_CONDITIONS.map(([value, slug, label]) => <span key={value}><i className={`ra-tree-key ra-tree-${slug}`} />{label}</span>)}<span><b className="site-center" />Registered site center</span></div>
+          <div><strong>Site Utilization</strong>{UTILIZATION_LEGEND.map(({ level, label, range }) => <span key={level}><UtilizationSwatch level={level} />{range ? `${label} (${range})` : label}</span>)}<span><SiteCenterKey />Registered site center</span></div>
+          <div><strong>Site Monitoring Condition</strong>{TREE_CONDITIONS.map(([value, slug, label]) => <span key={value}><TreeKey slug={slug} />{label}</span>)}<span><TreeKey slug="pending" />Pending Review (not approved)</span><small>Tree icons: latest approved condition of each monitored sample tree.</small></div>
         </div>
-        {selected && <div className="ra-map-popup"><button type="button" aria-label="Close site details" onClick={() => setSelected(null)}>×</button><strong>{selected.siteName}</strong><span>{selected.barangay}</span><span>Utilization: {selectedUtilization}% ({utilizationMeta(selectedUtilization).label})</span><span>Condition: {selected.treeCondition || "Not Yet Monitored"}</span>{selected.survivalRate != null && <span>Latest survival rate: {selected.survivalRate}%</span>}<span>Monitored sample trees: {trees.filter((tree) => tree.siteId === (selected.siteId || selected.id)).length}</span><button type="button" className="ra-map-popup-zoom" onClick={() => zoomToSite(selected)}>Zoom to site</button></div>}
+        {selected && <div className="ra-map-popup"><button type="button" aria-label="Close site details" onClick={() => setSelected(null)}>×</button><strong>{selected.siteName}</strong><span>{selected.barangay}</span><span>Utilization: {selectedUtilization.known ? `${selectedUtilization.percent}% (${selectedUtilization.label})` : selectedUtilization.label}{selectedUtilization.overCapacity ? " — over capacity" : ""}</span><span>Verified planted: {selectedUtilization.planted}{selectedUtilization.known ? ` of ${selectedUtilization.capacity}` : ""}</span><span>Site summary: {selected.treeCondition || "Not Yet Monitored"}</span>{selected.survivalRate != null && <span>Latest survival rate: {selected.survivalRate}%</span>}<span>Monitored sample trees: {trees.filter((tree) => tree.siteId === (selected.siteId || selected.id)).length}</span><button type="button" className="ra-map-popup-zoom" onClick={() => zoomToSite(selected)}>Zoom to site</button></div>}
       </div>
       {locationUnavailable > 0 && <p className="ra-map-note" role="status">Location unavailable: {locationUnavailable} monitored sample {locationUnavailable === 1 ? "tree has" : "trees have"} no saved registration GPS, so {locationUnavailable === 1 ? "it is" : "they are"} not drawn.</p>}
       <button type="button" className="ra-map-link" onClick={onViewFullMap}>View Full Map →</button>

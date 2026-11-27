@@ -20,13 +20,11 @@ test("XSS: textTooltip renders a hostile site name as literal text and creates n
 
 // Every authorized call site; `expressions` are the untrusted values that must be wrapped.
 const callSites = [
-  ["src/components/analytics/AnalyticsSitesMap.jsx", ["site.siteName || site.siteId"]],
-  ["src/pages/DashboardPage.jsx", ["site?.siteName", "site?.siteName"]],
-  ["src/pages/MapVisualizationPage.jsx", ["site.siteName"]],
+  // Registered-site markers for the full map, the Analytics map and site views.
+  ["src/components/map/siteOverlayLayer.js", ["label || site?.siteName"]],
   ["src/pages/PlantingPage.jsx", ["coverageRadiusMeters} m coverage", "getSiteName(selectedSite) || \"Registered Planting Site\")", "Site GPS"]],
   ["src/pages/SeedlingRequestsPage.jsx", ["getPlantingSiteDisplayName(site)"]],
   ["src/pages/MyRequestsPage.jsx", ["getPlantingSite(request)"]],
-  ["src/pages/SitesPage.jsx", ["site.siteName"]],
 ];
 // Constant labels and static barangay GeoJSON names are not user data and stay strings.
 const allowedRaw = [/^"[^"]*"/, /^String\(barangayName\)/, /^String\(name\)/, /^String\(featureBarangay\)/, /^name,/];

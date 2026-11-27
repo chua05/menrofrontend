@@ -16,3 +16,12 @@
 /* Submitted, awaiting Admin review: hollow dashed tree, never a verified condition colour. */
 .ra-tree-pending svg { fill: #f4effc; stroke: #6d3fc0; stroke-width: 1.6; stroke-dasharray: 2.2 1.6; }
 .ra-tree-popup-item.is-pending strong { color: #6d3fc0; }
+/* Legend keys shared by the full map and the Analytics map (components/map/MapLegendKeys.jsx). */
+.map-tree-key { position: relative; display: inline-block; width: 14px; height: 18px; flex-shrink: 0; vertical-align: middle; }
+/* Legend icons are not map markers (no .ra-tree-marker), so they are styled here with the same shape and colours. */
+.map-tree-key svg { width: 100%; height: 100%; stroke: #fff; stroke-width: 1.5; filter: drop-shadow(0 1px 1px rgb(0 0 0 / 0.35)); }
+.map-tree-key.ra-tree-pending svg { stroke: #6d3fc0; stroke-width: 1.6; stroke-dasharray: 2.2 1.6; }
+.map-tree-key.ra-tree-mixed svg { stroke: #f3a62f; stroke-width: 2; }
+.map-tree-key .ra-tree-count { top: -5px; right: -9px; min-width: 13px; height: 13px; font-size: 8px; line-height: 13px; }
+.map-utilization-key { display: inline-block; width: 16px; height: 12px; flex-shrink: 0; border: 2px solid; border-radius: 3px; vertical-align: middle; }
+.map-site-center-key { display: inline-block; width: 12px; height: 12px; flex-shrink: 0; border: 2px solid #fff; border-radius: 50%; box-shadow: 0 0 0 1px #94a3b8; vertical-align: middle; }

@@ -13,6 +13,7 @@ import { isAwaitingMonitoringSetup, lifecycleMethodLabel, lifecycleMonitoringVie
 import MonitoringTrackingDetails from "../components/MonitoringTrackingDetails";
 import ModalDialog from "../components/ModalDialog";
 import L from "leaflet";
+import { MAP_MAX_ZOOM, addBasemap } from "../components/map/basemap";
 import {
   CONDITION_SUM_ERROR, EMPTY_MONITORING_EVIDENCE, clearSharedCountError, monitoringPreview,
   isOfficialMonitoringObservation, isFullMonitoringObservation, monitoringScheduleLabel,
@@ -764,11 +765,9 @@ export default function MonitoringPage() {
     const photoLongitude = Number(form.longitude);
     if (![siteLatitude, siteLongitude, photoLatitude, photoLongitude].every(Number.isFinite)) return undefined;
 
-    const map = L.map(locationMapContainerRef.current, { zoomControl: true, attributionControl: true });
-    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-      attribution: "&copy; OpenStreetMap contributors",
-      maxZoom: 20,
-    }).addTo(map);
+    // Zoom stays within what the basemap can draw (OpenStreetMap serves tiles to z19), so the map never turns gray.
+    const map = L.map(locationMapContainerRef.current, { zoomControl: true, attributionControl: true, maxZoom: MAP_MAX_ZOOM });
+    addBasemap(map);
     const bounds = L.latLngBounds([[siteLatitude, siteLongitude], [photoLatitude, photoLongitude]]);
     const polygon = Array.isArray(selectedSite.polygon)
       ? selectedSite.polygon.map((point) => [Number(point.lat), Number(point.lng)]).filter(([lat, lng]) => Number.isFinite(lat) && Number.isFinite(lng))

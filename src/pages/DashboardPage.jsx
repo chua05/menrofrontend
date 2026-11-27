@@ -42,7 +42,8 @@ import { API_BASE_URL } from "../services/authenticatedApi";
 import { formatDisplayId } from "../utils/displayId";
 import { monthlySurvivalRates, officialMonitoringHistoryEntries, weightedOfficialSurvivalRate } from "../utils/monitoringForm";
 import { BULAN_BARANGAYS } from "../utils/userTypes";
-import { textTooltip } from "../utils/leafletTooltip";
+import { drawSiteOverlay } from "../components/map/siteOverlayLayer";
+import { MAP_MAX_ZOOM, addBasemap } from "../components/map/basemap";
 import KpiCard, { KpiGrid } from "../components/KpiCard";
 import "../styles/dashboard-page.css";
 
@@ -637,6 +638,10 @@ function getSiteCapacity(site) {
 }
 
 function getSitePlanted(site, reports) {
+  // The backend's verified planted total (the same figure every MENRO map uses).
+  const verified = Number(site?.verifiedPlanted);
+  if (site?.verifiedPlanted !== undefined && site?.verifiedPlanted !== null && Number.isFinite(verified)) return Math.max(0, verified);
+
   const direct = Number(
     site?.treesPlanted ??
       site?.planted ??
@@ -936,42 +941,7 @@ function QuickActionsCard({ actions, onNavigate }) {
   );
 }
 
-function getUtilizationColor(utilization) {
-  if (utilization >= 90) {
-    return {
-      fill: "#ef4444",
-      stroke: "#d72f2f",
-    };
-  }
 
-  if (utilization >= 50) {
-    return {
-      fill: "#facc15",
-      stroke: "#d6a900",
-    };
-  }
-
-  return {
-    fill: "#4caf63",
-    stroke: "#2f9847",
-  };
-}
-
-function getConditionColor(condition) {
-  switch (condition) {
-    case "Healthy":
-      return "#1aa343";
-
-    case "Needs Attention":
-      return "#f4b400";
-
-    case "Critical":
-      return "#e52d2d";
-
-    default:
-      return "#3186d9";
-  }
-}
 
 function DashboardSitesMap({
   sites,
@@ -1004,23 +974,12 @@ function DashboardSitesMap({
           ],
           zoom: 12,
           minZoom: 11,
-          maxZoom: 19,
+          maxZoom: MAP_MAX_ZOOM,
           zoomControl: true,
           attributionControl: true,
         });
 
-        L.tileLayer(
-          `https://api.maptiler.com/maps/streets-v2/{z}/{x}/{y}.png?key=${mapTilerKey}`,
-          {
-            tileSize: 512,
-            zoomOffset: -1,
-            minZoom: 1,
-            maxZoom: 20,
-            crossOrigin: true,
-            attribution:
-              '&copy; <a href="https://www.maptiler.com/copyright/">MapTiler</a> &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
-          }
-        ).addTo(map);
+        addBasemap(map, { key: mapTilerKey });
 
         const PanControl = L.Control.extend({
           options: {
@@ -1369,131 +1328,19 @@ function DashboardSitesMap({
 
     siteLayersRef.current = [];
 
+    // Coverage overlay coloured by verified utilization, blue site-center marker on top (components/map/siteOverlayLayer).
     sites.forEach((site) => {
-      const polygonPath =
-        Array.isArray(site?.polygon)
-          ? site.polygon
-              .filter(
-                (point) =>
-                  Number.isFinite(
-                    Number(point?.lat)
-                  ) &&
-                  Number.isFinite(
-                    Number(point?.lng)
-                  )
-              )
-              .map((point) => [
-                Number(point.lat),
-                Number(point.lng),
-              ])
-          : [];
-
-      const capacity =
-        getSiteCapacity(site);
-
-      const planted =
-        getSitePlanted(site, reports);
-
-      const utilization =
-        capacity > 0
-          ? Math.min(
-              100,
-              Math.round(
-                (planted / capacity) *
-                  100
-              )
-            )
-          : 0;
-
-      const utilizationColors =
-        getUtilizationColor(
-          utilization
-        );
-
-      if (polygonPath.length >= 3) {
-        const polygon = L.polygon(
-          polygonPath,
-          {
-            color:
-              utilizationColors.stroke,
-            opacity: 0.95,
-            weight: 1.5,
-            fillColor:
-              utilizationColors.fill,
-            fillOpacity:
-              planted > 0
-                ? 0.24
-                : 0.1,
-          }
-        ).addTo(map);
-
-        polygon.bindTooltip(
-          textTooltip(
-            site?.siteName ||
-              site?.id ||
-              "Planting Site"
-          ),
-          {
-            direction: "top",
-          }
-        );
-
-        siteLayersRef.current.push(
-          polygon
-        );
-      }
-
-      const latitude = Number(
-        site?.latitude
-      );
-
-      const longitude = Number(
-        site?.longitude
-      );
-
-      if (
-        !Number.isFinite(latitude) ||
-        !Number.isFinite(longitude)
-      ) {
-        return;
-      }
-
-      const condition =
-        getSiteCondition(
-          site,
-          monitoring
-        );
-
-      const marker =
-        L.circleMarker(
-          [latitude, longitude],
-          {
-            radius: 7,
-            color: "#ffffff",
-            weight: 2,
-            fillColor:
-              getConditionColor(
-                condition
-              ),
-            fillOpacity: 1,
-          }
-        ).addTo(map);
-
-      marker.bindTooltip(
-        textTooltip(
-          site?.siteName ||
-            site?.id ||
-            "Planting Site"
-        ),
-        {
-          direction: "top",
-          offset: [0, -6],
-        }
-      );
-
-      siteLayersRef.current.push(
-        marker
-      );
+      const { overlay, marker } = drawSiteOverlay(map, {
+        ...site,
+        maximumCapacity: getSiteCapacity(site),
+        verifiedPlanted: getSitePlanted(site, reports),
+      }, {
+        label: site?.siteName ||
+          site?.id ||
+          "Planting Site",
+      });
+      if (overlay) siteLayersRef.current.push(overlay);
+      if (marker) siteLayersRef.current.push(marker);
     });
 
     window.setTimeout(() => {

@@ -262,7 +262,7 @@ test("full map shows approved permanent-sample tree markers with working filters
   await expect(summary("Approved permanent-sample trees")).toHaveText("10");
   await expect(summary("Pending Review trees")).toHaveText("1");
   await expect(page.locator(".mv-map .ra-tree-pending")).toHaveCount(1);
-  for (const text of ["Permanent Sample Trees", "Damaged (Living)", "Needs Rechecking", "Pending Review (submitted, not yet approved)", "Overlapping trees"]) await expect(page.locator(".mv-side-panel")).toContainText(text);
+  for (const text of ["Site Monitoring Condition", "Damaged (Living)", "Needs Rechecking", "Pending Review (submitted, not yet approved)", "Overlapping trees"]) await expect(page.locator(".mv-side-panel")).toContainText(text);
 
   // Zoom in on Zone VIII: all ten Tree IDs stay reachable at their saved positions, overlapping ones as numbered markers or one shared popup.
   const select = (label) => page.locator(".mv-filter-field", { hasText: label }).locator("select");
