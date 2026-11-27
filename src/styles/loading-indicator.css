@@ -1,0 +1,67 @@
+/* One green spinner for every loading area. The area keeps the space it had while showing text, so nothing shifts.
+   The doubled class outranks generic parent rules (such as "list > div" grids) that would otherwise move the spinner. */
+.menro-loading.menro-loading {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto;
+  gap: 0;
+  place-items: center;
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+}
+
+/* Default sizes only (zero specificity): an area's own height and padding win, so it keeps the size it had. */
+:where(.menro-loading-page) {
+  min-height: 420px;
+  padding: 24px;
+}
+
+:where(.menro-loading-section) {
+  min-height: 72px;
+  padding: 12px;
+}
+
+.menro-loading.menro-loading.menro-loading-inline {
+  display: inline-grid;
+  width: auto;
+  min-height: 0;
+  vertical-align: middle;
+}
+
+.menro-spinner {
+  display: block;
+  box-sizing: border-box;
+  width: 34px;
+  height: 34px;
+  border: 3px solid #d7ebdf;
+  border-top-color: #1f8a4c;
+  border-radius: 50%;
+  animation: menro-spin 0.9s linear infinite;
+}
+
+.menro-loading-section .menro-spinner { width: 28px; height: 28px; }
+.menro-loading-inline .menro-spinner { width: 16px; height: 16px; border-width: 2px; }
+
+@keyframes menro-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Reduced motion: a still ring with its green arc; the status is still announced. */
+@media (prefers-reduced-motion: reduce) {
+  .menro-spinner { animation: none; }
+}
+
+.menro-visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  border: 0;
+  white-space: nowrap;
+}

@@ -22,7 +22,7 @@ for (const role of ["admin", "staff", "participant"]) for (const method of ["ema
     } else await page.getByRole("button", { name: "Continue with Google" }).click();
     await expect(page).toHaveURL(new RegExp(`/${role}/dashboard$`));
     await expect(page.getByText("Login Successful", { exact: true })).toHaveCount(1);
-    await expect(page.locator(".menro-toast-viewport-floating")).toHaveCSS("position", "fixed");
+    await expect(page.locator(".menro-toast-viewport:has(.menro-toast-floating)")).toHaveCSS("position", "fixed");
     const topbarBefore = await page.locator(".topbar").boundingBox();
     await expect(page.getByText("Login Successful", { exact: true })).toHaveCount(0, { timeout: 6000 });
     expect(await page.locator(".topbar").boundingBox()).toEqual(topbarBefore);

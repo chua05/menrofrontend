@@ -18,6 +18,7 @@ import { SiteCenterKey, TreeKey, UtilizationSwatch } from "../components/map/Map
 import { UTILIZATION_LEGEND, siteUtilization } from "../utils/siteUtilization";
 import { filterMapTrees, siteHasMatchingTree } from "../utils/mapTrees";
 import "../styles/map-visualization.css";
+import LoadingIndicator from "../components/LoadingIndicator";
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
 
@@ -837,7 +838,7 @@ export default function MapVisualizationPage() {
     <div className="mv-page">
       <h1 className="page-title-hidden">Map Visualization</h1>
 
-      {sitesLoading && <p role="status">Loading planting sites...</p>}
+      {sitesLoading && <LoadingIndicator message="Loading planting sites..." />}
       {sitesError && <p role="alert">{sitesError} Use Refresh Map to retry.</p>}
       {treeError && <p role="alert" className="mv-tree-error">{treeError}</p>}
 

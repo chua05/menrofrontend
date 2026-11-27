@@ -3,6 +3,7 @@ import { useParams } from "react-router-dom";
 import logo from "../assets/menrologo-transparent.png";
 import { guestAttendanceErrors, normalizeGuestContact, attendanceOpensLabel } from "../utils/guestAttendance";
 import "../styles/guest-event.css";
+import LoadingIndicator from "../components/LoadingIndicator";
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
 const EMPTY_FORM = { fullName: "", contactNumber: "", address: "" };
@@ -98,7 +99,7 @@ export default function GuestEventPage() {
         <article className="guest-event-card" aria-label="Guest event attendance">
           <div className="guest-event-heading"><h1>Tree Planting Event Attendance</h1><p>Register your attendance at this planting event.</p></div>
           <div className="guest-event-divider" />
-          {loading && <p className="guest-event-muted" role="status">Loading event...</p>}
+          {loading && <LoadingIndicator message="Loading event..." />}
           {loadError && <div className="guest-event-alert" role="alert">{loadError}</div>}
           {!loading && !event && <button type="button" className="guest-event-button" onClick={() => setRetryKey((count) => count + 1)}>Retry</button>}
 

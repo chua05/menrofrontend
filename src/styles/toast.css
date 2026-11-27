@@ -1,49 +1,37 @@
+/* One alert layer, fixed to the viewport at the upper centre (just below the top bar, clear of the notch). It sits in
+   <body> above every other layer, or inside the topmost open native <dialog> (the browser's top layer); position: fixed
+   keeps it at the same place on screen either way. It never takes part in page layout, so nothing moves. Its z-index is
+   above every z-indexed overlay in MENRO (the highest, the logout confirmation, uses 99999). */
 .menro-toast-viewport {
-  --menro-overlay-toast: 11000;
-}
-
-.menro-toast-viewport {
+  --menro-overlay-toast: 100000;
+  --menro-toast-top: calc(env(safe-area-inset-top, 0px) + var(--topbar-height, 72px) + 10px);
   position: fixed;
-  top: 82px;
+  top: var(--menro-toast-top);
   left: 50%;
   z-index: var(--menro-overlay-toast);
-  width: min(680px, calc(100vw - 32px));
+  width: min(680px, calc(100vw - 32px - env(safe-area-inset-left, 0px) - env(safe-area-inset-right, 0px)));
+  max-height: calc(100dvh - var(--menro-toast-top) - 16px);
+  margin: 0;
+  padding: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
+  overflow: clip;
+  overflow-clip-margin: 32px;
   transform: translateX(-50%);
   pointer-events: none;
 }
 
-.menro-toast-anchor,
-.menro-toast-page-anchor {
-  flex: 0 0 auto;
-  min-width: 0;
-}
-
-.menro-toast-anchor:empty,
-.menro-toast-page-anchor:empty {
-  display: none;
-}
-
-.menro-toast-viewport-modal {
-  position: static;
-  width: 100%;
-  padding: 8px 20px 0;
-  transform: none;
-}
-
-.menro-toast-viewport-page {
-  position: static;
-  width: 100%;
-  padding: 8px 24px 0;
-  transform: none;
-}
-
+/* Regular alerts: text only. No border, outline, box, background or icon; a soft halo keeps the text readable over any
+   page. They let clicks through, so they never block a control. */
 .menro-toast {
   max-width: 100%;
-  padding: 4px 8px;
+  margin: 0;
+  padding: 2px 8px;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
   color: #26352d;
   font-family: inherit;
   font-size: 13px;
@@ -54,23 +42,31 @@
   opacity: 0;
   transform: translateY(-5px);
   animation: menro-toast-enter 180ms ease-out forwards;
-  text-shadow: 0 1px 2px rgba(255, 255, 255, 0.95);
+  text-shadow: 0 0 2px #fff, 0 0 6px #fff, 0 1px 2px rgba(255, 255, 255, 0.95);
 }
 
 .menro-toast-success { color: #087443; }
-.menro-toast-title { display: block; }
-.menro-toast-viewport-floating { top: calc(var(--topbar-height, 72px) + 12px); }
-.menro-toast-viewport-floating .menro-toast {
-  position: relative; padding: 14px 48px 14px 18px; border: 1px solid #98c9ac;
-  border-radius: 12px; background: #fff; box-shadow: 0 8px 28px #123d2526;
-  text-align: left; text-shadow: none; pointer-events: auto;
-}
-.menro-toast-dismiss { position: absolute; right: 8px; top: 8px; width: 30px; height: 30px; border: 0; border-radius: 6px; background: transparent; color: #145b3a; font-size: 22px; cursor: pointer; }
-.menro-toast-dismiss:hover { background: #dff4e5; }
-.menro-toast-dismiss:focus-visible { outline: 2px solid #145b3a; outline-offset: 2px; }
 .menro-toast-error { color: #b42318; }
 .menro-toast-warning { color: #a15c00; }
 .menro-toast-info { color: #26352d; }
+.menro-toast-title { display: block; }
+
+/* The login alerts only: the green-bordered card with a dismiss button. Only the button takes clicks, so the card never
+   blocks a control underneath it (such as the first-visit guide). */
+.menro-toast-floating {
+  position: relative;
+  width: max-content;
+  padding: 14px 48px 14px 18px;
+  border: 1px solid #98c9ac;
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 8px 28px #123d2526;
+  text-align: left;
+  text-shadow: none;
+}
+.menro-toast-dismiss { pointer-events: auto; position: absolute; right: 8px; top: 8px; width: 30px; height: 30px; border: 0; border-radius: 6px; background: transparent; color: #145b3a; font-size: 22px; cursor: pointer; }
+.menro-toast-dismiss:hover { background: #dff4e5; }
+.menro-toast-dismiss:focus-visible { outline: 2px solid #145b3a; outline-offset: 2px; }
 
 .menro-toast.exiting {
   animation: menro-toast-exit 220ms ease-in forwards;
@@ -86,21 +82,12 @@
 
 @media (max-width: 700px) {
   .menro-toast-viewport {
-    top: 70px;
-    width: calc(100vw - 24px);
+    --menro-toast-top: calc(env(safe-area-inset-top, 0px) + var(--topbar-height, 64px) + 8px);
+    width: calc(100vw - 24px - env(safe-area-inset-left, 0px) - env(safe-area-inset-right, 0px));
   }
 
   .menro-toast { font-size: 12.5px; }
-
-  .menro-toast-viewport-modal {
-    width: 100%;
-    padding: 8px 14px 0;
-  }
-
-  .menro-toast-viewport-page {
-    width: 100%;
-    padding: 7px 12px 0;
-  }
+  .menro-toast-floating { width: auto; max-width: 100%; }
 }
 
 @media (prefers-reduced-motion: reduce) {

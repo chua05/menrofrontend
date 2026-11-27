@@ -126,12 +126,36 @@ test("release inventory loading settles, busy release cannot double-submit or di
   await expect.poll(() => Boolean(finishInventory)).toBe(true); await finishInventory();
   await expect(dialog.getByText("Loading current inventory...")).toHaveCount(0);
   await dialog.getByLabel("Available Release Date").fill("2026-11-05"); await dialog.getByLabel("Actual Released Quantity *").fill("10");
+  const detailsHeading = page.locator(".sr-details-modal .sr-modal-header h2"); const headingBefore = await detailsHeading.boundingBox();
+  // Every time the success alert's node enters the document is recorded: it must be inserted once (never remounted when a
+  // dialog closes) and never into <body> while a native dialog is open (it would be drawn behind the top layer).
+  await page.evaluate(() => { window.__toastInsertions = []; new MutationObserver(records => { for (const record of records) for (const node of record.addedNodes) {
+    if (!(node instanceof Element)) continue; const toasts = [node, ...node.querySelectorAll(".menro-toast")].filter(el => el.matches?.(".menro-toast") && el.textContent.includes("was released successfully"));
+    for (const toast of toasts) { const open = [...document.querySelectorAll("dialog[open]")]; window.__toastInsertions.push({ openDialogs: open.length, inTopDialog: open.length ? open.at(-1).contains(toast) : true }); } } })
+    .observe(document.body, { subtree: true, childList: true }); });
   await dialog.getByRole("button", { name: "Confirm Release" }).click(); await expect(dialog.getByRole("button", { name: "Releasing..." })).toBeDisabled();
   await expect(dialog.getByRole("button", { name: "Cancel", exact: true })).toBeDisabled(); await page.keyboard.press("Escape"); await expect(dialog).toBeVisible();
   expect(state.calls.filter(key => key.startsWith("PATCH"))).toHaveLength(1);
   await expect.poll(() => Boolean(finishRelease)).toBe(true); await finishRelease(); await expect(dialog).not.toBeVisible();
   expect(releaseBody).toEqual({ items: [{ inventoryId: "narra", releasedQuantity: 10, shortReleaseReason: "" }], availableReleaseDate: "2026-11-05", expectedVersion: 4 });
   await expect(page.getByText("REQ-2026-001 was released successfully.", { exact: true })).toBeVisible();
+  // The alert shows at the viewport's upper centre above the Request Details modal still open (one fixed layer stacked over
+  // every other fixed layer, or inside the topmost native dialog when one is open) and moves nothing inside the modal.
+  const placement = await page.locator(".menro-toast", { hasText: "was released successfully" }).evaluate(node => {
+    const box = node.getBoundingClientRect(), open = [...document.querySelectorAll("dialog[open]")], layer = node.closest(".menro-toast-viewport");
+    const layerZ = Number(getComputedStyle(layer).zIndex);
+    const otherZ = [...document.querySelectorAll("body *")].filter(el => !layer.contains(el) && ["fixed", "absolute"].includes(getComputedStyle(el).position))
+      .map(el => Number(getComputedStyle(el).zIndex) || 0);
+    return { inTopLayer: open.length ? open.at(-1) === layer.parentElement.parentElement : layer.parentElement.parentElement === document.body, above: otherZ.every(z => z < layerZ),
+      position: getComputedStyle(layer).position, centre: Math.round(box.left + box.width / 2 - innerWidth / 2), bottom: box.bottom, height: innerHeight };
+  });
+  await expect(page.locator(".sr-details-modal")).toBeVisible();
+  expect(placement.inTopLayer).toBe(true); expect(placement.above).toBe(true); expect(placement.position).toBe("fixed");
+  const insertions = await page.evaluate(() => window.__toastInsertions);
+  expect(insertions).toHaveLength(1); expect(insertions[0].inTopDialog).toBe(true);
+  expect(Math.abs(placement.centre)).toBeLessThanOrEqual(2); expect(placement.bottom).toBeLessThan(placement.height * 0.3);
+  const headingAfter = await detailsHeading.boundingBox(); console.log(`modal layout shift with toast: ${Math.abs(headingAfter.y - headingBefore.y)}px`);
+  expect(headingAfter.y).toBe(headingBefore.y);
   await expect(page.locator(".sr-detail-footer-actions").getByRole("button", { name: "Close", exact: true })).toBeFocused(); state.check();
 });
 

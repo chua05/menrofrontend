@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import PageLoadingState from "../components/PageLoadingState";
 import DashboardTutorial from "../components/DashboardTutorial";
 import { useToast } from "../context/ToastContext";
-import { consumeSuccessfulLogin } from "../utils/loginSuccess";
+import { consumeSuccessfulLoginAlert, loginSuccessMessage } from "../utils/loginSuccess";
 import { DASHBOARD_SOURCES, DASHBOARD_UNAVAILABLE_MESSAGE, metricAvailability } from "../utils/dashboardAvailability";
 import L from "leaflet";
 import { boundaryLayerOptions } from "../utils/barangayMap";
@@ -47,6 +47,7 @@ import { barangaySurvivalView, managementFigures, monthlyActivityView, survivalC
 import { MAP_MAX_ZOOM, addBasemap } from "../components/map/basemap";
 import KpiCard, { KpiGrid } from "../components/KpiCard";
 import "../styles/dashboard-page.css";
+import LoadingIndicator from "../components/LoadingIndicator";
 
 const BARANGAY_GEOJSON_URL = `${API_BASE_URL}/sites/barangay-boundaries`;
 const DASHBOARD_REQUEST_TIMEOUT_MS = 15_000;
@@ -1367,8 +1368,8 @@ export default function DashboardPage() {
   const [unavailableSources, setUnavailableSources] = useState(() => new Set());
   useEffect(() => {
     const frame = window.requestAnimationFrame(() => {
-      const nonce = consumeSuccessfulLogin(currentUser);
-      if (nonce) loginToast("Welcome back! You have successfully signed in.", { title: "Login Successful", duration: 4000, floating: true, dismissible: true, dedupeKey: `login-success:${nonce}` });
+      const login = consumeSuccessfulLoginAlert(currentUser);
+      if (login) loginToast(loginSuccessMessage(login.firstLogin), { title: "Login Successful", duration: 4000, floating: true, dismissible: true, dedupeKey: `login-success:${login.nonce}` });
     });
     return () => window.cancelAnimationFrame(frame);
   }, [currentUser, loginToast]);
@@ -2998,11 +2999,11 @@ export default function DashboardPage() {
                       </div>
                     )
                   )}
-                  {barangaySurvival.rows.length === 0 && (
+                  {barangaySurvival.rows.length === 0 && (analytics || analyticsUnavailable ? (
                     <span className="dashboard-chart-zero-copy">
-                      {analytics ? "No Admin-approved survival results yet." : analyticsUnavailable ? "Survival results are unavailable right now." : "Loading survival results…"}
+                      {analytics ? "No Admin-approved survival results yet." : "Survival results are unavailable right now."}
                     </span>
-                  )}
+                  ) : <LoadingIndicator message="Loading survival results…" />)}
                   {barangaySurvival.mode === "sample" && (
                     <span className="dashboard-chart-zero-copy">Permanent-sample results from Admin-approved Monitor Planted Trees visits, not official full-cohort survival.</span>
                   )}

@@ -8,6 +8,7 @@ import { sampleAnalyticsEnabled } from "../utils/permanentSampleFeatures";
 import AnalyticsSitesMap from "../components/analytics/AnalyticsSitesMap";
 import KpiCard, { KpiGrid } from "../components/KpiCard";
 import "../styles/reforestation-analytics.css";
+import PageLoadingState from "../components/PageLoadingState";
 
 // Every figure comes from GET /analytics/dashboard, which computes it from the stored records (backend analytics.service.js).
 const REFRESH_INTERVAL_MS = 60_000;
@@ -99,7 +100,7 @@ export default function ReforestationAnalyticsPage() {
   const filtered = JSON.stringify(filters) !== JSON.stringify(EMPTY_FILTERS);
 
   const updateFilter = (name) => (event) => setFilters((current) => ({ ...current, [name]: event.target.value }));
-  if (loading && !hasLoaded) return <div className="ra-page"><div className="ra-centered-state">Loading analytics…</div></div>;
+  if (loading && !hasLoaded) return <div className="ra-page"><PageLoadingState message="Loading analytics…" /></div>;
   if (loadError && !hasLoaded) return <div className="ra-page"><div className="ra-centered-state" role="alert"><span>{loadError}</span><button className="ra-secondary-button" onClick={() => loadAnalytics({ foreground: true })}>Retry</button></div></div>;
 
   return <div className="ra-page" aria-busy={updating || undefined}>

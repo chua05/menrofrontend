@@ -7,6 +7,7 @@ import { useAuth } from "../context/AuthContext";
 import { planDistribution, resolveVerifiedPlantingCohortEnabled, visibleCohortMessage } from "../utils/verifiedPlantingCohort";
 import SecureCameraCapture from "../components/SecureCameraCapture";
 import "../styles/verified-planting-cohorts.css";
+import LoadingIndicator from "../components/LoadingIndicator";
 
 const emptyPlanSample = () => ({ permanentId: "", unitType: "tree", species: "", siteReference: "", selectionReason: "" });
 const emptyBaseline = (sample = {}) => ({
@@ -156,7 +157,7 @@ export default function VerifiedPlantingCohortsPage({ embedded = false, view = "
     <p className="cohort-notice">{contextual ? "Sampling plan and baseline for this verified planting report. Admin approval is required for each; visit creation is never automatic." : "Approved planting records and permanent samples. Existing schedules and official KPIs remain unchanged; sample and visit creation is never automatic."}</p>
     {error && <p className="cohort-error" role="alert">{error}</p>}{message && <p className="cohort-success" role="status">{message}</p>}
     {(!contextual || cohorts.length > 1) && <><label htmlFor="verified-cohort-selection">Verified cohort</label><select id="verified-cohort-selection" value={selectedId} onChange={(event) => setSelectedId(event.target.value)}><option value="">Select a cohort</option>{cohorts.map((cohort) => <option key={cohort.id} value={cohort.id}>{cohort.id} — {cohort.verifiedPlantedQuantity} verified trees</option>)}</select></>}
-    {cohortsLoading && <p role="status">Loading authorized verified cohorts...</p>}
+    {cohortsLoading && <LoadingIndicator message="Loading authorized verified cohorts..." />}
     {!cohortsLoading && !cohorts.length && !error && <p role="status">{contextual ? "No verified planting cohort is linked to this report. Cohorts are recorded only when a report is approved while verified-cohort recording is enabled; earlier reports are not backfilled." : "No authorized verified cohorts are available."}</p>}
     {selected && <section className="cohort-card"><h3>Verified planting record</h3><dl>
       <dt>Cohort</dt><dd>{selected.id}</dd><dt>Verified planted quantity</dt><dd>{selected.verifiedPlantedQuantity}</dd>

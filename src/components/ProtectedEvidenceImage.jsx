@@ -2,6 +2,7 @@ import { displayableBlob } from "../utils/heicPreview";
 import { useEffect, useState } from "react";
 import { auth } from "../firebase/config";
 import { privateImageRequest } from "../utils/privateImageRequests";
+import LoadingIndicator from "./LoadingIndicator";
 
 const API_BASE_URL =
   import.meta.env.VITE_API_URL || "http://localhost:5000/api";
@@ -88,7 +89,7 @@ export default function ProtectedEvidenceImage({
   }, [endpoint]);
 
   if (state.status === "loading") {
-    return <div className="protected-evidence-state">Loading photo…</div>;
+    return <LoadingIndicator className="protected-evidence-state" message="Loading photo…" />;
   }
 
   if (state.status !== "ready") {

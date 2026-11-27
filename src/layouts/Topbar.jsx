@@ -13,6 +13,7 @@ import {
   mergeNotificationPages,
   notificationEmptyMessage,
 } from "../utils/notificationList";
+import LoadingIndicator from "../components/LoadingIndicator";
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
 
@@ -559,7 +560,7 @@ export default function Topbar({ onOpenSidebar, sidebarOpen = false }) {
               </div>
 
               <div className="notification-list">
-                {notificationLoading && <div className="notification-empty">Loading notifications...</div>}
+                {notificationLoading && <LoadingIndicator className="notification-empty" message="Loading notifications..." />}
                 {notificationError && <div className="notification-empty" role="alert">{notificationError}</div>}
                 {!notificationLoading && !notificationError && notifications.length === 0 && (
                   <div className="notification-empty">

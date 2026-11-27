@@ -22,6 +22,8 @@ import { auth } from "../firebase/config";
 
 import KpiCard, { KpiGrid } from "../components/KpiCard";
 import "../styles/seedlings.css";
+import LoadingIndicator from "../components/LoadingIndicator";
+import PageLoadingState from "../components/PageLoadingState";
 
 const API_BASE_URL =
   import.meta.env.VITE_API_URL || "http://localhost:5000/api";
@@ -1049,18 +1051,7 @@ export default function SeedlingsPage() {
   if (loading) {
     return (
       <div className="seedlings-page">
-        <div
-          style={{
-            minHeight: "420px",
-            display: "grid",
-            placeItems: "center",
-            color: "#526159",
-            fontSize: "13px",
-            fontWeight: 600,
-          }}
-        >
-          Loading seedling inventory...
-        </div>
+        <PageLoadingState message="Loading seedling inventory..." />
       </div>
     );
   }
@@ -1563,9 +1554,7 @@ export default function SeedlingsPage() {
             </div>
           </>
         ) : distributionLoading ? (
-          <div className="sd-distribution-state" role="status">
-            Loading distribution records...
-          </div>
+          <LoadingIndicator className="sd-distribution-state" message="Loading distribution records..." />
         ) : distributionError ? (
           <div className="sd-distribution-state" role="alert">
             <span>{distributionError}</span>

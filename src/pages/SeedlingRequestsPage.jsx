@@ -52,7 +52,7 @@ import { getRequesterDetailField } from "../utils/requesterDetails";
 import { ownsSeedlingRequest, canProcessSeedlingRequest, canReleaseSeedlingRequest, createdSeedlingRequest, plantingReportRequirement, isStaffDirectRequest, needsAdminSiteVerification } from "../utils/requestOwnership";
 import { approvedPolicyLabel } from "../utils/purposePolicyStatus";
 import { textTooltip } from "../utils/leafletTooltip";
-
+import LoadingIndicator from "../components/LoadingIndicator";
 
 const TABS = [
   { id: "all", label: "All Requests" },
@@ -301,7 +301,6 @@ function normalizeRequestForUi(request = {}) {
       proposal.description || proposal.eventDescription || request.eventDescription || "",
   };
 }
-
 
 
 function getPlantingSiteDisplayName(site) {
@@ -706,7 +705,6 @@ export default function SeedlingRequestsPage() {
 
   const moreMenuRef = useRef(null);
   const dateFilterRef = useRef(null);
-
 
 
   useEffect(() => {
@@ -1838,7 +1836,6 @@ useEffect(() => {
     (site) => site.barangay === form.eventBarangay
   );
 
-
   if (userRole === "participant" || (userRole === "staff" && ["/staff/request-seedlings", "/staff/walk-in-requests/new"].includes(location.pathname))) {
     const editing = pageSearchParams.has("edit");
     // Staff personal requests from before the single assisted form still reopen for editing.
@@ -1860,7 +1857,6 @@ useEffect(() => {
     <div className="seedling-requests-page">
       <h1 className="page-title-hidden">Seedling Requests</h1>
 
-
       {requestError && (
         <div className="sr-api-error" role="alert">
           <CircleX size={16} />
@@ -1869,7 +1865,7 @@ useEffect(() => {
       )}
 
       {loadingRequests && (
-        <div className="sr-api-loading">Loading seedling requests...</div>
+        <LoadingIndicator className="sr-api-loading" message="Loading seedling requests..." />
       )}
 
       <KpiGrid label="Seedling request summary">
@@ -2597,7 +2593,7 @@ useEffect(() => {
                   <div className="sr-modal-footer"><button type="button" className="sr-secondary-btn" disabled={actionLoading || !lateReleaseReturnReason.trim()} onClick={() => runLateReleaseAction("return")}>Return for Revision</button><button type="button" className="sr-approve-btn" disabled={actionLoading} onClick={() => runLateReleaseAction("approve")}>Approve Rescheduling</button></div>
                 </>}
               </section>
-              {releaseLoading ? <p role="status">Loading current inventory...</p> : (releaseModal.trees || []).map((tree, index) => {
+              {releaseLoading ? <LoadingIndicator message="Loading current inventory..." /> : (releaseModal.trees || []).map((tree, index) => {
                 const stock = releaseInventory.find((item) => item.id === tree.inventoryId);
                 const entered = releaseEntries[index]?.quantity ?? "";
                 const available = stock && Number(stock.availableQuantity) + (releaseModal.inventoryReserved === true ? Number(stock.reservedQuantity || 0) : 0);
@@ -2979,8 +2975,6 @@ useEffect(() => {
                 <X size={18} />
               </button>
             </div>
-
-            <div className="menro-toast-anchor" data-menro-toast-anchor />
 
             <div className="sr-modal-body">
               <div className="sr-detail-status-line">
@@ -4049,7 +4043,6 @@ function ParticipantLocationPreview({ barangay, site }) {
   );
 }
 
-
 function StaffReviewSection({ request }) {
   if (!request) return null;
 
@@ -4723,7 +4716,6 @@ useEffect(() => {
   void loadParticipantData();
 }, [loadParticipantData]);
 
-
   const plantingSitesForBarangay = plantingSites.filter(
     (site) =>
       isPlantingSiteActive(site) &&
@@ -5106,7 +5098,7 @@ useEffect(() => {
   };
 
   if (loadingParticipantData) {
-    return <div className="seedling-requests-page participant-seedling-page"><div style={{ minHeight: "420px", display: "grid", placeItems: "center", color: "#526159", fontSize: "13px", fontWeight: 600 }}>Loading available seedlings...</div></div>;
+    return <div className="seedling-requests-page participant-seedling-page"><PageLoadingState message="Loading available seedlings..." /></div>;
   }
 
   if (participantLoadError) {

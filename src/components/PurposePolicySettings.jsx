@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { authenticatedFetch } from "../services/authenticatedApi";
+import LoadingIndicator from "./LoadingIndicator";
 async function api(options) {
   const response = await authenticatedFetch("/purpose-policies", options); const body = await response.json();
   if (!response.ok) throw new Error(body.message || "Policy settings unavailable."); return body.data;
@@ -15,7 +16,7 @@ export default function PurposePolicySettings() {
     catch (failure) { setError(failure.message); } finally { setSaving(false); }
   }
   return <section className="settings-card"><h2>Purpose Reporting and Permanent Sample Policies</h2><p>Admin-only, versioned settings for new approvals. Unapproved thresholds, minimums and procedures remain pending. This does not activate automatic sampling or visit creation.</p>
-    {error && <p role="alert">{error}</p>}{!data ? !error && <p role="status">Loading purpose policies…</p> : <form onSubmit={save}>
+    {error && <p role="alert">{error}</p>}{!data ? !error && <LoadingIndicator message="Loading purpose policies…" /> : <form onSubmit={save}>
       <p>Policy version: {data.version} · Updated by: {data.updatedBy || "Initial template awaiting Admin configuration"}</p>
       <label>Effective Date<input type="date" required value={data.effectiveDate || ""} onChange={event => setData(current => ({ ...current, effectiveDate: event.target.value }))} /></label>
       {data.purposes.map((row, index) => <fieldset key={row.purpose} className="settings-card"><legend>{row.purpose}</legend>

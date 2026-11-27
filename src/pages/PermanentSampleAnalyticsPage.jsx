@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { sampleRequest } from "../services/permanentSampleApi";
+import LoadingIndicator from "../components/LoadingIndicator";
 
 export default function PermanentSampleAnalyticsPage() {
   const [data, setData] = useState(null);
@@ -51,7 +52,7 @@ export default function PermanentSampleAnalyticsPage() {
     <h1 className="page-title-hidden">Permanent Sample Monitoring Analytics</h1>
     <p>Approved permanent samples only. Estimates require complete, resolved assessments and explicit sampling-validity approval. Official aggregate KPIs remain separate.</p>
     {error && <p role="alert">{error}</p>}
-    {loading && !error && <p role="status">Loading approved monitoring analytics…</p>}
+    {loading && !error && <LoadingIndicator message="Loading approved monitoring analytics…" />}
     {ready && <>
       <div className="flex flex-wrap gap-4">
         <label>Site <select aria-label="Site" value={site} onChange={e => changeFilters(e.target.value, "")} className="rounded border p-2">

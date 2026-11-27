@@ -1859,8 +1859,6 @@ export default function EventSchedulePage() {
                 </div>
               </div>
 
-              <div className="menro-toast-anchor" data-menro-toast-anchor />
-
               <div className="ec-modal-body">
                 <div className="ec-detail-status-row">
                   <StatusBadge

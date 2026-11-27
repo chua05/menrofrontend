@@ -405,3 +405,84 @@ test("planting sites legend shows utilization as solid round dots", async ({ pag
   const shapes = await dots.evaluateAll(nodes => nodes.map(node => { const style = getComputedStyle(node); return [style.width, style.height, style.borderRadius, style.backgroundColor]; }));
   expect(shapes.slice(0, 3)).toEqual([["11px", "11px", "50%", "rgb(76, 175, 99)"], ["11px", "11px", "50%", "rgb(245, 158, 11)"], ["11px", "11px", "50%", "rgb(239, 68, 68)"]]);
 });
+
+// Temporary alerts: one viewport-fixed layer at the upper centre of the screen. Text only (no border, box or icon), and
+// showing one moves nothing on the page (the old in-page placement pushed the page down by 73 px).
+for (const [width, height] of [[1440, 900], [1024, 768], [390, 844], [375, 812]]) test(`page toast is fixed, text-only and moves nothing at ${width}x${height}`, async ({ page }, info) => {
+  await setup(page, "admin");
+  await page.setViewportSize({ width, height });
+  await page.goto("/admin/settings?role=admin");
+  const exportData = page.getByRole("button", { name: "Export Data" });
+  await expect(page.locator("main h1, main h2").first()).toBeVisible();
+  // What the reader sees at the top of the page (not scrolled, so scroll anchoring cannot hide a shift), before and while the alert shows.
+  const watched = [page.locator(".topbar"), page.locator("main h1, main h2").first(), page.locator("main input, main select").first(), page.getByRole("button", { name: "Save Settings" })];
+  const boxes = async () => Promise.all(watched.map(async (locator) => (await locator.isVisible()) ? locator.boundingBox() : null));
+  const before = await boxes();
+  await exportData.evaluate((button) => button.click());
+  const toast = page.locator(".menro-toast", { hasText: "Settings backup exported successfully." });
+  await expect(toast).toBeVisible();
+  const after = await boxes();
+  const shift = Math.max(0, ...before.map((box, i) => box && after[i] ? Math.abs(after[i].y - box.y) + Math.abs(after[i].height - box.height) : 0));
+  info.annotations.push({ type: "layout-shift", description: `${width}x${height}: ${shift}px` });
+  console.log(`layout shift with toast at ${width}x${height}: ${shift}px`);
+  const placement = await toast.evaluate((node) => {
+    const box = node.getBoundingClientRect(), style = getComputedStyle(node), layer = node.closest(".menro-toast-viewport");
+    return { position: getComputedStyle(layer).position, parent: layer.parentElement.parentElement === document.body, centre: Math.round(box.left + box.width / 2 - window.innerWidth / 2),
+      top: box.top, bottom: box.bottom, right: box.right, left: box.left, border: style.borderTopWidth, background: style.backgroundColor, shadow: style.boxShadow,
+      icons: node.querySelectorAll("svg, img").length, overflow: document.documentElement.scrollWidth > window.innerWidth };
+  });
+  expect(shift).toBe(0);
+  expect(placement).toMatchObject({ position: "fixed", parent: true, border: "0px", background: "rgba(0, 0, 0, 0)", shadow: "none", icons: 0, overflow: false });
+  expect(Math.abs(placement.centre)).toBeLessThanOrEqual(2);
+  expect(placement.top).toBeGreaterThanOrEqual(0);
+  expect(placement.bottom).toBeLessThan(height * 0.3);
+  expect(placement.left).toBeGreaterThanOrEqual(0); expect(placement.right).toBeLessThanOrEqual(width);
+});
+
+// Loading states: one animated green spinner, centred in the area that is loading (page loading inside the main content,
+// clear of the top bar and sidebar; section loading inside its section). The message stays for screen readers only.
+async function spinnerIn(page, status, area) {
+  await expect(status.locator(".menro-spinner")).toBeVisible();
+  return status.evaluate((node, areaSelector) => {
+    const spinner = node.querySelector(".menro-spinner").getBoundingClientRect(), region = (areaSelector ? node.closest(areaSelector) : node).getBoundingClientRect();
+    const message = node.querySelector(".menro-visually-hidden"), style = getComputedStyle(node.querySelector(".menro-spinner"));
+    const topbar = document.querySelector(".topbar")?.getBoundingClientRect(), sidebar = document.querySelector("aside.sidebar")?.getBoundingClientRect();
+    const sidebarShown = sidebar && sidebar.width > 0 && sidebar.right > 0 && getComputedStyle(document.querySelector("aside.sidebar")).visibility !== "hidden";
+    return { dx: Math.round(spinner.left + spinner.width / 2 - (region.left + region.width / 2)), dy: Math.round(spinner.top + spinner.height / 2 - (region.top + region.height / 2)),
+      text: node.textContent.trim(), messageBox: message ? message.getBoundingClientRect().width : -1, animation: style.animationName, colour: style.borderTopColor,
+      clearOfTopbar: !topbar || spinner.top >= topbar.bottom, clearOfSidebar: !sidebarShown || spinner.left >= sidebar.right || window.innerWidth < 1024,
+      overflow: document.documentElement.scrollWidth > window.innerWidth };
+  }, area);
+}
+
+for (const [width, height] of [[1440, 900], [1024, 768], [390, 844], [375, 812]]) test(`page and section loading show a centred green spinner at ${width}x${height}`, async ({ page }) => {
+  await setup(page, "admin");
+  await page.setViewportSize({ width, height });
+  // Page loading: Registered Users while its list is still loading.
+  await page.route("**/api/users*", () => {});
+  await page.goto("/admin/registered-users?role=admin");
+  const pageStatus = page.getByRole("status").filter({ hasText: "Loading users..." });
+  const pageSpinner = await spinnerIn(page, pageStatus);
+  expect(pageSpinner).toMatchObject({ text: "Loading users...", messageBox: 1, animation: "menro-spin", colour: "rgb(31, 138, 76)", clearOfTopbar: true, clearOfSidebar: true, overflow: false });
+  expect(Math.abs(pageSpinner.dx)).toBeLessThanOrEqual(1); expect(Math.abs(pageSpinner.dy)).toBeLessThanOrEqual(1);
+
+  // Section loading: the dashboard's survival card while the analytics service answers.
+  await page.unroute("**/api/users*");
+  await page.route("**/api/analytics/dashboard*", () => {});
+  await page.goto("/admin/dashboard?role=admin");
+  await expect(page.locator(".survival-card")).toBeVisible({ timeout: 20_000 });
+  const sectionStatus = page.locator(".survival-card").getByRole("status").filter({ hasText: "Loading survival results…" });
+  const sectionSpinner = await spinnerIn(page, sectionStatus);
+  expect(sectionSpinner).toMatchObject({ messageBox: 1, animation: "menro-spin", overflow: false });
+  expect(Math.abs(sectionSpinner.dx)).toBeLessThanOrEqual(1); expect(Math.abs(sectionSpinner.dy)).toBeLessThanOrEqual(1);
+});
+
+test("loading spinners stop rotating when reduced motion is requested", async ({ page }) => {
+  await setup(page, "admin");
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.route("**/api/users*", () => {});
+  await page.goto("/admin/registered-users?role=admin");
+  const spinner = page.getByRole("status").filter({ hasText: "Loading users..." }).locator(".menro-spinner");
+  await expect(spinner).toBeVisible();
+  await expect(spinner).toHaveCSS("animation-name", "none");
+});

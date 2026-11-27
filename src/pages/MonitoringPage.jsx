@@ -57,6 +57,8 @@ import * as exifr from "exifr";
 import KpiCard, { KpiGrid } from "../components/KpiCard";
 import { monitoringSampleQuery, monitoringSurvivalView } from "../utils/monitoringSampleView";
 import "../styles/survival-monitoring.css";
+import LoadingIndicator from "../components/LoadingIndicator";
+import PageLoadingState from "../components/PageLoadingState";
 
 const API_BASE_URL =
   import.meta.env.VITE_API_URL || "http://localhost:5000/api";
@@ -100,7 +102,6 @@ const CONDITION_META = {
     description: "Did not survive",
   },
 };
-
 
 
 function formatDate(value) {
@@ -178,7 +179,6 @@ function getCurrentUserIdentity(currentUser) {
   };
 }
 
-
 function deriveCondition(healthy, damaged, dead, totalChecked) {
   if (totalChecked <= 0) return "Healthy";
   if (dead === totalChecked) return "Dead";
@@ -239,7 +239,6 @@ function earlyMonitoringLabel(record) {
   }).format(twoDays);
   return dueSoonDate >= policy.deadlineDate ? "Early: Due Soon" : "Early: Available";
 }
-
 
 function getRecordId(record) {
   return record?.id || record?.monitoringId || "";
@@ -1680,7 +1679,7 @@ export default function MonitoringPage() {
   if (loading) {
     return (
       <div className="sm-page">
-        <div style={{ minHeight: "420px", display: "grid", placeItems: "center", color: "#526159", fontSize: "13px", fontWeight: 600 }}>Loading survival monitoring...</div>
+        <PageLoadingState message="Loading survival monitoring..." />
       </div>
     );
   }
@@ -1849,7 +1848,6 @@ export default function MonitoringPage() {
         </div>
       </div>
 
-
       {/* ANALYTICS */}
       <div className="sm-analytics-grid">
         <section className="sm-chart-card">
@@ -1900,11 +1898,15 @@ export default function MonitoringPage() {
                 </LineChart>
               </ResponsiveContainer>
           </div>
-          {survivalTrendEmpty && (
+          {survivalTrendEmpty && (survivalView.mode === "loading" ? (
+            <div className="sm-chart-empty-message">
+              <LoadingIndicator variant="inline" message={survivalView.emptyMessage} />
+            </div>
+          ) : (
             <p className="sm-chart-empty-message" role="status">
               {survivalView.emptyMessage}
             </p>
-          )}
+          ))}
         </section>
 
         <section className="sm-summary-card">
@@ -1979,7 +1981,7 @@ export default function MonitoringPage() {
       <section className="sm-records-card">
         <div className="sm-records-header">
           <h2>Monitoring Lifecycles</h2>
-          {sampleVisitsEnabled && sampleVisitsState.loading && <p role="status" className="sm-site-sub">Loading permanent-sample monitoring visits…</p>}
+          {sampleVisitsEnabled && sampleVisitsState.loading && <LoadingIndicator message="Loading permanent-sample monitoring visits…" />}
           {sampleVisitsEnabled && sampleVisitsState.error && (
             <p role="alert" className="sm-site-sub">
               {sampleVisitsState.error} Aggregate monitoring records are unaffected.{" "}
@@ -2707,8 +2709,6 @@ export default function MonitoringPage() {
                 <FiX size={19} />
               </button>
             </div>
-
-            <div className="menro-toast-anchor" data-menro-toast-anchor />
 
             <div className="sm-drawer-body">
               <section className="sm-detail-section">

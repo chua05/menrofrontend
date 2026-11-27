@@ -11,6 +11,7 @@ import { authenticatedFetch, authenticatedJson } from "../services/authenticated
 import { READ_TIMEOUT_MS, UPLOAD_TIMEOUT_MS, WRITE_TIMEOUT_MS, isAmbiguousWriteFailure, serverFailureMessage } from "../utils/requestTimeout";
 import { backendFieldErrors, focusFirstInvalid, retainInvalidFieldMessages } from "../utils/formValidation";
 import "../styles/official-planting.css";
+import LoadingIndicator from "./LoadingIndicator";
 // Every call is bounded so "Saving…" and "Loading…" always recover.
 async function api(path, options = {}, timeoutMs = READ_TIMEOUT_MS) {
   const { response, body } = await authenticatedJson(path, options, { timeoutMs });
@@ -241,7 +242,7 @@ export default function StaffPlantingReportForm({ currentUser, onClose, onSaved,
         {evidenceCarried && <p>Your verified planting evidence is kept and does not need to be uploaded again.</p>}
         <p>Your corrected report goes directly to the MENRO Admin for approval.</p></div>
     </div>}
-    {loading ? <>{error && <p role="alert" className="pr-official-form-error">{error}</p>}<p role="status">Loading authorized releases…</p></> : <form ref={root} onSubmit={save} noValidate>
+    {loading ? <>{error && <p role="alert" className="pr-official-form-error">{error}</p>}<LoadingIndicator message="Loading authorized releases…" /></> : <form ref={root} onSubmit={save} noValidate>
       {!options.length && <p>No eligible released requests are available. An existing authorized release is required.</p>}
       <fieldset disabled={saving || unconfirmed || Boolean(saved)}>
         <div className="pr-field"><label htmlFor="official-request">Seedling Release Record *</label><select id="official-request" value={selectedId} onChange={event => choose(event.target.value)} {...aria("requestId")}><option value="">Select a released request</option>{options.map(row => <option key={row.requestId} value={row.requestId}>{row.requesterName} — {row.eventName || row.requestId}</option>)}</select>{feedback("requestId")}</div>

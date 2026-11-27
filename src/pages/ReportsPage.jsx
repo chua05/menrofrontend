@@ -21,6 +21,7 @@ import {
   FiMapPin,
 } from "react-icons/fi";
 import "../styles/reports.css";
+import LoadingIndicator from "../components/LoadingIndicator";
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
 const NO_REPORT_DATA_MESSAGE = "Report data is unavailable for the selected report type or filters.";
@@ -791,10 +792,7 @@ export default function ReportsPage() {
             </div>
           )}
           {historyLoading && (
-            <div className="reports-empty-state" role="status">
-              <div className="reports-empty-icon"><FiRefreshCw size={27} /></div>
-              <h3>Loading generated reports...</h3>
-            </div>
+            <LoadingIndicator className="reports-empty-state" message="Loading generated reports..." />
           )}
         </div>
 

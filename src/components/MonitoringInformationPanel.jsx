@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { sampleRequest } from "../services/permanentSampleApi";
+import LoadingIndicator from "./LoadingIndicator";
 
 export default function MonitoringInformationPanel({ visitId, sampleId, assessmentRevision, readOnly = false, draftQuestion, onDraftQuestion }) {
   const [rows, setRows] = useState([]);
@@ -47,7 +48,7 @@ export default function MonitoringInformationPanel({ visitId, sampleId, assessme
   return <section className="mt-6 rounded-xl border bg-white p-4" aria-label="Optional requester information">
     <h3 className="text-lg font-semibold">Requester information</h3>
     <p>Optional. Unanswered questions do not block assessments, submission or review.</p>
-    {loading && <p role="status">Loading information requests…</p>}
+    {loading && <LoadingIndicator message="Loading information requests…" />}
     {error && <p role="alert">{error}</p>}
     {!readOnly && <form onSubmit={send} className="my-3 space-y-2">
       <label className="block">Question to the verified planting requester

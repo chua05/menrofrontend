@@ -34,6 +34,7 @@ import { SITE_CENTER_COLOR, drawSiteOverlay, siteOverlayStyle } from "../compone
 import { UtilizationSwatch } from "../components/map/MapLegendKeys";
 import { UTILIZATION_LEVELS, plantedOf, siteUtilization } from "../utils/siteUtilization";
 import "../styles/planting-sites.css";
+import LoadingIndicator from "../components/LoadingIndicator";
 
 const API_BASE_URL =
   import.meta.env.VITE_API_URL || "http://localhost:5000/api";
@@ -1328,8 +1329,8 @@ export default function SitesPage() {
   return (
     <div className="planting-sites-page" style={{ position: "relative" }}>
       {(loading || loadError) && (
-        <div role={loadError ? "alert" : "status"} style={{ position: "absolute", inset: 0, zIndex: 1000, minHeight: "420px", display: "grid", placeContent: "center", justifyItems: "center", gap: "14px", background: "#f8faf9", color: "#526159", fontSize: "13px", fontWeight: 600 }}>
-          <span>{loadError || "Loading registered planting sites..."}</span>
+        <div role={loadError ? "alert" : undefined} style={{ position: "absolute", inset: 0, zIndex: 1000, minHeight: "420px", display: "grid", placeContent: "center", justifyItems: "center", gap: "14px", background: "#f8faf9", color: "#526159", fontSize: "13px", fontWeight: 600 }}>
+          {loadError ? <span>{loadError}</span> : <LoadingIndicator message="Loading registered planting sites..." />}
           {loadError && <button type="button" className="ps-secondary-btn" onClick={loadSiteData}>Retry</button>}
         </div>
       )}
@@ -1491,11 +1492,7 @@ export default function SitesPage() {
             {!mapError &&
               loading && (
                 <div className="ps-empty-map-hint">
-                  <MapPin size={17} />
-
-                  <span>
-                    Loading registered planting sites...
-                  </span>
+                  <LoadingIndicator variant="inline" announce={false} message="Loading registered planting sites..." />
                 </div>
               )}
 

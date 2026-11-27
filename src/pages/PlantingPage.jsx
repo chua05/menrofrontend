@@ -1036,7 +1036,6 @@ export default function PlantingPage() {
     });
   }, [form.barangay]);
 
-
   
 
   useEffect(() => {
@@ -1335,7 +1334,6 @@ export default function PlantingPage() {
     : form.siteId && !filteredSites.some((site) => String(getSiteId(site)) === String(form.siteId)) ? "site"
     : form.eventId && !filteredEvents.some((event) => String(getEventId(event)) === String(form.eventId)) ? "event"
     : form.distributionId && !eligibleDistributions.some((entry) => String(entry.id) === String(form.distributionId)) ? "distribution" : "";
-
 
   const eligibleDistributionItems = useMemo(() => {
     const distribution = eligibleDistributions.find((entry) =>
@@ -3400,9 +3398,7 @@ export default function PlantingPage() {
 
                           <div className="pr-photo-content">
 
-
                     <PlantingPhotoControls inputId="planting-photos" count={photoFiles.length} max={MAX_EVIDENCE_PHOTOS} disabled={submitting || Boolean(unconfirmedSubmission)} error={formErrors.photos || photoPreviews.find(preview => preview.verificationStatus === "failed" || preview.submissionBlocked)?.verificationMessage || ""} onCamera={startCamera} onFiles={files => handlePhotoChange({ target: { files, value: "" } })} />
-
 
                     {photoPreviews.length > 0 && (
                       <div className="pr-evidence-grid">
@@ -3577,7 +3573,6 @@ export default function PlantingPage() {
                                       />
 
 
-
                               </div>
 
                               <div className="pr-location-map-legend">
@@ -3689,8 +3684,6 @@ export default function PlantingPage() {
                 <FiX size={20} />
               </button>
             </div>
-
-            <div className="menro-toast-anchor" data-menro-toast-anchor />
 
             <div className="pr-drawer-body">
               <section className="pr-drawer-section">
@@ -4339,7 +4332,6 @@ export default function PlantingPage() {
               </div>
               <button type="button" className="pr-close-button" onClick={closeDecision} disabled={actionLoading} aria-label="Close decision"><FiX size={17} /></button>
             </div>
-            <div className="menro-toast-anchor" data-menro-toast-anchor />
             <form
               className="pr-modal-body pr-decision-body"
               noValidate

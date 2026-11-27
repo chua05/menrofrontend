@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { sampleRequest } from "../services/permanentSampleApi";
+import LoadingIndicator from "../components/LoadingIndicator";
 
 export default function MonitoringInformationPage() {
   const { userRole } = useAuth();
@@ -56,7 +57,7 @@ export default function MonitoringInformationPage() {
     <h1 className="page-title-hidden">Monitoring information requests</h1>
     <p>Replies provide optional information to MENRO. Private monitoring photos are not shared here.</p>
     {error && <p role="alert">{error}</p>}
-    {!rows && !error && <p role="status">Loading requests…</p>}
+    {!rows && !error && <LoadingIndicator message="Loading requests…" />}
     {rows?.length === 0 && <p>No information requests.</p>}
     <ul>{rows?.map(row => <li key={row.id} className="my-2 rounded border bg-white p-4">
       <p>{row.question}</p><p>{row.status}</p>{row.answer && <p>Reply: {row.answer}</p>}

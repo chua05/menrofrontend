@@ -19,6 +19,7 @@ import { approvedVisitNote, blockedReportRow, gateReasons, readinessErrorMessage
 import { TRACKING_STATUS, withPickerReadiness } from "../utils/monitoringTracking";
 import { continueMonitoringChoices, hasMoreChoices, loadMonitoringChoices, loadReadiness, readinessPath, verifiedReportStartPath, verifiedReportsPath, withoutEligibleCohort } from "../utils/sampleReadinessLoader";
 import { monitoringApiErrorMessage, monitoringErrorSampleId, monitoringEvidenceErrorMessage, monitoringWriteErrorMessage } from "../utils/monitoringApiError";
+import LoadingIndicator from "../components/LoadingIndicator";
 
 const STATUS_LABELS = { DRAFT: "Draft", RETURNED: "Returned for Correction", PENDING_ADMIN_APPROVAL: "Pending Admin Review", APPROVED: "Approved" };
 const statusLabel = value => STATUS_LABELS[value] || value;
@@ -762,7 +763,7 @@ export default function PermanentSampleMonitoringPage({ embedded = false, open: 
   const visitList = (
     <>
       {error && <p role="alert" className="cohort-error">{error}</p>}
-      {loading && <p role="status">Loading monitoring visits…</p>}
+      {loading && <LoadingIndicator message="Loading monitoring visits…" />}
       {page && !loading && (
         <>
           {gateNotices.length > 0 && <ul className="psm-note" aria-label="Monitoring availability">{gateNotices.map(notice => <li key={notice}>{notice}</li>)}</ul>}

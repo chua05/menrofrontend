@@ -1,9 +1,6 @@
-import "../styles/page-loading-state.css";
+import LoadingIndicator from "./LoadingIndicator";
 
+// Full-page loading inside the main content area.
 export default function PageLoadingState({ message }) {
-  return (
-    <div className="page-loading-state" role="status" aria-live="polite">
-      {message}
-    </div>
-  );
+  return <LoadingIndicator variant="page" className="page-loading-state" message={message} />;
 }

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { authenticatedFetch } from "../services/authenticatedApi";
 import "../styles/planting-reports.css";
 import "../styles/event-attendance.css";
+import LoadingIndicator from "./LoadingIndicator";
 
 async function request(path, options) {
   const response = await authenticatedFetch(path, options);
@@ -77,7 +78,7 @@ export default function EventAttendancePanel({ eventId, canManageReservations = 
   return (
     <section className="pr-drawer-section pr-event-attendance" aria-label="Event attendance">
       <div className="pr-drawer-section-title">Event Attendance{status === "ready" ? ` (${attendance.length})` : ""}</div>
-      {status === "loading" && <p className="pr-helper-text" role="status">Loading attendance…</p>}
+      {status === "loading" && <LoadingIndicator message="Loading attendance…" />}
       {status === "error" && <p className="pr-helper-text" role="status">{error}</p>}
       {status === "ready" && (attendance.length === 0
         ? <p className="pr-helper-text">No guest attendance has been registered for this event.</p>

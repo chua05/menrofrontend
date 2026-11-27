@@ -23,6 +23,8 @@ async function setup(page, overrides = {}) {
     else if (url.pathname === "/api/sites") data = [site];
     else if (url.pathname === "/api/inventory/available") data = [availableSeedling];
     else if (url.pathname === "/api/notifications/unread-count") data = { unreadCount: 0 };
+    // The Staff/Admin dashboard reads its figures from the analytics service: an empty, valid payload.
+    else if (key === "GET /api/analytics/dashboard") data = { summary: {}, distributionTrend: [], plantingTrend: [], survivalTrend: [], barangaySurvival: [], permanentSample: { summary: { survivalRate: null, totalSampleTrees: 0 }, conditions: [], trend: [] } };
     else if (lists.includes(url.pathname)) data = [];
     else if (key.startsWith("GET ") && /^\/api\/planting-reports\/[^/]+\/verification-logs$/.test(url.pathname)) data = [];
     else if (key === "GET /api/events/event-1/attendance" || key === "GET /api/events/event-1/reservations") data = [];
@@ -267,11 +269,44 @@ test("login toast is fixed below topbar, dismissible and does not reappear on re
   await page.goto("/staff/dashboard?role=staff");
   const toast = page.getByRole("status").filter({ hasText: "Login Successful" });
   await expect(toast).toContainText("Welcome back! You have successfully signed in.");
-  await expect(page.locator(".menro-toast-viewport-floating")).toHaveCSS("position", "fixed");
+  await expect(toast).toHaveCSS("border-top-color", "rgb(152, 201, 172)"); await expect(toast).toHaveCSS("border-top-width", "1px");
+  await expect(page.locator(".menro-toast-viewport:has(.menro-toast-floating)")).toHaveCSS("position", "fixed");
   const topbar = page.locator(".topbar"); const before = await topbar.boundingBox();
   await page.getByRole("button", { name: "Dismiss Login Successful", exact: true }).click();
   await expect(toast).toHaveCount(0); expect(await topbar.boundingBox()).toEqual(before);
   await page.reload(); await expect(page.getByText("Login Successful", { exact: true })).toHaveCount(0);
+  fixture.check();
+});
+// A first sign-in (reported by the backend as firstLogin) says "Welcome!" in the same green-bordered login alert.
+test("first-time login alert says Welcome! with the returning-login design", async ({ page }) => {
+  const fixture = await setup(page);
+  await page.addInitScript(() => {
+    if (!sessionStorage.getItem("fixture-login-seeded")) {
+      sessionStorage.setItem("fixture-login-seeded", "true");
+      sessionStorage.setItem("menro:pending-dashboard-login", JSON.stringify({ uid: "test-staff", nonce: "fixture-first", createdAt: Date.now(), firstLogin: true }));
+    }
+    // Each placement of the login alert in the document: always in the top layer (never under <body> while a native dialog
+    // such as the first-visit guide is open, where it would be drawn behind it), and always the same element (moved with
+    // its layer when a dialog opens or closes, never remounted and re-announced).
+    window.__loginAlertInsertions = [];
+    new MutationObserver(records => { for (const record of records) for (const node of record.addedNodes) {
+      if (!(node instanceof Element)) continue;
+      for (const toast of [node, ...node.querySelectorAll(".menro-toast")].filter(el => el.matches?.(".menro-toast-floating"))) {
+        const open = [...document.querySelectorAll("dialog[open]")]; window.__firstLoginAlert ??= toast;
+        window.__loginAlertInsertions.push({ inTopLayer: open.length ? open.at(-1).contains(toast) : true, sameElement: toast === window.__firstLoginAlert });
+      } } }).observe(document, { subtree: true, childList: true });
+  });
+  await page.goto("/staff/dashboard?role=staff");
+  const toast = page.getByRole("status").filter({ hasText: "Login Successful" });
+  await expect(toast).toContainText("Welcome! You have successfully signed in.");
+  await expect(toast).not.toContainText("Welcome back!");
+  const placements = await page.evaluate(() => window.__loginAlertInsertions);
+  expect(placements.length).toBeGreaterThan(0);
+  expect(placements.every(placement => placement.inTopLayer && placement.sameElement)).toBe(true);
+  expect(await page.evaluate(() => document.querySelector(".menro-toast-floating") === window.__firstLoginAlert)).toBe(true);
+  await expect(toast).toHaveCSS("border-top-color", "rgb(152, 201, 172)"); await expect(toast).toHaveCSS("border-top-width", "1px");
+  await expect(page.locator(".menro-toast-viewport:has(.menro-toast-floating)")).toHaveCSS("position", "fixed");
+  await page.getByRole("button", { name: "Dismiss Login Successful", exact: true }).click(); await expect(toast).toHaveCount(0);
   fixture.check();
 });
 test("stale reportable balance displays a general conflict and never silently changes expectedVersion", async ({ page }) => {

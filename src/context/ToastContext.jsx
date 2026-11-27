@@ -1,9 +1,11 @@
 /* eslint-disable react-refresh/only-export-components */
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import "../styles/toast.css";
 
 export const DEFAULT_TOAST_DURATION = 8000;
+// At most this many alerts show at once; older ones leave first, so the stack never runs down the screen.
+export const MAX_VISIBLE_TOASTS = 3;
 const EXIT_DURATION = 220;
 const ToastContext = createContext(null);
 
@@ -109,43 +111,89 @@ export function ToastProvider({ children }) {
     dismiss,
   }), [dismiss, showToast]);
 
-  const modalAnchors = typeof document === "undefined"
-    ? []
-    : Array.from(document.querySelectorAll("[data-menro-toast-anchor]"));
-  const pageAnchor = typeof document === "undefined"
-    ? null
-    : document.querySelector("[data-menro-toast-page-anchor]");
-  const toastPlacement = modalAnchors.length ? "modal" : pageAnchor ? "page" : "viewport";
-  const toastHost = modalAnchors.at(-1) || pageAnchor ||
-    (typeof document !== "undefined" ? document.body : null);
-  const toastViewport = (items, placement) => (
-    <div
-      className={`menro-toast-viewport menro-toast-viewport-${placement}`}
-      aria-label="Notifications"
-    >
-      {items.map((toast) => (
-        <div
-          key={toast.id}
-          className={`menro-toast menro-toast-${toast.type}${toast.exiting ? " exiting" : ""}`}
-          role={toast.type === "error" ? "alert" : "status"}
-          aria-live={toast.type === "error" ? "assertive" : "polite"}
-          aria-atomic="true"
-        >
-          {toast.title && <strong className="menro-toast-title">{toast.title}</strong>}
-          {toast.message}
-          {toast.dismissible && <button type="button" className="menro-toast-dismiss" aria-label={`Dismiss ${toast.title || "notification"}`} onClick={() => dismiss(toast.id)}>×</button>}
-        </div>
-      ))}
-    </div>
-  );
+  // At most MAX_VISIBLE_TOASTS alerts at once: a newer one retires the oldest (with its exit animation) rather than
+  // leaving it hidden with a running timer.
+  useEffect(() => {
+    const showing = toasts.filter((toast) => !toast.exiting);
+    showing.slice(0, Math.max(0, showing.length - MAX_VISIBLE_TOASTS)).forEach((toast) => dismiss(toast.id));
+  }, [toasts, dismiss]);
+
+  // One viewport-fixed alert layer at the upper centre of the screen. A native modal <dialog> is drawn in the browser's
+  // top layer, above anything z-index can reach, so while one is open the layer lives in the topmost open dialog (still
+  // position: fixed, so it stays at the viewport's upper centre); otherwise in <body>, above every other layer. Nothing is
+  // ever inserted into the page flow, so showing an alert moves no header, field, button or modal.
+  const container = useTopLayerContainer(toasts.length > 0);
 
   return (
     <ToastContext.Provider value={api}>
       {children}
-      {toasts.some(toast => !toast.floating) && toastHost && createPortal(toastViewport(toasts.filter(toast => !toast.floating), toastPlacement), toastHost)}
-      {toasts.some(toast => toast.floating) && createPortal(toastViewport(toasts.filter(toast => toast.floating), "floating"), document.body)}
+      {toasts.length > 0 && container && createPortal(
+        <div className="menro-toast-viewport" aria-label="Notifications">
+          {toasts.slice(-MAX_VISIBLE_TOASTS).map((toast) => (
+            <div
+              key={toast.id}
+              className={`menro-toast menro-toast-${toast.type}${toast.floating ? " menro-toast-floating" : ""}${toast.exiting ? " exiting" : ""}`}
+              role={toast.type === "error" ? "alert" : "status"}
+              aria-live={toast.type === "error" ? "assertive" : "polite"}
+              aria-atomic="true"
+            >
+              {toast.title && <strong className="menro-toast-title">{toast.title}</strong>}
+              {toast.message}
+              {toast.dismissible && <button type="button" className="menro-toast-dismiss" aria-label={`Dismiss ${toast.title || "notification"}`} onClick={() => dismiss(toast.id)}>×</button>}
+            </div>
+          ))}
+        </div>,
+        container
+      )}
     </ToastContext.Provider>
   );
+}
+
+// Open native dialogs in the order they were opened (the browser's top-layer order), oldest first. Recorded from "open"
+// attribute changes; dialogs already open when this module loads keep document order.
+const dialogOpenOrder = [];
+function noteDialogs(records) {
+  for (const record of records) {
+    const dialog = record.target;
+    if (record.type !== "attributes" || dialog.tagName !== "DIALOG") continue;
+    const index = dialogOpenOrder.indexOf(dialog);
+    if (index >= 0) dialogOpenOrder.splice(index, 1);
+    if (dialog.open) dialogOpenOrder.push(dialog);
+  }
+}
+export function topmostOpenDialog() {
+  const open = [...document.querySelectorAll("dialog[open]")];
+  const ordered = dialogOpenOrder.filter((dialog) => dialog.isConnected && dialog.open);
+  return ordered.at(-1) || open.at(-1) || null;
+}
+
+// A single container node for the alert layer, kept in the topmost open dialog or else in <body>. It is moved (never
+// recreated), so an alert is not re-announced or remounted when a dialog opens or closes, and it is placed before paint,
+// so an alert never appears behind a dialog even for a frame.
+function useTopLayerContainer(active) {
+  const [container] = useState(() => {
+    if (typeof document === "undefined") return null;
+    const node = document.createElement("div");
+    node.className = "menro-toast-host";
+    return node;
+  });
+  const [, setOpenDialogs] = useState(0);
+  useEffect(() => {
+    if (typeof MutationObserver === "undefined") return undefined;
+    // Only the "open" attribute anywhere, and dialogs added to or removed from <body> (where ModalDialog portals them).
+    const opened = new MutationObserver((records) => { noteDialogs(records); setOpenDialogs((count) => count + 1); });
+    opened.observe(document.body, { subtree: true, attributes: true, attributeFilter: ["open"] });
+    const removed = new MutationObserver(() => setOpenDialogs((count) => count + 1));
+    removed.observe(document.body, { childList: true });
+    return () => { opened.disconnect(); removed.disconnect(); };
+  }, []);
+  useLayoutEffect(() => {
+    if (!container || !active) return;
+    const host = topmostOpenDialog() || document.body;
+    if (container.parentNode !== host) host.appendChild(container);
+  });
+  useEffect(() => () => container?.remove(), [container]);
+  return container;
 }
 
 export function useToast() {

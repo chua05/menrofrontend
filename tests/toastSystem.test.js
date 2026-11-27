@@ -15,12 +15,15 @@ const myRequestsSource = readFileSync(
   "utf8",
 );
 
-test("global toast provider uses an eight-second default and a body portal", () => {
+test("global toast provider uses an eight-second default and one top-layer portal, never an in-page anchor", () => {
   assert.match(contextSource, /DEFAULT_TOAST_DURATION\s*=\s*8000/);
-  assert.match(contextSource, /document\.querySelectorAll\("\[data-menro-toast-anchor\]"\)/);
-  assert.match(contextSource, /document\.querySelector\("\[data-menro-toast-page-anchor\]"\)/);
-  assert.match(contextSource, /modalAnchors\.at\(-1\) \|\| pageAnchor[\s\S]*document\.body/);
-  assert.match(contextSource, /createPortal\(toastViewport\(toasts\.filter/);
+  assert.match(contextSource, /document\.querySelectorAll\("dialog\[open\]"\)/);
+  assert.match(contextSource, /const host = topmostOpenDialog\(\) \|\| document\.body;/);
+  assert.match(contextSource, /host\.appendChild\(container\)/);
+  assert.match(contextSource, /useLayoutEffect\(\(\) => \{\s*if \(!container \|\| !active\) return;/);
+  assert.equal((contextSource.match(/createPortal\(/g) || []).length, 1);
+  assert.doesNotMatch(contextSource, /toast-anchor|toast-page-anchor/);
+  assert.match(contextSource, /MAX_VISIBLE_TOASTS = 3/);
 });
 
 test("toast queue deduplicates active messages and cleans up timers", () => {
@@ -40,16 +43,18 @@ test("toast viewport overlays content and honors reduced motion", () => {
   assert.match(toastCss, /z-index:\s*var\(--menro-overlay-toast\)/);
   assert.match(toastCss, /pointer-events:\s*none/);
   assert.match(toastCss, /prefers-reduced-motion:\s*reduce/);
-  assert.doesNotMatch(toastCss, /(?:^|\n)\.menro-toast\s*\{[^}]*\bbackground\s*:/s);
-  assert.doesNotMatch(toastCss, /(?:^|\n)\.menro-toast\s*\{[^}]*\bborder\s*:/s);
-  assert.doesNotMatch(toastCss, /(?:^|\n)\.menro-toast\s*\{[^}]*\bbox-shadow\s*:/s);
+  // Regular alerts are text only.
+  const regular = toastCss.match(/(?:^|\n)\.menro-toast\s*\{([^}]*)\}/)[1];
+  assert.match(regular, /\bborder:\s*0;/);
+  assert.match(regular, /\bbackground:\s*transparent;/);
+  assert.match(regular, /\bbox-shadow:\s*none;/);
 });
 
-test("modal alerts use a flow-positioned anchor without permanent empty spacing", () => {
-  assert.match(toastCss, /\.menro-toast-anchor:empty[^{}]*\{[^}]*display:\s*none/);
-  assert.match(toastCss, /\.menro-toast-viewport-modal\s*\{[^}]*position:\s*static/);
-  assert.match(toastCss, /\.menro-toast-viewport-modal\s*\{[^}]*width:\s*100%/);
-  assert.match(toastCss, /\.menro-toast-viewport-page\s*\{[^}]*position:\s*static/);
+test("alerts never take part in page or modal layout", () => {
+  assert.doesNotMatch(toastCss, /position:\s*static/);
+  assert.doesNotMatch(toastCss, /menro-toast-anchor|menro-toast-page-anchor|viewport-modal|viewport-page/);
+  assert.match(toastCss, /safe-area-inset-top/);
+  assert.match(toastCss, /max-height:\s*calc\(100dvh/);
 });
 
 test("My Requests consumes and clears route submission feedback", () => {
