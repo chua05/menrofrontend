@@ -223,6 +223,9 @@ test("analytics map keeps every densely planted sample tree reachable", async ({
   await page.goto("/admin/reforestation-analytics?role=admin");
   const reachable = async () => page.locator(".ra-tree-marker").evaluateAll(nodes => nodes.reduce((total, node) => total + Number(node.querySelector(".ra-tree-count")?.textContent || 1), 0));
   await expect(page.locator(".ra-tree-marker")).toHaveCount(1); expect(await reachable()).toBe(10);
+  // Site Utilization keys are small solid round dots in the overlay colours (not outlined squares).
+  const utilizationDots = await page.locator(".ra-map-legend").locator(".map-utilization-key").evaluateAll(nodes => nodes.map(node => { const style = getComputedStyle(node); return [style.width, style.height, style.borderRadius, style.backgroundColor, style.borderTopWidth]; }));
+  expect(utilizationDots.slice(0, 3)).toEqual([["11px", "11px", "50%", "rgb(76, 175, 99)", "0px"], ["11px", "11px", "50%", "rgb(245, 158, 11)", "0px"], ["11px", "11px", "50%", "rgb(239, 68, 68)", "0px"]]);
   await page.getByRole("button", { name: "Zoom to monitored trees" }).click();
   await expect.poll(async () => page.locator(".ra-tree-marker").count()).toBeGreaterThan(1); expect(await reachable()).toBe(10);
   for (let i = 0; i < 4 && await page.locator(".ra-tree-marker").count() < 10; i++) {
@@ -353,9 +356,52 @@ test("dashboard, analytics and survival monitoring show the same verified and ap
   data = analyticsData(false);
   await page.goto("/admin/reforestation-analytics?role=admin");
   await expect(page.locator(".kpi-card", { hasText: "Sample Survival Rate" }).locator(".kpi-card-value")).toHaveText("90%");
+  await page.route("**/api/monitoring", route => route.fulfill({ json: { success: true, data: [{ id: "lc-1", siteName: "Site 1", species: "Narra", history: [] }] } }));
   await page.goto("/admin/survival-monitoring?role=admin");
-  await expect(page.locator(".sm-sample-summary span")).toHaveText("90%");
-  await expect(page.locator(".sm-sample-summary")).toContainText("10 sample trees");
-  await expect(page.locator(".sm-sample-summary")).toContainText("not official full-cohort survival");
-  await expect(page.locator(".kpi-card", { hasText: "Official Survival Rate" }).locator(".kpi-card-value")).toHaveText("—");
+  // Survival Monitoring: the survival KPI, condition summary and trend are the same approved-sample figures; no separate banner.
+  await expect(page.locator(".sm-sample-summary")).toHaveCount(0);
+  await expect(card("Sample Survival Rate").locator(".kpi-card-value")).toHaveText("90%");
+  await expect(card("Sample Survival Rate")).toContainText("10 sample trees · official full-cohort survival not yet available");
+  await expect(card("Official Survival Rate")).toHaveCount(0);
+  await expect(page.locator(".kpi-card-title", { hasText: /^Approved Full Cohorts$/ })).toBeVisible();
+  const conditionRows = page.locator(".sm-summary-card .sm-volume-row");
+  await expect(conditionRows).toHaveText([/Healthy.*6 \(60%\)/, /Damaged \(Living\).*3 \(30%\)/, /Dead.*1 \(10%\)/, /Sample Survival Rate.*90%/]);
+  await expect(page.locator(".sm-chart-card h2")).toHaveText("Sample Survival Rate Trend");
+  await expect(page.locator(".sm-chart-card .recharts-line-dot")).toHaveCount(1);
+  // The Site filter reaches the analytics service. Site 1 has no approved sample results: the card falls back to official
+  // figures, says they cover all sites, and never keeps the All Sites 90%.
+  let siteResponse = "empty";
+  await page.route("**/api/analytics/dashboard*", route => {
+    const query = new URL(route.request().url()).searchParams; queries.push(query.toString());
+    if (!query.has("site")) return route.fulfill({ json: { success: true, data } });
+    return siteResponse === "error" ? route.fulfill({ status: 500, json: { success: false, message: "Service unavailable" } }) : route.fulfill({ json: { success: true, data: analyticsData(true) } });
+  });
+  const siteSelect = page.locator(".sm-filter-select").first();
+  await siteSelect.selectOption("Site 1");
+  await expect.poll(() => queries.at(-1)).toBe("site=Site+1");
+  await expect(card("Official Survival Rate")).toContainText("Admin-approved full cohorts, all sites · no approved sample results for the selected filters");
+  await expect(card("Sample Survival Rate")).toHaveCount(0);
+  await expect(page.locator(".sm-chart-card h2")).toHaveText("Official Survival Trend");
+  // Back to All Sites; an Admin approval shows on the next refresh without a reload.
+  await siteSelect.selectOption("All");
+  await expect(card("Sample Survival Rate").locator(".kpi-card-value")).toHaveText("90%");
+  data = { ...data, summary: { ...data.summary, sampleSurvivalRate: 85 }, permanentSample: { ...data.permanentSample, summary: { ...data.permanentSample.summary, survivalRate: 85 } } };
+  await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+  await expect(card("Sample Survival Rate").locator(".kpi-card-value")).toHaveText("85%");
+  // A failed load for new filters shows no figures from the previous filters.
+  siteResponse = "error";
+  await siteSelect.selectOption("Site 1");
+  await expect(card("Official Survival Rate")).toContainText("approved sample results unavailable right now");
+  await expect(page.locator(".kpi-card", { hasText: "85%" })).toHaveCount(0);
+});
+
+// Planting Sites page legend: Site Utilization keys are the same small solid round dots as the other map legends.
+test("planting sites legend shows utilization as solid round dots", async ({ page }) => {
+  await setup(page, "admin");
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.goto("/admin/planting-sites?role=admin");
+  const dots = page.locator(".ps-legend-row .map-utilization-key");
+  await expect(dots).toHaveCount(4);
+  const shapes = await dots.evaluateAll(nodes => nodes.map(node => { const style = getComputedStyle(node); return [style.width, style.height, style.borderRadius, style.backgroundColor]; }));
+  expect(shapes.slice(0, 3)).toEqual([["11px", "11px", "50%", "rgb(76, 175, 99)"], ["11px", "11px", "50%", "rgb(245, 158, 11)"], ["11px", "11px", "50%", "rgb(239, 68, 68)"]]);
 });

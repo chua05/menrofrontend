@@ -55,6 +55,7 @@ import { formatDisplayId } from "../utils/displayId";
 import { canResubmitObservation, canStaffReviewObservation, isOwnPendingObservation } from "../utils/monitoringObservationPermissions";
 import * as exifr from "exifr";
 import KpiCard, { KpiGrid } from "../components/KpiCard";
+import { monitoringSampleQuery, monitoringSurvivalView } from "../utils/monitoringSampleView";
 import "../styles/survival-monitoring.css";
 
 const API_BASE_URL =
@@ -642,28 +643,32 @@ export default function MonitoringPage() {
     };
   }, [isParticipant, userRole, retryKey]);
 
-  // Admin-approved permanent-sample results (Monitor Planted Trees), from the analytics service. Shown apart from the
-  // official full-cohort figures above them; reloaded with the page's own refresh.
-  const [sampleResults, setSampleResults] = useState(null);
-  const [sampleResultsError, setSampleResultsError] = useState(false);
+  // Admin-approved permanent-sample results (Monitor Planted Trees), from the analytics service: the same figures the
+  // Analytics and Visualization module shows, for the page's Site and Species filters; reloaded with the page's refresh.
+  // Each result is kept with the filter query it answers, so figures for earlier filters are never shown as current.
+  const sampleQuery = monitoringSampleQuery({ site: siteFilter, species: speciesFilter });
+  const [sampleState, setSampleState] = useState({ query: null, data: null, error: false });
   useEffect(() => {
     if (isParticipant || !userRole) return undefined;
     let cancelled = false;
-    apiRequest("/analytics/dashboard")
+    apiRequest(`/analytics/dashboard${sampleQuery ? `?${sampleQuery}` : ""}`)
       .then((response) => {
         if (cancelled) return;
         const sample = response?.data?.permanentSample;
         if (!sample?.summary) throw new Error("Invalid analytics response.");
-        setSampleResults(sample);
-        setSampleResultsError(false);
+        setSampleState({ query: sampleQuery, data: sample, error: false });
       })
       .catch((error) => {
         if (cancelled) return;
         console.error("Failed to load approved sample monitoring results:", error);
-        setSampleResultsError(true);
+        // A failed refresh keeps the figures already shown for these filters; a failed load for new filters shows none.
+        setSampleState((current) => (current.query === sampleQuery ? { ...current, error: true } : { query: sampleQuery, data: null, error: true }));
       });
     return () => { cancelled = true; };
-  }, [isParticipant, userRole, retryKey]);
+  }, [isParticipant, userRole, retryKey, sampleQuery]);
+  const sampleCurrent = sampleState.query === sampleQuery;
+  const sampleResults = sampleCurrent ? sampleState.data : null;
+  const sampleResultsError = sampleCurrent && sampleState.error;
 
   useEffect(() => {
     const refresh = () => setRetryKey((current) => current + 1);
@@ -1146,6 +1151,18 @@ export default function MonitoringPage() {
   }, [visibleRecords, trendRange]);
 
   const hasMonitoringHistory = visibleRecords.some((record) => (record.history || []).length > 0);
+
+  // Survival KPI, condition summary and trend: approved sample results when there are any (Staff/Admin), otherwise the
+  // official full-cohort figures, each labelled for what it is.
+  const survivalView = useMemo(() => monitoringSurvivalView({
+    sample: isParticipant ? null : sampleResults,
+    sampleLoading: !isParticipant && !sampleCurrent,
+    sampleError: !isParticipant && sampleResultsError,
+    filtered: Boolean(sampleQuery),
+    official: { ...summary, survivalRate: loadError ? null : summary.survivalRate, trend: trendData },
+    trendRange,
+  }), [isParticipant, sampleResults, sampleCurrent, sampleResultsError, sampleQuery, summary, loadError, trendData, trendRange]);
+  const survivalTrendEmpty = survivalView.mode === "official" ? !hasMonitoringHistory : !survivalView.trend.some((row) => row.survivalRate !== null);
 
   const hasGps = form.latitude !== "" && form.longitude !== "";
 
@@ -1697,27 +1714,9 @@ export default function MonitoringPage() {
       <KpiGrid label="Survival monitoring summary">
         <KpiCard title="Approved Full Cohorts" value={loadError ? "—" : summary.totalRecords} description="Official observations" tone="total" />
         <KpiCard title="Total Trees Monitored" value={loadError ? "—" : summary.totalTreesMonitored} description="Admin-approved full cohorts" tone="blue" />
-        <KpiCard title="Official Survival Rate" value={loadError || summary.survivalRate == null ? "—" : `${summary.survivalRate}%`} description="Admin-approved full cohorts" tone="green" />
+        <KpiCard title={survivalView.kpi.title} value={survivalView.kpi.value} description={survivalView.kpi.description} tone="green" />
         <KpiCard title="Total Trees Lost" value={loadError ? "—" : summary.dead} description="Approved full-cohort records" tone="red" />
       </KpiGrid>
-
-      {!isParticipant && (
-        <section className="sm-sample-summary" aria-label="Approved permanent-sample monitoring">
-          <div>
-            <strong>Sample Survival Rate</strong>
-            <span>{sampleResults?.summary?.survivalRate == null ? "—" : `${sampleResults.summary.survivalRate}%`}</span>
-          </div>
-          <p>
-            {sampleResultsError && !sampleResults
-              ? "Approved sample monitoring results are unavailable right now."
-              : !sampleResults
-                ? "Loading approved sample monitoring results…"
-                : sampleResults.summary.totalSampleTrees > 0
-                  ? `Permanent-sample results from ${sampleResults.summary.approvedVisits} Admin-approved Monitor Planted Trees ${sampleResults.summary.approvedVisits === 1 ? "visit" : "visits"} (${sampleResults.summary.totalSampleTrees} sample trees${sampleResults.summary.latestApprovedMonitoringDate ? `, latest ${sampleResults.summary.latestApprovedMonitoringDate}` : ""}). ${(sampleResults.conditions || []).map((row) => `${row.condition === "Damaged" ? "Damaged (Living)" : row.condition}: ${row.count}`).join(" · ")}. These are sampled trees, not official full-cohort survival.`
-                  : "No Admin-approved sample monitoring yet."}
-          </p>
-        </section>
-      )}
 
       {/* FILTERS */}
       <div className="sm-filter-row">
@@ -1856,8 +1855,8 @@ export default function MonitoringPage() {
         <section className="sm-chart-card">
           <div className="sm-card-heading-row">
             <div>
-              <h2>Survival Trend</h2>
-              <p>Survival rate (%) over monitoring periods</p>
+              <h2>{survivalView.trendTitle}</h2>
+              <p>{survivalView.trendSubtitle}</p>
             </div>
 
             <select
@@ -1877,7 +1876,7 @@ export default function MonitoringPage() {
                 height="100%"
                 initialDimension={MONITORING_CHART_INITIAL_SIZE}
               >
-                <LineChart data={trendData} margin={{ top: 12, right: 16, left: 0, bottom: 8 }}>
+                <LineChart data={survivalView.trend} margin={{ top: 12, right: 16, left: 0, bottom: 8 }}>
                   <CartesianGrid strokeDasharray="4 4" vertical={false} />
                   <XAxis dataKey="month" tickLine={false} axisLine={false} minTickGap={20} />
                   <YAxis
@@ -1887,7 +1886,7 @@ export default function MonitoringPage() {
                     axisLine={false}
                   />
                   <Tooltip
-                    formatter={(value) => [`${value}%`, "Survival Rate"]}
+                    formatter={(value) => [`${value}%`, survivalView.survivalLabel]}
                   />
                   <Line
                     type="monotone"
@@ -1901,9 +1900,9 @@ export default function MonitoringPage() {
                 </LineChart>
               </ResponsiveContainer>
           </div>
-          {!hasMonitoringHistory && (
+          {survivalTrendEmpty && (
             <p className="sm-chart-empty-message" role="status">
-              No survival monitoring records have been submitted yet.
+              {survivalView.emptyMessage}
             </p>
           )}
         </section>
@@ -1912,94 +1911,41 @@ export default function MonitoringPage() {
           <div className="sm-card-heading-row">
             <div>
               <h2>Monitoring Summary</h2>
-              <p>Overall condition of all monitored trees</p>
+              <p>{survivalView.mode === "sample"
+                ? "Permanent sample trees, latest Admin-approved visit"
+                : "Overall condition of approved full-cohort trees"}</p>
             </div>
           </div>
 
           <div className="sm-volume-list">
-            <div className="sm-volume-row">
-              <div className="sm-volume-label">
-                <span
-                  className="sm-volume-dot"
-                  style={{ background: CONDITION_META.Healthy.color }}
-                />
-                <div>
-                  <strong>Healthy</strong>
-                  <small>Good condition</small>
-                </div>
-              </div>
-
-              <div className="sm-volume-progress">
-                <div className="sm-volume-top">
-                  <span>
-                    {summary.healthy} ({summary.healthyPercent}%)
-                  </span>
-                  <strong>{summary.healthyPercent}%</strong>
-                </div>
-                <div className="sm-progress-track">
-                  <div
-                    className="sm-progress-fill sm-fill-healthy"
-                    style={{ width: `${summary.healthyPercent}%` }}
+            {survivalView.conditions.map((row) => (
+              <div className="sm-volume-row" key={row.condition}>
+                <div className="sm-volume-label">
+                  <span
+                    className={`sm-volume-dot sm-fill-${row.condition === "Needs Rechecking" ? "rechecking" : row.condition.toLowerCase()}`}
                   />
+                  <div>
+                    <strong>{row.label}</strong>
+                    <small>{row.note}</small>
+                  </div>
                 </div>
-              </div>
-            </div>
 
-            <div className="sm-volume-row">
-              <div className="sm-volume-label">
-                <span
-                  className="sm-volume-dot"
-                  style={{ background: CONDITION_META.Damaged.color }}
-                />
-                <div>
-                  <strong>Damaged</strong>
-                  <small>Needs attention</small>
+                <div className="sm-volume-progress">
+                  <div className="sm-volume-top">
+                    <span>
+                      {row.count} ({row.percent}%)
+                    </span>
+                    <strong>{row.percent}%</strong>
+                  </div>
+                  <div className="sm-progress-track">
+                    <div
+                      className={`sm-progress-fill sm-fill-${row.condition === "Needs Rechecking" ? "rechecking" : row.condition.toLowerCase()}`}
+                      style={{ width: `${row.percent}%` }}
+                    />
+                  </div>
                 </div>
               </div>
-
-              <div className="sm-volume-progress">
-                <div className="sm-volume-top">
-                  <span>
-                    {summary.damaged} ({summary.damagedPercent}%)
-                  </span>
-                  <strong>{summary.damagedPercent}%</strong>
-                </div>
-                <div className="sm-progress-track">
-                  <div
-                    className="sm-progress-fill sm-fill-damaged"
-                    style={{ width: `${summary.damagedPercent}%` }}
-                  />
-                </div>
-              </div>
-            </div>
-
-            <div className="sm-volume-row">
-              <div className="sm-volume-label">
-                <span
-                  className="sm-volume-dot"
-                  style={{ background: CONDITION_META.Dead.color }}
-                />
-                <div>
-                  <strong>Dead</strong>
-                  <small>Did not survive</small>
-                </div>
-              </div>
-
-              <div className="sm-volume-progress">
-                <div className="sm-volume-top">
-                  <span>
-                    {summary.dead} ({summary.deadPercent}%)
-                  </span>
-                  <strong>{summary.deadPercent}%</strong>
-                </div>
-                <div className="sm-progress-track">
-                  <div
-                    className="sm-progress-fill sm-fill-dead"
-                    style={{ width: `${summary.deadPercent}%` }}
-                  />
-                </div>
-              </div>
-            </div>
+            ))}
 
             <div className="sm-volume-row sm-survival-row">
               <div className="sm-volume-label">
@@ -2007,20 +1953,20 @@ export default function MonitoringPage() {
                   <FiTrendingUp size={16} />
                 </div>
                 <div>
-                  <strong>Survival Rate</strong>
-                  <small>Overall percentage</small>
+                  <strong>{survivalView.survivalLabel}</strong>
+                  <small>{survivalView.mode === "sample" ? "Healthy and damaged (living) sample trees" : "Overall percentage"}</small>
                 </div>
               </div>
 
               <div className="sm-volume-progress">
                 <div className="sm-volume-top">
-                  <span>{summary.survivalRate == null ? "—" : `${summary.survivalRate}%`}</span>
-                  <strong>{summary.survivalRate == null ? "—" : `${summary.survivalRate}%`}</strong>
+                  <span>{survivalView.survivalRate == null ? "—" : `${survivalView.survivalRate}%`}</span>
+                  <strong>{survivalView.survivalRate == null ? "—" : `${survivalView.survivalRate}%`}</strong>
                 </div>
                 <div className="sm-progress-track">
                   <div
                     className="sm-progress-fill sm-fill-survival"
-                    style={{ width: `${summary.survivalRate ?? 0}%` }}
+                    style={{ width: `${survivalView.survivalRate ?? 0}%` }}
                   />
                 </div>
               </div>

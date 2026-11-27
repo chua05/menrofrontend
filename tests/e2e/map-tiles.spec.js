@@ -113,6 +113,9 @@ test("full map colours site overlays by verified utilization, updates them on re
   for (const text of ["Healthy", "Damaged (Living)", "Dead", "Needs Rechecking", "Pending Review (submitted, not yet approved)", "Overlapping trees"]) await expect(condition).toContainText(text);
   await expect(condition.locator(".map-tree-key")).toHaveCount(6);
   await expect(legend.locator(".mv-legend-section", { hasText: "Site Utilization" })).toContainText("Capacity not set");
+  // Site Utilization keys are small solid round dots in the overlay colours (not outlined squares).
+  const utilizationDots = await legend.locator(".mv-legend-section", { hasText: "Site Utilization" }).locator(".map-utilization-key").evaluateAll(nodes => nodes.map(node => { const style = getComputedStyle(node); return [style.width, style.height, style.borderRadius, style.backgroundColor, style.borderTopWidth]; }));
+  expect(utilizationDots.slice(0, 3)).toEqual([["11px", "11px", "50%", "rgb(76, 175, 99)", "0px"], ["11px", "11px", "50%", "rgb(245, 158, 11)", "0px"], ["11px", "11px", "50%", "rgb(239, 68, 68)", "0px"]]);
 
   // Approved planting raises the site to 95%: Refresh Map recolours it red without a reload.
   current = { ...current, verifiedPlanted: 95 };

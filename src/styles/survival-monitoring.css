@@ -447,6 +447,10 @@
   background: #e54848;
 }
 
+.sm-fill-rechecking {
+  background: #7c8ba1;
+}
+
 .sm-survival-row {
   margin-top: 4px;
   padding: 12px 10px;
@@ -1737,45 +1741,3 @@
 .sm-row-monitor-button { display: block; margin-top: 8px; min-height: 34px; padding: 0 12px; border: 1px solid #17643a; border-radius: 8px; background: #17643a; color: #fff; font-family: inherit; font-size: 13px; font-weight: 650; white-space: nowrap; cursor: pointer; }
 .sm-row-monitor-button:hover { background: #124f2e; }
 .sm-row-monitor-button:focus-visible { outline: 3px solid rgba(23, 100, 58, 0.3); outline-offset: 2px; }
-
-/* Admin-approved permanent-sample results, kept apart from the official full-cohort KPIs above. */
-.sm-sample-summary {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 10px 18px;
-  margin: 0 0 18px;
-  padding: 12px 16px;
-  border: 1px solid #d7e6dc;
-  border-radius: 10px;
-  background: #f6fbf7;
-}
-
-.sm-sample-summary div {
-  display: flex;
-  align-items: baseline;
-  gap: 10px;
-}
-
-.sm-sample-summary strong {
-  color: #17643a;
-  font-size: 12px;
-  font-weight: 700;
-  text-transform: uppercase;
-}
-
-.sm-sample-summary span {
-  color: #12301f;
-  font-size: 22px;
-  font-weight: 700;
-}
-
-.sm-sample-summary p {
-  flex: 1 1 320px;
-  min-width: 0;
-  margin: 0;
-  color: #526159;
-  font-size: 12.5px;
-  line-height: 1.45;
-  overflow-wrap: anywhere;
-}

@@ -576,17 +576,6 @@
   line-height: 1.4;
 }
 
-.ps-legend-square {
-  width: 20px;
-  height: 20px;
-
-  flex: 0 0 20px;
-
-  border-radius: 3px;
-
-  opacity: 0.85;
-}
-
 .ps-legend-dot {
   width: 14px;
   height: 14px;

@@ -21,7 +21,8 @@ const dashboardCss = readFileSync(
 
 test("survival trend preserves its empty-period axes and separates the message", () => {
   assert.match(monitoring, /grouped\.set\(month, \{ month, alive: 0, total: 0 \}\)/);
-  assert.match(monitoring, /<LineChart data=\{trendData\}/);
+  assert.match(monitoring, /<LineChart data=\{survivalView\.trend\}/);
+  assert.match(monitoring, /trend: trendData \}/);
   assert.match(monitoring, /initialDimension=\{MONITORING_CHART_INITIAL_SIZE\}/);
   assert.match(monitoring, /sm-chart-empty-message/);
   assert.doesNotMatch(monitoring, /sm-chart-zero-message/);

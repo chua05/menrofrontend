@@ -31,6 +31,7 @@ import { BULAN_BARANGAYS } from "../utils/userTypes";
 import { boundaryLayerOptions, siteBoundaryDiagnostic } from "../utils/barangayMap";
 import { MAP_MAX_ZOOM, addBasemap } from "../components/map/basemap";
 import { SITE_CENTER_COLOR, drawSiteOverlay, siteOverlayStyle } from "../components/map/siteOverlayLayer";
+import { UtilizationSwatch } from "../components/map/MapLegendKeys";
 import { UTILIZATION_LEVELS, plantedOf, siteUtilization } from "../utils/siteUtilization";
 import "../styles/planting-sites.css";
 
@@ -2880,13 +2881,12 @@ function MapLegend() {
           </div>
 
           {["available", "partial", "full", "unknown"].map((level) => (
-            <LegendSquare
-              key={level}
-              color={UTILIZATION_LEVELS[level].fill}
-              label={UTILIZATION_LEVELS[level].range
+            <div className="ps-legend-row" key={level}>
+              <UtilizationSwatch level={level} />
+              {UTILIZATION_LEVELS[level].range
                 ? `${UTILIZATION_LEVELS[level].label} (${UTILIZATION_LEVELS[level].range})`
                 : UTILIZATION_LEVELS[level].label}
-            />
+            </div>
           ))}
 
           <LegendDot
@@ -2927,24 +2927,6 @@ function MapLegend() {
           Barangay Boundary
         </div>
       </div>
-    </div>
-  );
-}
-
-function LegendSquare({
-  color,
-  label,
-}) {
-  return (
-    <div className="ps-legend-row">
-      <span
-        className="ps-legend-square"
-        style={{
-          background: color,
-        }}
-      />
-
-      {label}
     </div>
   );
 }

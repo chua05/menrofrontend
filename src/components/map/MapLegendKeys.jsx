@@ -12,10 +12,9 @@ export function TreeKey({ slug, count }) {
   );
 }
 
-// A transparent area with its outline, as a coverage overlay is drawn.
+// A small solid dot in the utilization colour of the coverage overlays.
 export function UtilizationSwatch({ level }) {
-  const { fill, stroke } = UTILIZATION_LEVELS[level];
-  return <span className="map-utilization-key" aria-hidden="true" style={{ background: `${fill}3d`, borderColor: stroke }} />;
+  return <span className="map-utilization-key" aria-hidden="true" style={{ background: UTILIZATION_LEVELS[level].fill }} />;
 }
 
 export function SiteCenterKey() {
