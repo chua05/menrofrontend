@@ -81,7 +81,7 @@ function timestampText(value) {
   return seconds != null ? new Date(seconds * 1000).toLocaleString("en-PH") : "—";
 }
 
-export default function Topbar({ onOpenSidebar, sidebarOpen = false }) {
+export default function Topbar({ onToggleSidebar, sidebarDocked = false, sidebarExpanded = false }) {
   const { currentUser, userRole, logout } = useAuth();
   const navigate = useNavigate();
 
@@ -421,6 +421,10 @@ export default function Topbar({ onOpenSidebar, sidebarOpen = false }) {
     userRole
   );
   const unreadCount = notificationUnreadCount;
+  // Docked: the hamburger toggles the rail. Drawer (phones): it opens the overlay.
+  const menuLabel = !sidebarDocked
+    ? "Open sidebar"
+    : sidebarExpanded ? "Collapse sidebar" : "Expand sidebar";
 
   return (
     <header className="topbar">
@@ -429,11 +433,11 @@ export default function Topbar({ onOpenSidebar, sidebarOpen = false }) {
         <button
           type="button"
           className="topbar-menu-btn"
-          onClick={onOpenSidebar}
-          aria-label="Open sidebar"
-          aria-expanded={sidebarOpen}
+          onClick={onToggleSidebar}
+          aria-label={menuLabel}
+          aria-expanded={sidebarExpanded}
           aria-controls="menro-sidebar"
-          title="Open navigation"
+          title={menuLabel}
         >
           <Menu
             size={20}

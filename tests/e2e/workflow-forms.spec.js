@@ -1107,7 +1107,7 @@ test("staff manages sampling plans and baselines inside the approved report's de
   await expect(page.getByRole("button", { name: /Create Visit/ })).toHaveCount(0);
   await expect(page.getByText(/to manage eligible permanent samples and baseline records/)).toHaveCount(0);
   await page.getByRole("button", { name: "Close planting report details", exact: true }).click();
-  await page.getByRole("button", { name: "Open sidebar", exact: true }).click();
+  await expect(page.getByRole("navigation", { name: "Main navigation" }).getByRole("link", { name: "Home", exact: true })).toBeVisible();
   await expect(page.getByRole("link", { name: "Verified Planting Records", exact: true })).toHaveCount(0);
   await expect(page.getByRole("link", { name: "Permanent Sample Monitoring", exact: true, includeHidden: true })).toHaveCount(0);
   await page.goto("/staff/survival-monitoring?role=staff");
@@ -1127,7 +1127,7 @@ test("admin reviews plan/baseline readiness inside the approved report's details
   await expect(drawer.getByRole("button", { name: "Approve sampling plan", exact: true })).toHaveCount(0); // policy snapshot still pending
   await expect(drawer.getByRole("button", { name: /Create Visit/ })).toHaveCount(0);
   await page.getByRole("button", { name: "Close planting report details", exact: true }).click();
-  await page.getByRole("button", { name: "Open sidebar", exact: true }).click();
+  await expect(page.getByRole("navigation", { name: "Main navigation" }).getByRole("link", { name: "Home", exact: true })).toBeVisible();
   await expect(page.getByRole("link", { name: "Verified Planting Records", exact: true })).toHaveCount(0);
   await expect(page.getByRole("link", { name: "Permanent Sample Monitoring", exact: true, includeHidden: true })).toHaveCount(0);
   await page.goto("/admin/survival-monitoring?role=admin");

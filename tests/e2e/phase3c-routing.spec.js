@@ -120,7 +120,8 @@ test("participant legacy monitoring links redirect to planting reports without s
   await expect(page).toHaveURL(/\/participant\/my-planting-reports/);
   await expect(page.getByRole("heading", { name: "Survival Monitoring" })).toHaveCount(0);
   await page.goto("/participant/dashboard?role=participant");
-  await page.getByRole("button", { name: "Open sidebar" }).click();
+  // Desktop docks the sidebar: its links are reachable without opening it.
+  await expect(page.getByRole("button", { name: "Collapse sidebar" })).toBeVisible();
   await expect(page.getByRole("link", { name: "Survival Monitoring", includeHidden: true })).toHaveCount(0);
   await expect(page.getByRole("link", { name: "My Planting Reports" })).toBeVisible();
 });

@@ -32,7 +32,6 @@ async function login(page,role){
 const backendGet=(page,pathname)=>page.waitForResponse(r=>{const u=new URL(r.url());return r.request().method()==="GET"&&u.origin===backend&&u.pathname===`/api${pathname}`;},{timeout:60000});
 const collection=page=>backendGet(page,"/verified-sample-monitoring/visits");
 async function survivalMonitoring(page){
- await page.getByRole("button",{name:"Open sidebar",exact:true}).click();
  await page.getByRole("link",{name:"Survival Monitoring",exact:true}).click();
  // "Loading survival monitoring..." holds the heading until three list requests resolve (slow on a cold emulator).
  await expect(page.getByRole("heading",{name:"Survival Monitoring",exact:true})).toBeVisible({timeout:60000});

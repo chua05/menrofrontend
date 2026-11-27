@@ -1,4 +1,5 @@
 import ModalDialog from "../components/ModalDialog";
+import SidebarTooltip from "./SidebarTooltip";
 import { NavLink } from "react-router-dom";
 import { useEffect, useMemo, useState } from "react";
 import {
@@ -301,10 +302,31 @@ function getInitials(name, role) {
     .toUpperCase();
 }
 
-export default function Sidebar({ isOpen, onClose }) {
+function badgeText(count) {
+  return count > 99 ? "99+" : count;
+}
+
+function badgeLabel(count) {
+  return `${count} unread update${count === 1 ? "" : "s"}`;
+}
+
+// mode "docked": a normal landmark beside the page, expanded or collapsed to the icon rail.
+// mode "drawer": the modal overlay drawer used on phones.
+export default function Sidebar({ mode, expanded = true, isOpen, onClose }) {
   const { userRole, currentUser } = useAuth();
 
   const [notifications, setNotifications] = useState(getPublishedNotifications);
+  const [tooltip, setTooltip] = useState(null);
+
+  const docked = mode === "docked";
+  const rail = docked && !expanded;
+
+  // Expanding (or leaving docked mode) drops any rail tooltip that was showing.
+  const [tooltipRail, setTooltipRail] = useState(rail);
+  if (tooltipRail !== rail) {
+    setTooltipRail(rail);
+    setTooltip(null);
+  }
 
   const resolvedRole =
     userRole && NAVIGATION[userRole] ? userRole : "participant";
@@ -345,6 +367,140 @@ export default function Sidebar({ isOpen, onClose }) {
 
   const initials = getInitials(displayName, resolvedRole);
 
+  const showTooltip = (event, label) => {
+    const box = event.currentTarget.getBoundingClientRect();
+    setTooltip({ label, top: box.top + box.height / 2, left: box.right + 10 });
+  };
+  const hideTooltip = () => setTooltip(null);
+
+  const brand = (
+    <div className="sb-brand">
+      <img
+        src={menroLogo}
+        alt="MENRO Bulan logo"
+        className="sb-brand-logo"
+      />
+
+      {!rail && (
+        <div className="sb-brand-text">
+          <div className="sb-brand-name">MENRO</div>
+          <div className="sb-brand-location">Bulan, Sorsogon</div>
+        </div>
+      )}
+    </div>
+  );
+
+  const navGroups = navigation.map((group) => (
+    <div className="sb-group" key={group.section}>
+      {!rail && <div className="sb-section">{group.section}</div>}
+
+      {group.items.map((item) => {
+        const Icon = item.icon;
+        const unreadCount = unreadCounts[item.to] || 0;
+        const badgeId = `sb-badge${item.to.replaceAll("/", "-")}`;
+
+        if (rail) {
+          return (
+            <NavLink
+              key={item.to}
+              to={item.to}
+              aria-label={item.label}
+              aria-describedby={unreadCount > 0 ? badgeId : undefined}
+              className={({ isActive }) =>
+                `sb-item sb-rail-item ${isActive ? "active" : ""}`
+              }
+              onMouseEnter={(event) => showTooltip(event, item.label)}
+              onFocus={(event) => showTooltip(event, item.label)}
+              onMouseLeave={hideTooltip}
+              onBlur={hideTooltip}
+              onKeyDown={(event) => { if (event.key === "Escape") hideTooltip(); }}
+            >
+              <Icon
+                className="sb-item-icon"
+                size={19}
+                strokeWidth={1.8}
+                aria-hidden="true"
+              />
+
+              {unreadCount > 0 && (
+                <span
+                  id={badgeId}
+                  className="sb-item-badge"
+                  aria-label={badgeLabel(unreadCount)}
+                >
+                  {badgeText(unreadCount)}
+                </span>
+              )}
+            </NavLink>
+          );
+        }
+
+        return (
+          <NavLink
+            key={item.to}
+            to={item.to}
+            data-modal-close={docked ? undefined : ""}
+            className={({ isActive }) =>
+              `sb-item ${isActive ? "active" : ""}`
+            }
+          >
+            <Icon
+              className="sb-item-icon"
+              size={17}
+              strokeWidth={1.8}
+            />
+
+            <span className="sb-item-label">{item.label}</span>
+
+            {unreadCount > 0 && (
+              <span
+                className="sb-item-badge"
+                aria-label={badgeLabel(unreadCount)}
+              >
+                {badgeText(unreadCount)}
+              </span>
+            )}
+          </NavLink>
+        );
+      })}
+    </div>
+  ));
+
+  const user = (
+    <div className="sb-bottom">
+      <div className="sb-user">
+        <div className="sb-avatar" title={rail ? displayName : undefined}>{initials}</div>
+
+        {!rail && (
+          <div className="sb-user-content">
+            <div className="sb-user-name">{displayName}</div>
+            <div className="sb-user-role">{roleLabel}</div>
+          </div>
+        )}
+      </div>
+
+    </div>
+  );
+
+  if (docked) {
+    return (
+      <aside
+        id="menro-sidebar"
+        className={`sidebar docked ${rail ? "rail" : "expanded"}`}
+      >
+        <div className="sb-header">{brand}</div>
+
+        <nav className="sb-nav" aria-label="Main navigation" onScroll={hideTooltip}>
+          {navGroups}
+        </nav>
+
+        {user}
+
+        {rail && <SidebarTooltip tooltip={tooltip} />}
+      </aside>
+    );
+  }
+
   return (
     <ModalDialog open={isOpen} onClose={onClose} className="sidebar-modal-layer" label="Main navigation" id="menro-sidebar">
       <>
@@ -356,18 +512,7 @@ export default function Sidebar({ isOpen, onClose }) {
     >
       {/* Header */}
       <div className="sb-header">
-        <div className="sb-brand">
-          <img
-            src={menroLogo}
-            alt="MENRO Bulan logo"
-            className="sb-brand-logo"
-          />
-
-          <div className="sb-brand-text">
-            <div className="sb-brand-name">MENRO</div>
-            <div className="sb-brand-location">Bulan, Sorsogon</div>
-          </div>
-        </div>
+        {brand}
 
         <button
           type="button"
@@ -382,58 +527,11 @@ export default function Sidebar({ isOpen, onClose }) {
 
       {/* Navigation */}
       <nav className="sb-nav">
-        {navigation.map((group) => (
-          <div className="sb-group" key={group.section}>
-            <div className="sb-section">{group.section}</div>
-
-            {group.items.map((item) => {
-              const Icon = item.icon;
-              const unreadCount = unreadCounts[item.to] || 0;
-
-              return (
-                <NavLink
-                  key={item.to}
-                  to={item.to}
-                  data-modal-close=""
-                  className={({ isActive }) =>
-                    `sb-item ${isActive ? "active" : ""}`
-                  }
-                >
-                  <Icon
-                    className="sb-item-icon"
-                    size={17}
-                    strokeWidth={1.8}
-                  />
-
-                  <span className="sb-item-label">{item.label}</span>
-
-                  {unreadCount > 0 && (
-                    <span
-                      className="sb-item-badge"
-                      aria-label={`${unreadCount} unread update${unreadCount === 1 ? "" : "s"}`}
-                    >
-                      {unreadCount > 99 ? "99+" : unreadCount}
-                    </span>
-                  )}
-                </NavLink>
-              );
-            })}
-          </div>
-        ))}
+        {navGroups}
       </nav>
 
       {/* User */}
-      <div className="sb-bottom">
-        <div className="sb-user">
-          <div className="sb-avatar">{initials}</div>
-
-          <div className="sb-user-content">
-            <div className="sb-user-name">{displayName}</div>
-            <div className="sb-user-role">{roleLabel}</div>
-          </div>
-        </div>
-
-      </div>
+      {user}
     </aside>
       </>
     </ModalDialog>

@@ -88,8 +88,9 @@ for (const role of ["admin", "staff", "participant"]) test(`actual ${role} dashb
   state.check();
 });
 
-test("closed sidebar is inert and opening, Escape, close and navigation restore safe focus", async ({ page }) => {
-  const state = await fixture(page); await page.goto("/staff/requests?role=staff");
+// The overlay drawer (and its focus handling) is the phone layout; wider screens dock the sidebar (sidebar-rail.spec.js).
+test("closed phone drawer is inert and opening, Escape, close and navigation restore safe focus", async ({ page }) => {
+  const state = await fixture(page); await page.setViewportSize({ width: 390, height: 844 }); await page.goto("/staff/requests?role=staff");
   const sidebar = page.locator("aside.sidebar"), trigger = page.getByRole("button", { name: "Open sidebar" });
   await expect(sidebar).toHaveJSProperty("inert", true);
   await trigger.click(); await expect(sidebar.getByRole("button", { name: "Close sidebar" })).toBeFocused();
@@ -103,11 +104,21 @@ test("closed sidebar is inert and opening, Escape, close and navigation restore 
   state.check();
 });
 
-test("sidebar navigation never leaves focused descendants inside aria-hidden content", async ({ page }) => {
-  const state = await fixture(page); await page.goto("/staff/requests?role=staff");
+test("phone drawer navigation never leaves focused descendants inside aria-hidden content", async ({ page }) => {
+  const state = await fixture(page); await page.setViewportSize({ width: 390, height: 844 }); await page.goto("/staff/requests?role=staff");
   await page.getByRole("button", { name: "Open sidebar" }).click();
   await page.locator("aside.sidebar").getByRole("link", { name: "Seedling Requests", exact: true }).click();
   await page.locator("main").ariaSnapshot();
+  expect(await page.evaluate(() => Boolean(document.activeElement.closest('[aria-hidden="true"],[inert]')))).toBe(false);
+  state.check();
+});
+
+test("docked sidebar links are reachable without opening and navigation keeps focus outside hidden content", async ({ page }) => {
+  const state = await fixture(page, { "GET /api/inventory/species": route => route.fulfill({ json: { success: true, data: [] } }) }); await page.goto("/staff/requests?role=staff");
+  const sidebar = page.locator("aside#menro-sidebar");
+  await expect(sidebar).toHaveJSProperty("inert", false); await expect(page.locator("dialog[open]")).toHaveCount(0);
+  const link = sidebar.getByRole("link", { name: "Seedling Inventory", exact: true }); await link.focus(); await expect(link).toBeFocused();
+  await link.click(); await expect(page).toHaveURL(/\/staff\/seedlings/); await page.locator("main").ariaSnapshot();
   expect(await page.evaluate(() => Boolean(document.activeElement.closest('[aria-hidden="true"],[inert]')))).toBe(false);
   state.check();
 });
@@ -196,7 +207,7 @@ for (const role of ["admin", "staff", "participant"]) test(`${role} forest topba
   const ratios = colors.map(([foreground, background]) => contrast(foreground, background));
   for (const ratio of ratios) expect(ratio).toBeGreaterThanOrEqual(4.5);
   await test.info().attach(`${role}-contrast`, { body: JSON.stringify({ ratios, minimum: Math.min(...ratios) }), contentType: "application/json" });
-  const menu = page.getByRole("button", { name: "Open sidebar" }); await menu.focus(); await expect(menu).toHaveCSS("outline-style", "solid");
+  const menu = page.locator(".topbar-menu-btn"); await expect(menu).toHaveAccessibleName("Collapse sidebar"); await menu.focus(); await expect(menu).toHaveCSS("outline-style", "solid");
   const bell = page.getByRole("button", { name: "Notifications", exact: true }); await bell.click(); await expect(page.locator(".notification-panel")).toBeVisible();
   const badge = page.locator(".notification-badge"); await expect(badge).toHaveText("2");
   const badgeColors = await badge.evaluate(node => [getComputedStyle(node).color, getComputedStyle(node).backgroundColor]); expect(contrast(...badgeColors)).toBeGreaterThanOrEqual(4.5);
@@ -209,6 +220,7 @@ for (const role of ["admin", "staff", "participant"]) test(`${role} forest topba
   await page.screenshot({ path: test.info().outputPath(`${role}-mobile.png`) });
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   const box = await search.boundingBox(); expect(box.width).toBeGreaterThan(50);
+  await expect(menu).toHaveAccessibleName("Open sidebar");
   await menu.click(); await expect(page.getByRole("button", { name: "Close sidebar" })).toBeFocused(); await page.keyboard.press("Escape"); await expect(menu).toBeFocused();
   state.check();
 });

@@ -17,6 +17,8 @@
   --border-strong: #d4ddd7;
 
   --sidebar-width: 248px;
+  --sidebar-rail-width: 72px;
+  --sidebar-ease: cubic-bezier(0.22, 1, 0.36, 1);
   --topbar-height: 72px;
 }
 
@@ -506,6 +508,138 @@
     rgba(239, 68, 68, 0.1);
 
   color: #fee2e2;
+}
+
+/* =====================================================
+   DOCKED SIDEBAR (>= 768px): PUSH LAYOUT + ICON RAIL
+===================================================== */
+
+/* Just below the sticky topbar (900) so its popovers float above; the two never overlap. */
+.sidebar.docked {
+  z-index: 890;
+
+  width: var(--sidebar-width);
+
+  overflow-x: hidden;
+
+  box-shadow:
+    4px 0 18px rgba(2, 35, 22, 0.08);
+
+  transform: none;
+
+  transition:
+    width 230ms var(--sidebar-ease);
+}
+
+.sidebar.docked.rail {
+  width: var(--sidebar-rail-width);
+}
+
+.dashboard-shell.sidebar-docked .dashboard-main {
+  width: auto;
+
+  margin-left: var(--sidebar-width);
+
+  transition:
+    margin-left 230ms var(--sidebar-ease);
+}
+
+.dashboard-shell.sidebar-rail .dashboard-main {
+  margin-left: var(--sidebar-rail-width);
+}
+
+.sidebar.rail .sb-header {
+  padding: 13px 0;
+
+  justify-content: center;
+}
+
+.sidebar.rail .sb-brand-logo {
+  width: 46px;
+  height: 46px;
+}
+
+.sidebar.rail .sb-nav {
+  padding: 12px 10px 86px;
+}
+
+.sidebar.rail .sb-group + .sb-group {
+  margin-top: 8px;
+  padding-top: 8px;
+
+  border-top:
+    1px solid rgba(255, 255, 255, 0.12);
+}
+
+.sidebar.rail .sb-rail-item {
+  position: relative;
+
+  min-height: 42px;
+
+  padding: 0;
+
+  justify-content: center;
+}
+
+.sidebar.rail .sb-rail-item:hover {
+  transform: none;
+}
+
+.sidebar.rail .sb-rail-item .sb-item-badge {
+  position: absolute;
+  top: 3px;
+  right: 6px;
+
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+
+  font-size: 9px;
+}
+
+.sidebar.rail .sb-bottom {
+  left: 8px;
+  right: 8px;
+
+  padding: 8px 0;
+}
+
+.sidebar.rail .sb-user {
+  padding-bottom: 0;
+
+  justify-content: center;
+
+  border-bottom: 0;
+}
+
+.sb-tooltip {
+  position: fixed;
+  z-index: 1300;
+
+  padding: 6px 10px;
+
+  border-radius: 6px;
+
+  background: var(--menro-darker);
+  color: #ffffff;
+
+  box-shadow:
+    0 6px 18px rgba(2, 35, 22, 0.22);
+
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+
+  pointer-events: none;
+
+  transform: translateY(-50%);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sidebar.docked,
+  .dashboard-shell.sidebar-docked .dashboard-main {
+    transition: none;
+  }
 }
 
 /* =====================================================
@@ -1288,11 +1422,16 @@ input[type="search"]::-webkit-search-results-decoration {
    RESPONSIVE — SMALL TABLET
 ===================================================== */
 
-@media (max-width: 768px) {
+/* The drawer width applies only below the docked breakpoint (768px). */
+@media (max-width: 767.98px) {
   :root {
     --sidebar-width:
       min(87vw, 290px);
+  }
+}
 
+@media (max-width: 768px) {
+  :root {
     --topbar-height: 66px;
   }
 

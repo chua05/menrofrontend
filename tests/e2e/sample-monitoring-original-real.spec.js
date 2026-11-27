@@ -25,14 +25,14 @@ async function login(page,role){
  await expect(page).toHaveURL(new RegExp(`/${role==="otherStaff"?"staff":role}/dashboard$`),{timeout:30000});return f;
 }
 const collection=page=>page.waitForResponse(r=>{const u=new URL(r.url());return r.request().method()==="GET"&&u.origin===backend&&u.pathname==="/api/verified-sample-monitoring/visits";},{timeout:30000});
-async function discover(page){await page.getByRole("button",{name:"Open sidebar",exact:true}).click();
+async function discover(page){
  // Staff and Admin reach permanent-sample monitoring only through Survival Monitoring's single button.
  await page.getByRole("link",{name:"Survival Monitoring",exact:true}).click();await expect(page.getByRole("heading",{name:"Survival Monitoring",exact:true})).toBeVisible({timeout:60000});
  const [response]=await Promise.all([collection(page),page.locator(".sm-header-actions").getByRole("button",{name:"Monitor Planted Trees",exact:true}).click()]);
  await expect(page.getByRole("dialog",{name:"Monitor Planted Trees"})).toBeVisible();return response;}
 async function open(page,role){const f=await login(page,role);const r=await discover(page,role);const b=await r.json();expect(r.status()).toBe(200);expect(b.data.visits.some(v=>v.id===f.visitId)).toBe(true);const dialog=page.getByRole("dialog",{name:"Monitor Planted Trees"});await expect(dialog).toBeVisible();await expect(dialog.getByRole("combobox",{name:"Verified Planting Report *",exact:true})).toHaveValue(f.visitId);return f;}
 // Admin reviews one visit from the Monitoring Records table.
-async function openAdmin(page){const f=await login(page,"admin");await page.getByRole("button",{name:"Open sidebar",exact:true}).click();await page.getByRole("link",{name:"Survival Monitoring",exact:true}).click();
+async function openAdmin(page){const f=await login(page,"admin");await page.getByRole("link",{name:"Survival Monitoring",exact:true}).click();
  await page.locator(`tr[data-sample-visit-row="${f.visitId}"]`).getByRole("button",{name:`View monitoring visit ${f.visitId}`,exact:true}).click({timeout:60000});await expect(page.getByRole("dialog",{name:"Review Monitoring Visit"})).toBeVisible();}
 async function api(page,endpoint,method="GET",body){return page.evaluate(async({endpoint,method,body})=>{const {authenticatedFetch}=await import("/src/services/authenticatedApi.js");const r=await authenticatedFetch(endpoint,{method,...(body?{body:JSON.stringify(body),headers:{"Content-Type":"application/json"}}:{})});return{status:r.status,body:await r.json()};},{endpoint,method,body});}
 const detail=(page,id)=>api(page,`/verified-sample-monitoring/visits/${id}`);

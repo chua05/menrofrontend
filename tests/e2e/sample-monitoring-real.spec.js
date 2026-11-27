@@ -23,7 +23,7 @@ async function login(page,role){
  await expect(page).toHaveURL(new RegExp(`/${role==="otherStaff"?"staff":role}/dashboard$`),{timeout:30000});return f;
 }
 const collection=page=>page.waitForResponse(r=>{const u=new URL(r.url());return r.request().method()==="GET"&&u.origin===backend&&u.pathname==="/api/verified-sample-monitoring/visits";},{timeout:30000});
-async function discover(page,role){await page.getByRole("button",{name:"Open sidebar",exact:true}).click();
+async function discover(page,role){
  // Staff record visits through Survival Monitoring's single "Monitor Planted Trees" button. Admin has no such
  // button: submitted visits are listed in the existing Monitoring Records table, loaded on arrival.
  const adminList=role==="admin"?collection(page):null;
@@ -65,7 +65,6 @@ async function multipart(page,f,photo,sampleId=photo.tree,key=photo.key){
 }
 test("real Staff Survival Monitoring single button opens the eight-section permanent-sample form in Monitor Planted Trees",async({page})=>{
  await isolate(page);const f=await login(page,"staff");
- await page.getByRole("button",{name:"Open sidebar",exact:true}).click();
  await expect(page.getByRole("link",{name:"Permanent Sample Monitoring",exact:true,includeHidden:true})).toHaveCount(0);
  await page.getByRole("link",{name:"Survival Monitoring",exact:true}).click();
  await expect(page).toHaveURL(/\/staff\/survival-monitoring$/);await expect(page.getByRole("heading",{name:"Survival Monitoring",exact:true})).toBeVisible({timeout:60000});
