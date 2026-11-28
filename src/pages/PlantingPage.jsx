@@ -101,6 +101,8 @@ import { useAuth } from "../context/AuthContext";
 import ProtectedEvidenceImage from "../components/ProtectedEvidenceImage";
 import { auth } from "../firebase/config";
 import { formatDisplayId } from "../utils/displayId";
+import { buildSearchIndex, matchesSearch } from "../utils/recordSearch";
+import { plantingReportSearchFields } from "../utils/tableSearchFields";
 import { BULAN_BARANGAYS, USER_TYPES } from "../utils/userTypes";
 import { textTooltip } from "../utils/leafletTooltip";
 import {
@@ -376,6 +378,7 @@ export default function PlantingPage() {
   const isParticipant = userRole === "participant";
   const canReview = ["staff", "admin"].includes(userRole);
 
+  const reportsLoadSeq = useRef(0);
   const uploadInputRef = useRef(null);
   const previewUrlsRef = useRef([]);
   const activePhotoPreviewIdsRef = useRef(new Set());
@@ -637,6 +640,8 @@ export default function PlantingPage() {
   async function loadReports({ background = false } = {}) {
     if (!background) { setLoading(true); setReportError(""); }
 
+    const loadSeq = ++reportsLoadSeq.current;
+
     try {
       const endpoint = isParticipant
         ? "/planting-reports/my-reports"
@@ -644,17 +649,18 @@ export default function PlantingPage() {
 
       const response = await apiRequest(endpoint);
       const rows = Array.isArray(response.data) ? response.data : [];
-      setRecords(rows);
+      // A slower earlier response never overwrites a newer one.
+      if (loadSeq === reportsLoadSeq.current) setRecords(rows);
       return rows;
     } catch (error) {
-      if (background) return null;
+      if (background || loadSeq !== reportsLoadSeq.current) return null;
       setRecords([]);
       setReportError(isSessionError(error)
         ? error.message
         : "Unable to load planting reports. Please try again.");
       return null;
     } finally {
-      if (!background) setLoading(false);
+      if (loadSeq === reportsLoadSeq.current) setLoading(false);
     }
   }
 
@@ -1387,30 +1393,19 @@ export default function PlantingPage() {
     events.find((entry) => String(getEventId(entry)) === String(form.eventId)) || null,
   [events, form.eventId]);
 
-  const filteredRecords = useMemo(() => {
-    const search = searchTerm.trim().toLowerCase();
+  // One search index per loaded report (every column the table shows for this role).
+  const reportSearchIndexes = useMemo(() => new Map(visibleRecords.map((record) => [
+    record,
+    buildSearchIndex(plantingReportSearchFields(record, { role: userRole, displayStatus: displayReportStatus })),
+  ])), [visibleRecords, userRole]);
 
+  const filteredRecords = useMemo(() => {
     return visibleRecords.filter((record) => {
       const matchesStatus = reportMatchesStatusFilter(record, statusFilter);
 
-      const searchableText = [
-        record.id,
-        record.participantName,
-        record.siteName,
-        record.barangay,
-        record.species,
-        ...reportSeedlingItems(record).map((item) => item.species),
-        record.eventName,
-        record.verificationStatus,
-        record.reportingProgress,
-      ]
-        .filter(Boolean)
-        .join(" ")
-        .toLowerCase();
-
-      return matchesStatus && (search.length === 0 || searchableText.includes(search));
+      return matchesStatus && matchesSearch(reportSearchIndexes.get(record), searchTerm);
     });
-  }, [visibleRecords, searchTerm, statusFilter]);
+  }, [visibleRecords, reportSearchIndexes, searchTerm, statusFilter]);
 
   // Counts use the same submission/review status helpers as the table rows.
   const summary = useMemo(() => reportKpiCounts(visibleRecords), [visibleRecords]);

@@ -2,6 +2,8 @@
 // role and filter rules are unit-testable. The visit list is loaded without a server-side status
 // filter (that needs a composite Firestore index not deployed for Admin); drafts are dropped here.
 
+import { buildSearchIndex, matchesSearch } from "./recordSearch.js";
+
 export const VISIT_STATUS_LABELS = Object.freeze({
   RETURNED: "Returned for Correction",
   PENDING_ADMIN_APPROVAL: "Pending Admin Review",
@@ -24,16 +26,24 @@ export function canDecideVisit(visit, { writesPaused = false } = {}) {
 
 // Applies the existing Monitoring Records filters to a visit row. Visits have no single species or
 // latest condition, so a species or condition filter excludes them rather than guessing.
-export function visitMatchesRecordFilters(visit, { search = "", site = "All", species = "All", condition = "All", from = "", to = "" } = {}) {
+export function visitMatchesRecordFilters(visit, { search = "", index = null, site = "All", species = "All", condition = "All", from = "", to = "" } = {}) {
   if (species !== "All" || condition !== "All") return false;
   if (site !== "All" && visit.siteName !== site) return false;
   const date = visit.dateMonitored || visit.visitDate || "";
   if (from && date < from) return false;
   if (to && date > to) return false;
-  const term = String(search || "").trim().toLowerCase();
-  if (!term) return true;
-  return [visit.id, visit.reportNumber, visit.siteName, visit.barangay, visit.submittedByName, visitStatusLabel(visit.status), "permanent sample visit"]
-    .filter(Boolean).join(" ").toLowerCase().includes(term);
+  if (!String(search || "").trim()) return true;
+  return matchesSearch(index ?? buildSearchIndex(visitSearchFields(visit)), search);
+}
+
+// Everything a visit row shows: visit ID, report, site/barangay, visit and monitored dates, status, submitter, progress.
+// The submitter and progress texts mirror the row's own wording (MonitoringPage visit table).
+export function visitSearchFields(visit) {
+  const completed = visit?.progress?.completed ?? 0, total = visit?.progress?.total ?? 0;
+  const submitter = visit?.submittedByName === null ? "Submitter unavailable" : `Submitted by ${visit?.submittedByName || "MENRO Staff"}`;
+  return [visit?.id, visit?.reportNumber, visit?.siteName, visit?.barangay, visit?.visitDate, visit?.dateMonitored,
+    visitStatusLabel(visit?.status), submitter, "Permanent sample visit", "Scheduled visit",
+    completed, total, `${completed}/${total} sample trees assessed`];
 }
 
 // Reads every page of the authorized visit list. Drafts share the pages with submitted visits, so the

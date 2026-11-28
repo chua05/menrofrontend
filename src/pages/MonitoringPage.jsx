@@ -4,10 +4,12 @@ import { authenticatedFetch } from "../services/authenticatedApi";
 import { monitoringApiErrorMessage } from "../utils/monitoringApiError";
 import { withDeadline, RequestTimeoutError, READ_TIMEOUT_MS } from "../utils/requestTimeout";
 import { resolveVerifiedPlantingCohortEnabled } from "../utils/verifiedPlantingCohort";
-import { canDecideVisit, createLatestRequestGate, loadSubmittedVisitPages, visitMatchesRecordFilters, visitStatusLabel } from "../utils/adminMonitoringVisitReview";
+import { canDecideVisit, createLatestRequestGate, loadSubmittedVisitPages, visitMatchesRecordFilters, visitSearchFields, visitStatusLabel } from "../utils/adminMonitoringVisitReview";
+import { buildSearchIndex, matchesSearch } from "../utils/recordSearch";
+import { monitoringRecordSearchFields } from "../utils/tableSearchFields";
 import { createEvidenceAttempt, assertEvidenceComplete } from "../utils/evidenceAttempt";
 import { useSearchParams } from "react-router-dom";
-import { TRACKING_STATUS, deriveTrackingRows, isVerifiedPlantingReport, trackingMatchesRecordFilters, trackingNeedsCohortLookup, trackingReportNumber } from "../utils/monitoringTracking";
+import { TRACKING_STATUS, deriveTrackingRows, isVerifiedPlantingReport, trackingMatchesRecordFilters, trackingNeedsCohortLookup, trackingReportNumber, trackingSearchFields } from "../utils/monitoringTracking";
 import { loadReadiness, readinessPath } from "../utils/sampleReadinessLoader";
 import { isAwaitingMonitoringSetup, lifecycleMethodLabel, lifecycleMonitoringView, monitoringDisplayId, monitoringSetupBlocker, monitoringStatusLabel, monitoringStatusTone } from "../utils/monitoringRecordView";
 import MonitoringTrackingDetails from "../components/MonitoringTrackingDetails";
@@ -700,7 +702,10 @@ export default function MonitoringPage() {
     };
   }, []);
 
+  const refreshLoadSeq = useRef(0);
+
   async function refreshPlantingReports() {
+    const refreshSeq = ++refreshLoadSeq.current;
     setActionLoading(true);
     setFormError("");
 
@@ -718,6 +723,8 @@ export default function MonitoringPage() {
           isParticipant ? "/planting-reports/my-reports" : "/planting-reports"
         ),
       ]);
+
+      if (refreshSeq !== refreshLoadSeq.current) return;
 
       setRecords(
         (
@@ -748,12 +755,12 @@ export default function MonitoringPage() {
       );
     } catch (error) {
       console.error(error);
-      setFormError(
+      if (refreshSeq === refreshLoadSeq.current) setFormError(
         error.message ||
           "Unable to refresh monitoring data."
       );
     } finally {
-      setActionLoading(false);
+      if (refreshSeq === refreshLoadSeq.current) setActionLoading(false);
     }
   }
 
@@ -915,28 +922,15 @@ export default function MonitoringPage() {
     [visibleRecords]
   );
 
+  // One search index per loaded lifecycle row (every column the table shows), built once per data change.
+  const lifecycleSearchIndexes = useMemo(() => new Map(visibleRecords.map((record) => [
+    record,
+    buildSearchIndex(monitoringRecordSearchFields(record, { earlyLabel: earlyMonitoringLabel(record) })),
+  ])), [visibleRecords]);
+
   const filteredRecords = useMemo(() => {
-    const search = searchTerm.trim().toLowerCase();
-
     return visibleRecords.filter((record) => {
-      const searchableText = [
-        record.id,
-        record.monitoringNumber,
-        record.plantingReportNumber,
-        monitoringStatusLabel(record.status),
-        record.plantingReportId,
-        record.siteName,
-        record.barangay,
-        record.species,
-        record.participant,
-        record.condition,
-      ]
-        .filter(Boolean)
-        .join(" ")
-        .toLowerCase();
-
-      const matchesSearch =
-        search.length === 0 || searchableText.includes(search);
+      const matchesQuery = matchesSearch(lifecycleSearchIndexes.get(record), searchTerm);
 
       const matchesSite =
         siteFilter === "All" || record.siteName === siteFilter;
@@ -952,7 +946,7 @@ export default function MonitoringPage() {
       const matchesTo = !dateTo || monitoredDate <= dateTo;
 
       return (
-        matchesSearch &&
+        matchesQuery &&
         matchesSite &&
         matchesSpecies &&
         matchesCondition &&
@@ -962,6 +956,7 @@ export default function MonitoringPage() {
     });
   }, [
     visibleRecords,
+    lifecycleSearchIndexes,
     searchTerm,
     siteFilter,
     speciesFilter,
@@ -1006,14 +1001,16 @@ export default function MonitoringPage() {
     return () => window.clearTimeout(timer);
   }, [sampleVisitsEnabled, loadSampleVisits]);
 
+  const visitSearchIndexes = useMemo(() => new Map(sampleVisits.map((visit) => [visit, buildSearchIndex(visitSearchFields(visit))])), [sampleVisits]);
   const filteredSampleVisits = useMemo(() => sampleVisits.filter((visit) => visitMatchesRecordFilters(visit, {
-    search: searchTerm, site: siteFilter, species: speciesFilter, condition: conditionFilter, from: dateFrom, to: dateTo,
-  })), [sampleVisits, searchTerm, siteFilter, speciesFilter, conditionFilter, dateFrom, dateTo]);
+    search: searchTerm, index: visitSearchIndexes.get(visit), site: siteFilter, species: speciesFilter, condition: conditionFilter, from: dateFrom, to: dateTo,
+  })), [sampleVisits, visitSearchIndexes, searchTerm, siteFilter, speciesFilter, conditionFilter, dateFrom, dateTo]);
   // Actual monitoring records (aggregate lifecycles and permanent-sample visits). Tracking rows are counted separately.
   const totalRows = filteredRecords.length + filteredSampleVisits.length;
+  const trackingSearchIndexes = useMemo(() => new Map(trackingRows.map((row) => [row, buildSearchIndex(trackingSearchFields(row))])), [trackingRows]);
   const filteredTrackingRows = useMemo(() => trackingRows.filter((row) => trackingMatchesRecordFilters(row, {
-    search: searchTerm, site: siteFilter, species: speciesFilter, condition: conditionFilter, from: dateFrom, to: dateTo,
-  })), [trackingRows, searchTerm, siteFilter, speciesFilter, conditionFilter, dateFrom, dateTo]);
+    search: searchTerm, index: trackingSearchIndexes.get(row), site: siteFilter, species: speciesFilter, condition: conditionFilter, from: dateFrom, to: dateTo,
+  })), [trackingRows, trackingSearchIndexes, searchTerm, siteFilter, speciesFilter, conditionFilter, dateFrom, dateTo]);
   const tableRows = totalRows + filteredTrackingRows.length;
   // Client-side pagination over the displayed rows in table order: lifecycles, tracking rows, visits.
   // The page resets to 1 whenever a filter changes (keyed state, no effect needed).

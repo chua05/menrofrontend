@@ -6,6 +6,7 @@
 import { MONITORING_POLICY, describeMonitoringStatus, monitoringPolicyOf } from "./monitoringStatus.js";
 import { approvedVisitNote, readinessMessages, readinessStatusLabel } from "./sampleVisitReadiness.js";
 import { formatDisplayId } from "./displayId.js";
+import { buildSearchIndex, matchesSearch } from "./recordSearch.js";
 
 // Headline monitoring stage of a tracking row (user-facing), mapped only from stored policy, cohort and readiness.
 export const TRACKING_STAGE = Object.freeze({
@@ -216,13 +217,17 @@ export function withPickerReadiness(row, readiness) {
 
 // Applies the existing Monitoring Records filters to a tracking row. Tracking rows have no species,
 // condition or monitoring date, so those filters exclude them rather than guessing.
-export function trackingMatchesRecordFilters(row, { search = "", site = "All", species = "All", condition = "All", from = "", to = "" } = {}) {
+export function trackingMatchesRecordFilters(row, { search = "", index = null, site = "All", species = "All", condition = "All", from = "", to = "" } = {}) {
   if (species !== "All" || condition !== "All" || from || to) return false;
   if (site !== "All" && row.siteName !== site) return false;
-  const term = String(search || "").trim().toLowerCase();
-  if (!term) return true;
-  return [row.reportNumber, row.siteName, row.barangay, row.stage, row.status, row.requirement, row.setup, "verified planting report", "tracking"]
-    .filter(Boolean).join(" ").toLowerCase().includes(term);
+  if (!String(search || "").trim()) return true;
+  return matchesSearch(index ?? buildSearchIndex(trackingSearchFields(row)), search);
+}
+
+// Everything a tracking row shows: report number, site/barangay, dates or labels, stage, status, setup.
+export function trackingSearchFields(row) {
+  return [trackingReportNumber(row), row?.reportNumber, row?.siteName, row?.barangay, row?.stage, row?.status, row?.requirement, row?.setup,
+    row?.startMonitoringDate, row?.startLabel, row?.nextLabel, "Not yet assigned", "Tracking only", "verified planting report", "tracking", "Not Yet Monitored"];
 }
 
 // Whether the page needs the cohort and readiness lookups for these tracking candidates.

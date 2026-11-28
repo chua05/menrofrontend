@@ -1629,3 +1629,112 @@
   .sd-tabs > .sd-header-actions:empty { display: none; }
   .sd-tabs > .sd-header-actions > button { width: 100%; justify-content: center; }
 }
+
+/* Automatic stock status: neutral badge for records whose baseline needs review. */
+.sd-status-needs-review {
+  background: #eef1f4;
+  color: #4f5d6b;
+}
+
+.sd-stock-status-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+}
+
+/* Distribution Records sub-tabs (same type scale and green accent as .sd-tab). */
+.sd-subtabs {
+  min-height: 46px;
+  padding: 0 14px;
+  border-bottom: 1px solid #edf1ee;
+  display: flex;
+  align-items: stretch;
+  gap: 6px;
+  overflow-x: auto;
+}
+
+.sd-subtab {
+  position: relative;
+  padding: 0 11px;
+  border: none;
+  background: transparent;
+  color: #526159;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 13px;
+  line-height: 1.3;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.sd-subtab::after {
+  content: "";
+  position: absolute;
+  left: 4px;
+  right: 4px;
+  bottom: 0;
+  height: 2px;
+  background: transparent;
+}
+
+.sd-subtab.active {
+  color: #087443;
+}
+
+.sd-subtab.active::after {
+  background: #159447;
+}
+
+.sd-subtab:focus-visible {
+  outline: 2px solid #8bbd9f;
+  outline-offset: -2px;
+}
+
+/* Distribution filter bar: the Seedlings filter design, wrapping to fit five controls. */
+.sd-distribution-filter-bar {
+  flex-wrap: wrap;
+}
+
+.sd-distribution-filter-bar .sd-filter-select {
+  flex: 1 1 165px;
+  max-width: 220px;
+  min-width: 0;
+}
+
+.sd-filter-date input {
+  width: 100%;
+  height: 100%;
+  padding-right: 8px;
+  border: none;
+  outline: none;
+  background: transparent;
+  color: #344138;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.sd-distribution-filter-bar .sd-more-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.sd-allocation-table {
+  min-width: 1380px;
+}
+
+.sd-allocation-basis {
+  font-size: 11.5px;
+  font-style: italic;
+}
+
+.sd-distribution-empty .sd-secondary-btn {
+  margin-top: 12px;
+}
+
+@media (max-width: 480px) {
+  .sd-distribution-filter-bar .sd-filter-select {
+    max-width: none;
+  }
+}

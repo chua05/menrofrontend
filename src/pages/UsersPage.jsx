@@ -21,6 +21,8 @@ import PageLoadingState from "../components/PageLoadingState";
 import { useToast } from "../context/ToastContext";
 import { auth } from "../firebase/config";
 import { formatDisplayId } from "../utils/displayId";
+import { buildSearchIndex, matchesSearch } from "../utils/recordSearch";
+import { registryUserSearchFields } from "../utils/tableSearchFields";
 import { BULAN_BARANGAYS } from "../utils/userTypes";
 import KpiCard, { KpiGrid } from "../components/KpiCard";
 import "../styles/registered-users.css";
@@ -118,6 +120,7 @@ export default function UsersPage() {
   const { userRole } = useAuth();
 
   const [users, setUsers] = useState([]);
+  const usersLoadSeq = useRef(0);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
 
@@ -181,6 +184,8 @@ export default function UsersPage() {
   };
 
   const fetchUsers = async () => {
+    const loadSeq = ++usersLoadSeq.current;
+
     try {
       setLoading(true);
       setLoadError("");
@@ -208,15 +213,19 @@ export default function UsersPage() {
         ? result.data.map(toRegistryUser)
         : [];
 
+      // A slower earlier response never overwrites a newer one.
+      if (loadSeq !== usersLoadSeq.current) return;
+
       setUsers(mappedUsers);
     } catch (error) {
       console.error(error);
+      if (loadSeq !== usersLoadSeq.current) return;
       setUsers([]);
       setLoadError(error.message === "Authentication token not found."
         ? "Your session has expired. Please sign in again."
         : "Unable to load registered users. Please try again.");
     } finally {
-      setLoading(false);
+      if (loadSeq === usersLoadSeq.current) setLoading(false);
     }
   };
 
@@ -224,6 +233,8 @@ export default function UsersPage() {
   let cancelled = false;
 
   const loadUsers = async () => {
+    const loadSeq = ++usersLoadSeq.current;
+
     try {
       setLoadError("");
       const token = await getFreshToken();
@@ -250,7 +261,7 @@ export default function UsersPage() {
         );
       }
 
-      if (cancelled) return;
+      if (cancelled || loadSeq !== usersLoadSeq.current) return;
 
       const mappedUsers = Array.isArray(result.data)
         ? result.data.map(toRegistryUser)
@@ -261,7 +272,7 @@ export default function UsersPage() {
     } catch (error) {
       console.error(error);
 
-      if (cancelled) return;
+      if (cancelled || loadSeq !== usersLoadSeq.current) return;
 
       setUsers([]);
       setLoadError(error.message === "Authentication token not found."
@@ -326,6 +337,12 @@ export default function UsersPage() {
     [counts]
   );
 
+  // One search index per loaded user (name, email, contact, role, barangay, dates, status; never UIDs).
+  const userSearchIndexes = useMemo(() => new Map(users.map((user) => [
+    user,
+    buildSearchIndex(registryUserSearchFields(user)),
+  ])), [users]);
+
   const filteredUsers = useMemo(() => {
     return users.filter((user) => {
       if (activeTab === "admin" && user.role !== "admin") return false;
@@ -347,30 +364,15 @@ export default function UsersPage() {
       if (statusFilter && user.status !== statusFilter) return false;
       if (barangayFilter && user.barangay !== barangayFilter) return false;
 
-      if (search.trim()) {
-        const query = search.trim().toLowerCase();
-
-        const haystack = [
-          user.fullName,
-          user.username,
-          user.email,
-          user.contact,
-          user.organization,
-          user.barangay,
-          user.role,
-          user.status,
-        ]
-          .filter(Boolean)
-          .join(" ")
-          .toLowerCase();
-
-        if (!haystack.includes(query)) return false;
+      if (search.trim() && !matchesSearch(userSearchIndexes.get(user), search)) {
+        return false;
       }
 
       return true;
     });
   }, [
     users,
+    userSearchIndexes,
     activeTab,
     roleFilter,
     statusFilter,

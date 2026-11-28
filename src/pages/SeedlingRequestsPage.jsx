@@ -41,6 +41,8 @@ import {
 } from "../utils/identificationDocuments";
 import { auth } from "../firebase/config";
 import { formatDisplayId } from "../utils/displayId";
+import { buildSearchIndex, matchesSearch } from "../utils/recordSearch";
+import { seedlingRequestSearchFields } from "../utils/tableSearchFields";
 import { BULAN_BARANGAYS } from "../utils/userTypes";
 import { formatScheduleTime } from "../utils/saplingRequestWorkflow";
 import { downloadPrivateRequestLetter, downloadPrivateWalkInAcknowledgement, hasPrivateRequestLetter } from "../utils/requestLetterDownload";
@@ -598,6 +600,7 @@ export default function SeedlingRequestsPage() {
   const [myRequestsOnly, setMyRequestsOnly] = useState(false);
 
   const [searchTerm, setSearchTerm] = useState("");
+  const requestsLoadSeq = useRef(0);
   const [barangayFilter, setBarangayFilter] =
     useState("");
   const [requestTypeFilter, setRequestTypeFilter] =
@@ -754,10 +757,15 @@ export default function SeedlingRequestsPage() {
     setLoadError("");
   }
 
+  const loadSeq = ++requestsLoadSeq.current;
+
   try {
     const data = await apiRequest("/seedling-requests");
     const list = Array.isArray(data) ? data : [];
     const normalized = list.map(normalizeRequestForUi);
+
+    // A slower earlier response never overwrites a newer one.
+    if (loadSeq !== requestsLoadSeq.current) return normalized;
 
     setRequests(normalized);
     setSelectedRequest((current) => {
@@ -768,12 +776,12 @@ export default function SeedlingRequestsPage() {
   } catch (error) {
     console.error("Failed to load seedling requests:", error);
 
-    if (!background) {
+    if (!background && loadSeq === requestsLoadSeq.current) {
       setLoadError("Unable to load seedling requests. Please try again.");
     }
     return null;
   } finally {
-    if (!background) setLoadingRequests(false);
+    if (loadSeq === requestsLoadSeq.current) setLoadingRequests(false);
   }
 }, [userRole]);
 
@@ -870,6 +878,15 @@ useEffect(() => {
     };
   }, [requests]);
 
+  // One search index per loaded request (every column the table shows), rebuilt only when the data or tab changes.
+  const requestSearchIndexes = useMemo(() => new Map(requests.map((request) => [
+    request,
+    buildSearchIndex(seedlingRequestSearchFields(request, {
+      displayId: getRequestDisplayId(request),
+      secondaryDate: activeTab === "approved" ? request.approvedDate : activeTab === "rejected" ? request.rejectedDate : "",
+    })),
+  ])), [requests, activeTab]);
+
   const filteredRequests = useMemo(() => {
     const activeConfig = TABS.find(
       (tab) => tab.id === activeTab
@@ -929,34 +946,11 @@ useEffect(() => {
         }
       }
 
-      if (searchTerm.trim()) {
-        const search = searchTerm
-          .trim()
-          .toLowerCase();
-
-        const searchable = [
-          getRequestDisplayId(request),
-          request.requestNumber,
-          request.requestId,
-          request.requesterName,
-          request.requesterRole,
-          request.barangay,
-          request.organization,
-          request.requestType,
-          request.purpose,
-          request.purposeDetails,
-          request.status,
-          ...(request.trees || []).map(
-            (tree) => tree.treeName
-          ),
-        ]
-          .filter(Boolean)
-          .join(" ")
-          .toLowerCase();
-
-        if (!searchable.includes(search)) {
-          return false;
-        }
+      if (
+        searchTerm.trim() &&
+        !matchesSearch(requestSearchIndexes.get(request), searchTerm)
+      ) {
+        return false;
       }
 
       return true;
@@ -974,6 +968,7 @@ useEffect(() => {
     dateFrom,
     dateTo,
     searchTerm,
+    requestSearchIndexes,
   ]);
 
   const totalPages = Math.max(

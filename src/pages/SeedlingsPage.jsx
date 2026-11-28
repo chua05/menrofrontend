@@ -14,6 +14,9 @@ import {
   MoreVertical,
   RotateCcw,
   Boxes,
+  Layers,
+  CalendarDays,
+  MapPin,
 } from "lucide-react";
 
 import { useAuth } from "../context/AuthContext";
@@ -24,6 +27,18 @@ import KpiCard, { KpiGrid } from "../components/KpiCard";
 import "../styles/seedlings.css";
 import LoadingIndicator from "../components/LoadingIndicator";
 import PageLoadingState from "../components/PageLoadingState";
+import { calculateStockStatus } from "../utils/stockStatus";
+import { filterInventoryRecords, indexInventoryRecords, inventoryStockStatus, stockStatusNote } from "../utils/inventorySearch";
+import {
+  EMPTY_DISTRIBUTION_FILTERS,
+  allocationTotals,
+  distributionFilterOptions,
+  distributionTotals,
+  filterAllocationRows,
+  filterDistributions,
+  hasActiveDistributionFilters,
+  prepareDistributions,
+} from "../utils/distributionTracking";
 
 const API_BASE_URL =
   import.meta.env.VITE_API_URL || "http://localhost:5000/api";
@@ -31,7 +46,6 @@ const API_BASE_URL =
 const CATEGORY_OPTIONS = [
   "Native Tree", "Fruit Tree", "Hardwood", "Mangrove", "Ornamental", "Other",
 ];
-const STOCK_STATUS_OPTIONS = ["Available", "Limited", "Out of Stock"];
 const SOURCE_TYPE_OPTIONS = [
   "MENRO Propagation", "DENR / PENRO", "Provincial Government",
   "Other Government Office", "Donation", "Wildling Collection",
@@ -61,6 +75,7 @@ function timestampToIso(value) {
 }
 
 function normalizeInventoryItem(item) {
+  const stock = inventoryStockStatus(item);
   return {
     ...item,
     id: item.id || "",
@@ -107,7 +122,10 @@ function normalizeInventoryItem(item) {
       item.batchReference || "",
     description:
       item.description || "",
-    status: item.stockStatus || item.status || "",
+    status: stock.status,
+    totalReceivedQuantity: stock.totalReceivedQuantity,
+    remainingStockPercent: stock.remainingPercent,
+    stockBaselineIssue: stock.baselineIssue,
     createdAt:
       timestampToIso(item.createdAt) ||
       item.createdAt ||
@@ -116,31 +134,6 @@ function normalizeInventoryItem(item) {
       timestampToIso(item.updatedAt) ||
       item.updatedAt ||
       "",
-  };
-}
-
-function normalizeDistribution(record) {
-  const items = Array.isArray(record.items)
-    ? record.items.map((item) => ({
-        ...item,
-        species: item.species || item.treeName || "Unnamed seedling",
-        quantity: Number(item.releasedQuantity ?? item.quantity ?? 0),
-      }))
-    : [];
-
-  return {
-    ...record,
-    id: record.id || "",
-    distributionNumber: record.distributionNumber || record.id || "",
-    requestNumber: record.requestNumber || record.requestId || "",
-    participantName: record.participantName || record.organization || "—",
-    items,
-    totalQuantityReleased: Number(
-      record.totalQuantityReleased ||
-        items.reduce((total, item) => total + item.quantity, 0)
-    ),
-    releasedAt: timestampToIso(record.releasedAt) || record.releasedAt || "",
-    status: record.status || "Released",
   };
 }
 
@@ -240,7 +233,6 @@ function getInitialForm() {
     category: "",
     categorySpecification: "",
     quantity: "",
-    stockStatus: "Available",
     sourceType: "",
     sourceSpecification: "",
     dateReceived: "",
@@ -293,6 +285,16 @@ function StatusBadge({ status }) {
   );
 }
 
+function StockStatusSummary({ seedling }) {
+  const note = stockStatusNote(seedling);
+  return (
+    <div className="sd-stock-status-summary">
+      <StatusBadge status={seedling.status} />
+      {note && <small className="sd-secondary-text">{note}</small>}
+    </div>
+  );
+}
+
 export default function SeedlingsPage() {
   const { success: showSuccess, error: showError } = useToast();
   const { userRole } = useAuth();
@@ -322,6 +324,19 @@ export default function SeedlingsPage() {
 
   const highlightedDistributionId = pageSearchParams.get("distribution") || "";
 
+  const [distributionView, setDistributionView] = useState("transactions");
+  const [distributionFilters, setDistributionFilters] = useState(EMPTY_DISTRIBUTION_FILTERS);
+
+  // A deep link to one distribution must keep it reachable: show All Transactions with no filters.
+  useEffect(() => {
+    if (!highlightedDistributionId) return undefined;
+    const resetTimer = window.setTimeout(() => {
+      setDistributionView("transactions");
+      setDistributionFilters(EMPTY_DISTRIBUTION_FILTERS);
+    }, 0);
+    return () => window.clearTimeout(resetTimer);
+  }, [highlightedDistributionId]);
+
   useEffect(() => {
     if (activeTab !== "distribution" || distributionLoading || !highlightedDistributionId) return undefined;
     const highlightTimer = window.setTimeout(() => {
@@ -331,7 +346,7 @@ export default function SeedlingsPage() {
       });
     }, 0);
     return () => window.clearTimeout(highlightTimer);
-  }, [activeTab, distributionLoading, highlightedDistributionId, distributions]);
+  }, [activeTab, distributionLoading, highlightedDistributionId, distributions, distributionView]);
 
   const [searchTerm, setSearchTerm] =
     useState("");
@@ -370,7 +385,6 @@ export default function SeedlingsPage() {
 
   const [editForm, setEditForm] =
     useState({
-      stockStatus: "Available",
       description: "",
     });
 
@@ -474,12 +488,12 @@ export default function SeedlingsPage() {
 
         const records = Array.isArray(response.data) ? response.data : [];
         setDistributions(
-          records
-            .filter(
+          prepareDistributions(
+            records.filter(
               (record) =>
                 String(record.status || "Released").toLowerCase() === "released"
             )
-            .map(normalizeDistribution)
+          )
             .sort(
               (first, second) =>
                 new Date(second.releasedAt || 0) -
@@ -608,51 +622,46 @@ export default function SeedlingsPage() {
     ].sort();
   }, [seedlings]);
 
-  const filteredSeedlings = useMemo(() => {
-    return seedlings.filter((seedling) => {
-      if (
-        treeFilter &&
-        seedling.treeName !== treeFilter
-      ) {
-        return false;
-      }
+  // Search index built once per record (not per keystroke); filtering runs on the full list before pagination.
+  const indexedSeedlings = useMemo(() => indexInventoryRecords(seedlings), [seedlings]);
 
-      if (
-        statusFilter &&
-        seedling.status !== statusFilter
-      ) {
-        return false;
-      }
+  const filteredSeedlings = useMemo(
+    () => filterInventoryRecords(indexedSeedlings, {
+      search: searchTerm,
+      treeName: treeFilter,
+      status: statusFilter,
+    }),
+    [indexedSeedlings, treeFilter, statusFilter, searchTerm]
+  );
 
-      if (searchTerm.trim()) {
-        const search =
-          searchTerm.trim().toLowerCase();
+  const allocationRows = useMemo(
+    () => distributions.flatMap((distribution) => distribution.allocationRows),
+    [distributions]
+  );
 
-        const searchable = [
-          seedling.id,
-          seedling.treeName,
-          seedling.scientificName,
-          seedling.category,
-          seedling.status,
-          seedling.description,
-        ]
-          .filter(Boolean)
-          .join(" ")
-          .toLowerCase();
+  const distributionOptions = useMemo(() => distributionFilterOptions(allocationRows), [allocationRows]);
 
-        if (!searchable.includes(search)) {
-          return false;
-        }
-      }
+  const filteredDistributions = useMemo(
+    () => filterDistributions(distributions, distributionFilters),
+    [distributions, distributionFilters]
+  );
 
-      return true;
-    });
-  }, [
-    seedlings,
-    treeFilter,
-    statusFilter,
-    searchTerm,
-  ]);
+  const filteredAllocationRows = useMemo(
+    () => filterAllocationRows(allocationRows, distributionFilters),
+    [allocationRows, distributionFilters]
+  );
+
+  const distributionSummary = distributionView === "batches"
+    ? allocationTotals(filteredAllocationRows)
+    : distributionTotals(filteredDistributions, distributionFilters);
+
+  const distributionFiltersActive = hasActiveDistributionFilters(distributionFilters);
+
+  const updateDistributionFilter = (field, value) => {
+    setDistributionFilters((previous) => ({ ...previous, [field]: value }));
+  };
+
+  const resetDistributionFilters = () => setDistributionFilters(EMPTY_DISTRIBUTION_FILTERS);
 
   const totalPages = Math.max(
     1,
@@ -691,11 +700,6 @@ export default function SeedlingsPage() {
       if (field === "treeName") {
         const species = speciesOptions.find((item) => item.treeName === value);
         next.scientificName = species?.scientificName || "";
-      }
-      if (field === "quantity" && value !== "" && Number(value) === 0) {
-        next.stockStatus = "Out of Stock";
-      } else if (field === "quantity" && Number(value) > 0 && previous.stockStatus === "Out of Stock") {
-        next.stockStatus = "Available";
       }
       if (field === "category" && value !== "Other") next.categorySpecification = "";
       if (field === "sourceType" && value !== "Other") next.sourceSpecification = "";
@@ -743,8 +747,6 @@ export default function SeedlingsPage() {
       errors.quantity =
         "Initial quantity cannot be negative.";
     }
-    if (quantity === 0 && form.stockStatus !== "Out of Stock") errors.stockStatus = "Zero quantity must be Out of Stock.";
-    if (quantity > 0 && !["Available", "Limited"].includes(form.stockStatus)) errors.stockStatus = "Positive quantity must be Available or Limited.";
 
     if (!SOURCE_TYPE_OPTIONS.includes(form.sourceType)) errors.sourceType = "Source type is required.";
     if (form.sourceType === "Other" && !form.sourceSpecification.trim()) errors.sourceSpecification = "Please specify the source.";
@@ -840,7 +842,6 @@ export default function SeedlingsPage() {
               category: form.category,
               categorySpecification: form.categorySpecification.trim(),
               initialQuantity: quantity,
-              stockStatus: form.stockStatus,
               sourceType: form.sourceType,
               sourceSpecification: form.sourceSpecification.trim(),
               dateReceived: form.dateReceived,
@@ -889,7 +890,6 @@ export default function SeedlingsPage() {
     setSelectedSeedling(seedling);
 
     setEditForm({
-      stockStatus: seedling.currentQuantity <= 0 ? "Out of Stock" : seedling.status,
       description:
         seedling.description || "",
     });
@@ -962,12 +962,6 @@ export default function SeedlingsPage() {
 
     const errors = {};
 
-    if (selectedSeedling.currentQuantity <= 0 && editForm.stockStatus !== "Out of Stock") {
-      errors.stockStatus = "Zero quantity must remain Out of Stock.";
-    } else if (selectedSeedling.currentQuantity > 0 && !["Available", "Limited"].includes(editForm.stockStatus)) {
-      errors.stockStatus = "Positive quantity must be Available or Limited.";
-    }
-
     if (
       editForm.description.length >
       500
@@ -996,7 +990,6 @@ export default function SeedlingsPage() {
           {
             method: "PATCH",
             body: JSON.stringify({
-              stockStatus: editForm.stockStatus,
               description:
                 editForm.description.trim(),
             }),
@@ -1253,6 +1246,10 @@ export default function SeedlingsPage() {
 
                   <option value="Out of Stock">
                     Out of Stock
+                  </option>
+
+                  <option value="Needs Review">
+                    Needs Review
                   </option>
                 </select>
               </div>
@@ -1567,6 +1564,178 @@ export default function SeedlingsPage() {
             </button>
           </div>
         ) : distributions.length > 0 ? (
+          <>
+          <div className="sd-subtabs" role="tablist" aria-label="Distribution record views">
+            {[
+              ["transactions", "All Transactions"],
+              ["batches", "By Inventory Batch"],
+            ].map(([view, label]) => (
+              <button
+                key={view}
+                type="button"
+                role="tab"
+                aria-selected={distributionView === view}
+                className={`sd-subtab ${distributionView === view ? "active" : ""}`}
+                onClick={() => setDistributionView(view)}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+
+          {/* DISTRIBUTION FILTERS */}
+          <div className="sd-filter-bar sd-distribution-filter-bar" role="search" aria-label="Filter distribution records">
+            <div className="sd-search">
+              <Search size={15} />
+              <input
+                type="search"
+                placeholder="Search distributions..."
+                aria-label="Search distribution records"
+                value={distributionFilters.search}
+                onChange={(event) => updateDistributionFilter("search", event.target.value)}
+              />
+            </div>
+
+            <div className="sd-filter-select">
+              <Sprout size={15} />
+              <select
+                aria-label="Seedling type"
+                value={distributionFilters.seedlingType}
+                onChange={(event) => updateDistributionFilter("seedlingType", event.target.value)}
+              >
+                <option value="">All Seedling Types</option>
+                {distributionOptions.seedlingTypes.map((species) => (
+                  <option key={species} value={species}>{species}</option>
+                ))}
+              </select>
+            </div>
+
+            <div className="sd-filter-select">
+              <Layers size={15} />
+              <select
+                aria-label="Source type"
+                value={distributionFilters.sourceType}
+                onChange={(event) => updateDistributionFilter("sourceType", event.target.value)}
+              >
+                <option value="">All Source Types</option>
+                {distributionOptions.sourceTypes.map((source) => (
+                  <option key={source} value={source}>{source}</option>
+                ))}
+              </select>
+            </div>
+
+            <div className="sd-filter-select sd-filter-date" title="Date released">
+              <CalendarDays size={15} />
+              <input
+                type="date"
+                aria-label="Date released"
+                value={distributionFilters.dateReleased}
+                onChange={(event) => updateDistributionFilter("dateReleased", event.target.value)}
+              />
+            </div>
+
+            <div className="sd-filter-select">
+              <MapPin size={15} />
+              <select
+                aria-label="Barangay or planting site"
+                value={distributionFilters.location}
+                onChange={(event) => updateDistributionFilter("location", event.target.value)}
+              >
+                <option value="">All Barangays / Sites</option>
+                {["Barangay", "Planting Site"].map((group) => {
+                  const options = distributionOptions.locations.filter((option) => option.group === group);
+                  return options.length > 0 ? (
+                    <optgroup key={group} label={group}>
+                      {options.map((option) => (
+                        <option key={option.value} value={option.value}>{option.label}</option>
+                      ))}
+                    </optgroup>
+                  ) : null;
+                })}
+              </select>
+            </div>
+
+            <div className="sd-filter-spacer" />
+
+            <button
+              type="button"
+              className="sd-more-btn"
+              title="Reset filters"
+              aria-label="Reset distribution filters"
+              disabled={!distributionFiltersActive}
+              onClick={resetDistributionFilters}
+            >
+              <RotateCcw size={16} />
+            </button>
+          </div>
+
+          {distributionView === "batches" ? (
+            filteredAllocationRows.length > 0 && (
+              <div className="sd-table-scroll sd-distribution-table-scroll">
+                <table className="sd-table sd-distribution-table sd-allocation-table">
+                  <thead>
+                    <tr>
+                      <th>DISTRIBUTION ID</th>
+                      <th>BATCH / REFERENCE NO.</th>
+                      <th>SEEDLING TYPE</th>
+                      <th>SOURCE TYPE</th>
+                      <th>DATE RECEIVED</th>
+                      <th>RELEASED QTY</th>
+                      <th>RECIPIENT</th>
+                      <th>RELATED REQUEST</th>
+                      <th>DESTINATION</th>
+                      <th>DATE RELEASED</th>
+                      <th>RELEASED BY</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredAllocationRows.map((row) => {
+                      const released = formatDateTime(row.releasedAt);
+                      const fromCurrentRecord = row.basis === "current-record";
+                      return (
+                        <tr
+                          key={row.key}
+                          className={row.distributionId === highlightedDistributionId ? "sd-distribution-highlight" : ""}
+                          title={fromCurrentRecord ? "Batch details are taken from the current batch record; they were not captured at release time." : undefined}
+                        >
+                          <td className="sd-primary-text">{row.distributionNumber || "—"}</td>
+                          <td className={row.recordFound ? "sd-primary-text" : "sd-secondary-text"}>
+                            {row.batchLabel}
+                            {row.batchReference && row.inventoryNumber && row.inventoryNumber !== row.batchReference && (
+                              <div className="sd-secondary-text">{row.inventoryNumber}</div>
+                            )}
+                          </td>
+                          <td>{row.species}</td>
+                          <td>
+                            <div className={row.sourceType ? "" : "sd-secondary-text"}>{row.sourceLabel}</div>
+                            {fromCurrentRecord && <div className="sd-secondary-text sd-allocation-basis">(current record)</div>}
+                          </td>
+                          <td className={row.dateReceived ? "" : "sd-secondary-text"}>{row.dateReceivedLabel}</td>
+                          <td className="sd-number sd-distributed-number">{formatNumber(row.quantity)}</td>
+                          <td>
+                            <div className="sd-primary-text">{row.recipient}</div>
+                            {row.organization && row.organization !== row.recipient && (
+                              <div className="sd-secondary-text">{row.organization}</div>
+                            )}
+                          </td>
+                          <td>{row.requestNumber || "—"}</td>
+                          <td>
+                            <div>{row.destination || "—"}</div>
+                            {row.barangay && <div className="sd-secondary-text">Brgy. {row.barangay}</div>}
+                          </td>
+                          <td>
+                            <div className="sd-primary-text">{released.date}</div>
+                            <div className="sd-secondary-text">{released.time}</div>
+                          </td>
+                          <td>{row.releasedBy}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )
+          ) : filteredDistributions.length > 0 && (
           <div className="sd-table-scroll sd-distribution-table-scroll">
             <table className="sd-table sd-distribution-table">
               <thead>
@@ -1583,7 +1752,7 @@ export default function SeedlingsPage() {
                 </tr>
               </thead>
               <tbody>
-                {distributions.map((distribution) => {
+                {filteredDistributions.map((distribution) => {
                   const released = formatDateTime(distribution.releasedAt);
 
                   return (
@@ -1637,7 +1806,7 @@ export default function SeedlingsPage() {
                           "—"}
                       </td>
                       <td>{distribution.requestNumber || "—"}</td>
-                      <td>{distribution.releasedBy || "—"}</td>
+                      <td>{distribution.releasedByName || "—"}</td>
                       <td>
                         <StatusBadge status={distribution.status} />
                       </td>
@@ -1647,6 +1816,43 @@ export default function SeedlingsPage() {
               </tbody>
             </table>
           </div>
+          )}
+
+          {(distributionView === "batches" ? filteredAllocationRows.length : filteredDistributions.length) === 0 && (
+            <div className="sd-empty-state sd-distribution-empty">
+              <div className="sd-empty-icon">
+                <Boxes size={34} strokeWidth={1.6} />
+              </div>
+              {distributionFiltersActive ? (
+                <>
+                  <h2>No matching distribution records</h2>
+                  <p>Try changing your search or filter settings.</p>
+                  <button type="button" className="sd-secondary-btn" onClick={resetDistributionFilters}>
+                    <RotateCcw size={15} />
+                    Reset Filters
+                  </button>
+                </>
+              ) : (
+                <>
+                  <h2>No batch allocations recorded</h2>
+                  <p>Released distributions have no seedling item details to show by batch.</p>
+                </>
+              )}
+            </div>
+          )}
+
+          <div className="sd-table-footer">
+            <div className="sd-results-text" aria-live="polite">
+              {distributionView === "batches"
+                ? `Showing ${formatNumber(distributionSummary.allocations)} batch allocation${distributionSummary.allocations === 1 ? "" : "s"} from ${formatNumber(distributionSummary.transactions)} of ${formatNumber(distributions.length)} transactions`
+                : `Showing ${formatNumber(distributionSummary.transactions)} of ${formatNumber(distributions.length)} transactions`}
+              {` · ${formatNumber(distributionSummary.quantity)} seedlings released`}
+              {distributionView !== "batches" && (distributionFilters.seedlingType || distributionFilters.sourceType)
+                ? " in matching batch allocations"
+                : ""}
+            </div>
+          </div>
+          </>
         ) : (
           <div className="sd-empty-state sd-distribution-empty">
             <div className="sd-empty-icon">
@@ -1793,10 +1999,17 @@ export default function SeedlingsPage() {
           />
         </FormField>
 
-        <FormField label="Stock Status *" error={formErrors.stockStatus}>
-          <select value={form.stockStatus} disabled={form.quantity !== "" && Number(form.quantity) === 0} onChange={(event) => updateForm("stockStatus", event.target.value)}>
-            {STOCK_STATUS_OPTIONS.map((status) => <option key={status} value={status} disabled={Number(form.quantity) > 0 && status === "Out of Stock"}>{status}</option>)}
-          </select>
+        <FormField label="Stock Status (automatic)" hint="Calculated from current quantity against total received (30% or less is Limited).">
+          <input
+            type="text"
+            value={
+              form.quantity !== "" && Number.isInteger(Number(form.quantity)) && Number(form.quantity) >= 0
+                ? calculateStockStatus(Number(form.quantity), Number(form.quantity))
+                : "Calculated when saved"
+            }
+            aria-label="Stock Status (automatic)"
+            readOnly
+          />
         </FormField>
 
         <FormField label="Source Type *" error={formErrors.sourceType}>
@@ -1959,19 +2172,10 @@ export default function SeedlingsPage() {
                 }
               >
                 <div className="sd-form-grid">
-                  <FormField label="Stock Status *" error={editErrors.stockStatus}>
-                    <select
-                      value={editForm.stockStatus}
-                      disabled={selectedSeedling.currentQuantity <= 0}
-                      onChange={(event) => updateEditForm("stockStatus", event.target.value)}
-                    >
-                      {STOCK_STATUS_OPTIONS.map((status) => (
-                        <option key={status} value={status} disabled={selectedSeedling.currentQuantity > 0 && status === "Out of Stock"}>
-                          {status}
-                        </option>
-                      ))}
-                    </select>
-                  </FormField>
+                  <div className="sd-form-field full-width">
+                    <span>Stock Status (automatic)</span>
+                    <StockStatusSummary seedling={selectedSeedling} />
+                  </div>
 
                   <FormField
                     label="Description"
@@ -2088,12 +2292,8 @@ export default function SeedlingsPage() {
               </div>
 
               <div className="sd-modal-body">
-                <div className="sd-detail-status">
-                  <StatusBadge
-                    status={
-                      selectedSeedling.status
-                    }
-                  />
+                <div className="sd-detail-status" aria-label="Stock Status (automatic)">
+                  <StockStatusSummary seedling={selectedSeedling} />
                 </div>
 
                 <div className="sd-details-grid">

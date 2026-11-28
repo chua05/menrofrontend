@@ -417,6 +417,8 @@ for (const [width, height] of [[1440, 900], [1024, 768], [390, 844], [375, 812]]
   // What the reader sees at the top of the page (not scrolled, so scroll anchoring cannot hide a shift), before and while the alert shows.
   const watched = [page.locator(".topbar"), page.locator("main h1, main h2").first(), page.locator("main input, main select").first(), page.getByRole("button", { name: "Save Settings" })];
   const boxes = async () => Promise.all(watched.map(async (locator) => (await locator.isVisible()) ? locator.boundingBox() : null));
+  // Let the route's own entry animation finish first, so only the alert can move anything.
+  await page.evaluate(() => Promise.all(document.getAnimations().map((animation) => animation.finished.catch(() => {}))));
   const before = await boxes();
   await exportData.evaluate((button) => button.click());
   const toast = page.locator(".menro-toast", { hasText: "Settings backup exported successfully." });
@@ -424,8 +426,7 @@ for (const [width, height] of [[1440, 900], [1024, 768], [390, 844], [375, 812]]
   const after = await boxes();
   const shift = Math.max(0, ...before.map((box, i) => box && after[i] ? Math.abs(after[i].y - box.y) + Math.abs(after[i].height - box.height) : 0));
   info.annotations.push({ type: "layout-shift", description: `${width}x${height}: ${shift}px` });
-  console.log(`layout shift with toast at ${width}x${height}: ${shift}px`);
-  const placement = await toast.evaluate((node) => {
+  console.log(`layout shift with toast at ${width}x${height}: ${shift}px`);  const placement = await toast.evaluate((node) => {
     const box = node.getBoundingClientRect(), style = getComputedStyle(node), layer = node.closest(".menro-toast-viewport");
     return { position: getComputedStyle(layer).position, parent: layer.parentElement.parentElement === document.body, centre: Math.round(box.left + box.width / 2 - window.innerWidth / 2),
       top: box.top, bottom: box.bottom, right: box.right, left: box.left, border: style.borderTopWidth, background: style.backgroundColor, shadow: style.boxShadow,

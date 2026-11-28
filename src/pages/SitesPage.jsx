@@ -33,6 +33,8 @@ import { MAP_MAX_ZOOM, addBasemap } from "../components/map/basemap";
 import { SITE_CENTER_COLOR, drawSiteOverlay, siteOverlayStyle } from "../components/map/siteOverlayLayer";
 import { UtilizationSwatch } from "../components/map/MapLegendKeys";
 import { UTILIZATION_LEVELS, plantedOf, siteUtilization } from "../utils/siteUtilization";
+import { buildSearchIndex, matchesSearch } from "../utils/recordSearch";
+import { plantingSiteSearchFields } from "../utils/tableSearchFields";
 import "../styles/planting-sites.css";
 import LoadingIndicator from "../components/LoadingIndicator";
 
@@ -250,6 +252,7 @@ export default function SitesPage() {
   const canManage =
     userRole === "admin" || userRole === "staff";
 
+  const sitesLoadSeq = useRef(0);
   const mapContainerRef = useRef(null);
   const mapRef = useRef(null);
   const bulanBoundsRef = useRef(null);
@@ -304,24 +307,15 @@ export default function SitesPage() {
   const [conditionFilter, setConditionFilter] =
     useState("all");
 
-  const filteredSites = useMemo(() => {
-    const query = search.trim().toLowerCase();
+  // One search index per loaded site (IDs, name, barangay, location, status, condition, capacity).
+  const siteSearchIndexes = useMemo(() => new Map(sites.map((site) => [
+    site,
+    buildSearchIndex(plantingSiteSearchFields(site)),
+  ])), [sites]);
 
+  const filteredSites = useMemo(() => {
     return sites.filter((site) => {
-      const matchesSearch =
-        !query ||
-        String(site.id || "")
-          .toLowerCase()
-          .includes(query) ||
-        String(site.siteId || "")
-          .toLowerCase()
-          .includes(query) ||
-        String(site.siteName || "")
-          .toLowerCase()
-          .includes(query) ||
-        String(site.barangay || "")
-          .toLowerCase()
-          .includes(query);
+      const matchesQuery = matchesSearch(siteSearchIndexes.get(site), search);
 
       const status = getSiteStatus(site);
 
@@ -338,13 +332,14 @@ export default function SitesPage() {
         condition === conditionFilter;
 
       return (
-        matchesSearch &&
+        matchesQuery &&
         matchesStatus &&
         matchesCondition
       );
     });
   }, [
     sites,
+    siteSearchIndexes,
     search,
     statusFilter,
     conditionFilter,
@@ -424,13 +419,15 @@ export default function SitesPage() {
   }
 
   async function loadSites() {
+    const loadSeq = ++sitesLoadSeq.current;
     const response = await apiRequest("/sites");
 
     const records = Array.isArray(response.data)
       ? response.data
       : [];
 
-    setSites(records);
+    // A slower earlier response never overwrites a newer one.
+    if (loadSeq === sitesLoadSeq.current) setSites(records);
   }
 
   async function handleViewFullDetails() {

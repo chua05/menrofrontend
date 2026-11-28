@@ -3,6 +3,8 @@ import { useSearchParams } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { auth } from "../firebase/config";
 import { formatDisplayId } from "../utils/displayId";
+import { buildSearchIndex, matchesSearch } from "../utils/recordSearch";
+import { generatedReportSearchFields } from "../utils/tableSearchFields";
 import {
   FiBarChart2,
   FiCalendar,
@@ -136,6 +138,7 @@ export default function ReportsPage() {
   const [filterType, setFilterType] = useState("");
   const [filterStatus, setFilterStatus] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
+  const reportsLoadSeq = useRef(0);
 
   const [errorMsg, setErrorMsg] = useState("");
 
@@ -145,6 +148,7 @@ export default function ReportsPage() {
   const loadReports = useCallback(async ({ silent = false } = {}) => {
     if (!silent) setHistoryLoading(true);
     setHistoryError("");
+    const loadSeq = ++reportsLoadSeq.current;
     try {
       const token = await auth.currentUser?.getIdToken();
       if (!token) throw new Error("Your session has expired. Please sign in again.");
@@ -153,11 +157,12 @@ export default function ReportsPage() {
       });
       const payload = await response.json().catch(() => null);
       if (!response.ok) throw new Error(payload?.message || "Unable to load generated reports.");
-      setReports(Array.isArray(payload?.data) ? payload.data : []);
+      // A slower earlier response never overwrites a newer one.
+      if (loadSeq === reportsLoadSeq.current) setReports(Array.isArray(payload?.data) ? payload.data : []);
     } catch (loadError) {
-      setHistoryError(loadError.message || "Unable to load generated reports.");
+      if (loadSeq === reportsLoadSeq.current) setHistoryError(loadError.message || "Unable to load generated reports.");
     } finally {
-      if (!silent) setHistoryLoading(false);
+      if (loadSeq === reportsLoadSeq.current) setHistoryLoading(false);
     }
   }, []);
 
@@ -178,9 +183,13 @@ export default function ReportsPage() {
     return () => window.clearTimeout(filterTimer);
   }, [pageSearchParams]);
 
-  const filteredReports = useMemo(() => {
-    const search = searchTerm.trim().toLowerCase();
+  // One search index per loaded report (ID, type label, date, generator, status).
+  const reportSearchIndexes = useMemo(() => new Map(reports.map((report) => [
+    report,
+    buildSearchIndex(generatedReportSearchFields(report, { typeLabel: getReportTypeLabel(report.type) })),
+  ])), [reports]);
 
+  const filteredReports = useMemo(() => {
     return reports.filter((report) => {
       const matchesType =
         !filterType ||
@@ -190,22 +199,17 @@ export default function ReportsPage() {
         !filterStatus ||
         report.status === filterStatus;
 
-      const matchesSearch =
-        !search ||
-        String(report.id).toLowerCase().includes(search) ||
-        String(getReportTypeLabel(report.type)).toLowerCase().includes(search) ||
-        String(report.generatedByName || report.generatedBy || "")
-          .toLowerCase()
-          .includes(search);
+      const matchesQuery = matchesSearch(reportSearchIndexes.get(report), searchTerm);
 
       return (
         matchesType &&
         matchesStatus &&
-        matchesSearch
+        matchesQuery
       );
     });
   }, [
     reports,
+    reportSearchIndexes,
     filterType,
     filterStatus,
     searchTerm,
